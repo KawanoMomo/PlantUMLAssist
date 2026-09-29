@@ -1,6 +1,12 @@
 const { test } = require('@playwright/test');
 const { gotoApp, saveDirFor, shotOut } = require('../helpers');
 
+// 保存先の一覧は保存先の右クリック「保存先の一覧を開く」で中央の枠に開き、開くたびに読み直す
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。
+async function openFolder(page) {
+  await require('../scenarios/_scenario').openFolder(page);
+}
+
 // BLK-reviewer-20260908-1203 の画面写真。印だけで「内容ずれ」と分かった図を
 // 「食い違いの中身を調べる」で開き、欠落と旧名、そして指摘文が出ているところを撮る。
 const DIR = saveDirFor(__filename);
@@ -52,7 +58,7 @@ test('shot: 内容ずれの中身を調べる', async ({ page }) => {
   await put(page, 'gpio_state', NOW);
   await exportSvg(page, 'gpio_state', NOW);
 
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
   const scan = page.locator('#folder-svg-diff-scan');
   if (await scan.count() && await scan.isEnabled()) {

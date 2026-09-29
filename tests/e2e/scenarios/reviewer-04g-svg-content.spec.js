@@ -98,7 +98,9 @@ function clearDir(page) {
 }
 
 async function openFolder(page) {
-  await page.locator('#btn-tab-folder').click();
+  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
+  // BLK-owner-20260924-0637-1: 旧 📂 一覧は保存先の右クリック「保存先の一覧を開く」で中央の枠に開く。
+  await require('./_scenario').openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
 }
 

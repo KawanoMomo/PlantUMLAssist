@@ -4,7 +4,7 @@
 // 自分では選べず、そこで手詰まりになっていた。不一致行から質問 1 件を出して
 // 答えを待たずに次へ進めること、二重に聞かないことを見る。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText, saveDirFor } = require('../helpers');
+const { gotoApp, getEditorText, saveDirFor, openCompareTabs } = require('../helpers');
 
 // 先輩 (primary) の図。Disabled と、そこへの遷移が自分の図に無い。
 const SENIOR = [
@@ -44,7 +44,7 @@ async function openMap(page) {
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(600);
   await typeDsl(page, MINE);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-pane')).toBeVisible();
   await page.locator('#btn-map-run').click();
   await expect(page.locator('#map-list')).toBeVisible();
@@ -113,7 +113,7 @@ test('別の行は別の質問として預けられる', async ({ page }) => {
   await expect(page.locator('#map-asked')).toContainText('先輩に預けた質問 2 件');
 });
 
-test('預けた質問は 📌 指摘の一覧に並ぶ', async ({ page }) => {
+test('預けた質問は 指摘の一覧に並ぶ', async ({ page }) => {
   await openMap(page);
   await row(page, 'ref-only', 'state', 'Disabled').locator('.map-ask').click();
   await page.waitForTimeout(600);

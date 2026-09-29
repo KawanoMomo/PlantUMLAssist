@@ -39,6 +39,17 @@ window.MA.zoomHud = (function() {
     return name ? (name + ' · ' + pct) : pct;
   }
 
+  // BLK-builder-20260926-1010-1: 帯はキャンバスの右上に浮くので、図の上端が帯の下端より上にあると
+  // 図の右上 (header の文字・右端の参加者や部品の頭) が帯のボタンの下に隠れ、ホバーも押下も届かない。
+  // 図を下げる量を返す: 図の上端 (下げる前) が帯の下端 + 余白より上ならその差、下なら 0。
+  // 帯が出ていない (下端が数値でない・0 以下) ときも 0。
+  function figureGap(hudBottom, figureTop, pad) {
+    var hb = Number(hudBottom), ft = Number(figureTop);
+    if (!isFinite(hb) || hb <= 0 || !isFinite(ft)) return 0;
+    var need = hb + (pad == null ? 4 : Number(pad) || 0) - ft;
+    return need > 0 ? Math.ceil(need) : 0;
+  }
+
   function buildHudHtml(diagramType, z) {
     var esc = (window.MA.htmlUtils && window.MA.htmlUtils.escHtml)
       ? window.MA.htmlUtils.escHtml
@@ -63,5 +74,6 @@ window.MA.zoomHud = (function() {
     isMax: isMax,
     hudLabel: hudLabel,
     buildHudHtml: buildHudHtml,
+    figureGap: figureGap,
   };
 })();

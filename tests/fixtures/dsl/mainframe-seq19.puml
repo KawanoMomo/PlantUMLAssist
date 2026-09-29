@@ -1,0 +1,15 @@
+' 狙い: newpage, mainframe, stereotype <<...>>
+@startuml
+participant "MCUドライバ" as Drv <<HW Abstraction>>
+participant "アプリ" as App <<Safety Critical>>
+mainframe 起動シーケンス概要
+App -> Drv : Init()
+Drv --> App : E_OK
+newpage 診断シーケンス
+App -> Drv : SelfTest()
+Drv --> App : Result
+App -> Drv : LogSelfTestResult()
+Drv --> App : E_OK
+App -> Drv : ClearSelfTestFlag()
+Drv --> App : E_OK
+@enduml

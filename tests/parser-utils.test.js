@@ -110,3 +110,68 @@ describe('isAmbiguousType — actor だけの図は図種を決めない', funct
     expect(parserUtils.isAmbiguousType("@startuml\n' メモ\nactor User\n@enduml")).toBe(true);
   });
 });
+
+// BLK-owner-20260924-2232-2: コンポーネント図・ユースケース図で境界を先に置くと、本文は
+// `package "Mcal" {` / `}` だけになる。PlantUML はこれをクラス図として描き、右パネルが
+// クラスの追加フォームに替わって、コンポーネント・ユースケースを 1 つも足せなくなっていた。
+// 境界の開き行と閉じ括弧しか無い間は「決められない」と答え、選んである図種を保たせる。
+describe('isAmbiguousType — 境界だけの本文は図種を決めない', function() {
+  [
+    'package "Mcal" {',
+    'rectangle "ECU" {',
+    'node Server {',
+    'folder "src" {',
+    'frame "F1" {',
+    'cloud "AWS" {',
+    'package "Mcal" <<Layer>> {',
+    'rectangle "ECU" #lightblue {',
+    'package "Mcal" as M {',
+  ].forEach(function(open) {
+    test(open + ' と } だけなら ambiguous', function() {
+      expect(parserUtils.isAmbiguousType('@startuml\n' + open + '\n}\n@enduml')).toBe(true);
+    });
+  });
+  test('入れ子の境界だけでも ambiguous', function() {
+    expect(parserUtils.isAmbiguousType('@startuml\npackage "Mcal" {\n  rectangle "Dio" {\n  }\n}\n@enduml')).toBe(true);
+  });
+  test('境界と actor だけでも ambiguous (シーケンス・ユースケースのどちらもあり得る)', function() {
+    expect(parserUtils.isAmbiguousType('@startuml\nactor User\npackage "ECU" {\n}\n@enduml')).toBe(true);
+  });
+  test('境界の中に component が来たら決まる', function() {
+    var t = '@startuml\npackage "Mcal" {\n  component Dio\n}\n@enduml';
+    expect(parserUtils.isAmbiguousType(t)).toBe(false);
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-component');
+  });
+  test('境界の中に usecase が来たら決まる', function() {
+    var t = '@startuml\nrectangle "ECU" {\n  usecase Init\n}\n@enduml';
+    expect(parserUtils.isAmbiguousType(t)).toBe(false);
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-usecase');
+  });
+  test('境界の中に class が来たら決まる', function() {
+    var t = '@startuml\npackage "Mcal" {\n  class Dio\n}\n@enduml';
+    expect(parserUtils.isAmbiguousType(t)).toBe(false);
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-class');
+  });
+  test('namespace (クラス図だけの語) や波括弧の無い node (部品) は境界だけの本文として扱わない', function() {
+    expect(parserUtils.isAmbiguousType('@startuml\nnamespace N {\n}\n@enduml')).toBe(false);
+    expect(parserUtils.isAmbiguousType('@startuml\nnode Server\n@enduml')).toBe(false);
+  });
+});
+
+// BLK-migrator-20260923-1409: `agent` と矢印だけの component 図が、矢印を根拠に
+// sequence と読まれていた。図種を外すと選択枠のモジュールごと外れ、枠が 1 つも出ない。
+describe('detectDiagramType 波括弧の無い component 要素', function() {
+  test('agent 宣言 + 矢印だけの図は component', function() {
+    var t = ['@startuml', 'left to right direction', 'agent "Published Event" as event',
+             'node iotRule', 'event --> iotRule : JSON message', '@enduml'].join('\n');
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-component');
+  });
+  test('参加者の宣言がある図は今までどおり sequence', function() {
+    var t = ['@startuml', 'participant A', 'database B', 'A -> B : read', '@enduml'].join('\n');
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-sequence');
+  });
+  test('actor のある図は component に倒さない', function() {
+    var t = ['@startuml', 'actor User', 'node Server', 'User --> Server : use', '@enduml'].join('\n');
+    expect(parserUtils.detectDiagramType(t)).toBe('plantuml-sequence');
+  });
+});

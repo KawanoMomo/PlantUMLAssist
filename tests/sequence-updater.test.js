@@ -362,14 +362,16 @@ describe('moveMessage', function() {
     expect(seq.moveMessage(text, 4, -1)).toBe(text);
   });
 
-  test('no-op when next non-blank line is an alt opener', function() {
+  // BLK-owner-20260924-2232-3: 枠の区切り (頭・else・end) は 1 段越えて隣の分岐・枠の外へ移す
+  // (以前は止まって何も起きず、else 側へ移す手段が無かった)。
+  test('crosses an alt opener into the first branch', function() {
     var text = '@startuml\nA -> B : first\nalt ok\nA -> C\nend\n@enduml';
-    expect(seq.moveMessage(text, 2, 1)).toBe(text);
+    expect(seq.moveMessage(text, 2, 1)).toBe('@startuml\nalt ok\n  A -> B : first\nA -> C\nend\n@enduml');
   });
 
-  test('no-op when next non-blank line is an end keyword', function() {
+  test('crosses an end keyword out of the block', function() {
     var text = '@startuml\nalt ok\nA -> B : first\nend\nA -> C\n@enduml';
-    expect(seq.moveMessage(text, 3, 1)).toBe(text);
+    expect(seq.moveMessage(text, 3, 1)).toBe('@startuml\nalt ok\nend\nA -> B : first\nA -> C\n@enduml');
   });
 
   test('no-op when adjacent is participant declaration', function() {

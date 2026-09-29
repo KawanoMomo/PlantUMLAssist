@@ -149,6 +149,18 @@ window.MA.sourceLock = (function() {
     return { action: 'ask', origin: e.origin };
   }
 
+  // unchangedSinceOpen(docId, dsl) — 開いたときから本文が変わっていないか (decide が skip を
+  // 返す条件) を、錠に触らずに答える。decide は名前が変わっていれば錠を外すので、書き先が
+  // 控え (`{名前}-編集中`) に替わった後の doc で問い合わせると、それだけで錠が外れて以後の
+  // 書き戻しが本体へ入ってしまう (BLK-builder-20260924-0637-b2-1-red)。問い合わせはこちらを使う。
+  function unchangedSinceOpen(docId, dsl) {
+    var e = docId ? _read()[docId] : null;
+    if (!e || typeof dsl !== 'string' || !e.opened) return false;
+    if (e.mode === 'copy' && e.alias) return false;
+    if (e.mode === 'overwrite') return false;
+    return fingerprint(dsl) === e.opened;
+  }
+
   // answer(docId, choice, used) — 確認への返事。
   //   'overwrite' … 元ファイルへ書いてよい
   //   'keep'      … 元ファイルは変更前のまま保ち、控えへ書く
@@ -173,13 +185,15 @@ window.MA.sourceLock = (function() {
 
   // 確認ダイアログに出す文言。判定の隣に置き、画面はここから取る
   // (書き先が変わったときに文言だけ置いていかれないように)。
-  function askText(origin) {
+  // dir — そのタブの書き先のフォルダ (BLK-human-20260925-1150)。渡せば「どのフォルダのファイルか」も言う。
+  function askText(origin, dir) {
+    var where = dir ? '（' + String(dir).replace(/[\\/]+$/, '') + ' の中）' : '';
     return {
       title: '開いたファイルを上書きしますか',
       // BLK-junior-20260914-0906: 「なぜ今これを聞かれるのか」と「どちらを選んでも
       // 古い控えの中身が図に入ることはない」を本文で言い切る。開いただけでは
       // 聞かれない (decide が skip を返す) ので、出たときは必ず本文を変えている。
-      body: '「' + origin + '.puml」は一覧から開いたファイルです。開いたときから本文が変わったので、'
+      body: '「' + origin + '.puml」' + where + 'は一覧から開いたファイルです。開いたときから本文が変わったので、'
         + 'このまま自動保存すると元ファイルを書き換えます。どちらを選んでも、書かれるのは'
         + 'いま画面に出ている本文です（' + origin + COPY_SUFFIX + ' などの古い控えの中身が図に入ることはありません）。',
       overwrite: 'このファイルを書き換える',
@@ -204,7 +218,7 @@ window.MA.sourceLock = (function() {
   function answeredText(choice, origin, alias) {
     if (choice === 'keep') {
       return {
-        text: '🔒 ' + origin + '.puml は変更前のまま（いまの本文は ' + alias + '.puml に入りました）',
+        text: '' + origin + '.puml は変更前のまま（いまの本文は ' + alias + '.puml に入りました）',
         undo: '↩ やっぱり ' + origin + '.puml を書き換える',
       };
     }
@@ -213,22 +227,24 @@ window.MA.sourceLock = (function() {
 
   // 上部バーに常時出す 1 語。錠がかかっていることを見えるようにする
   // (確認に答えたあとも、書き先がどこかは見えていないと分からない)。
+  // BLK-builder-20260924-1702-2 (design 9a): 札は絵文字を使わず、ファイル名も繰り返さない
+  // (名前は左隣のパンくずが言う)。札が言うのは「この図をどう書くか」だけ。
   function label(docId, docName) {
     var e = docId ? _read()[docId] : null;
     if (!e || String(docName) !== e.origin) return null;
     if (e.mode === 'copy' && e.alias) {
       // BLK-junior-20260915-2240: 押し間違えても、押した本人がここから 1 クリックで戻せる。
       return {
-        text: '🔒 元ファイル保護',
+        text: '元ファイル保護',
         title: e.origin + '.puml は変更前のまま保ちます。書き先は ' + e.alias
           + '.puml です（押すと ' + e.origin + '.puml を書き換える方に戻せます）',
         undoable: true,
       };
     }
     if (e.mode === 'overwrite') {
-      return { text: '✎ ' + e.origin, title: '開いた ' + e.origin + '.puml をそのまま書き換えます' };
+      return { text: '元ファイルに書く', title: '開いた ' + e.origin + '.puml をそのまま書き換えます' };
     }
-    return { text: '🔒 ' + e.origin,
+    return { text: '書く前に確認',
              title: '一覧から開いたファイルです。読むだけなら何も書きません。本文を変えたときだけ、'
                + '元ファイルを書き換えてよいか一度だけ確認します' };
   }
@@ -241,6 +257,7 @@ window.MA.sourceLock = (function() {
     clearAll: clearAll,
     copyName: copyName,
     decide: decide,
+    unchangedSinceOpen: unchangedSinceOpen,
     answer: answer,
     answeredText: answeredText,
     askText: askText,

@@ -95,11 +95,22 @@ window.MA.exportTarget = (function() {
     var scratchDocs = deliverable.filter(function(d) { return d.scratch; });
     var pool = includeScratch ? deliverable : deliverable.filter(function(d) { return !d.scratch; });
     var targets = mode === MODE_FOLDER ? pool : pool.filter(function(d) { return d.open; });
+    // BLK-owner-20260925-0235-prune: 行ごとの入る / 入らない (チェックリストの行の頭で切り替える)。
+    // 的と未確定の既定を決めた後に、利用者が押した行だけを上書きする。並びは候補の順のまま。
+    var ov = (o.overrides && typeof o.overrides === 'object') ? o.overrides : {};
+    if (Object.keys(ov).length) {
+      var base = targets;
+      targets = all.filter(function(d) {
+        if (ov[d.name] === true) return true;
+        if (ov[d.name] === false) return false;
+        return base.indexOf(d) !== -1;
+      });
+    }
 
     var openCount = pool.filter(function(d) { return d.open; }).length;
     var folderCount = folderAvailable ? pool.length : 0;
     var template = all.length - pool.length;
-    var missing = pool.length - targets.length;
+    var missing = pool.filter(function(d) { return targets.indexOf(d) === -1; }).length;
     var missingUnopened = pool.filter(function(d) {
       return !d.open && targets.indexOf(d) === -1;
     }).length;

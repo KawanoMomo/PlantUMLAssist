@@ -128,7 +128,7 @@ describe('一覧', function() {
   });
 
   test('バッジは要再確認/全件で出る', function() {
-    expect(MF.badgeText(MF.summary(MF.review(list, docs)))).toBe('🔖 手動指摘 1/2');
+    expect(MF.badgeText(MF.summary(MF.review(list, docs)))).toBe('手動指摘 1/2');
   });
 });
 

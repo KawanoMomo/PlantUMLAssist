@@ -1,7 +1,7 @@
 'use strict';
 // BLK-junior-20260914-1206-wish: 指摘.md に言及の無い図でも、junior は自分と先輩の
 // 両方を開いて突き合わせ「対応不要」を自分で判定していた。指摘.md を一覧の側から
-// 読み、図 1 枚ずつに 対象外 / ⚠未確認 / ✅対応済み を付ける。
+// 読み、図 1 枚ずつに 対象外 / ⚠確かめられず / ✅反映済み を付ける。
 if (!global.window) {
   var jsdom = require('jsdom');
   var dom = new jsdom.JSDOM('<!DOCTYPE html><html><body></body></html>');
@@ -124,26 +124,26 @@ describe('note-board — 反映されているか', function() {
   var MINE_FIXED = ['@startuml', 'participant Gpio_Driver',
     'Gpio_Driver -> Hw_Ctrl : Gpio_Init', '@enduml'].join('\n');
 
-  test('古い綴りが残っていれば ⚠未確認', function() {
+  test('古い綴りが残っていれば ⚠確かめられず', function() {
     var b = boardOf(NOTE, NAMES, KINDS).board;
     var st = NB.statusOf({ hits: NB.hitsOf(b, 'gpio_init_sequence'), dsl: MINE_OLD });
     expect(st.key).toBe('todo');
-    expect(st.mark).toBe('⚠未確認');
+    expect(st.mark).toBe('⚠確かめられず');
   });
 
-  test('統一後の綴りだけなら ✅対応済み (Gpio_Driver を Gpio と読み違えない)', function() {
+  test('統一後の綴りだけなら ✓反映済み (Gpio_Driver を Gpio と読み違えない)', function() {
     var b = boardOf(NOTE, NAMES, KINDS).board;
     var st = NB.statusOf({ hits: NB.hitsOf(b, 'gpio_init_sequence'), dsl: MINE_FIXED });
     expect(st.key).toBe('done');
-    expect(st.mark).toBe('✅対応済み');
+    expect(st.mark).toBe('✓反映済み');
   });
 
-  test('本文をまだ読んでいない図は ✅ にしない', function() {
+  test('本文をまだ読んでいない図は ✓ にしない', function() {
     var b = boardOf(NOTE, NAMES, KINDS).board;
     expect(NB.statusOf({ hits: NB.hitsOf(b, 'gpio_init_sequence') }).key).toBe('todo');
   });
 
-  test('別ドメインと決めた注記があれば ✅対応済み', function() {
+  test('別ドメインと決めた注記があれば ✓反映済み', function() {
     var b = boardOf(NOTE, NAMES, KINDS).board;
     var dsl = ['@startuml', "' domain-verdict: separate gpio vs junior",
       'state Uninit', '@enduml'].join('\n');
@@ -166,14 +166,14 @@ describe('note-board — 反映されているか', function() {
     expect(NB.sideRename(SIDE_NOTE, '')).toBe(null);
   });
 
-  test('自分側の綴りのままなら ⚠未確認、相手に揃えてあれば ✅対応済み', function() {
+  test('自分側の綴りのままなら ⚠確かめられず、相手に揃えてあれば ✓反映済み', function() {
     var b = boardOf(SIDE_NOTE, NAMES, KINDS).board;
     var hits = NB.hitsOf(b, 'gpio_init_sequence');
     expect(NB.statusOf({ hits: hits, dsl: MINE_OLD, mineFolder: 'junior' }).key).toBe('todo');
     expect(NB.statusOf({ hits: hits, dsl: MINE_FIXED, mineFolder: 'junior' }).key).toBe('done');
   });
 
-  test('部品ごと消しただけでは ✅ にしない (揃えた綴りが入って初めて対応済み)', function() {
+  test('部品ごと消しただけでは ✓ にしない (揃えた綴りが入って初めて対応済み)', function() {
     var b = boardOf(SIDE_NOTE, NAMES, KINDS).board;
     var empty = ['@startuml', 'participant Hw_Ctrl', '@enduml'].join('\n');
     var st = NB.statusOf({ hits: NB.hitsOf(b, 'gpio_init_sequence'), dsl: empty, mineFolder: 'junior' });
@@ -181,7 +181,7 @@ describe('note-board — 反映されているか', function() {
     expect(st.title).toContain('どちらの綴りも見当たりません');
   });
 
-  test('証拠の無い指摘は本文を読んでも ⚠未確認 のまま', function() {
+  test('証拠の無い指摘は本文を読んでも ⚠確かめられず のまま', function() {
     var b = boardOf(NOTE, NAMES, KINDS).board;
     var st = NB.statusOf({ hits: NB.hitsOf(b, 'gpio_state'), dsl: '@startuml\nstate Uninit\n@enduml' });
     expect(st.key).toBe('todo');
@@ -200,7 +200,7 @@ describe('note-board — 一覧に出す形', function() {
     var map = NB.statusMap({ board: b, names: NAMES, dslByName: {} });
     var s = NB.summaryText({ board: b, names: NAMES, statusByName: map, hasNote: true });
     expect(s).toContain('対象外 3 枚');
-    expect(s).toContain('⚠未確認 2 枚');
+    expect(s).toContain('⚠確かめられず 2 枚');
   });
 
   test('宛先の書かれていない指摘は件数で断る', function() {

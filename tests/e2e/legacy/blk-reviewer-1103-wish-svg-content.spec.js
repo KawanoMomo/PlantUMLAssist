@@ -46,7 +46,12 @@ function render(page, dsl) {
 async function putRawSvg(page, name, dsl) {
   const svg = await render(page, dsl);
   expect(svg).not.toBeNull();
-  fs.writeFileSync(path.join(ABS, name + '.svg'), svg, 'utf-8');
+  // PlantUML が末尾に畳む元の DSL (`<?plantuml-src …?>`) も外す。畳まれた DSL があると
+  // 一覧はそれで持ち主と中身を言い切る (BLK-reviewer-20260914-0906) ので、描き直して
+  // 比べる対象 (印も畳まれた DSL も無い svg) にならない。
+  const bare = svg.replace(/<\?plantuml-src\s+[0-9A-Za-z_-]+\s*\?>/g, '');
+  expect(bare).not.toContain('plantuml-src');
+  fs.writeFileSync(path.join(ABS, name + '.svg'), bare, 'utf-8');
 }
 
 async function clearDir(page) {
@@ -55,9 +60,23 @@ async function clearDir(page) {
   }, DIR);
 }
 
+// 保存先の一覧は FILES の保存先の右クリック「保存先の一覧を開く」で中央の枠に開く
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。旧経路 (保存先の
+// 見出しを畳んで開き直す) は FILES の節を開くだけで、一覧の枠は見えないまま待ち続けた。
+// 開くたびに読み直すので、後から置いたファイルも出る。
 async function openFolder(page) {
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open .folder-item');
+  await require('../scenarios/_scenario').openFolder(page);
+  await page.waitForSelector('#folder-panel.open.is-list .folder-item');
+  // 開いた直後は FILES ツリーの読み直しが続けて一覧を 1 回描き直す。その間に押すと
+  // 描き直しで消えた古いボタンに当たることがあるので、描き直しが 400ms 止むまで待つ。
+  await page.evaluate(() => new Promise((resolve) => {
+    const el = document.getElementById('folder-panel');
+    let t = null;
+    const mo = new MutationObserver(() => { clearTimeout(t); t = setTimeout(done, 400); });
+    function done() { mo.disconnect(); resolve(); }
+    mo.observe(el, { childList: true });
+    t = setTimeout(done, 400);
+  }));
 }
 
 const NOW = '@startuml\nparticipant A\nparticipant B\nA -> B: go\nB -> A: done\n@enduml';
@@ -80,14 +99,15 @@ test.describe('BLK-reviewer-1103-wish: 上書きせずに SVG の中身を確か
     await expect(verify).toHaveText('SVG の中身を確かめる（2 枚）');
     await verify.click();
 
-    // 確かめ終わると、一致した図と食い違う図に分かれる
+    // 確かめ終わると、読める図と食い違う図に分かれる。置いた svg は畳まれた DSL を外してあり
+    // 描き直した svg とはその分だけバイトが違うので、今の姿の方は「体裁差のみ」(作り直し不要) になる。
     await expect(page.locator('#folder-svg-content'))
-      .toContainText('一致 1 枚 / ずれ 1 枚', { timeout: 120000 });
+      .toContainText('体裁差のみ 1 枚 / ずれ 1 枚', { timeout: 120000 });
     await expect(page.locator('#folder-svg-verify-note')).toContainText('比べました');
     await expect(page.locator('#folder-panel .folder-item[data-file-name="R1103w_b"] [data-svg-content="differ"]'))
       .toHaveCount(1);
     await expect(page.locator('#folder-panel .folder-item[data-file-name="R1103w_a"] [data-svg-content]'))
-      .toHaveCount(0);
+      .toHaveAttribute('data-svg-content', 'format');
     await expect(page.locator('#folder-svg-verify')).toHaveText('中身を確かめる SVG はありません');
   });
 

@@ -5,11 +5,13 @@ Serves static files + /render endpoint for PlantUML local/online rendering.
 import atexit
 import base64
 import binascii
+import calendar
 import collections
 import hashlib
 import json
 import os
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -29,8 +31,18 @@ FROZEN = bool(getattr(sys, 'frozen', False))
 ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
 
 
+# BLK-owner-20260926-0550-7: E2E が起こすサーバは PUA_DATA_ROOT に test-results/ の下を渡され、設定
+# (`.assist-prefs.json`) と既定の保存先をそこに置く。渡されないと、同じチェックアウトから起こした利用者の
+# アプリと設定を共有し、テストが利用者の保存先へ図を書いていた (data-loss)。
+SANDBOX_DATA_ROOT = os.environ.get('PUA_DATA_ROOT', '').strip()
+
+
 def _data_root():
     """設定と autosave を置く、再起動しても残る場所。"""
+    if SANDBOX_DATA_ROOT:
+        d = Path(SANDBOX_DATA_ROOT).expanduser().resolve()
+        d.mkdir(parents=True, exist_ok=True)
+        return d
     if not FROZEN:
         return Path(__file__).parent
     base = os.environ.get('APPDATA') or str(Path.home())
@@ -47,6 +59,11 @@ DATA_ROOT = _data_root()
 DEFAULT_JAR_PATH = ROOT / 'lib' / 'plantuml.jar'
 DAEMON_SRC = ROOT / 'lib' / 'PlantUMLDaemon.java'
 FETCH_SCRIPT = ROOT / 'lib' / 'fetch-plantuml.ps1'
+# BLK-human-20260925-1500: 取得する PlantUML の版は lib/PLANTUML_VERSION の 1 行だけが正本
+# (fetch-plantuml.ps1 / .sh もここを読む)。1.2026.3〜.6 は並行領域 (`--` / `||`) を持つ複合状態で
+# 最初の領域しか描かず、残りの領域が黙って消えるので、それより古い jar には取得し直しを促す。
+PLANTUML_VERSION_FILE = ROOT / 'lib' / 'PLANTUML_VERSION'
+JAR_MIN_SAFE_VERSION = '1.2026.7'
 # Java も同梱しない。無いときに案内する公式配布元。
 JAVA_DOWNLOAD_URL = 'https://adoptium.net/temurin/releases/'
 PORT = int(os.environ.get('PUA_PORT', '8766'))
@@ -71,6 +88,68 @@ AUTOSAVE_UNSAFE_CHARS = set('<>:"|?*/' + chr(92)) | {chr(c) for c in range(32)}
 AUTOSAVE_RESERVED = ({'con', 'prn', 'aux', 'nul'}
                      | {'com%d' % i for i in range(1, 10)}
                      | {'lpt%d' % i for i in range(1, 10)})
+
+
+# BLK-human-20260917-0901: 手元の .puml を開いて、元のファイルへ書き戻す。
+# 文字コード (UTF-8 BOM / UTF-8 / Shift_JIS) と改行は開いたときのまま保つ
+# (改行は呼ぶ側が戻した text をそのまま書く。ここでは translate しない)。
+OPEN_FILE_EXTS = ('.puml', '.plantuml', '.uml', '.txt')
+OPEN_FILE_TYPES = ('PlantUML (*.puml;*.plantuml;*.uml;*.txt)', 'All files (*.*)')
+
+
+def decode_source_bytes(blob):
+    """バイト列を (text, encoding, bom, eol) に読む。text の改行は LF に揃える。"""
+    bom = blob.startswith(b'\xef\xbb\xbf')
+    if bom:
+        raw, enc = blob[3:].decode('utf-8', 'replace'), 'utf-8'
+    else:
+        try:
+            raw, enc = blob.decode('utf-8'), 'utf-8'
+        except UnicodeDecodeError:
+            raw, enc = blob.decode('cp932', 'replace'), 'shift_jis'
+    crlf = raw.count('\r\n')
+    lf = raw.count('\n') - crlf
+    eol = 'crlf' if crlf and crlf >= lf else 'lf'
+    return raw.replace('\r\n', '\n'), enc, bom, eol
+
+
+def read_source_file(path):
+    p = Path(str(path))
+    if p.suffix.lower() not in OPEN_FILE_EXTS:
+        raise ValueError('開けるのは .puml / .plantuml / .uml / .txt です')
+    text, enc, bom, eol = decode_source_bytes(p.read_bytes())
+    return {'path': str(p), 'name': p.name, 'text': text, 'encoding': enc, 'bom': bom, 'eol': eol}
+
+
+def write_source_file(path, text, encoding, bom):
+    """(ok, path or error)。既にある .puml 類にだけ書く (新しい場所へ複製しない)。"""
+    if not isinstance(path, str) or not path.strip():
+        return False, 'path が必要です'
+    p = Path(path)
+    if p.suffix.lower() not in OPEN_FILE_EXTS:
+        return False, '書き戻せるのは .puml / .plantuml / .uml / .txt です'
+    if not p.is_file():
+        return False, f'元のファイルが見つかりません: {p}'
+    text = '' if text is None else str(text)
+    codec = 'cp932' if str(encoding or '').lower() in ('shift_jis', 'sjis', 'cp932') else 'utf-8'
+    try:
+        blob = text.encode(codec)
+    except UnicodeEncodeError as exc:
+        return False, f'Shift_JIS で書けない文字があります: {text[exc.start:exc.end]!r}'
+    if codec == 'utf-8' and bom:
+        blob = b'\xef\xbb\xbf' + blob
+    try:
+        p.write_bytes(blob)
+    except OSError as exc:
+        return False, f'書けません: {exc}'
+    return True, str(p)
+
+
+def _version_hash(text):
+    """版の中身の一致を見るための sha1 (改行コード・行末の空白・末尾の空行は無視)。"""
+    t = str(text or '').replace('\r\n', '\n').replace('\r', '\n')
+    t = '\n'.join(line.rstrip(' \t') for line in t.split('\n')).rstrip('\n')
+    return hashlib.sha1(t.encode('utf-8')).hexdigest()
 
 
 def _version_head(text):
@@ -121,13 +200,146 @@ KIND_SKIP_RE = re.compile(
     r"scale\b|autonumber\b|allow_mixing\b|left to right\b|top to bottom\b)", re.I)
 
 
+# BLK-migrator-20260929-1051: 本文からの図種の当て方は画面 (src/core/parser-utils.js の detectDiagramType) と
+# 同じにする。1 行目から順に「最初に図種の分かる行」で決めていたため、actor で始まるユースケース図を
+# シーケンス図、interface で始まるコンポーネント図をクラス図と読み、保存先の一覧に偽の「名乗りと本文が
+# 別の図」を出していた (BLK-owner-20260926-0550-4 と同じ根)。図全体の語の組み合わせで決める。
+# 片方だけ変えないこと (tests/blk-migrator-20260929-1051-kind-by-svg.test.js が両者の一致を見る)。
+_DK_START_RE = re.compile(r'^\s*@startuml\b')
+_DK_END_RE = re.compile(r'^\s*@enduml\b')
+
+
+def _dk_match(pat, s, flags=0):
+    # JS の正規表現と同じく、語の境目と語の文字は ASCII だけで数える (日本語の直後の as などで食い違わない)。
+    return re.match(pat, s, flags | re.A)
+
+
+def _dk_search(pat, s, flags=0):
+    return re.search(pat, s, flags | re.A)
+
+
+def detect_diagram_kind(text):
+    """detectDiagramType の写し。'sequence' / 'class' / 'state' / 'activity' / 'usecase' / 'component' / ''。"""
+    if not isinstance(text, str) or not text.strip():
+        return ''
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    f = dict(seq_only=False, participant=False, actor=False, uc_short=False, uc_kw=False, package=False,
+             class_kw=False, abstract_class=False, enum=False, class_only=False, class_rel=False,
+             state_kw=False, activity_kw=False, comp_kw=False, comp_elem=False, comp_bracket=False,
+             msg_arrow=False)
+    in_block = False
+    for line in text.split('\n'):
+        t = line.strip()
+        if not t or t.startswith("'"):
+            continue
+        if _DK_START_RE.match(t):
+            in_block = True
+            continue
+        if _DK_END_RE.match(t):
+            break
+        if not in_block:
+            continue
+        if _dk_match(r'^(participant|boundary|control|entity|database|queue|collections)\b', t):
+            f['seq_only'] = True
+        if _dk_match(r'^participant\b', t):
+            f['participant'] = True
+        if _dk_match(r'^actor\b', t):
+            f['actor'] = True
+        if _dk_match(r'^\(.+\)', t):
+            f['uc_short'] = True
+        if (_dk_search(r'(-+>|<-+|\.+>|<\.+|--|\.\.)\s*\([^()*][^()]*\)\s*(:.*)?$', t) or
+                _dk_search(r'\bas\s+\([^()]+\)\s*$', t) or
+                _dk_match(r'^:[^:;]+:\s*(-|\.|<|as\b|$)', t) or
+                _dk_match(r'^skinparam\s+actorStyle\b', t, re.I)):
+            f['uc_short'] = True
+        if _dk_match(r'^usecase\b', t):
+            f['uc_kw'] = True
+        if _dk_match(r'^(package|rectangle)\b.*\{', t):
+            f['package'] = True
+        if _dk_match(r'^(class|interface|abstract|enum)\b', t):
+            f['class_kw'] = True
+        if _dk_match(r'^abstract\s+class\s', t):
+            f['abstract_class'] = True
+        if _dk_match(r'^(class|abstract|enum)\b', t):
+            f['class_only'] = True
+        if _dk_match(r'^enum\s', t):
+            f['enum'] = True
+        if _dk_search(r'\s(<\|--|--\|>|<\|\.\.|\.\.\|>|\*--|--\*|o--|--o)\s', t):
+            f['class_rel'] = True
+        if _dk_match(r'^state\b|^\[\*\]', t):
+            f['state_kw'] = True
+        if _dk_match(r'^(start|stop)\b|^:.+;|^if\s+\(|^fork\b', t):
+            f['activity_kw'] = True
+        if _dk_match(r'^component\b', t):
+            f['comp_kw'] = True
+        if _dk_match(r'^(agent|node|artifact|cloud|folder|frame|storage|stack|card|file|hexagon|person)\b', t):
+            f['comp_elem'] = True
+        if _dk_match(r'^\[[^\]*][^\]]*\]', t):
+            f['comp_bracket'] = True
+        if _dk_search(r'\s(->|-->|->>|-->>|<-|<--|<<-|<<--)\s', t):
+            f['msg_arrow'] = True
+
+    has_activity_start = _dk_search(r'^\s*start\s*$', text, re.M)
+    has_action = _dk_search(r'^\s*:[^:]+;\s*$', text, re.M)
+    has_activity_kw2 = _dk_search(r'^\s*(endif|endwhile|end\s+fork|fork|while|repeat)\s*(\(|$)', text, re.M)
+    has_swimlane = _dk_search(r'^\s*\|[^|]+\|\s*$', text, re.M)
+    if (has_activity_start or has_action) and (has_activity_kw2 or has_action or has_activity_start or has_swimlane):
+        if not f['class_kw'] and not f['comp_kw']:
+            return 'activity'
+    has_legacy_activity = _dk_search(r'\(\*(top)?\)\s*-+>|-+>\s*\(\*\)|^\s*if\s+"[^"]*"\s+then', text, re.M)
+    if has_legacy_activity and not f['class_kw'] and not f['comp_kw'] and not f['seq_only']:
+        return 'activity'
+    has_state_explicit = _dk_search(r'^\s*state\s+\w', text, re.M)
+    has_initial = _dk_search(r'^\s*\[\*\]\s*-->', text, re.M)
+    has_final = _dk_search(r'-->\s*\[\*\]', text, re.M)
+    if (has_state_explicit or has_initial or has_final) and not f['class_kw'] and not f['comp_kw']:
+        return 'state'
+    if f['comp_kw']:
+        return 'component'
+    if f['comp_elem'] and not f['seq_only'] and not f['actor']:
+        return 'component'
+    if (f['comp_elem'] and not f['participant'] and not f['actor'] and not f['class_only']
+            and not f['class_rel']):
+        return 'component'
+    if (f['comp_bracket'] and f['class_kw'] and not f['class_only'] and not f['class_rel']
+            and not f['participant']):
+        return 'component'
+    if f['uc_kw'] and not f['class_only']:
+        return 'usecase'
+    if f['comp_bracket'] and f['comp_elem'] and not f['class_only'] and not f['class_rel']:
+        return 'component'
+    if f['abstract_class'] or f['enum'] or f['class_rel']:
+        return 'class'
+    if f['class_kw']:
+        return 'class'
+    if f['state_kw']:
+        return 'state'
+    if f['activity_kw']:
+        return 'activity'
+    if f['uc_kw'] or f['uc_short'] or (f['actor'] and f['package']):
+        return 'usecase'
+    if f['comp_bracket']:
+        return 'component'
+    if f['seq_only']:
+        return 'sequence'
+    if f['actor']:
+        return 'sequence' if f['msg_arrow'] else 'usecase'
+    if f['msg_arrow']:
+        return 'sequence'
+    return ''
+
+
 def dsl_kind(text):
     """DSL の本文から図種の slug を当てる。当てられなければ ''。
 
     当てられない図には手を出さない (分からないまま別名に回す方が危ない)。
+    図全体の語で決め (detect_diagram_kind)、それで決まらないときだけ最初に図種の分かる行で決める。
     """
     if not isinstance(text, str):
         return ''
+    kind = detect_diagram_kind(text)
+    if kind:
+        return kind
     for line in text.splitlines():
         s = line.strip()
         if not s or KIND_SKIP_RE.match(s):
@@ -136,6 +348,22 @@ def dsl_kind(text):
             if pat.match(s):
                 return slug
     return ''
+
+
+def is_skeleton_dsl(text):
+    """図として何も言っていない本文か (空・@start/@end・コメントだけ、または活動図の start / stop だけ)。
+
+    クライアントの blankDoc.isBlank と同じ線引き (BLK-owner-20260925-0312-2)。
+    """
+    if not isinstance(text, str):
+        return False
+    body = []
+    for line in text.splitlines():
+        s = line.strip()
+        if not s or s.startswith("'") or re.match(r'^@(start|end)', s, re.I):
+            continue
+        body.append(s)
+    return not body or body == ['start', 'stop']
 
 
 def kind_base_name(name):
@@ -156,6 +384,13 @@ if sys.platform == 'win32':
 # Browser client POSTs /heartbeat every ~5s; if the tab is closed the
 # pings stop and the watchdog terminates the server automatically.
 IDLE_SHUTDOWN_SEC = 300
+# BLK-human-20260924-0900: ハーネスや E2E が起こした server は、ブラウザを閉じても落とさない。
+# ページを閉じるたびに届く POST /shutdown で約 2 秒後に落ち、空いたポートを別の server が
+# 取って他人の作業木を測る事故が起きていた。ただし起こした側が片付けずに死ぬと残り続けるので、
+# 無音で落ちる安全弁は 3 時間に延ばして残す (ループが .running を残骸とみなす時間と同じ)。
+# Windows アプリ (app.py) は設定しないので今までどおり止まる。
+NO_IDLE_EXIT = os.environ.get('PUA_NO_IDLE_EXIT') == '1'
+NO_IDLE_EXIT_SEC = 3 * 60 * 60
 # BLK-reviewer-20260908-1203-wish: 食い違いの中身を言うために /verify-svg に添える材料の上限。
 # puml は数 KB、text 要素は 1 枚の図で数十〜数百なので、この上限に当たるのは
 # 図でない何かを掴んだときだけ。当たっても応答が肥らないようにするための蓋。
@@ -272,6 +507,8 @@ RENDER_API_DOC = {
         'fields': {
             'text': "必須。PlantUML の DSL 全文 (@startuml … @enduml)",
             'mode': "任意。'local' (既定、同梱 Java) または 'online' (plantuml.com へ送信)",
+            'dir': ("任意。その図の .puml のあるフォルダ。相対の !include / !includesub をここから探す"
+                    "(省略すると server の作業フォルダ)。本文は書き換えない。読めないときの 422 は探したフォルダを言う"),
             'withSvg': ("任意。true にすると、保存中の svg (印を外したもの) と描き直した svg の"
                         "本文そのものを savedSvg / drawnSvg として返す。可視差分プレビュー用。"
                         "応答が重いので types が 1 件のときだけ効く"),
@@ -424,6 +661,45 @@ def build_info():
     _BUILD_INFO = info
     return info
 
+
+# BLK-human-20260917-0900: 設定 → 情報 の「更新を確認」。押されたとき (または利用者が
+# 起動時確認を入れたとき) だけ GitHub Releases の latest を 1 回読む。図・DSL・ファイルは送らない。
+# 落とさない・実行しない。開けるのはこのリポジトリの GitHub の URL だけ。
+UPDATE_REPO_URL = 'https://github.com/KawanoMomo/PlantUMLAssist'
+UPDATE_LATEST_API = 'https://api.github.com/repos/KawanoMomo/PlantUMLAssist/releases/latest'
+
+
+def fetch_latest_release(opener=None):
+    """{current, release:{tag_name, html_url, assets:[{name, browser_download_url}]}} か {current, error}。"""
+    out = {'current': build_info()}
+    try:
+        req = urllib.request.Request(UPDATE_LATEST_API, headers={
+            'User-Agent': 'PlantUMLAssist-update-check',
+            'Accept': 'application/vnd.github+json',
+        })
+        with (opener or urllib.request.urlopen)(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+        out['release'] = {
+            'tag_name': str(data.get('tag_name') or ''),
+            'html_url': str(data.get('html_url') or ''),
+            'assets': [{'name': str(a.get('name') or ''),
+                        'browser_download_url': str(a.get('browser_download_url') or '')}
+                       for a in (data.get('assets') or []) if isinstance(a, dict)],
+        }
+    except urllib.error.HTTPError as e:
+        out['error'] = f'HTTP {e.code}'
+    except Exception as e:  # オフライン・プロキシ等。画面に理由を出す
+        out['error'] = str(getattr(e, 'reason', '') or e)[:120]
+    return out
+
+
+def open_repo_url(url):
+    """このリポジトリの GitHub URL だけを既定のブラウザで開く (アプリの窓を遷移させない)。"""
+    if not isinstance(url, str) or not url.startswith(UPDATE_REPO_URL + '/'):
+        return False
+    import webbrowser
+    return bool(webbrowser.open(url))
+
 # GET /api — 窓口の索引。docs/api.md と同じ並びで、1 行ずつ何をするかを言う。
 API_INDEX = {
     'name': 'PlantUMLAssist server API',
@@ -431,9 +707,14 @@ API_INDEX = {
     'endpoints': [
         {'endpoint': 'GET /api', 'summary': 'この索引'},
         {'endpoint': 'GET /version', 'summary': 'アプリの版・コミット・日付 (git tag が正本)'},
+        {'endpoint': 'GET /update-check', 'summary': 'GitHub Releases の最新版を 1 回読む (押したときだけ。落とさない)'},
+        {'endpoint': 'POST /open-url', 'summary': 'このリポジトリの GitHub の URL を既定のブラウザで開く',
+         'request': "{url}"},
         {'endpoint': 'GET /render', 'summary': 'POST /render の仕様'},
         {'endpoint': 'POST /render', 'summary': 'DSL を描いて SVG を返す',
          'request': "{text, mode}"},
+        {'endpoint': 'POST /preproc', 'summary': 'DSL を同梱の plantuml.jar のプリプロセッサだけに通し、展開後の行を返す (外へ送らない)',
+         'request': "{text}"},
         {'endpoint': 'GET /verify-svg', 'summary': 'POST /verify-svg の仕様'},
         {'endpoint': 'POST /verify-svg', 'summary': '保存中の svg が今の puml の結果かを中身で確かめる',
          'request': "{dir, types: [名前...], mode}"},
@@ -444,12 +725,24 @@ API_INDEX = {
          'request': '?dir=&type='},
         {'endpoint': 'POST /autosave-svg', 'summary': '書き出した svg を保存する (印を刻む)',
          'request': "{type, dir, svg}"},
+        {'endpoint': 'POST /autosave-image', 'summary': '資料化した画像 (png / svg) を保存フォルダに置き、書けた大きさを返す',
+         'request': "{name, dir, image: {ext, base64}}"},
         {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
         {'endpoint': 'GET /version-search', 'summary': '保存フォルダの全図の版から部品名を探す (混入点の材料)',
          'request': '?dir=&q='},
         {'endpoint': 'GET /version-diff', 'summary': '1 枚の図の「その版」と「直前の版」の本文を組で返す (全文差分の材料)',
          'request': '?dir=&type=[&stamp=]'},
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
+        {'endpoint': 'GET /git-status', 'summary': '保存先が Git 作業木ならブランチ・ahead/behind・変更 (M/A/D)。読むだけで通信しない',
+         'request': '?dir='},
+        {'endpoint': 'GET /git-log', 'summary': 'その図 (file 省略で保存先全体) に関係するコミット。新しい順',
+         'request': '?dir=&file='},
+        {'endpoint': 'GET /git-refs', 'summary': 'ブランチとタグの一覧', 'request': '?dir='},
+        {'endpoint': 'GET /git-show', 'summary': 'rev 時点の {file}.puml の本文 {text}', 'request': '?dir=&file=&rev='},
+        {'endpoint': 'POST /git-commit', 'summary': '保存先の変更を全部載せてコミットする', 'request': '{dir, message}'},
+        {'endpoint': 'POST /git-pull', 'summary': '取得 (pull --ff-only)。押したときだけ', 'request': '{dir}'},
+        {'endpoint': 'POST /git-push', 'summary': '送信 (push)。押したときだけ。認証は OS の git', 'request': '{dir}'},
+        {'endpoint': 'POST /git-checkout', 'summary': 'ブランチ切り替え', 'request': '{dir, branch}'},
         {'endpoint': 'GET /peek-notes', 'summary': '隣のフォルダに置かれた指摘 (.md) を読む',
          'request': '?dir='},
         {'endpoint': 'GET /name-registry', 'summary': '保存フォルダの親にある正式表記の登録簿 (3 人で共有)',
@@ -460,6 +753,10 @@ API_INDEX = {
          'request': '?dir='},
         {'endpoint': 'POST /cohort-ack', 'summary': '確認済みの組の台帳を置き換える',
          'request': "{dir, entries: [{key, domain, kind, left, right, fingerprint, note, by, at}]}"},
+        {'endpoint': 'GET /meeting-log', 'summary': '会議セットで並べた日時の控え (▤ 変更サマリボードの「変更前 = 前回の会議」)',
+         'request': '?dir='},
+        {'endpoint': 'POST /meeting-log', 'summary': '会議セットで並べた日時を 1 つ足す',
+         'request': '{dir, at}'},
         {'endpoint': 'GET /vault', 'summary': '保管庫の中身', 'request': '?dir='},
         {'endpoint': 'POST /vault', 'summary': '保管庫へ入れる'},
         {'endpoint': 'GET /tickets', 'summary': '変更チケットの一覧', 'request': '?dir='},
@@ -471,20 +768,26 @@ API_INDEX = {
          'request': "{dir, peer, kind, settled} | {dir, clear: true}"},
         {'endpoint': 'GET /rename-pairs', 'summary': 'そのフォルダで打たれた置換の組', 'request': '?dir='},
         {'endpoint': 'POST /rename-pairs', 'summary': '置換の組を 1 つ覚える',
-         'request': "{dir, from, to, hits}"},
+         'request': "{dir, from, to, hits, applied}"},
         {'endpoint': 'GET /doc-sets', 'summary': 'そのフォルダに登録した資料セット', 'request': '?dir='},
         {'endpoint': 'POST /doc-sets', 'summary': '資料セットを 1 つ登録する (同じ名前は置き換え)',
          'request': "{dir, name, docs, items}"},
         {'endpoint': 'DELETE /doc-sets', 'summary': '資料セットを 1 つ消す', 'request': '?dir=&name='},
         {'endpoint': 'POST /file-roles', 'summary': '保存フォルダの _roles.json を置き換える',
          'request': "{dir, roles}"},
+        {'endpoint': 'POST /export-zip', 'summary': '書き出した zip を保存フォルダに置き、書けたバイト数を返す',
+         'request': "{dir, name, base64}"},
         {'endpoint': 'POST /export-log', 'summary': '書き出しの控えを 1 件足す'},
+        {'endpoint': 'POST /file-op', 'summary': 'FILES ツリーの右クリック: 図の名前変更 / 複製 / 別フォルダへ移動 / 場所を開く'},
         {'endpoint': 'GET /prefs', 'summary': 'この機械に保存した設定'},
+        {'endpoint': 'GET /data-root', 'summary': '設定と既定の保存先の置き場所 {dataRoot, sandbox} (sandbox は PUA_DATA_ROOT で起こしたテスト用)'},
         {'endpoint': 'POST /prefs', 'summary': '設定を書く'},
         {'endpoint': 'POST /jar-path', 'summary': 'plantuml.jar の場所を設定する {path}'},
         {'endpoint': 'POST /pick-jar', 'summary': 'アプリ版: jar をファイルダイアログで選ぶ'},
         {'endpoint': 'POST /fetch-jar', 'summary': 'アプリ版/Windows: 公式から jar を取得する'},
         {'endpoint': 'POST /native-save', 'summary': 'アプリ版: 保存ダイアログで書き出す {fileName, text|base64}'},
+        {'endpoint': 'POST /native-open', 'summary': 'アプリ版: 開くダイアログ (複数選択) で .puml を読む → {files: [{path, name, text, encoding, bom, eol}]}'},
+        {'endpoint': 'POST /native-write', 'summary': '開いた元の .puml へ文字コードを保って書き戻す', 'request': '{path, text, encoding, bom}'},
         {'endpoint': 'GET /env', 'summary': 'Java / jar の有無など実行環境'},
         {'endpoint': 'POST /heartbeat', 'summary': '生存通知 (無音 300 秒で server は落ちる)'},
         {'endpoint': 'POST /shutdown', 'summary': '停止を予約する'},
@@ -494,8 +797,15 @@ API_INDEX = {
 # PlantUML のエラー画の目印。src/core/render-error.js の detect と同じ 3 条件。
 # 片方だけ変えないこと。
 _ERR_GREEN_MARK = b'fill="#33FF02"'
-_ERR_RED_TEXT_RE = re.compile(rb'<text[^>]*fill="#FF0000"[^>]*>(.*?)</text>', re.S | re.I)
-_ERR_LINE_RE = re.compile(rb'\[From string \(line (\d+)\)')
+# BLK-human-20260925-1500: 1.2026.7 からは色を短く書く (赤は #F00)。どちらの書き方でも拾う。
+_ERR_RED_TEXT_RE = re.compile(rb'<text[^>]*fill="#(?:FF0000|F00)"[^>]*>(.*?)</text>', re.S | re.I)
+_ERR_LINE_RE = re.compile(rb'\[From [^\]]*?\(line (\d+)\)')
+# BLK-migrator-20260926-1608 / BLK-owner-20260925-1932-1: 赤字の文言 (Illegal sequence arrow / No such color など)
+# に error の語が無くてもエラー画。文言ではなく `[From …]` の出所の行か波線の付いた行があることで見分ける。
+_ERR_WHERE_RE = re.compile(rb'\[From [^\]]*\]|text-decoration="wavy underline"')
+_ERR_VERSION_RE = re.compile(rb'<text[^>]*>\s*PlantUML (?:version )?([0-9][0-9A-Za-z.\-]*)')
+_ERR_SOURCE_RE = re.compile(rb'<text[^>]*text-decoration="wavy underline"[^>]*>(.*?)</text>', re.S)
+_ERR_ASSUMED_RE = re.compile(r'Assumed diagram type:\s*([A-Za-z_]+)')
 _ENTITIES = {'&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'", '&amp;': '&', '&#160;': ' '}
 
 
@@ -507,18 +817,119 @@ def _decode_entities(raw):
     return text.strip()
 
 
+# BLK-migrator-20260924-1432: PlantUML が描いている途中で落ちた (例外) ときの絵。
+# 文法エラーの配色を使わず白地に黒文字で「An error has occured : <例外>」と
+# (1.2026.3 からは綴りが occurred。どちらの綴りでも見分ける。BLK-builder-20260925-1052-4)
+# 「PlantUML (版) has crashed.」を書く。src/core/render-error.js の detectCrash と同じ 2 条件。
+_CRASH_HEAD_RE = re.compile(rb'<text[^>]*>\s*An error has occurr?ed\s*:?\s*(.*?)</text>', re.S | re.I)
+_CRASH_MARK_RE = re.compile(rb'<text[^>]*>\s*PlantUML \(([^)<]*)\) has crashed\.?\s*</text>', re.I)
+
+
+def detect_render_crash(svg):
+    """PlantUML が描画の途中で落ちた絵なら {'message', 'line': None, 'crashed': True}。"""
+    if not svg:
+        return None
+    h = _CRASH_HEAD_RE.search(svg)
+    if not h:
+        return None
+    c = _CRASH_MARK_RE.search(svg)
+    if not c:
+        return None
+    cause = _decode_entities(h.group(1))
+    version = c.group(1).decode('utf-8', 'replace')
+    message = 'PlantUML %s が描画の途中で落ちました' % version + (' (%s)' % cause if cause else '')
+    return {'message': message, 'line': None, 'crashed': True}
+
+
+# BLK-migrator-20260925-1332: smetana の state 図で、複合状態の最初の並行領域が空 (`state X {` の直後に
+# `--` / `||`) だと PlantUML 1.2026.3 自身が落ちる。落ちた絵には行が無いので本文から区切りの行を探す。
+# src/core/render-error.js の emptyFirstRegions と同じ規則。片方だけ変えないこと。
+_STATE_OPEN_RE = re.compile(r'^state\s+(?:"([^"]*)"\s+as\s+([^\s{<#]+)|([^\s{<#]+))[^{]*\{\s*$')
+
+
+def empty_first_regions(text):
+    """[{'line', 'sep', 'open_line', 'name'}] — 最初の並行領域が空の複合状態の、その区切りの行。"""
+    out = []
+    stack = []
+    in_comment = False
+    for i, raw in enumerate(str(text or '').split('\n')):
+        t = raw.rstrip('\r').strip()
+        if in_comment:
+            if "'/" in t:
+                in_comment = False
+            continue
+        if t.startswith("/'"):
+            if t.find("'/", 2) < 0:
+                in_comment = True
+            continue
+        if not t or t.startswith("'"):
+            continue
+        top = stack[-1] if stack else None
+        if t in ('--', '||'):
+            if top and top['state'] and not top['sep_seen']:
+                top['sep_seen'] = True
+                if top['empty']:
+                    out.append({'line': i + 1, 'sep': t, 'open_line': top['open_line'], 'name': top['name']})
+            continue
+        if t.startswith('}'):
+            if stack:
+                stack.pop()
+            continue
+        if top:
+            top['empty'] = False
+        m = _STATE_OPEN_RE.match(t)
+        if m:
+            stack.append({'state': True, 'open_line': i + 1, 'name': m.group(1) or m.group(2) or m.group(3),
+                          'empty': True, 'sep_seen': False})
+        elif re.search(r'\{\s*$', t):
+            stack.append({'state': False, 'empty': False, 'sep_seen': True})
+    return out
+
+
+def crash_cause(err, text):
+    """落ちた絵の帯に添える 1 文 (「N 行目 `--` の前の並行領域が空です」) と行。無ければ ('', None)。"""
+    if not err or not err.get('crashed'):
+        return '', None
+    r = empty_first_regions(text)
+    if not r:
+        return '', None
+    return '%d 行目 `%s` の前の並行領域が空です' % (r[0]['line'], r[0]['sep']), r[0]['line']
+
+
 def detect_render_error(svg):
     """PlantUML の「エラー画」なら {'message', 'line'}。図なら None。"""
     if not svg or _ERR_GREEN_MARK not in svg:
-        return None
+        return detect_render_crash(svg)
     m = _ERR_RED_TEXT_RE.search(svg)
     if not m:
         return None
-    message = _decode_entities(m.group(1))
-    if 'error' not in message.lower():
+    if not _ERR_WHERE_RE.search(svg):
         return None
+    message = _decode_entities(m.group(1))
     lm = _ERR_LINE_RE.search(svg)
-    return {'message': message, 'line': int(lm.group(1)) if lm else None}
+    info = {'message': message, 'line': int(lm.group(1)) if lm else None}
+    # BLK-migrator-20260925-0752: エラー画には版・波線の付いた行・PlantUML が推測した図種が書いてある。
+    # 帯で「PlantUML {版} がこの行を読めません」と PlantUML 側の限界であることを言うのに使う。
+    vm = _ERR_VERSION_RE.search(svg)
+    if vm:
+        info['version'] = vm.group(1).decode('ascii', 'replace')
+    sm = _ERR_SOURCE_RE.search(svg)
+    if sm:
+        info['source'] = _decode_entities(sm.group(1))
+    am = _ERR_ASSUMED_RE.search(message)
+    if am:
+        info['assumed'] = am.group(1).lower()
+    return info
+
+
+def describe_render_error(err):
+    """帯と 422 の error に出す 1 行。src/core/render-error.js の describe と同じ文面。"""
+    head = ('%d 行目: ' % err['line']) if err.get('line') else ''
+    if err.get('crashed') or not err.get('version'):
+        return head + err['message']
+    where = ('%d 行目' % err['line']) if err.get('line') else 'この行'
+    src = (' `%s`' % err['source']) if err.get('source') else ''
+    return 'PlantUML %s がこの行を読めません: %s%s (%s)' % (err['version'], where, src, err['message'])
 
 
 def resolve_render_request(data):
@@ -630,6 +1041,37 @@ def normalize_dsl(text):
     return '\n'.join(out)
 
 
+def _eol_newline(eol):
+    """開いたファイルの改行 ('lf' / 'crlf') を open() の newline に直す。
+
+    分からないものは None (これまでどおり platform の既定) にする。開いた元が
+    無い図の保存の仕方までは変えない (BLK-migrator-20260918-0349)。
+    """
+    s = str(eol or '').strip().lower()
+    if s == 'lf':
+        return '\n'
+    if s == 'crlf':
+        return '\r\n'
+    return None
+
+
+def _file_eol(path):
+    """既にあるファイルの改行 ('lf' / 'crlf')。無い・読めない・改行を含まないなら None。
+
+    保存先の一覧から開いた図は client が開いたときの改行を知らない
+    (BLK-human-20260925-1250)。上書きする相手の改行をそのまま引き継ぐ。
+    """
+    try:
+        blob = Path(str(path)).read_bytes()
+    except OSError:
+        return None
+    crlf = blob.count(b'\r\n')
+    lf = blob.count(b'\n') - crlf
+    if not crlf and not lf:
+        return None
+    return 'crlf' if crlf and crlf >= lf else 'lf'
+
+
 def _atomic_write_text(path, text, encoding='utf-8', newline=None):
     """`path` を、読んでいる側に途中経過を見せずに置き換える。"""
     tmp = path.with_name(path.name + '.tmp-' + str(os.getpid()) + '-' + str(threading.get_ident()))
@@ -660,6 +1102,318 @@ def _atomic_write_text(path, text, encoding='utf-8', newline=None):
         tmp.unlink()
     except OSError:
         pass
+
+
+def _atomic_write_bytes(path, data):
+    """`path` をバイト列で置き換える。zip は 1 バイトでも欠けると開けないので
+    書き途中を見せない (BLK-primary-20260918-0249)。"""
+    tmp = path.with_name(path.name + '.tmp-' + str(os.getpid()) + '-' + str(threading.get_ident()))
+    try:
+        with open(tmp, 'wb') as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        deadline = time.monotonic() + REPLACE_RETRY_SECONDS
+        while True:
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if time.monotonic() >= deadline:
+                    break
+                time.sleep(REPLACE_RETRY_INTERVAL)
+        with open(path, 'wb') as f:
+            f.write(data)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+    try:
+        tmp.unlink()
+    except OSError:
+        pass
+
+
+# ── Git (BLK-human-20260923-1702, design 10c) ─────────────────────────────
+# 保存先が Git 作業木のときだけ、FILES ツリーの下端に GIT 欄を出す。
+# ここは OS の `git` を呼ぶだけで、資格情報は持たない (認証は git 側の設定に任せる)。
+# 取得 (pull)・送信 (push)・ブランチ切替は、画面で人が押したときの POST だけが動かす
+# (GET は読むだけで、通信するコマンドを 1 つも呼ばない)。マージと衝突の解消は扱わない。
+GIT_TIMEOUT_SEC = 20
+GIT_NET_TIMEOUT_SEC = 120
+GIT_LOG_MAX = 200
+_GIT_EXE = None
+
+
+def git_exe():
+    """PATH 上の git。無ければ '' (GIT 欄を出さない)。"""
+    global _GIT_EXE
+    if _GIT_EXE is None:
+        import shutil
+        _GIT_EXE = shutil.which('git') or ''
+    return _GIT_EXE
+
+
+def run_git(cwd, args, timeout=GIT_TIMEOUT_SEC):
+    """`git -C cwd args...` を実行し (returncode, stdout, stderr) を返す。git が無ければ None。"""
+    exe = git_exe()
+    if not exe:
+        return None
+    env = dict(os.environ)
+    env['GIT_TERMINAL_PROMPT'] = '0'   # 資格情報を端末で訊かない (画面が固まる)
+    env['LC_ALL'] = 'C'
+    try:
+        r = subprocess.run([exe, '-C', str(cwd), '-c', 'core.quotepath=false'] + list(args),
+                           capture_output=True, timeout=timeout, env=env, **_SUBPROCESS_KWARGS)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return (1, '', str(e))
+
+    def dec(b):
+        return (b or b'').decode('utf-8', 'replace')
+    return (r.returncode, dec(r.stdout), dec(r.stderr))
+
+
+def git_toplevel(save_dir):
+    """save_dir を含む作業木の根。作業木でなければ None。"""
+    try:
+        if not Path(save_dir).is_dir():
+            return None
+    except OSError:
+        return None
+    r = run_git(save_dir, ['rev-parse', '--show-toplevel'])
+    if not r or r[0] != 0:
+        return None
+    top = r[1].strip()
+    if not top:
+        return None
+    # 作業木の中でも .gitignore で外したフォルダ (例: 成果物リポジトリの test-results/) は
+    # Git で管理していないので、GIT 欄を出さない。
+    rel = _git_rel(top, save_dir)
+    if rel:
+        ci = run_git(top, ['check-ignore', '-q', '--', rel + '/'])
+        if ci and ci[0] == 0:
+            return None
+    return Path(top)
+
+
+def parse_git_branch_line(line):
+    """`## main...origin/main [ahead 1, behind 2]` を {branch, upstream, ahead, behind} に。"""
+    out = {'branch': '', 'upstream': '', 'ahead': 0, 'behind': 0}
+    s = line[3:] if line.startswith('## ') else line
+    m = re.search(r'\[(.*)\]\s*$', s)
+    if m:
+        for part in m.group(1).split(','):
+            mm = re.match(r'(ahead|behind)\s+(\d+)', part.strip())
+            if mm:
+                out[mm.group(1)] = int(mm.group(2))
+        s = s[:m.start()].strip()
+    for head in ('No commits yet on ', 'Initial commit on '):
+        if s.startswith(head):
+            s = s[len(head):]
+    if '...' in s:
+        b, up = s.split('...', 1)
+        out['branch'], out['upstream'] = b.strip(), up.strip()
+    else:
+        out['branch'] = s.strip()
+    return out
+
+
+def parse_git_porcelain(text):
+    """`git status --porcelain=v1 -b` を読む。M / A / D の 1 文字に畳む (未追跡は A)。"""
+    info = {'branch': '', 'upstream': '', 'ahead': 0, 'behind': 0, 'changes': []}
+    for line in text.splitlines():
+        if not line:
+            continue
+        if line.startswith('## '):
+            info.update(parse_git_branch_line(line))
+            continue
+        xy, path = line[:2], line[3:]
+        if ' -> ' in path:
+            path = path.split(' -> ', 1)[1]
+        path = path.strip().strip('"')
+        if xy == '??':
+            code = 'A'
+        elif 'D' in xy:
+            code = 'D'
+        elif 'A' in xy:
+            code = 'A'
+        else:
+            code = 'M'
+        info['changes'].append({'code': code, 'path': path})
+    return info
+
+
+def _git_rel(top, save_dir, name=''):
+    """作業木の根から見た save_dir (と name.puml) の相対パス。区切りは /。"""
+    rel = os.path.relpath(os.path.realpath(str(save_dir)), os.path.realpath(str(top)))
+    rel = '' if rel == '.' else rel.replace('\\', '/')
+    if name:
+        fn = name + '.puml'
+        return (rel + '/' + fn) if rel else fn
+    return rel
+
+
+def git_status(save_dir):
+    """保存先の Git の様子。作業木でなければ {'repo': False}。"""
+    if not git_exe():
+        return {'available': False, 'repo': False}
+    top = git_toplevel(save_dir)
+    if not top:
+        return {'available': True, 'repo': False}
+    r = run_git(save_dir, ['status', '--porcelain=v1', '-b', '--untracked-files=all', '--', '.'])
+    if not r or r[0] != 0:
+        return {'available': True, 'repo': False, 'error': (r[2] if r else '').strip()}
+    info = parse_git_porcelain(r[1])
+    rel = _git_rel(top, save_dir)
+    for c in info['changes']:
+        p = c['path']
+        local = p[len(rel) + 1:] if rel and p.startswith(rel + '/') else p
+        c['file'] = local
+        c['name'] = local[:-5] if local.lower().endswith('.puml') and '/' not in local else ''
+    info['available'] = True
+    info['repo'] = True
+    info['root'] = str(top)
+    info['modified'] = len(info['changes'])
+    return info
+
+
+_GIT_LOG_FMT = '%x1e%H%x1f%h%x1f%an%x1f%aI%x1f%s%x1f%D'
+
+
+def parse_git_log(text):
+    """_GIT_LOG_FMT + --numstat の出力を commit の列にする。"""
+    out = []
+    for rec in text.split('\x1e'):
+        rec = rec.strip('\n')
+        if not rec.strip():
+            continue
+        lines = rec.split('\n')
+        f = lines[0].split('\x1f')
+        if len(f) < 6:
+            continue
+        refs = [x.strip() for x in f[5].split(',') if x.strip()]
+        tags = [x[len('tag: '):] for x in refs if x.startswith('tag: ')]
+        added = removed = 0
+        files = creates = 0
+        for ln in lines[1:]:
+            parts = ln.split('\t')
+            if len(parts) >= 3:
+                files += 1
+                try:
+                    added += int(parts[0])
+                    removed += int(parts[1])
+                except ValueError:
+                    pass
+            elif ln.startswith(' create mode '):
+                # --summary の行。このコミットで生まれたファイル (BLK-builder-20260924-2246-1)。
+                creates += 1
+        out.append({'hash': f[0], 'short': f[1], 'author': f[2], 'date': f[3],
+                    'message': f[4], 'tags': tags,
+                    'head': any(x == 'HEAD' or x.startswith('HEAD -> ') for x in refs),
+                    'added': added, 'removed': removed,
+                    # 触ったファイルが全部このコミットで生まれた (図を作ったコミット。design 10c の「初版 +12」)。
+                    'created': files > 0 and creates >= files})
+    return out
+
+
+def git_log(save_dir, name=''):
+    """この図に関係するコミット (name が空なら保存先全体)。新しい順。"""
+    top = git_toplevel(save_dir)
+    if not top:
+        return {'repo': False, 'commits': []}
+    path = _git_rel(top, save_dir, name) if name else (_git_rel(top, save_dir) or '.')
+    args = ['log', '-n', str(GIT_LOG_MAX), '--format=' + _GIT_LOG_FMT, '--numstat', '--summary']
+    if name:
+        args.append('--follow')
+    r = run_git(top, args + ['--', path])
+    if not r or r[0] != 0:
+        # コミットが 1 つも無い作業木は log が失敗する。空の履歴として返す。
+        return {'repo': True, 'commits': []}
+    return {'repo': True, 'commits': parse_git_log(r[1])}
+
+
+def git_refs(save_dir):
+    top = git_toplevel(save_dir)
+    if not top:
+        return {'repo': False, 'current': '', 'branches': [], 'tags': []}
+    b = run_git(top, ['for-each-ref', '--format=%(refname:short)%09%(objectname:short)%09%(HEAD)',
+                      'refs/heads'])
+    t = run_git(top, ['for-each-ref', '--sort=-creatordate',
+                      '--format=%(refname:short)%09%(objectname:short)', 'refs/tags'])
+    branches, tags, current = [], [], ''
+    for ln in (b[1] if b and b[0] == 0 else '').splitlines():
+        f = ln.split('\t')
+        if len(f) >= 3:
+            on = f[2].strip() == '*'
+            branches.append({'name': f[0], 'short': f[1], 'current': on})
+            if on:
+                current = f[0]
+    for ln in (t[1] if t and t[0] == 0 else '').splitlines():
+        f = ln.split('\t')
+        if len(f) >= 2:
+            tags.append({'name': f[0], 'short': f[1]})
+    return {'repo': True, 'current': current, 'branches': branches, 'tags': tags}
+
+
+_GIT_REV_RE = re.compile(r'^[0-9A-Za-z._/\-~^]{1,200}$')
+
+
+def git_rev_ok(rev):
+    return bool(rev) and bool(_GIT_REV_RE.match(rev)) and not rev.startswith('-')
+
+
+def git_show(save_dir, rev, name):
+    """rev 時点の {name}.puml の本文。無ければ None。"""
+    if not git_rev_ok(rev):
+        return None
+    top = git_toplevel(save_dir)
+    if not top:
+        return None
+    r = run_git(top, ['show', rev + ':' + _git_rel(top, save_dir, name)])
+    if not r or r[0] != 0:
+        return None
+    return r[1]
+
+
+def git_commit(save_dir, message):
+    """保存先の変更を全部載せてコミットする。戻り値 (ok, dict)。"""
+    msg = (message or '').strip()
+    if not msg:
+        return False, {'error': 'コミットメッセージを書いてください'}
+    top = git_toplevel(save_dir)
+    if not top:
+        return False, {'error': '保存先は Git の作業木ではありません'}
+    a = run_git(save_dir, ['add', '-A', '--', '.'])
+    if not a or a[0] != 0:
+        return False, {'error': (a[2] if a else 'git がありません').strip()}
+    c = run_git(save_dir, ['commit', '-m', msg, '--', '.'])
+    if not c or c[0] != 0:
+        return False, {'error': ((c[2] or c[1]) if c else 'git がありません').strip()}
+    h = run_git(top, ['rev-parse', '--short', 'HEAD'])
+    return True, {'ok': True, 'short': (h[1].strip() if h and h[0] == 0 else '')}
+
+
+def git_net(save_dir, op, branch=''):
+    """pull / push / checkout。人が押したときだけ呼ばれる。"""
+    top = git_toplevel(save_dir)
+    if not top:
+        return False, {'error': '保存先は Git の作業木ではありません'}
+    if op == 'pull':
+        r = run_git(top, ['pull', '--ff-only'], timeout=GIT_NET_TIMEOUT_SEC)
+    elif op == 'push':
+        r = run_git(top, ['push'], timeout=GIT_NET_TIMEOUT_SEC)
+    elif op == 'checkout':
+        if not git_rev_ok(branch):
+            return False, {'error': 'ブランチ名が読めません'}
+        r = run_git(top, ['checkout', branch])
+    else:
+        return False, {'error': 'unknown op'}
+    if not r or r[0] != 0:
+        return False, {'error': ((r[2] or r[1]) if r else 'git がありません').strip()}
+    return True, {'ok': True, 'output': (r[1] + r[2]).strip()}
+
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -697,14 +1451,22 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/cohort-ack':
             with _fs_lock:
                 return self._handle_cohort_ack_get()
+        if self.path.split('?')[0] == '/meeting-log':
+            with _fs_lock:
+                return self._handle_meeting_log_get()
         if self.path.split('?')[0] == '/peek-dirs':
             with _fs_lock:
                 return self._handle_peek_dirs()
         if self.path.split('?')[0] == '/peek-notes':
             with _fs_lock:
                 return self._handle_peek_notes()
+        # BLK-human-20260923-1702 (design 10c): 保存先の Git を読む口。読むだけで通信しない。
+        if self.path.split('?')[0] in ('/git-status', '/git-log', '/git-refs', '/git-show'):
+            return self._handle_git_get()
         if self.path.split('?')[0] == '/version':
             return self._send_json(200, build_info())
+        if self.path.split('?')[0] == '/update-check':
+            return self._send_json(200, fetch_latest_release())
         if self.path.split('?')[0] == '/render':
             return self._send_json(200, RENDER_API_DOC)
         if self.path.split('?')[0] == '/verify-svg':
@@ -714,6 +1476,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/prefs':
             with _fs_lock:
                 return self._send_json(200, read_prefs())
+        if self.path.split('?')[0] == '/data-root':
+            return self._send_json(200, {'dataRoot': str(DATA_ROOT), 'sandbox': bool(SANDBOX_DATA_ROOT)})
         if self.path.split('?')[0] == '/env':
             return self._send_json(200, detect_env())
         path = self.path.split('?')[0]
@@ -748,6 +1512,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/autosave-svg':
             with _fs_lock:
                 return self._handle_autosave_svg_post()
+        if self.path == '/autosave-image':
+            with _fs_lock:
+                return self._handle_autosave_image_post()
         if self.path == '/vault':
             with _fs_lock:
                 return self._handle_vault_post()
@@ -769,15 +1536,26 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/cohort-ack':
             with _fs_lock:
                 return self._handle_cohort_ack_post()
+        if self.path == '/meeting-log':
+            with _fs_lock:
+                return self._handle_meeting_log_post()
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
+        if self.path == '/export-zip':
+            with _fs_lock:
+                return self._handle_export_zip_post()
         if self.path == '/export-log':
             with _fs_lock:
                 return self._handle_export_log_post()
         if self.path == '/verify-svg':
             with _fs_lock:
                 return self._handle_verify_svg_post()
+        # BLK-human-20260923-1701 (design 10b): FILES ツリーの右クリック・ドラッグから
+        # ファイル単位の操作 (名前変更 / 複製 / 別フォルダへ移動 / 場所を開く) を受ける口。
+        if self.path == '/file-op':
+            with _fs_lock:
+                return self._handle_file_op_post()
         if self.path == '/prefs':
             with _fs_lock:
                 return self._handle_prefs_post()
@@ -790,9 +1568,27 @@ class Handler(BaseHTTPRequestHandler):
                 return self._handle_pick_jar_post()
         if self.path == '/fetch-jar':
             return self._handle_fetch_jar_post()
+        if self.path == '/open-url':
+            data = self._read_json_object()
+            if data is None:
+                return
+            if not open_repo_url(data.get('url')):
+                return self._send_json(400, {'error': 'このリポジトリの GitHub の URL だけ開けます'})
+            return self._send_json(200, {'ok': True})
         # アプリ版の保存はブラウザのダウンロードではなくネイティブのダイアログ。
         if self.path == '/native-save':
             return self._handle_native_save_post()
+        # BLK-human-20260917-0901: 手元の .puml を開く (アプリ版はネイティブの複数選択)
+        # と、開いた元のファイルへ文字コード・改行を保ったまま書き戻す。
+        if self.path == '/native-open':
+            return self._handle_native_open_post()
+        if self.path == '/native-write':
+            with _fs_lock:
+                return self._handle_native_write_post()
+        # BLK-human-20260923-1702 (design 10c): コミット・取得・送信・ブランチ切替。
+        # どれも画面で人が押したときだけ届く (自動では呼ばない)。
+        if self.path in ('/git-commit', '/git-pull', '/git-push', '/git-checkout'):
+            return self._handle_git_post()
         if self.path == '/heartbeat':
             with _state_lock:
                 _last_heartbeat = time.time()
@@ -800,6 +1596,10 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         if self.path == '/shutdown':
+            if NO_IDLE_EXIT:
+                self.send_response(204)
+                self.end_headers()
+                return
             # Don't kill immediately — F5 reload also fires pagehide/beforeunload.
             # Instead fast-forward the idle timer so the watchdog fires in ~2s,
             # which a fresh heartbeat from the new page will cancel.
@@ -808,6 +1608,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(204)
             self.end_headers()
             return
+        # BLK-migrator-20260929-1351: 当てる前の本文を PlantUML 自身のプリプロセッサで展開する口。
+        if self.path == '/preproc':
+            return self._handle_preproc_post()
         if self.path != '/render':
             self.send_error(404)
             return
@@ -825,8 +1628,10 @@ class Handler(BaseHTTPRequestHandler):
         if problem:
             self._send_json(400, {'error': problem, 'api': RENDER_API_DOC})
             return
+        # BLK-primary-20260929-1108: dir はその図の .puml のあるフォルダ。相対の !include をそこから探す。
+        base_dir = render_base_dir(data.get('dir'))
         if mode == 'local':
-            svg, error = render_local(text)
+            svg, error = render_local(text, base_dir)
         else:
             svg, error = render_online(text)
         if error:
@@ -837,8 +1642,22 @@ class Handler(BaseHTTPRequestHandler):
             # 元から !resp.ok を描画エラー扱いにしているので見え方は変わらない。
             err = detect_render_error(svg)
             if err:
-                msg = ('%d 行目: %s' % (err['line'], err['message'])) if err['line'] else err['message']
-                payload = {'error': msg, 'line': err['line'], 'kind': 'plantuml-syntax'}
+                msg = describe_render_error(err)
+                cause, cause_line = crash_cause(err, text)
+                if cause:
+                    msg += '。' + cause
+                searched = include_search_note(err.get('message'), base_dir if mode == 'local' else None)
+                if searched:
+                    msg += '。' + searched
+                payload = {'error': msg, 'line': err['line'],
+                           'kind': 'plantuml-crash' if err.get('crashed') else 'plantuml-syntax'}
+                if cause_line:
+                    payload['causeLine'] = cause_line
+                for key in ('version', 'source', 'assumed', 'message'):
+                    if err.get(key):
+                        payload[key] = err[key]
+                if searched:
+                    payload['includeDir'] = searched.split(': ', 1)[1]
                 if warning:
                     payload['warning'] = warning
                 self._send_json(422, payload)
@@ -877,6 +1696,18 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {'error': 'body must be an object'})
             return None
         return data
+
+    def _handle_preproc_post(self):
+        data = self._read_json_object()
+        if data is None:
+            return
+        text = data.get('text')
+        if not isinstance(text, str) or not text.strip():
+            return self._send_json(400, {'error': 'text (DSL 全文) が要ります'})
+        lines, error = preproc_local(text, render_base_dir(data.get('dir')))
+        if error:
+            return self._send_json(200, {'ok': False, 'error': error})
+        self._send_json(200, {'ok': True, 'lines': lines})
 
     def _handle_jar_path_post(self):
         data = self._read_json_object()
@@ -954,6 +1785,39 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(500, {'error': f'保存できません: {exc}'})
         self._send_json(200, {'path': str(target)})
 
+    # --- open local .puml (BLK-human-20260917-0901) -------------------------
+
+    def _handle_native_open_post(self):
+        """アプリ版: 開くダイアログ (複数選択) で選んだ .puml を読んで返す。Web 版は 409。"""
+        if NATIVE_DIALOG is None:
+            return self._send_json(409, {'error': 'ファイルダイアログはアプリ版だけで使えます'})
+        picker = getattr(NATIVE_DIALOG, 'open_files', None)
+        if picker is None:
+            one = NATIVE_DIALOG.open_file('.puml を開く', OPEN_FILE_TYPES)
+            picked = [one] if one else []
+        else:
+            picked = picker('.puml を開く', OPEN_FILE_TYPES)
+        if not picked:
+            return self._send_json(200, {'canceled': True, 'files': []})
+        files = []
+        for path in picked:
+            try:
+                files.append(read_source_file(path))
+            except (OSError, ValueError) as exc:
+                files.append({'path': str(path), 'name': Path(path).name, 'error': str(exc)})
+        self._send_json(200, {'files': files})
+
+    def _handle_native_write_post(self):
+        """開いた元のファイルへ書き戻す。{path, text, encoding, bom}。"""
+        data = self._read_json_object()
+        if data is None:
+            return
+        ok, result = write_source_file(data.get('path'), data.get('text'),
+                                       data.get('encoding'), data.get('bom'))
+        if not ok:
+            return self._send_json(400, {'error': result})
+        self._send_json(200, {'path': result})
+
     def _json_charset(self):
         """応答本文の文字コードを呼ぶ側の希望から決める (BLK-reviewer-20260914-1606)。
 
@@ -1005,6 +1869,39 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, write_prefs(data))
 
     # --- autosave helpers ----------------------------------------------------
+
+    def _handle_git_get(self):
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        name = params.get('file', '')
+        if name and not self._autosave_validate_type(name):
+            return self._send_json(400, {'error': 'invalid file'})
+        route = parsed.path
+        if route == '/git-status':
+            return self._send_json(200, git_status(save_dir))
+        if route == '/git-log':
+            return self._send_json(200, git_log(save_dir, name))
+        if route == '/git-refs':
+            return self._send_json(200, git_refs(save_dir))
+        if not name:
+            return self._send_json(400, {'error': 'file が要ります'})
+        text = git_show(save_dir, params.get('rev', ''), name)
+        if text is None:
+            return self._send_json(404, {'error': 'そのコミットにこの図はありません'})
+        return self._send_json(200, {'text': text})
+
+    def _handle_git_post(self):
+        data = self._read_json_object()
+        if data is None:
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        if self.path == '/git-commit':
+            with _fs_lock:
+                ok, res = git_commit(save_dir, data.get('message', ''))
+        else:
+            ok, res = git_net(save_dir, self.path[len('/git-'):], data.get('branch', ''))
+        return self._send_json(200 if ok else 409, res)
 
     def _autosave_resolve_dir(self, raw):
         """Resolve an autosave dir argument to an absolute Path. Empty/None → default."""
@@ -1372,6 +2269,90 @@ class Handler(BaseHTTPRequestHandler):
             return
         entry['prevStamp'] = stamps[0]
 
+    # BLK-owner-20260929-1111-1: 1 字ごとの自動保存が 20 回続くと、上書き前の中身 (他で書かれた・
+    # 前から置いてあった図) の版が「古い方から捨てる」で真っ先に消え、戻せない上書きになっていた。
+    # 版は 2 種類ある: 打ちかけの途中 (直前にこの server が自動保存で書いた中身) と、
+    # それ以外 (保存先に元からあった・外で書かれた中身 = 元の版)。元の版は版ファイルの mtime を
+    # 元の図の mtime (刻印より 2 秒以上前) にして印にし、上限で捨てるときも最新の 1 つは残す。
+    _OWN_WRITES = {}        # 書いた .puml のパス (小文字) → 書き終えた直後の mtime_ns
+    _FRESH_OWNERS = {}      # 新しい図が作ったファイルのパス (小文字) → その図の印 (freshId)
+    _WRITERS = {}           # 書いた .puml のパス (小文字) → 最後に書いたタブの印 (docId)
+    ORIGIN_GAP = 2          # 元の版の印: 版の mtime が刻印より この秒数以上前
+
+    @staticmethod
+    def _path_key(path):
+        return str(path).replace(chr(92), '/').lower()
+
+    def _note_own_write(self, file_path):
+        try:
+            Handler._OWN_WRITES[self._path_key(file_path)] = file_path.stat().st_mtime_ns
+        except OSError:
+            pass
+
+    def _written_by(self, file_path, doc_id):
+        """そのファイルを最後に書いたのがこのタブで、その後に外で書き換わっていないか。
+
+        BLK-owner-20260930-0311-1: ＋ で開いたシーケンス図に actor を先に足すと本文はユースケースと読まれ、
+        続けて participant を足すと図種の読みが替わったとして `{名前}_sequence` へ回されていた
+        (タブ名が黙って替わり、actor 1 行の `{名前}.puml` が残る)。自分で書いた続きは読みが替わっても回さない。
+        """
+        if not doc_id:
+            return False
+        return (Handler._WRITERS.get(self._path_key(file_path)) == doc_id
+                and self._is_own_write(file_path))
+
+    def _is_own_write(self, file_path):
+        try:
+            return Handler._OWN_WRITES.get(self._path_key(file_path)) == file_path.stat().st_mtime_ns
+        except OSError:
+            return False
+
+    @staticmethod
+    def _stamp_epoch(stamp):
+        base = str(stamp).partition('.')[0]
+        try:
+            return calendar.timegm(time.strptime(base, '%Y%m%d-%H%M%S'))
+        except (ValueError, OverflowError):
+            return None
+
+    def _is_origin_version(self, save_dir, dt, stamp):
+        at = self._stamp_epoch(stamp)
+        if at is None:
+            return False
+        try:
+            mtime = self._version_path(save_dir, dt, stamp).stat().st_mtime
+        except OSError:
+            return False
+        return mtime <= at - self.ORIGIN_GAP
+
+    def _versions_to_drop(self, save_dir, dt):
+        """上限を超えた版のうち捨てる刻印。元の版が上限の内に 1 つも無ければ、最新の元の版は残す。"""
+        stamps = self._version_stamps(save_dir, dt)
+        if len(stamps) <= self.VERSIONS_KEEP:
+            return []
+        keep = stamps[:self.VERSIONS_KEEP]
+        if not any(self._is_origin_version(save_dir, dt, s) for s in keep):
+            for s in stamps[self.VERSIONS_KEEP:]:
+                if self._is_origin_version(save_dir, dt, s):
+                    keep = stamps[:self.VERSIONS_KEEP - 1] + [s]
+                    break
+        return [s for s in stamps if s not in keep]
+
+    def _fresh_clash(self, file_path, fresh_id, dsl):
+        """新しい図 (まだ 1 度も書いていないタブ) の書き込みが、既にある別のファイルに当たるか。"""
+        if not fresh_id:
+            return False
+        key = self._path_key(file_path)
+        try:
+            if not file_path.exists():
+                return False
+            if Handler._FRESH_OWNERS.get(key) == fresh_id:
+                return False   # この図が作ったファイル (続きの保存)
+            old = file_path.read_text(encoding='utf-8')
+        except OSError:
+            return True        # 読めないものは上書きしない
+        return old.replace(chr(13) + chr(10), chr(10)) != str(dsl).replace(chr(13) + chr(10), chr(10))
+
     def _stash_version(self, save_dir, dt, new_dsl):
         """上書きの直前に、今ある中身を `_versions/` へ退避する。
 
@@ -1383,26 +2364,37 @@ class Handler(BaseHTTPRequestHandler):
             if not file_path.exists():
                 return
             old = file_path.read_text(encoding='utf-8')
+            old_mtime = file_path.stat().st_mtime
         except OSError:
             return
         if old == new_dsl:
             return
+        origin = not self._is_own_write(file_path)
         vdir = self._versions_dir(save_dir)
         try:
             vdir.mkdir(parents=True, exist_ok=True)
             stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
             target = self._version_path(save_dir, dt, stamp)
             # 同じ秒に 2 回保存しても前の退避を潰さない (末尾に連番を足す)。
+            # 連番は同じ秒の一番大きい番号の次から (上限で捨てた番号を使い直すと、新しい版が古い版に並ぶ)。
             n = 1
+            if target.exists():
+                same = [self._stamp_key(s)[1] for s in self._version_stamps(save_dir, dt)
+                        if str(s).partition('.')[0] == stamp]
+                n = max(same + [0]) + 1
             while target.exists():
                 target = self._version_path(save_dir, dt, '%s.%d' % (stamp, n))
                 n += 1
             _atomic_write_text(target, old)
+            if origin:
+                at = self._stamp_epoch(stamp)
+                if at is not None:
+                    t = min(old_mtime, at - self.ORIGIN_GAP)
+                    os.utime(target, (t, t))
         except OSError:
             return
-        # 上限を超えた分は古い方から捨てる。
-        stamps = self._version_stamps(save_dir, dt)
-        for old_stamp in stamps[self.VERSIONS_KEEP:]:
+        # 上限を超えた分は古い方から捨てる (元の版の最新 1 つは残す)。
+        for old_stamp in self._versions_to_drop(save_dir, dt):
             try:
                 self._version_path(save_dir, dt, old_stamp).unlink()
             except OSError:
@@ -1451,6 +2443,9 @@ class Handler(BaseHTTPRequestHandler):
             # 図種が変わって消えた版を見分けるのに要るのは最初の宣言行だけ。
             # 本文全部を一覧に載せると、20 版で数百 KB を毎回運ぶことになる。
             item['head'] = _version_head(text)
+            # BLK-owner-20260923-2312-prune: 「この図の履歴」は前の版に戻った「往復」に印を付ける。
+            # 本文を運ばずに中身の一致を言えるよう、改行・行末の空白・末尾の空行を無視した中身の sha1 を添える。
+            item['hash'] = _version_hash(text)
             versions.append(item)
         self._send_json(200, {'name': dt, 'dir': str(save_dir), 'versions': versions})
 
@@ -1466,14 +2461,21 @@ class Handler(BaseHTTPRequestHandler):
     SEARCH_TERMS_MAX = 6        # 1 回に突き合わせる語の数 (混在は 2〜3 語で足りる)
     SEARCH_LINES_PER_VERSION = 40   # 1 版から返す当たり行の上限
 
-    def _search_hits(self, text, terms):
-        """本文 → 語ごとの出現数と、当たった行 (行番号つき)。"""
+    def _search_hits(self, text, terms, fold=False):
+        """本文 → 語ごとの出現数と、当たった行 (行番号つき)。
+
+        `fold` は大文字小文字を無視する (▤ 影響を見る の症状の語。Spi_Driver と
+        spi_driver を同じ語として拾う)。混入点は表記の揺れそのものを見るので既定は区別する。
+        """
         counts = [0] * len(terms)
         lines = []
+        if fold:
+            terms = [t.lower() for t in terms]
         for no, line in enumerate(str(text or '').splitlines(), 1):
             hit = False
+            probe = line.lower() if fold else line
             for i, t in enumerate(terms):
-                c = line.count(t)
+                c = probe.count(t)
                 if c:
                     counts[i] += c
                     hit = True
@@ -1486,6 +2488,7 @@ class Handler(BaseHTTPRequestHandler):
 
         `q` は空白区切りの語 (混在を見るので複数可)。返すのは図ごとの
         「古い順の版 + いまの中身」で、各版に語ごとの出現数と当たり行が付く。
+        `ci=1` で大文字小文字を無視する。いまの中身には更新時刻 `mtime` (UTC) が付く。
         """
         parsed = urllib.parse.urlparse(self.path)
         params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
@@ -1495,6 +2498,7 @@ class Handler(BaseHTTPRequestHandler):
         if not terms:
             self._send_json(400, {'error': 'q is required — 探す部品名を 1 つ以上'})
             return
+        fold = params.get('ci', '') in ('1', 'true')
         names = []
         try:
             for p in sorted(save_dir.iterdir(), key=lambda x: x.name.lower()):
@@ -1512,16 +2516,23 @@ class Handler(BaseHTTPRequestHandler):
                     text = self._version_path(save_dir, name, stamp).read_text(encoding='utf-8')
                 except OSError:
                     continue
-                counts, lines = self._search_hits(text, terms)
+                counts, lines = self._search_hits(text, terms, fold)
                 versions.append({'stamp': stamp, 'current': False,
                                  'counts': counts, 'lines': lines})
                 scanned += 1
+            cur_path = save_dir / (name + '.puml')
             try:
-                text = (save_dir / (name + '.puml')).read_text(encoding='utf-8')
+                text = cur_path.read_text(encoding='utf-8')
             except OSError:
                 text = ''
-            counts, lines = self._search_hits(text, terms)
-            versions.append({'stamp': '', 'current': True,
+            # いまの中身がいつ書かれたか (UTC)。控えの刻印は「その版が置き換えられた時刻」
+            # なので、いまの中身の時刻はファイルの更新時刻でしか言えない。
+            try:
+                mtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime(cur_path.stat().st_mtime)) + 'Z'
+            except OSError:
+                mtime = ''
+            counts, lines = self._search_hits(text, terms, fold)
+            versions.append({'stamp': '', 'current': True, 'mtime': mtime,
                              'counts': counts, 'lines': lines})
             scanned += 1
             files.append({'name': name, 'versions': versions})
@@ -1691,8 +2702,21 @@ class Handler(BaseHTTPRequestHandler):
             'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             'lines': len(dsl.splitlines()),
         }
+        # BLK-junior-20260928-2255: 資料化の控えには画像の実体も入れる (puml と meta だけでは
+        # 「提出物庫に入れました」の画像が庫に無い)。{stamp}.{ext} に置き、書けた大きさを返す。
+        image_ext, image_bytes = None, None
+        if data.get('image') is not None:
+            image_ext, image_bytes = self._decode_image(data.get('image'))
+            if image_ext is None:
+                self._send_json(400, {'error': image_bytes})
+                return
+            meta['image'] = puml.stem + '.' + image_ext
         try:
             _atomic_write_text(puml, dsl)
+            if image_ext:
+                image_path = puml.with_suffix('.' + image_ext)
+                _atomic_write_bytes(image_path, image_bytes)
+                meta['imageSize'] = image_path.stat().st_size
             meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding='utf-8')
         except OSError as e:
             self._send_json(500, {'error': f'write failed: {e}'})
@@ -1898,14 +2922,26 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {'error': 'from and to must be non-empty strings'})
             return
         save_dir = self._autosave_resolve_dir(data.get('dir'))
+        now = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
         entry = {
             'from': src,
             'to': dst,
-            'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'at': now,
             'hits': int(data.get('hits') or 0),
         }
+        old = self._read_rename_pairs(save_dir)
+        # applied_at は [置換] で当てた最後の日時 (BLK-primary-20260914-1106-friction)。
+        # 開いた時に欄へ入れる「前回の組」はこれを持つ組に限る。打っただけの回は
+        # 前に当てた日時を引き継ぐ (打ち直しで当てた事実を消さない)。
+        if data.get('applied') is True:
+            entry['applied_at'] = now
+        else:
+            for p in old:
+                if p.get('from') == src and p.get('to') == dst and isinstance(p.get('applied_at'), str):
+                    entry['applied_at'] = p['applied_at']
+                    break
         # 同じ組は 1 行。打ち直すたびに先頭へ上がるので、最近の関心が上に並ぶ。
-        pairs = [p for p in self._read_rename_pairs(save_dir)
+        pairs = [p for p in old
                  if not (p.get('from') == src and p.get('to') == dst)]
         pairs.insert(0, entry)
         pairs = pairs[:self.RENAMES_MAX]
@@ -2101,6 +3137,59 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json(200, {'dir': str(save_dir), 'path': str(path), 'entries': clean})
 
+    # BLK-primary-20260924-1332-wish: 会議セットで並べた日時の控え。▤ 変更サマリボードの
+    # 「変更前 = 前回の会議」はこれを読む。ブラウザを起こし直しても (localStorage が空でも)
+    # 前の会議の時点で比べられるよう、保存フォルダに置く。1 日 1 件 (その日の最後の時刻)。
+    MEETING_LOG_FILE = '_meetings.json'
+    MEETING_LOG_MAX = 64 * 1024
+    MEETING_LOG_KEEP = 30
+
+    def _meeting_log_path(self, save_dir):
+        return Path(save_dir) / self.MEETING_LOG_FILE
+
+    def _read_meeting_log(self, save_dir):
+        path = self._meeting_log_path(save_dir)
+        try:
+            if not path.exists() or path.stat().st_size > self.MEETING_LOG_MAX:
+                return []
+            data = json.loads(path.read_text(encoding='utf-8-sig'))
+        except (OSError, ValueError):
+            return []
+        items = data.get('meetings') if isinstance(data, dict) else data
+        if not isinstance(items, list):
+            return []
+        return sorted({v.strip() for v in items if isinstance(v, str) and v.strip()})
+
+    def _handle_meeting_log_get(self):
+        """GET /meeting-log?dir= — 会議セットで並べた日時の控え (古い順)."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        self._send_json(200, {'dir': str(save_dir), 'meetings': self._read_meeting_log(save_dir)})
+
+    def _handle_meeting_log_post(self):
+        """POST /meeting-log {dir, at} — 日時を 1 つ足す。同じ日の分はその日の最後の時刻に置き換える."""
+        data = self._read_json_object()
+        if data is None:
+            return
+        at = data.get('at')
+        if not isinstance(at, str) or not re.match(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}', at.strip()):
+            self._send_json(400, {'error': 'at must be an ISO datetime'})
+            return
+        at = at.strip()
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        items = [v for v in self._read_meeting_log(save_dir) if v[:10] != at[:10]]
+        items.append(at)
+        items = sorted(items)[-self.MEETING_LOG_KEEP:]
+        path = self._meeting_log_path(save_dir)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _atomic_write_text(path, json.dumps({'meetings': items}, ensure_ascii=False, indent=2) + '\n')
+        except OSError as e:
+            self._send_json(500, {'error': f'書き込めません: {e}'})
+            return
+        self._send_json(200, {'dir': str(save_dir), 'meetings': items})
+
     def _handle_name_registry_get(self):
         """GET /name-registry?dir= — 保存フォルダの親にある正式表記の登録簿."""
         parsed = urllib.parse.urlparse(self.path)
@@ -2254,6 +3343,11 @@ class Handler(BaseHTTPRequestHandler):
         dt = data.get('type')
         dsl = data.get('dsl', '')
         dir_raw = data.get('dir')
+        # BLK-migrator-20260918-0349: 元が LF のファイルを開いて保存すると、
+        # テキストモードの既定 (Windows では os.linesep) が \n を \r\n に書き換え、
+        # 無変更保存でもバイト単位で一致しなくなっていた。本文は常に LF で受け、
+        # 書くときの改行だけをここで決める (控え・版・hash の比較は LF のまま)。
+        newline = _eol_newline(data.get('eol'))
         if not self._autosave_validate_type(dt):
             self._send_json(400, {'error': 'invalid type — パス区切り・制御文字・Windows の禁止文字は使えません'})
             return
@@ -2267,15 +3361,48 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(500, {'error': f'cannot create directory: {e}'})
             return
         # BLK-junior-20260908-2003: 図種が変わる保存は上書きではなく別ファイルへ回す。
-        target, prev_kind, new_kind = self._resolve_save_target(save_dir, dt, dsl)
+        # BLK-owner-20260924-2232-1: 元に戻す / やり直しで入れた本文は、図種が替わっても
+        # 名前を回さない (名前を変えるのは利用者が図名を直したときだけ)。
+        # BLK-owner-20260930-0311-1: このタブが書いた続き (docId が最後の書き手と同じで、外で書き換わっていない) も回さない。
+        # タブの名前と書き先は、本文の図種の読みが替わっても変えない (1 つのタブが書くファイルは 1 枚)。
+        doc_id = data.get('docId')
+        doc_id = doc_id if isinstance(doc_id, str) and doc_id else None
+        if data.get('keepName') is True or self._written_by(self._autosave_file_path(save_dir, dt), doc_id):
+            target, prev_kind, new_kind = dt, '', dsl_kind(dsl)
+        else:
+            target, prev_kind, new_kind = self._resolve_save_target(save_dir, dt, dsl)
         file_path = self._autosave_file_path(save_dir, target)
+        # BLK-owner-20260929-1111-1: 新しい図 (＋ で開いてまだ 1 度も書いていないタブ) の書き込みが
+        # 保存先に既にある別の図に当たるなら書かない。名前を選び直すのは画面の側。
+        fresh_id = data.get('freshId')
+        fresh_id = fresh_id if isinstance(fresh_id, str) and fresh_id else None
+        if fresh_id and self._fresh_clash(self._autosave_file_path(save_dir, dt), fresh_id, dsl):
+            self._send_json(409, {'error': 'exists', 'conflict': True, 'name': dt,
+                                  'message': '同じ名前の図が保存先にあります (' + dt + '.puml)。'
+                                             'この図の名前を選び直すまで書きません'})
+            return
+        # BLK-human-20260925-1250: 改行の指定が無い (保存先の一覧から開いた図など) ときは、
+        # 上書きする相手 (無ければ名前を回す前の元の図) の改行を引き継ぐ。
+        # 既定の改行で書くと LF のファイルが 1 行直しただけで全行 CRLF に変わる。
+        if newline is None:
+            newline = _eol_newline(_file_eol(file_path)
+                                   or _file_eol(self._autosave_file_path(save_dir, dt)))
         # 同じ図種の中での上書きは今までどおり。消える中身は先に控える。
         self._stash_version(save_dir, target, dsl)
         try:
-            _atomic_write_text(file_path, dsl)
+            # 改行を指定されたときは、本文をいったん LF に揃えてから書く
+            # (\r\n のまま newline='\r\n' で書くと \r\r\n になる)。
+            _atomic_write_text(file_path,
+                               dsl.replace('\r\n', '\n') if newline else dsl,
+                               newline=newline)
         except OSError as e:
             self._send_json(500, {'error': f'write failed: {e}'})
             return
+        self._note_own_write(file_path)
+        if doc_id:
+            Handler._WRITERS[self._path_key(file_path)] = doc_id
+        if fresh_id:
+            Handler._FRESH_OWNERS[self._path_key(file_path)] = fresh_id
         meta = {
             'lastSavedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             'lastSavedType': target,
@@ -2309,8 +3436,14 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not path.exists():
                 return dt, '', new_kind
-            prev_kind = dsl_kind(path.read_text(encoding='utf-8'))
+            prev_text = path.read_text(encoding='utf-8')
+            prev_kind = dsl_kind(prev_text)
         except OSError:
+            return dt, '', new_kind
+        # BLK-owner-20260925-0312-2: 既にあるファイルが白紙・骨だけ (`@startuml / @enduml`、
+        # 活動図の `start / stop`) なら、図種が替わっても別名へ回さない。潰して失う中身が無く、
+        # 回すと中身の無い `{名前}.puml` と本物の `{名前}_{図種}.puml` が並ぶ。
+        if is_skeleton_dsl(prev_text):
             return dt, '', new_kind
         if not new_kind or not prev_kind or new_kind == prev_kind:
             return dt, prev_kind, new_kind
@@ -2330,6 +3463,60 @@ class Handler(BaseHTTPRequestHandler):
         # 行き先が決められないときは、消さない方を採って刻印付きの名前にする。
         stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
         return base + '-' + stamp, prev_kind, new_kind
+
+    def _handle_export_zip_post(self):
+        """書き出した zip を保存フォルダに置き、置けたバイト数を答える。
+
+        BLK-primary-20260918-0249: zip の受け渡しがブラウザの a[download] だけだと、
+        どこへ落ちたか (落ちたのか) をアプリ側が知る術が無く、届いていなくても
+        「保存しました」と出てしまう。ここで実際に書いた結果を返し、画面は
+        この答えを見てから成功を名乗る。
+        """
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8')
+        try:
+            data = json.loads(body)
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        name = data.get('name')
+        if not isinstance(name, str) or not name.lower().endswith('.zip'):
+            self._send_json(400, {'error': 'name must end with .zip'})
+            return
+        # パス区切り・上位への脱出・Windows の禁止文字を弾く (保存フォルダの外に書かない)。
+        if not self._autosave_validate_type(name[:-4]):
+            self._send_json(400, {'error': 'invalid name — パス区切り・制御文字・Windows の禁止文字は使えません'})
+            return
+        b64 = data.get('base64')
+        if not isinstance(b64, str) or b64 == '':
+            self._send_json(400, {'error': 'base64 must be a non-empty string'})
+            return
+        try:
+            raw = base64.b64decode(b64, validate=True)
+        except (binascii.Error, ValueError):
+            self._send_json(400, {'error': 'base64 decode failed'})
+            return
+        # zip の先頭 (PK\x03\x04) が無いものは受け取らない。空の zip を「届いた」と言わない。
+        if len(raw) < 4 or raw[:2] != b'PK':
+            self._send_json(400, {'error': 'not a zip'})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        try:
+            save_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            self._send_json(500, {'error': f'mkdir failed: {e}'})
+            return
+        target = save_dir / name
+        try:
+            _atomic_write_bytes(target, raw)
+            written = target.stat().st_size
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        if written != len(raw):
+            self._send_json(500, {'error': 'short write'})
+            return
+        self._send_json(200, {'ok': True, 'path': str(target), 'bytes': written})
 
     def _handle_autosave_svg_post(self):
         """保存フォルダの {type}.svg だけを書き直す。
@@ -2370,6 +3557,67 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             mtime = None
         self._send_json(200, {'ok': True, 'path': str(svg_path), 'svgMtime': mtime})
+
+    # BLK-junior-20260928-2255: 資料化した画像 (PNG / SVG) を保存フォルダに置く。
+    # これまで画像はブラウザのダウンロードに渡すだけで、保存フォルダには puml しか入らなかった
+    # (画面は「保存フォルダと提出物庫に入れました」と言っていた)。
+    IMAGE_EXTS = ('png', 'svg')
+
+    @classmethod
+    def _decode_image(cls, image):
+        """{ext, base64} を (ext, bytes) にする。形が違えば (None, 理由)。"""
+        if not isinstance(image, dict):
+            return None, 'image must be an object'
+        ext = str(image.get('ext') or '').lower().lstrip('.')
+        if ext not in cls.IMAGE_EXTS:
+            return None, 'ext must be png or svg'
+        b64 = image.get('base64')
+        if not isinstance(b64, str) or b64 == '':
+            return None, 'base64 must be a non-empty string'
+        try:
+            data = base64.b64decode(b64, validate=True)
+        except (binascii.Error, ValueError):
+            return None, 'base64 を読めません'
+        if not data:
+            return None, '画像が空です'
+        return ext, data
+
+    def _handle_autosave_image_post(self):
+        """POST /autosave-image {name, dir, image: {ext, base64}} — 保存フォルダに {name}.{ext} を書く。
+
+        書けたら書いた後のファイルの大きさを返す (呼び手は送ったバイト数と突き合わせてから成功を出す)。
+        """
+        length = int(self.headers.get('Content-Length', 0))
+        try:
+            data = json.loads(self.rfile.read(length).decode('utf-8'))
+        except ValueError:
+            self._send_json(400, {'error': 'invalid JSON'})
+            return
+        if not isinstance(data, dict):
+            self._send_json(400, {'error': 'body must be an object'})
+            return
+        name = data.get('name')
+        if not self._autosave_validate_type(name):
+            self._send_json(400, {'error': 'invalid name — パス区切り・制御文字・Windows の禁止文字は使えません'})
+            return
+        ext, blob = self._decode_image(data.get('image'))
+        if ext is None:
+            self._send_json(400, {'error': blob})
+            return
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        try:
+            save_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            self._send_json(500, {'error': f'mkdir failed: {e}'})
+            return
+        path = save_dir / (name + '.' + ext)
+        try:
+            _atomic_write_bytes(path, blob)
+            size = path.stat().st_size
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        self._send_json(200, {'ok': True, 'path': str(path), 'size': size})
 
     # BLK-reviewer-20260908-1103: mtime 比較だけでは「svg が今の puml から作られたか」は
     # 分からない (保存し直しただけで中身は追いついている図と、前々回の編集から
@@ -2479,7 +3727,7 @@ class Handler(BaseHTTPRequestHandler):
                 results[name] = {'status': 'missing'}
                 continue
             text = puml_bytes.decode('utf-8', errors='replace')
-            drawn, err = render_local(text) if mode == 'local' else render_online(text)
+            drawn, err = render_local(text, save_dir) if mode == 'local' else render_online(text)
             if drawn is None:
                 # 描けなかったものを「一致」とも「食い違い」とも言わない。控えも残さない。
                 results[name] = {'status': 'error', 'error': err or 'render failed'}
@@ -2988,6 +4236,90 @@ class Handler(BaseHTTPRequestHandler):
                               'versions': self._version_counts(save_dir).get(dt, 0)})
 
 
+    def _handle_file_op_post(self):
+        """FILES ツリーのファイル単位の操作 (BLK-human-20260923-1701 / design 10b)。
+
+        body: {op, dir, name, to?, toDir?}
+          rename … {name}.puml を {to}.puml へ (隣の .svg と図種の控えも一緒に)
+          copy   … {name}.puml を {to}.puml へ複製 (.svg は複製しない。描き直せば揃う)
+          move   … {name}.puml と .svg を toDir へ (名前は変えない)
+          reveal … その図の場所をエクスプローラで開く (PUA_NO_REVEAL があれば開かず場所だけ返す)
+        行き先に同じ名前があれば 409 で断る (黙って上書きしない)。過去版は動かさない。
+        """
+        data = self._read_json_object()
+        if data is None:
+            return
+        op = str(data.get('op') or '')
+        name = str(data.get('name') or '')
+        if op not in ('rename', 'copy', 'move', 'reveal'):
+            return self._send_json(400, {'error': 'op は rename / copy / move / reveal のどれか'})
+        if not self._autosave_validate_type(name):
+            return self._send_json(400, {'error': '名前にパス区切り・制御文字・Windows の禁止文字は使えません'})
+        save_dir = self._autosave_resolve_dir(data.get('dir'))
+        src = self._autosave_file_path(save_dir, name)
+        if not src.exists():
+            return self._send_json(404, {'error': 'その名前の図が保存フォルダにありません'})
+        if op == 'reveal':
+            opened = False
+            if sys.platform == 'win32' and not os.environ.get('PUA_NO_REVEAL'):
+                try:
+                    subprocess.Popen(['explorer', '/select,', str(src)])
+                    opened = True
+                except OSError:
+                    opened = False
+            return self._send_json(200, {'ok': True, 'path': str(src), 'opened': opened})
+        if op == 'move':
+            to_raw = str(data.get('toDir') or '').strip()
+            if not to_raw:
+                return self._send_json(400, {'error': '移動先のフォルダを指定してください'})
+            to_dir = self._autosave_resolve_dir(to_raw)
+            if to_dir == save_dir:
+                return self._send_json(400, {'error': '移動先が今のフォルダと同じです'})
+            to_name = name
+        else:
+            to_dir = save_dir
+            to_name = str(data.get('to') or '').strip()
+            if to_name.lower().endswith('.puml'):
+                to_name = to_name[:-5]
+            if not self._autosave_validate_type(to_name):
+                return self._send_json(400, {'error': '新しい名前にパス区切り・制御文字・Windows の禁止文字は使えません'})
+            if to_name == name:
+                return self._send_json(400, {'error': '名前が変わっていません'})
+        dst = self._autosave_file_path(to_dir, to_name)
+        if dst.exists():
+            return self._send_json(409, {'error': '行き先に同じ名前の図があります: ' + to_name})
+        try:
+            to_dir.mkdir(parents=True, exist_ok=True)
+            if op == 'copy':
+                shutil.copyfile(str(src), str(dst))
+            else:
+                os.replace(str(src), str(dst))
+                svg = src.with_suffix('.svg')
+                if svg.exists():
+                    try:
+                        os.replace(str(svg), str(dst.with_suffix('.svg')))
+                    except OSError:
+                        pass
+        except OSError as e:
+            return self._send_json(500, {'error': '動かせませんでした: ' + str(e)})
+        # 図種の控えは名前に付いているので、行き先の名前へ写す (元は rename / move なら消す)。
+        try:
+            kinds = self._read_saved_kinds(save_dir)
+            if name in kinds:
+                kind = kinds[name]
+                if op != 'copy':
+                    del kinds[name]
+                    self._kinds_path(save_dir).write_text(
+                        json.dumps({'kinds': kinds}, ensure_ascii=False), encoding='utf-8')
+                dst_kinds = self._read_saved_kinds(to_dir) if to_dir != save_dir else kinds
+                dst_kinds[to_name] = kind
+                self._kinds_path(to_dir).write_text(
+                    json.dumps({'kinds': dst_kinds}, ensure_ascii=False), encoding='utf-8')
+        except OSError:
+            pass
+        return self._send_json(200, {'ok': True, 'op': op, 'name': to_name, 'dir': str(to_dir)})
+
+
 # --- Environment probe (GET /env) --------------------------------------------
 #
 # design「1a 設定と網羅」5a は、設定のレンダリング画面に Java の検出結果を
@@ -3042,14 +4374,65 @@ def detect_env():
     return _env_report(java)
 
 
+def recommended_jar_version():
+    """「公式から取得」で取る版 (lib/PLANTUML_VERSION の 1 行目)。読めなければ None。"""
+    try:
+        v = PLANTUML_VERSION_FILE.read_text(encoding='utf-8').splitlines()[0].strip()
+    except (OSError, IndexError):
+        return None
+    return v or None
+
+
+_jar_version_cache = {}
+
+
+def jar_version(path):
+    """jar のマニフェスト (Implementation-Version) から版を読む。通信も Java の起動もしない。"""
+    try:
+        st = Path(path).stat()
+    except OSError:
+        return None
+    key = (str(path), st.st_mtime, st.st_size)
+    if key in _jar_version_cache:
+        return _jar_version_cache[key]
+    ver = None
+    try:
+        import zipfile
+        with zipfile.ZipFile(str(path)) as zf:
+            mf = zf.read('META-INF/MANIFEST.MF').decode('utf-8', 'replace')
+        m = re.search(r'^Implementation-Version:\s*(\S+)', mf, re.M)
+        ver = m.group(1) if m else None
+    except Exception:   # 壊れた・jar でないファイル (BadZipFile など) は「版が分からない」
+        ver = None
+    _jar_version_cache.clear()
+    _jar_version_cache[key] = ver
+    return ver
+
+
+def version_less(a, b):
+    """'1.2026.3' < '1.2026.7' のような版の比較。数字でない部分は 0 とみなす。"""
+    def parts(v):
+        return [int(x) if x.isdigit() else 0 for x in re.split(r'[.\-]', str(v or ''))]
+    pa, pb = parts(a), parts(b)
+    n = max(len(pa), len(pb))
+    pa += [0] * (n - len(pa))
+    pb += [0] * (n - len(pb))
+    return pa < pb
+
+
 def _env_report(java):
     """/env の答え。jar の有無と app モードは毎回見る (走行中に変わる)。"""
     jar = jar_path()
+    ver = jar_version(jar) if jar.exists() else None
     return {
         'java': java,
         'javaUrl': JAVA_DOWNLOAD_URL,
         'jar': jar.exists(),
         'jarPath': str(jar) if jar.exists() else '',
+        'jarVersion': ver or '',
+        'jarRecommended': recommended_jar_version() or '',
+        'jarMinSafe': JAR_MIN_SAFE_VERSION,
+        'jarOutdated': bool(ver) and version_less(ver, JAR_MIN_SAFE_VERSION),
         'app': NATIVE_DIALOG is not None,
         'canFetchJar': FETCH_SCRIPT.exists() and os.name == 'nt',
     }
@@ -3068,6 +4451,27 @@ def _env_report(java):
 _daemon_lock = threading.Lock()
 _daemon_proc = None
 _daemon_disabled = False  # set True once we decide to stop retrying the daemon
+# BLK-migrator-20260925-1632: the running JVM keeps the jar it was started with
+# open and loads classes from it lazily. When that file is replaced in place
+# (「公式から取得」, a hand copy, a version bump) the daemon reads the new bytes
+# through the old central directory and answers NoClassDefFoundError for any
+# class it had not loaded yet -- the diagram never draws again until restart.
+# We remember what the jar looked like when the daemon started and restart the
+# daemon as soon as the file on disk differs.
+_daemon_jar_key = None
+# A daemon answer that means "the JVM could not load its own classes" rather
+# than "PlantUML did not like the diagram". Such an answer is never shown: the
+# daemon is dropped and the diagram is drawn once more by a fresh JVM.
+_DAEMON_BROKEN_JAR_RE = re.compile(r'NoClassDefFoundError|ClassNotFoundException|ZipException')
+
+
+def _jar_key(jar):
+    """(path, mtime_ns, size) of the jar, or None when it cannot be read."""
+    try:
+        st = Path(jar).stat()
+    except OSError:
+        return None
+    return (str(jar), st.st_mtime_ns, st.st_size)
 # BLK-builder-20260907-2249-1: the daemon's stderr must never be left unread.
 # PlantUML logs through java.util.logging, whose ConsoleHandler writes to
 # System.err; on a diagram it cannot export (Logme.error) that is a full stack
@@ -3123,24 +4527,76 @@ def _start_daemon():
 
 
 def _get_daemon():
-    """Lazily start the daemon on first use. Returns Popen or None if unusable."""
-    global _daemon_proc, _daemon_disabled
+    """Lazily start the daemon on first use. Returns Popen or None if unusable.
+
+    A daemon started from a jar that has since been replaced on disk is dropped
+    and started again (BLK-migrator-20260925-1632). A changed jar also clears
+    `_daemon_disabled`: the new jar may well work where the old one did not.
+    """
+    global _daemon_proc, _daemon_disabled, _daemon_jar_key
+    key = _jar_key(jar_path())
+    if key != _daemon_jar_key:
+        if _daemon_proc is not None:
+            _kill_daemon()
+        _daemon_disabled = False
     if _daemon_disabled:
         return None
     if _daemon_proc is not None and _daemon_proc.poll() is None:
         return _daemon_proc
+    _daemon_jar_key = key
     _daemon_proc = _start_daemon()
     if _daemon_proc is None:
         _daemon_disabled = True
     return _daemon_proc
 
 
-def _render_via_daemon(text):
+def _kill_daemon():
+    """Drop the daemon at once (it is not asked to finish: it may be wedged)."""
+    global _daemon_proc
+    if _daemon_proc is not None:
+        try:
+            _daemon_proc.kill()
+        except Exception:
+            pass
+    _daemon_proc = None
+
+
+# BLK-primary-20260929-1108: 相対の `!include` / `!includesub` は、その .puml のあるフォルダから探す
+# (PlantUML をファイルに対して起動したときと同じ)。GUI の本文はファイルではなく文字列で渡るので、
+# 探す起点を渡さないと server の作業フォルダを探し、隣の共通ファイル (common_defs.puml) が読めなかった。
+# daemon には本文の前に BASEDIR_MAGIC + フォルダ + 改行を付けて渡す。本文は書き換えない。
+BASEDIR_MAGIC = '\x00BASEDIR '
+
+
+def render_base_dir(raw):
+    """/render・/preproc の dir を、include を探す起点のフォルダ (Path) にする。無い・フォルダでなければ None。"""
+    if not isinstance(raw, str) or not raw.strip() or '\n' in raw or '\x00' in raw:
+        return None
+    try:
+        p = Path(raw.strip()).expanduser().resolve()
+    except (OSError, RuntimeError, ValueError):
+        return None
+    return p if p.is_dir() else None
+
+
+def _with_base_dir(text, base_dir):
+    return (BASEDIR_MAGIC + str(base_dir) + '\n' + text) if base_dir else text
+
+
+def include_search_note(message, base_dir):
+    """描けない理由が include の読めなさなら、探したフォルダを言う 1 文を返す (無関係なら '')。"""
+    if not re.search(r'cannot include|include.*(not found|見つか)', str(message or ''), re.I):
+        return ''
+    where = str(base_dir) if base_dir else str(Path.cwd())
+    return '探したフォルダ: %s' % where
+
+
+def _render_via_daemon(text, base_dir=None):
     """Send DSL to the daemon, read SVG back. Returns (svg, error) or raises on IO."""
     proc = _get_daemon()
     if proc is None:
         return None, 'daemon unavailable'
-    payload = text.encode('utf-8')
+    payload = _with_base_dir(text, base_dir).encode('utf-8')
     proc.stdin.write(struct.pack('>I', len(payload)))
     proc.stdin.write(payload)
     proc.stdin.flush()
@@ -3189,7 +4645,7 @@ def _read_exact(stream, n):
     return b''.join(chunks)
 
 
-def _render_via_pipe(text):
+def _render_via_pipe(text, base_dir=None):
     """Fallback: one-shot `java -jar plantuml.jar -pipe` (slower, Java 8+ compatible)."""
     try:
         proc = subprocess.run(
@@ -3197,6 +4653,7 @@ def _render_via_pipe(text):
             input=text.encode('utf-8'),
             capture_output=True,
             timeout=30,
+            cwd=str(base_dir) if base_dir else None,
             **_SUBPROCESS_KWARGS,
         )
     except FileNotFoundError:
@@ -3208,7 +4665,7 @@ def _render_via_pipe(text):
     return proc.stdout, None
 
 
-def render_local(text):
+def render_local(text, base_dir=None):
     global _daemon_proc
     jar = jar_path()
     if not jar.exists():
@@ -3216,8 +4673,15 @@ def render_local(text):
                       '設定 → レンダリング で jar を選ぶか「公式から取得」を押してください')
     with _daemon_lock:
         try:
-            svg, err = _render_via_daemon(text)
-            if svg is not None or err is not None and err != 'daemon unavailable':
+            svg, err = _render_via_daemon(text, base_dir)
+            if err is not None and _DAEMON_BROKEN_JAR_RE.search(err):
+                # The JVM cannot load its own classes (the jar changed under it,
+                # BLK-migrator-20260925-1632). Not the diagram's fault: drop the
+                # daemon and draw once more with a fresh JVM below. The next
+                # request starts a new daemon.
+                print(f'daemon cannot load classes ({err[:120]}); restarting')
+                _kill_daemon()
+            elif svg is not None or err is not None and err != 'daemon unavailable':
                 return svg, err
         except (BrokenPipeError, EOFError, OSError) as exc:
             # Daemon died or stopped answering; drop it and fall back for this
@@ -3225,13 +4689,63 @@ def render_local(text):
             print(f'daemon unusable ({exc}); falling back to -pipe')
             for line in daemon_log_tail(10):
                 print(f'  daemon stderr: {line}')
-            if _daemon_proc is not None:
-                try:
-                    _daemon_proc.kill()
-                except Exception:
-                    pass
-            _daemon_proc = None
-    return _render_via_pipe(text)
+            _kill_daemon()
+    return _render_via_pipe(text, base_dir)
+
+
+# BLK-migrator-20260929-1351: 当て方は描いた側を先に使う。マクロ (!procedure / !definelong / 引数つき !define /
+# !include した手続き / 変数) を DSL の読み方で 1 種類ずつ真似るのをやめ、PlantUML 自身の
+# プリプロセッサが展開した行を返す。描画と同じ daemon を使い (数 ms)、使えなければ -preproc の 1 回起動。
+# ローカルの jar だけを使う (online モードでも外へは送らない)。展開できなければ (None, 理由)。
+PREPROC_MAGIC = '\x00PREPROC\n'
+PREPROC_TIMEOUT_SEC = float(os.environ.get('PUA_PREPROC_TIMEOUT', '8'))
+
+
+def _preproc_via_pipe(text, base_dir=None):
+    try:
+        proc = subprocess.run(
+            ['java', '-jar', str(jar_path()), '-preproc', '-pipe', '-charset', 'UTF-8'],
+            input=text.encode('utf-8'), capture_output=True, timeout=PREPROC_TIMEOUT_SEC,
+            cwd=str(base_dir) if base_dir else None,
+            **_SUBPROCESS_KWARGS,
+        )
+    except FileNotFoundError:
+        return None, 'java not found'
+    except subprocess.TimeoutExpired:
+        return None, 'preproc timeout'
+    if proc.returncode != 0:
+        return None, 'PlantUML error: ' + proc.stderr.decode('utf-8', errors='replace')[:300]
+    return proc.stdout.decode('utf-8', errors='replace'), None
+
+
+def preproc_local(text, base_dir=None):
+    """(lines, error)。lines は最初の @startuml ブロックを展開した行 (@startuml / @enduml を含む)。"""
+    if not jar_path().exists():
+        return None, 'plantuml.jar not found'
+    out = None
+    with _daemon_lock:
+        try:
+            proc = _get_daemon()
+            if proc is not None:
+                payload = _with_base_dir(PREPROC_MAGIC + text, base_dir).encode('utf-8')
+                proc.stdin.write(struct.pack('>I', len(payload)))
+                proc.stdin.write(payload)
+                proc.stdin.flush()
+                status, body = _read_daemon_reply(proc, PREPROC_TIMEOUT_SEC)
+                if status != 0:
+                    return None, body.decode('utf-8', errors='replace')[:300]
+                out = body.decode('utf-8', errors='replace')
+        except (BrokenPipeError, EOFError, OSError) as exc:
+            print(f'daemon preproc unusable ({exc}); falling back to -preproc')
+            _kill_daemon()
+    if out is None:
+        out, err = _preproc_via_pipe(text, base_dir)
+        if err:
+            return None, err
+    lines = out.replace('\r\n', '\n').split('\n')
+    if lines and lines[-1] == '':
+        lines.pop()
+    return lines, None
 
 
 def _shutdown_daemon():
@@ -3303,6 +4817,10 @@ def _encode_base64(data):
     return ''.join(out)
 
 
+def _idle_limit_sec():
+    return NO_IDLE_EXIT_SEC if NO_IDLE_EXIT else IDLE_SHUTDOWN_SEC
+
+
 def _idle_watchdog(server):
     """Shut the server down when the browser client stops sending heartbeats."""
     global _shutdown_started
@@ -3312,7 +4830,7 @@ def _idle_watchdog(server):
             if _shutdown_started:
                 return
             idle = time.time() - _last_heartbeat
-        if idle > IDLE_SHUTDOWN_SEC:
+        if idle > _idle_limit_sec():
             with _state_lock:
                 if _shutdown_started:
                     return
@@ -3327,7 +4845,10 @@ def main():
     print(f'  ROOT: {ROOT}')
     print(f'  DATA: {DATA_ROOT}')
     print(f'  JAR:  {jar_path()} (exists={jar_path().exists()})')
-    print(f'  IDLE_SHUTDOWN: {IDLE_SHUTDOWN_SEC}s (auto-stops if browser tab closes)')
+    if NO_IDLE_EXIT:
+        print(f'  IDLE_SHUTDOWN: {NO_IDLE_EXIT_SEC}s, browser close ignored (PUA_NO_IDLE_EXIT)')
+    else:
+        print(f'  IDLE_SHUTDOWN: {IDLE_SHUTDOWN_SEC}s (auto-stops if browser tab closes)')
     print('Press Ctrl+C to stop.')
     # Warm up the JVM daemon in a background thread so the first /render
     # call doesn't pay the ~1s startup cost.

@@ -36,7 +36,9 @@ describe('insertWrapAtSelection', function() {
 });
 
 describe('keyboard handling', function() {
-  test('Tab inserts 2 spaces (workspace ADR-011)', function() {
+  // BLK-owner-20260924-2232-4: 本文欄は 1 行で足りる欄なので、Tab は次の欄へ移る (空白を入れない)。
+  // 以前の「Tab で空白 2 つ / Shift+Tab で外す」(workspace ADR-011 のエディタ向け) は本文欄では外した。
+  test('Tab は空白を入れず、ブラウザの既定 (次の欄へ移る) に任せる', function() {
     var container = document.createElement('div');
     document.body.appendChild(container);
     RLE.mount(container, 'hello');
@@ -45,19 +47,41 @@ describe('keyboard handling', function() {
     ta.focus();
     var ev = new window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
     ta.dispatchEvent(ev);
-    expect(ta.value.substring(0, 2)).toBe('  ');
+    expect(ta.value).toBe('hello');
+    expect(ev.defaultPrevented).toBe(false);
   });
 
-  test('Shift+Tab removes leading 2 spaces (outdent)', function() {
+  test('Enter で確定: 末尾の空白を落として onChange を 1 回呼び、rle-enter を出す。blur でもう一度は書かない', function() {
     var container = document.createElement('div');
     document.body.appendChild(container);
-    RLE.mount(container, '  hello');
+    var got = [];
+    RLE.mount(container, '', function(v) { got.push(v); });
     var ta = container.querySelector('.rle-textarea');
-    ta.setSelectionRange(4, 4);
-    ta.focus();
-    var ev = new window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    var entered = 0;
+    container.addEventListener('rle-enter', function() { entered++; });
+    ta.value = 'request  ';
+    var ev = new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
     ta.dispatchEvent(ev);
-    expect(ta.value).toBe('hello');
+    expect(ev.defaultPrevented).toBe(true);
+    expect(got).toEqual(['request']);
+    expect(entered).toBe(1);
+    expect(ta.value).toBe('request');
+    ta.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(got).toEqual(['request']);
+  });
+
+  test('Shift+Enter は改行のまま (確定しない)。確定すると改行は \\n で書かれる', function() {
+    var container = document.createElement('div');
+    document.body.appendChild(container);
+    var got = [];
+    var obj = RLE.mount(container, '', function(v) { got.push(v); });
+    var ta = container.querySelector('.rle-textarea');
+    var ev = new window.KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true });
+    ta.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(false);
+    expect(got.length).toBe(0);
+    ta.value = 'a' + String.fromCharCode(10) + 'b' + String.fromCharCode(10);
+    expect(obj.getValue()).toBe('a\\nb');
   });
 
   test('Escape dispatches rle-escape custom event', function() {
@@ -221,5 +245,38 @@ describe('design 2b color panel', function() {
     ta.setSelectionRange(0, ta.value.length);
     c.querySelector('.rle-color-clear').click();
     expect(ta.value).toBe('hello');
+  });
+});
+
+// BLK-owner-20260923-2332-prune: 見え方の欄が白い 1 行欄に見え、メッセージの本文の欄が
+// 2 つあると読まれていた。打てない欄と分かる見出しを付け、空の間は出さない。
+describe('見え方の欄は本文の欄と見分けられる', function() {
+  test('空の本文では見え方の欄を出さない', function() {
+    var c = document.createElement('div');
+    document.body.appendChild(c);
+    RLE.mount(c, '');
+    expect(c.querySelector('.rle-preview-wrap').hidden).toBe(true);
+    expect(c.querySelectorAll('textarea').length).toBe(1);
+    expect(c.querySelectorAll('input[type="text"], input:not([type])').length).toBe(0);
+  });
+  test('打つと「図での見え方」の見出し付きで出て、消すとまた隠れる', function() {
+    var c = document.createElement('div');
+    document.body.appendChild(c);
+    RLE.mount(c, '');
+    var ta = c.querySelector('.rle-textarea');
+    ta.value = 'Spi_Init';
+    ta.dispatchEvent(new window.Event('input'));
+    expect(c.querySelector('.rle-preview-wrap').hidden).toBe(false);
+    expect(c.querySelector('.rle-preview-caption').textContent).toBe('図での見え方');
+    expect(c.querySelector('.rle-preview').textContent).toBe('Spi_Init');
+    ta.value = '';
+    ta.dispatchEvent(new window.Event('input'));
+    expect(c.querySelector('.rle-preview-wrap').hidden).toBe(true);
+  });
+  test('既に本文がある要素を開いたときは最初から見え方が出ている', function() {
+    var c = document.createElement('div');
+    document.body.appendChild(c);
+    RLE.mount(c, 'Ack');
+    expect(c.querySelector('.rle-preview-wrap').hidden).toBe(false);
   });
 });

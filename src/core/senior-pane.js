@@ -106,7 +106,7 @@
     var list = (names || []).map(_s).filter(function(n) { return !!n; });
     var out = { name: '', how: 'none', candidates: [], reason: '', key: '', keys: [] };
     if (!mine.name || !list.length) {
-      out.reason = list.length ? 'まだ図を開いていません' : '先輩のフォルダに図がありません';
+      out.reason = list.length ? 'まだ図を開いていません' : '比較相手のフォルダに図がありません';
       return out;
     }
 
@@ -138,10 +138,10 @@
       out.reason = '同じドメイン (' + dom + ') の同じ図種';
       return out;
     }
-    if (domHit.length) {
-      out.name = kindHit.length ? kindHit[0] : '';
+    if (kindHit.length) {
+      out.name = kindHit[0];
       out.how = 'domain';
-      out.candidates = kindHit.length ? kindHit : domHit;
+      out.candidates = kindHit;
       out.reason = '同じドメイン (' + dom + ') の図';
       return out;
     }
@@ -149,6 +149,10 @@
     // 4. 同じ図種の共通図 → その中から自分の部品の所だけを抜き出す。
     //    BLK-junior-20260914-2206-wish: 先輩のクラス図は全ドライバ共通の 1 枚で、
     //    部品名で 1:1 に引けないため 1〜3 段のどれにも掛からず常に「−」だった。
+    //    BLK-junior-20260923-2012: 同じ部品 (adc) の別の図種 (adc_init_sequence /
+    //    adc_state) があると 3 段目が先に効き、図種の違う候補だけを並べて相手を
+    //    決めず、共通図まで降りてこなかった。同じ図種が部品名で引けなければ、
+    //    図種の違う同部品の図より先に共通図を見る。
     var keys = (partKeys || []).filter(function(k) { return !!_s(k); });
     if (kind && keys.length) {
       var common = list.filter(function(n) {
@@ -165,13 +169,48 @@
       }
     }
 
-    out.reason = 'この図 (' + baseOf(mine.name) + ') に当たる先輩の図はありません';
+    // 3'. 同じドメインで図種の読めない図だけは候補として並べる (中身を見ないと
+    //     図種が分からないので、人に選ばせる)。図種が読めて違う図は相手ではない
+    //     (クラス図の相手にシーケンス図を並べると、比べる物が無いのに候補が出る)。
+    var domCands = domHit.filter(function(n) { return !kind || !kindOf(n); });
+    if (domCands.length) {
+      out.how = 'domain';
+      out.candidates = domCands;
+      out.reason = '同じドメイン (' + dom + ') の図';
+      return out;
+    }
+
+    // 相手のフォルダにその図種はあるが、どれもこの部品の図ではない (共通図も無い)。
+    // 「無い」と言い切る。枚数も言うのは、フォルダを目で走査し直させないため
+    // (cross-ref-diff の「TIMER のクラス図がありません (3 枚中 0 枚)」と同じ言い方)。
+    var sameKind = kind ? list.filter(function(n) { return kindOf(n) === kind; }).length : 0;
+    if (sameKind) {
+      var P = (keys[0] || dom || baseOf(mine.name)).toUpperCase();
+      var word = kindWord(kind);
+      out.part = P;
+      out.sameKind = sameKind;
+      out.reason = 'この図 (' + baseOf(mine.name) + ') に当たる相手の図はありません。'
+        + P + ' の' + word + 'は ' + list.length + ' 枚中 0 枚 (' + word + 'は ' + sameKind
+        + ' 枚ありますが、どれも ' + P + ' の図ではありません)';
+      return out;
+    }
+
+    out.reason = 'この図 (' + baseOf(mine.name) + ') に当たる相手の図はありません';
     return out;
+  }
+
+  // 図種の呼び名 (「クラス図」)。diagram-kind が読めなければ図種の語のまま。
+  var KIND_WORD = { sequence: 'シーケンス図', state: '状態遷移図', class: 'クラス図',
+    usecase: 'ユースケース図', component: 'コンポーネント図', activity: 'アクティビティ図' };
+  function kindWord(kind) {
+    var DK = (typeof window !== 'undefined' && window.MA) ? window.MA.diagramKind : null;
+    var lab = (DK && DK.label) ? DK.label(kind) : '';
+    return lab ? lab + '図' : (KIND_WORD[kind] || 'この図種');
   }
 
   // 枠の上に出す 1 行。押す前に「いま何が横にあるか」が読める。
   function noticeText(pick, seniorLabel) {
-    var who = _s(seniorLabel) || '先輩';
+    var who = _s(seniorLabel) || '比較相手';
     if (!pick) return who + ' のフォルダを選んでください';
     if (pick.how === 'none') return pick.reason;
     if (pick.name) {
@@ -189,29 +228,29 @@
   function statusText(pick, opts) {
     var o = opts || {};
     if (!o.ready) {
-      return { label: '👀 先輩 −', title: '先輩の図を読むだけで横に出します (押すと開きます)', count: 0 };
+      return { label: '並べて比較 −', title: '別のフォルダの図を読むだけで横に並べます (押すと開きます)', count: 0 };
     }
     if (!pick || pick.how === 'none') {
-      return { label: '👀 先輩 −', title: (pick && pick.reason) || '先輩のフォルダを選んでください', count: 0 };
+      return { label: '並べて比較 −', title: (pick && pick.reason) || '比較相手のフォルダを選んでください', count: 0 };
     }
     if (pick.how === 'common-slice' && pick.name) {
       return {
-        label: '👀 先輩 ' + baseOf(pick.name) + '（' + pick.key + '）',
-        title: '先輩の共通図 ' + baseOf(pick.name) + ' から「' + pick.key
+        label: '並べて比較 ' + baseOf(pick.name) + '（' + pick.key + '）',
+        title: '比較相手の共通図 ' + baseOf(pick.name) + ' から「' + pick.key
           + '」に当たる所だけを抜き出して横に出します (読むだけ)',
         count: 1,
       };
     }
     if (pick.name) {
       return {
-        label: '👀 先輩 ' + baseOf(pick.name),
-        title: '横に出る先輩の図: ' + baseOf(pick.name) + ' (' + pick.reason + '・読むだけ)',
+        label: '並べて比較 ' + baseOf(pick.name),
+        title: '横に並ぶ相手の図: ' + baseOf(pick.name) + ' (' + pick.reason + '・読むだけ)',
         count: 1,
       };
     }
     var n = (pick.candidates || []).length;
     return {
-      label: '👀 先輩 ' + n + ' 候補',
+      label: '並べて比較 ' + n + ' 候補',
       title: pick.reason + ' が ' + n + ' 枚あります (押すと枠が開き、選べます)',
       count: n,
     };
@@ -248,12 +287,21 @@
       name: _s(s.name),
       width: _width(s.width),
       seen: !!s.seen,
+      // design 9a: この枠は「並べて比較」1 つの入口の実体になる。相手を据え置いて
+      // 図の切り替えに追従させる 'keep' と、いま出している 1 枚だけを見る 'once' を
+      // 枠の中で切り替える (別画面を増やさない)。
+      mode: s.mode === 'once' ? 'once' : 'keep',
     };
   }
 
+  // 枠内の切り替えの呼び名。画面と unit の両方がここを見る。
+  var MODE_LABELS = { keep: '据え置く', once: '1 回だけ' };
+
   // 初めて開いたときだけ出す 1 行。この枠が何かを言い切る (読むだけだと分かること)。
-  var FIRST_NOTE = 'この枠は、別のフォルダの図を手本として横に出すものです（読むだけ・書き換えません）。'
-    + '× で閉じられます。';
+  // BLK-builder-20260924-1801-2 (design 9a / 10c): 相手は別のフォルダ・別タブ・前回保存版・過去のコミットの
+  // どれでもよく、正しい側とは限らない (9a が「手本」「先輩」の前提を外した)。相手が何でも成り立つ言い方にする。
+  var FIRST_NOTE = 'この枠は、比べる相手の図（別のフォルダ・別タブ・前回保存版・過去のコミット）を横に出すものです'
+    + '（読むだけ・書き換えません）。× で閉じられます。';
 
   // firstOpenNote(state) — まだ説明を出していなければ文言を返す。出したなら ''。
   function firstOpenNote(state) {
@@ -283,6 +331,7 @@
     pickCounterpart: pickCounterpart, noticeText: noticeText, statusText: statusText,
     normalize: normalize, load: load, save: save,
     FIRST_NOTE: FIRST_NOTE, firstOpenNote: firstOpenNote,
+    MODE_LABELS: MODE_LABELS,
     DEFAULT_WIDTH: DEFAULT_WIDTH, MIN_WIDTH: MIN_WIDTH,
   };
 

@@ -45,6 +45,7 @@ test.describe('BLK-junior-0943 別名つきの宣言を取り込んでも壊れ�
     await page.waitForTimeout(900);
 
     // 壊れた宣言が入ると PlantUML が構文エラーを返し、描画が止まる。
-    await expect(page.locator('#render-status')).toContainText('OK');
+    // BLK-builder-20260924-1427-3 (design 7a / 10a): 描けたときの見出しは「Rendered · Nms」
+    await expect(page.locator('#render-status')).toContainText('Rendered');
   });
 });

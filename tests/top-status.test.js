@@ -68,6 +68,18 @@ describe('top-status — 上部バーに残す状態表示 (design 1a)', () => {
     expect(ts.render()).toBe('local · —');
   });
 
+  // BLK-builder-20260924-1427-3 (design 7a / 10a): プレビュー見出しは「Rendered · 32ms」。描画方法は書かない。
+  test('previewHead: 描けたことと所要時間を design の形で出す', () => {
+    expect(ts.previewHead(32)).toBe('Rendered · 32ms');
+    expect(ts.previewHead(1500)).toBe('Rendered · 1.5s');
+    expect(/local|online/.test(ts.previewHead(32))).toBe(false);
+  });
+
+  test('previewHead: 所要時間が測れなければ数字を作らない', () => {
+    expect(ts.previewHead()).toBe('Rendered · —');
+    expect(ts.previewHead(-1)).toBe('Rendered · —');
+  });
+
   test('isError: 失敗のときだけ真', () => {
     expect(ts.isError('error')).toBe(true);
     expect(ts.isError('ok')).toBe(false);

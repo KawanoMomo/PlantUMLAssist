@@ -1,0 +1,9 @@
+@startuml
+state Operation {
+  [*] --> Phase1
+}
+[*] --> Operation
+Operation --> [H] : suspend
+[H] --> Operation : resume
+Operation --> [H*] : deep suspend
+@enduml

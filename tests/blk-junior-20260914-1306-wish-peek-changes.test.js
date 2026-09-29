@@ -87,7 +87,7 @@ describe('peekChanges.compare — 1 枚の判定', function() {
     expect(row.added.length).toBe(0);
   });
 
-  test('刻印は 🕘履歴 と同じ見え方にする (同じ版を 2 通りの時刻で出さない)', function() {
+  test('刻印は 履歴 と同じ見え方にする (同じ版を 2 通りの時刻で出さない)', function() {
     var row = PC.compare(entry('a', AFTER_ADD, BEFORE, '20260914-093000'));
     expect(row.stampLabel).toBe(window.MA.versionHistory.label('20260914-093000'));
     expect(row.stampLabel).not.toBe('20260914-093000');

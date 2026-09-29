@@ -3,7 +3,7 @@
 // 名前も抽象度もばらばらな 2 枚を「読み比べて推測する」のをやめ、
 // 片方にしか無い状態・遷移をハイライトから 1 つ選べるようにする。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, openCompareTabs } = require('../helpers');
 
 // 先輩 (primary) の図。Disabled と、そこへの遷移が 1 本多い。
 const SENIOR = [
@@ -49,7 +49,7 @@ async function openCompare(page, mine) {
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(600);
   await typeDsl(page, mine == null ? MINE : mine);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#compare-pane')).toBeVisible();
 }
 
@@ -57,7 +57,7 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
 });
 
-test('「🔀 対応表」で状態と遷移の対応が並ぶ', async ({ page }) => {
+test('「対応表」で状態と遷移の対応が並ぶ', async ({ page }) => {
   await openCompare(page);
   await expect(page.locator('#map-list')).toBeHidden();
 
@@ -94,7 +94,9 @@ test('対応が付いた行を押すと自分の図のその行へ飛ぶ', async
   await page.locator('#btn-map-run').click();
 
   const row = page.locator('.map-row[data-map-type="state"][data-map-line]', { hasText: 'Ready_State' }).first();
-  await row.click();
+  // 行には「同じもの / 別もの / 先輩に聞く」のボタンが並び (BLK-junior-20260908-0823 の決め・0923 の質問)、
+  // 行の真ん中は「同じもの」に当たる。飛ぶために押すのは自分の図の名前の欄。
+  await row.locator('.map-mine').click();
   await page.waitForTimeout(300);
 
   const sel = await page.evaluate(() => {
@@ -138,7 +140,7 @@ test('抽象度が違いすぎる図では、対応が取れないことを先�
     'Init --> Configuring : begin',
     '@enduml',
   ].join('\n'));
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await page.locator('#btn-map-run').click();
 
   await expect(page.locator('#map-warn')).toBeVisible();
@@ -164,6 +166,6 @@ test('参照ペインを開き直しても対応表のボタンは出ている',
   await openCompare(page);
   await page.locator('#btn-compare-close').click();
   await expect(page.locator('#compare-pane')).toBeHidden();
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await expect(page.locator('#btn-map-run')).toBeVisible();
 });

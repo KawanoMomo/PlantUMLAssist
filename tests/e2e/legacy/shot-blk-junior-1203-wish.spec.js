@@ -3,7 +3,7 @@
 // 先輩だけにあるクラス・関係が橙で並び、関係の行が「継承: 親 A ← 子 B」と
 // 向きの分かる形になっているところを撮る。
 const { test } = require('@playwright/test');
-const { gotoApp, shotOut } = require('../helpers');
+const { gotoApp, shotOut, openCompareTabs } = require('../helpers');
 
 const OUT = shotOut('shot-blk-junior-1203-wish.png');
 
@@ -40,7 +40,7 @@ test('shot: クラス図の対応表から先輩の継承を取り込む', async
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(600);
   await typeDsl(page, MINE);
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await page.locator('#btn-map-run').click();
   await page.waitForSelector('#map-list .map-row');
   await page.locator('#compare-pane').screenshot({ path: OUT });

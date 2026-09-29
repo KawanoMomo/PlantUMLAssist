@@ -1,14 +1,13 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, switchTypeWithSample } = require('../helpers');
 
 test.describe('UC-3: 不具合対応 (dependency 追記)', () => {
   test.describe('α: DSL technical', () => {
     test('addRelation dependency emits canonical', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-component');
-      await page.waitForTimeout(300);
-      await page.locator('#co-tail-kind').selectOption('relation');
+      await switchTypeWithSample(page, 'plantuml-component');
+      await page.locator('#co-tail-kind-chip-relation').click();
       await page.locator('#co-tail-rkind').selectOption('dependency');
       await page.locator('#co-tail-from').selectOption('WebApp');
       await page.locator('#co-tail-to').selectOption('IAuth');
@@ -19,8 +18,7 @@ test.describe('UC-3: 不具合対応 (dependency 追記)', () => {
     });
     test('parser distinguishes association vs dependency', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-component');
-      await page.waitForTimeout(300);
+      await switchTypeWithSample(page, 'plantuml-component');
       await page.evaluate(() => {
         var ed = document.getElementById('editor');
         ed.value = '@startuml\nA -- B\nC ..> D\n@enduml';
@@ -39,17 +37,15 @@ test.describe('UC-3: 不具合対応 (dependency 追記)', () => {
   test.describe('γ: workflow completion', () => {
     test('relation kind selector exposes both options', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-component');
-      await page.waitForTimeout(300);
-      await page.locator('#co-tail-kind').selectOption('relation');
+      await switchTypeWithSample(page, 'plantuml-component');
+      await page.locator('#co-tail-kind-chip-relation').click();
       var options = await page.locator('#co-tail-rkind option').allTextContents();
       expect(options.some(function(o) { return o.includes('Association'); })).toBe(true);
       expect(options.some(function(o) { return o.includes('Dependency'); })).toBe(true);
     });
     test('post-add kind change works via updateRelation API', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-component');
-      await page.waitForTimeout(300);
+      await switchTypeWithSample(page, 'plantuml-component');
       await page.evaluate(() => {
         var ed = document.getElementById('editor');
         ed.value = '@startuml\nA -- B\n@enduml';

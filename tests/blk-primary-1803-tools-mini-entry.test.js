@@ -32,15 +32,24 @@ describe('畳んだツールの小さな入口 (BLK-primary-20260908-1803)', fun
     });
   });
 
-  test('札の文字は畳んでいる件数を出す', function() {
-    expect(tm.miniLabel(25)).toBe('他 25 件');
-    expect(tm.miniLabel(1)).toBe('他 1 件');
+  // BLK-builder-20260924-1416-3 (design 7a / 9a / 10a): 札の文字は「ツール ▾」。
+  // 以前の「他 25 件」は押すまで何の件数か読めなかった。件数は title に回す。
+  test('札の文字はどの件数でも「ツール ▾」', function() {
+    expect(tm.miniLabel(25)).toBe('ツール ▾');
+    expect(tm.miniLabel(1)).toBe('ツール ▾');
+    expect(tm.miniLabel(0)).toBe('ツール ▾');
+  });
+
+  test('畳んでいる件数は title で読める', function() {
+    expect(tm.miniTitle(25)).toContain('畳んでいるツール 25 件');
+    expect(tm.miniTitle(1)).toContain('畳んでいるツール 1 件');
+    expect(tm.miniTitle(25)).toContain('Ctrl+K');
   });
 
   test('件数が数でない・0 以下でも壊れない', function() {
-    expect(tm.miniLabel(0)).toBe('他 0 件');
-    expect(tm.miniLabel(null)).toBe('他 0 件');
-    expect(tm.miniLabel(undefined)).toBe('他 0 件');
+    expect(tm.miniTitle(0)).toContain('畳んでいるツール 0 件');
+    expect(tm.miniTitle(null)).toContain('畳んでいるツール 0 件');
+    expect(tm.miniTitle(undefined)).toContain('畳んでいるツール 0 件');
   });
 
   test('メニューに載っているボタンは全部畳む対象 (札の件数と一致する)', function() {

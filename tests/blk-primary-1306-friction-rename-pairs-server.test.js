@@ -77,4 +77,17 @@ describe('POST/GET /rename-pairs', function() {
     ]);
     expect(JSON.parse(out)).toEqual([]);
   });
+
+  // BLK-primary-20260914-1106-friction: 当てた組だけが applied_at を持ち、
+  // 当てた後に打っただけの回が来ても当てた日時は消えない。
+  test('applied: true の組だけ applied_at を持ち、打ち直しで消えない', function() {
+    const out = runPython([
+      'post({"dir": tmp, "from": "SpiDrv", "to": "Spi_Driver", "hits": 9, "applied": True})',
+      'post({"dir": tmp, "from": "SpiRegs", "to": "Spi_Registers", "hits": 7})',
+      'post({"dir": tmp, "from": "SpiDrv", "to": "Spi_Driver", "hits": 0})',
+      'rows = {r["from"]: r for r in get()["pairs"]}',
+      'print(json.dumps([bool(rows["SpiDrv"].get("applied_at")), "applied_at" in rows["SpiRegs"]]))',
+    ]);
+    expect(JSON.parse(out)).toEqual([true, false]);
+  });
 });

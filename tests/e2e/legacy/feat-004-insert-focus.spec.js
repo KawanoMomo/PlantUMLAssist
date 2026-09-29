@@ -91,11 +91,11 @@ test.describe('FEAT-004: 挿入 modal の本文欄への初期フォーカス', 
     expect(await page.locator('#seq-mod-to').inputValue()).toBe('DB');
     expect(await page.locator('#seq-mod-arrow').inputValue()).toBe('->');
 
-    // 変更前も Escape で modal は閉じない (rle-escape の listener が存在しない)。
-    // フォーカス移動によってこの挙動が変わっていないことを確認する。
+    // BLK-owner-20260924-2232-4: 窓は Esc で「キャンセル」する (以前は閉じなかった)。
+    // 本文欄にフォーカスがあっても (rle-escape) 同じく閉じる。
     await page.keyboard.press('Escape');
     await page.waitForTimeout(200);
-    expect(await page.locator('#seq-modal').evaluate((el) => el.style.display)).toBe('flex');
+    expect(await page.locator('#seq-modal').evaluate((el) => el.style.display)).toBe('none');
     expect(errors).toEqual([]);
   });
 

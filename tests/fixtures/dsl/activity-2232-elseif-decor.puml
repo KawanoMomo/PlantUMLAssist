@@ -1,0 +1,21 @@
+@startuml
+header H1
+footer F1
+title T1
+caption C1
+legend
+L1
+endlegend
+start
+:a;
+if (c1?) then (yes)
+  :b;
+elseif (c2?) then (yes)
+  :c;
+else (no)
+  :d;
+endif
+-> lbl;
+:e;
+stop
+@enduml

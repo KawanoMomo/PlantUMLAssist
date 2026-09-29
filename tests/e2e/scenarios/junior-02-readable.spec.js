@@ -5,7 +5,32 @@ const { test, expect } = require('@playwright/test');
 const { setDiagramTitle, getEditorText } = require('../helpers');
 const S = require('./_scenario');
 
+// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
+// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
+async function openFolder(page) {
+  // BLK-owner-20260924-0637-1: 旧 📂 一覧は保存先の右クリック「保存先の一覧を開く」で中央の枠に開く。
+  await require('./_scenario').openFolder(page);
+  await page.waitForSelector('#folder-panel.open');
+}
+
+
+// BLK-owner-20260923-1509-prune: 「並べる」面はタブ列の「並べて比較」1 つになった。
+// 旧 ⇔ 並べて見る (#btn-tab-compare) はその枠の相手「別タブの図」になったので、
+// 台本の手順も 「並べて比較を開く → 相手を選ぶ」を通る。見る中身は変わらない。
+async function openCompareTabs(p) {
+  await p.waitForSelector('#btn-tab-senior');
+  if (await p.locator('#senior-pane').isHidden()) {
+    await p.locator('#btn-tab-senior').click();
+  }
+  await p.locator('#senior-target-tabs').click();
+  await p.waitForSelector('#compare-pane:not([hidden])');
+}
+
 const DIR = S.dirFor(__filename);
+
+// 読み込み直した直後の画面は init (保存先の取り込み /prefs を最大 3 秒待って走る) の前の骨格で、
+// 札やボタンは見えていても押しても何も起きない。全体実行 (--workers=4) で /prefs が遅い回に
+// 部品ビュー・並べて比較の手順が落ちていたので、reload の後は押せるようになった印を待つ。
 
 // BLK-junior-20260909-0603-wish: 手本は `persona-data\primary` にあり、自分のタブに
 // 無い。覗く画面は全面のモーダルなので、開くと書きかけが見えず、閉じると手本が
@@ -61,6 +86,8 @@ test('手順2 先輩の構成(参加者5・メッセージ6)を名前と本文�
   await page.locator('#diagram-type').selectOption('plantuml-sequence');
   await page.waitForTimeout(500);
 
+  // 名前と本文だけの表は、まとめて足す入口 (種別チップの「まとめて」) の中にある。
+  await page.locator('#seq-tail-kind-chip-bulk').click();
   await page.locator('#seq-scaffold-open').click();
   await expect(page.locator('#seq-sc-modal')).toBeVisible();
 
@@ -124,6 +151,77 @@ test('手順2 先輩の構成(参加者5・メッセージ6)を名前と本文�
   expect(t).toContain('P1 --> Dev : E_OK');
 });
 
+// BLK-human-20260923-1330: 自己メッセージ (`A -> A`) は PlantUML の正当な記法なのに、
+// 「まとめて追加」が「From と To が同じです」で確定ボタンごと止めていた。
+// 検証は「止める」ではなく「知らせる」: 警告は出るが追加はできる。
+test('手順2 同じ参加者へのメッセージを含む構成も、警告は出たうえでまとめて追加できる', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('#preview-svg', { timeout: 5000 });
+  await page.locator('#diagram-type').selectOption('plantuml-sequence');
+  await page.waitForTimeout(500);
+
+  // 名前と本文だけの表は、まとめて足す入口 (種別チップの「まとめて」) の中にある。
+  await page.locator('#seq-tail-kind-chip-bulk').click();
+  await page.locator('#seq-scaffold-open').click();
+  await expect(page.locator('#seq-sc-modal')).toBeVisible();
+
+  await page.locator('#seq-sc-title').fill('TIMER内部処理');
+  await page.locator('#seq-sc-ptype-0').selectOption('actor');
+  await page.locator('#seq-sc-pname-0').fill('Dev');
+  await page.locator('#seq-sc-ptype-1').selectOption('participant');
+  await page.locator('#seq-sc-pname-1').fill('Timer');
+  await page.waitForTimeout(200);
+
+  // 1 本目は普通のメッセージ、2 本目を自己メッセージにする。
+  await page.locator('#seq-sc-mfrom-0').selectOption('Dev');
+  await page.locator('#seq-sc-mto-0').selectOption('Timer');
+  await page.locator('#seq-sc-mtext-0').fill('Timer_Init()');
+  await page.locator('#seq-sc-add-msg').click();
+  await page.locator('#seq-sc-mfrom-1').selectOption('Timer');
+  await page.locator('#seq-sc-mto-1').selectOption('Timer');
+  await page.locator('#seq-sc-mtext-1').fill('内部処理');
+  await page.waitForTimeout(300);
+
+  // 到達条件その1: 警告は出る (何を確かめてほしいかが読める)。
+  const notice = page.locator('#seq-sc-errors');
+  await expect(notice).toContainText('From と To');
+  await expect(notice.locator('.scaffold-warn')).toHaveCount(1);
+  await expect(notice.locator('.scaffold-error')).toHaveCount(0);
+
+  // 到達条件その2: 警告が出ていても「追加」は押せる (止められない)。
+  const confirm = page.locator('#seq-sc-confirm');
+  await expect(confirm).toBeEnabled();
+  await expect(page.locator('#seq-sc-preview')).toContainText('Timer -> Timer : 内部処理');
+
+  await confirm.click();
+  await page.waitForTimeout(400);
+
+  // 到達条件その3: 自己メッセージが矢印の形のまま DSL に入る。
+  const t = await getEditorText(page);
+  expect(t).toContain('Dev -> Timer : Timer_Init()');
+  expect(t).toContain('Timer -> Timer : 内部処理');
+
+  // 到達条件その4: プレビューに自己メッセージの矢印が描かれる。
+  await page.waitForTimeout(2500);
+  await expect(page.locator('#preview-svg svg')).toBeVisible();
+  const selfMsg = await page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    if (!svg) return null;
+    const hit = Array.prototype.some.call(svg.querySelectorAll('text'),
+      (n) => (n.textContent || '').indexOf('内部処理') >= 0);
+    // 自己メッセージは往路と復路に分かれて描かれるので、本数ではなく
+    // 「両方のラベルが図に出ている」ことで確かめる。
+    const init = Array.prototype.some.call(svg.querySelectorAll('text'),
+      (n) => (n.textContent || '').indexOf('Timer_Init()') >= 0);
+    // PlantUML 1.2026.7 からメッセージは g.message に入らない。矢じり (<polygon>) の数で数える。
+    return { drawn: hit, initDrawn: init, messages: svg.querySelectorAll('g.message').length || svg.querySelectorAll('polygon').length };
+  });
+  expect(selfMsg, 'プレビューが描かれている').not.toBeNull();
+  expect(selfMsg.drawn, '自己メッセージのラベルが図に出る').toBe(true);
+  expect(selfMsg.initDrawn, '通常のメッセージも並んで出る').toBe(true);
+  expect(selfMsg.messages >= 2, '矢印が描かれている').toBe(true);
+});
+
 // BLK-junior-20260909-0603-wish: 手本を「見て → 閉じて → 記憶で打つ」の往復をなくす。
 // 覗いたその 1 枚を閉じずに書きかけの右へ据え、足りない状態・遷移を色で出す。
 test('手順2 先輩の図を手本として右に据えたまま、自分に無い状態・遷移が色で分かる', async ({ page }) => {
@@ -132,6 +230,7 @@ test('手順2 先輩の図を手本として右に据えたまま、自分に無
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'timer_state', SENIOR_STATE);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-peek');
 
   // 書きかけ (手順 2 の途中。手本の 5 遷移のうち 2 本しか打てていない)。
@@ -271,6 +370,64 @@ test('手順2 手本の矢印から、種類を選び直さずに同じ関連を
   expect(t).toContain('Driver_Common --> IRQCtrl : uses');
 });
 
+// BLK-owner-20260929-0351-1: 関係のフォームの上の欄 (From) は、どの種類でも図に描かれる矢の根元。
+// 継承・実現では子 (実装クラス) が From。以前は「親 (From)」で、子を From に選ぶと継承が逆向きに入った。
+const DRV_CLASS = [
+  '@startuml',
+  'interface IDrv',
+  'abstract class BaseDrv',
+  'class SpiDrv',
+  '@enduml',
+].join('\n');
+
+test('手順2 継承・実現は子 (実装クラス) を From に選べば、その向きのまま入り、選び直しても同じ順で出る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR + '-from-root');
+  await page.locator('#diagram-type').selectOption('plantuml-class');
+  await page.waitForTimeout(400);
+  await S.typeDsl(page, DRV_CLASS);
+  await page.waitForTimeout(1500);
+
+  // 継承: 上の欄は 子 (From)、下の欄は 親 (To)。子の SpiDrv を From に選ぶ。
+  await page.locator('#cl-tail-kind-chip-relation').click();
+  await page.locator('.cl-tail-rkind-card[data-value="inheritance"]').click();
+  await expect(page.locator('#cl-tail-from-label')).toHaveText('子 (From)');
+  await expect(page.locator('#cl-tail-to-label')).toHaveText('親 (To)');
+  await page.locator('#cl-tail-from').selectOption('SpiDrv');
+  await page.locator('#cl-tail-to').selectOption('BaseDrv');
+  await expect(page.locator('#cl-tail-rpreview')).toContainText('BaseDrv <|-- SpiDrv');
+  await expect(page.locator('#cl-tail-rpreview')).toContainText('子: SpiDrv / 親: BaseDrv');
+  await page.locator('#cl-tail-add').click();
+  await page.waitForTimeout(800);
+  let t = await getEditorText(page);
+  expect(t).toContain('BaseDrv <|-- SpiDrv');
+  expect(t).not.toContain('SpiDrv <|-- BaseDrv');
+
+  // 実現: 実装クラス (From) / インターフェース (To)。
+  if (!(await page.locator('#cl-tail-rkind').count())) await page.locator('#cl-tail-kind-chip-relation').click();
+  await page.locator('.cl-tail-rkind-card[data-value="implementation"]').click();
+  await expect(page.locator('#cl-tail-from-label')).toHaveText('実装クラス (From)');
+  await expect(page.locator('#cl-tail-to-label')).toHaveText('インターフェース (To)');
+  await page.locator('#cl-tail-from').selectOption('SpiDrv');
+  await page.locator('#cl-tail-to').selectOption('IDrv');
+  await page.locator('#cl-tail-add').click();
+  await page.waitForTimeout(1500);
+  t = await getEditorText(page);
+  expect(t).toContain('IDrv <|.. SpiDrv');
+  expect(t).not.toContain('SpiDrv <|.. IDrv');
+
+  // 図で継承の線を押すと、編集パネルも 子 (From) = SpiDrv / 親 (To) = BaseDrv の順で出る。
+  const line = t.split('\n').findIndex((l) => l === 'BaseDrv <|-- SpiDrv') + 1;
+  const rel = page.locator('#overlay-layer [data-type="relation"][data-line="' + line + '"]').first();
+  await expect(rel).toBeAttached({ timeout: 10000 });
+  const rb = await rel.boundingBox();
+  await page.mouse.click(rb.x + rb.width / 2, rb.y + rb.height / 2);
+  await page.waitForTimeout(400);
+  await expect(page.locator('#cl-rel-from')).toHaveValue('SpiDrv');
+  await expect(page.locator('#cl-rel-to')).toHaveValue('BaseDrv');
+  await expect(page.locator('#props-content')).toContainText('子 (From)');
+  await expect(page.locator('#props-content')).toContainText('親 (To)');
+});
+
 // BLK-junior-20260912-2103-wish: 手順 2 で先輩の図の構成をそのまま持ち込むと、
 // `actor` を持ち、ラベルに括弧の付くシーケンスは本文判定でユースケースに倒れる。
 // 保存した図種を控えておき、一覧の行に印として出し、そのまま開けることを守る。
@@ -308,7 +465,7 @@ test('手順2 保存した図種の印が一覧に出て、押すとその図種
   await page.waitForTimeout(400);
 
   // 到達条件その1: 一覧の行に「前回保存した図種」の印が出る。
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForTimeout(800);
   const badge = page.locator('#folder-panel .folder-kind[data-kind-of="timer_init_sequence"]');
   await expect(badge).toHaveAttribute('data-saved-kind', 'sequence');
@@ -379,7 +536,86 @@ test('手順2 手本の無い部品のコンポーネント図を、部品名 1 
   // (足し忘れたまま先へ進まない)。
   await page.waitForTimeout(400);
   await expect(page.locator('#co-deps-summary')).toHaveAttribute('data-catalog-missing', '0');
+
+  // BLK-owner-20260923-2332-2: 部品を境界 (package) で囲むところまでフォームだけで行う。
+  // 到達条件その5: 境界を作った直後は、その境界が「追加する位置」に選ばれている。
+  await page.locator('#co-tail-kind-chip-package').click();
+  await page.locator('#co-tail-label').fill('Mcal');
+  await page.locator('#co-tail-add').click();
+  await page.waitForTimeout(800);
+  expect(await getEditorText(page)).toContain('package "Mcal" {');
+  await page.locator('#co-tail-kind-chip-component').click();
+  await expect(page.locator('#co-tail-place option:checked')).toHaveText('境界『Mcal』の中');
+
+  // 到達条件その6: そのまま部品を足すと境界の `{ }` の中に入る。
+  await page.locator('#co-tail-alias').fill('Timer_Hw');
+  await page.locator('#co-tail-add').click();
+  await page.waitForTimeout(1200);
+  expect(await getEditorText(page)).toMatch(/package "Mcal" \{\n\s+component Timer_Hw\n\}/);
+
+  // 到達条件その7: 図で既にある部品を選び、右パネルから同じ境界の中へ移せる。
+  const hit = page.locator('#overlay-layer rect.selectable[data-type="component"][data-id="TIMER_Driver"]').first();
+  await expect(hit).toBeAttached({ timeout: 10000 });
+  const hb = await hit.boundingBox();
+  await page.mouse.click(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.waitForTimeout(300);
+  await page.locator('#co-edit-group-move').selectOption({ label: '境界『Mcal』の中へ移す' });
+  await page.waitForTimeout(800);
+  const moved = await getEditorText(page);
+  expect(moved).toMatch(/package "Mcal" \{\n\s+component Timer_Hw\n\s+component[^\n]*TIMER_Driver[^\n]*\n\}/);
+  // 移したのは宣言の行だけ。依存の行は元の場所のまま。
+  expect(moved).toContain('TIMER_Driver ..> Clock_Ctrl : クロック制御');
+  // 依存の行より前に境界が来ている (後ろだと PlantUML が「already defined」で描けない)。
+  expect(moved.indexOf('package "Mcal" {')).toBeLessThan(moved.indexOf('TIMER_Driver ..> Clock_Ctrl'));
+  // 描き直した図でも、境界の中の部品を押して選べる。
+  await expect(page.locator('#overlay-layer rect.selectable[data-type="component"][data-id="TIMER_Driver"]').first())
+    .toBeAttached({ timeout: 10000 });
 });
+
+// BLK-owner-20260924-2232-2: 台本の成長規則 (コンポーネント図 → ユースケース図) で、白紙から
+// 境界を先に置いて中身を足す順でも起こせる。境界だけの本文 (`package "Mcal" {` / `}`) は
+// PlantUML がクラス図として描くので、以前は右パネルがクラスの追加フォームに替わり、
+// レールを押し直しても戻らず、部品もユースケースも 1 つも足せなかった。
+for (const c of [
+  { rail: 'plantuml-component', pre: 'co', name: 'コンポーネント', boundary: 'Mcal', kind: 'component', elem: 'Dio' },
+  { rail: 'plantuml-usecase', pre: 'uc', name: 'ユースケース', boundary: 'ECU', kind: 'usecase', elem: 'Init' },
+]) {
+  test('手順2 白紙の' + c.name + '図に境界を先に置き、同じ図種のまま中へ要素を足せる', async ({ page }) => {
+    await S.bootWithSaveDir(page, DIR + '-boundary-first');
+    await page.locator('#btn-tab-new').click();
+    await page.waitForTimeout(400);
+    await page.locator('#rail-types .rail-btn[data-type="' + c.rail + '"]').click();
+    await page.waitForTimeout(800);
+
+    await page.locator('#' + c.pre + '-tail-kind-chip-package').click();
+    await page.locator('#' + c.pre + '-tail-label').fill(c.boundary);
+    await page.locator('#' + c.pre + '-tail-add').click();
+    await page.waitForTimeout(1500);   // 描画 (SVG の図種の照合) まで待つ
+    expect(await getEditorText(page)).toMatch(new RegExp('\\{\\n\\}'));
+
+    // 境界しか無くても、図種も右パネルも選んだ図種のまま (クラスの追加フォームに替わらない)。
+    await expect(page.locator('#diagram-type')).toHaveValue(c.rail);
+    await expect(page.locator('[id^="cl-tail-kind-chip-"]')).toHaveCount(0);
+    await expect(page.locator('#' + c.pre + '-tail-add')).toBeVisible();
+    // レールの同じ図種を押し直しても本文は入れ替わらない。
+    await page.locator('#rail-types .rail-btn[data-type="' + c.rail + '"]').click();
+    await page.waitForTimeout(400);
+    expect(await getEditorText(page)).toContain('"' + c.boundary + '" {');
+    await expect(page.locator('#' + c.pre + '-tail-add')).toBeVisible();
+
+    // 次の要素の「追加する位置」は今置いた境界の中で、足すとその `{ }` に入る。
+    await page.locator('#' + c.pre + '-tail-kind-chip-' + c.kind).click();
+    await expect(page.locator('#' + c.pre + '-tail-place option:checked')).toHaveText('境界『' + c.boundary + '』の中');
+    await page.locator('#' + c.pre + '-tail-alias').fill(c.elem);
+    await page.locator('#' + c.pre + '-tail-add').click();
+    await page.waitForTimeout(1200);
+    expect(await getEditorText(page)).toMatch(new RegExp('"' + c.boundary + '" \\{\\n\\s+' + c.kind + ' ' + c.elem + '\\n\\}'));
+    await expect(page.locator('#diagram-type')).toHaveValue(c.rail);
+    // 描き直した図でも、境界の中の要素を押して選べる。
+    await expect(page.locator('#overlay-layer .selectable[data-id="' + c.elem + '"]').first())
+      .toBeAttached({ timeout: 10000 });
+  });
+}
 // BLK-human-20260912-2130: 手順 2 で junior が起こす 5 図種 (状態遷移・クラス・
 // コンポーネント・ユースケース・アクティビティ) でも、シーケンスと同じく
 // 「ホバーすると選択範囲が枠で見え、その枠内のどこを押しても同じ要素が選べる」こと。
@@ -626,6 +862,7 @@ test('手順2 先輩が足したメソッドを、記法を打ち直さずに自
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'driver_common_class', SENIOR_IRQ);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-peek');
   await page.locator('#diagram-type').selectOption('plantuml-class');
   await page.waitForTimeout(400);
@@ -697,6 +934,7 @@ test('手順2 遷移ラベルを、先輩の図を開かずに部品の名前帳
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'spi_init_sequence', SENIOR_SPI_SEQ);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-peek');
   await page.locator('#diagram-type').selectOption('plantuml-state');
   await page.waitForTimeout(400);
@@ -780,6 +1018,7 @@ test.describe('junior 手順2: 部品を選ぶと 6 図種が 2 列で並び、�
     await S.putDoc(page, BOARD_SENIOR, 'spi_activity', BOARD_SENIOR_ACT);
     await S.putDoc(page, BOARD_SENIOR, 'driver_common_class', BOARD_SENIOR_CLASS);
     await page.reload();
+    await page.waitForSelector('html[data-app-ready="1"]');
     await page.waitForSelector('#btn-tab-peek');
   });
 
@@ -931,6 +1170,7 @@ test('手順2 活動図の本文を、先輩のクラス図タブに行かずに
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'driver_common_class', SENIOR_COMMON_CLASS);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-peek');
   await page.locator('#diagram-type').selectOption('plantuml-activity');
   await page.waitForTimeout(400);
@@ -955,9 +1195,17 @@ test('手順2 活動図の本文を、先輩のクラス図タブに行かずに
   // 到達条件その2: 押せば括弧まで入り、そのままアクションとして足せる。
   await picker.locator('.vocab-chip[data-name="Spi_Init"]').click();
   await expect(page.locator('#ac-tail-text')).toHaveValue('Spi_Init()');
-  await page.locator('#ac-tail-add').click();
+  // BLK-owner-20260925-0312-4: 処理欄も他の図種と同じく Enter で確定 (改行は Shift+Enter)。
+  await page.locator('#ac-tail-text').press('Enter');
+  await expect.poll(async () => getEditorText(page)).toContain(':Spi_Init();');
   await page.waitForTimeout(400);
-  expect(await getEditorText(page)).toContain(':Spi_Init();');
+  await page.locator('#ac-tail-text').click();
+  await page.keyboard.type('Clk_A');
+  await page.keyboard.press('Shift+Enter');
+  await page.keyboard.type('Clk_B');
+  await expect(page.locator('#ac-tail-text')).toHaveValue('Clk_A\nClk_B');
+  expect(await getEditorText(page)).not.toContain('Clk_A');
+  await page.locator('#ac-tail-text').fill('');
 
   // 到達条件その3: 打ちかけの本文は消えない (カーソル位置に差し込む)。
   await page.locator('#ac-tail-kind').selectOption('action');
@@ -971,6 +1219,54 @@ test('手順2 活動図の本文を、先輩のクラス図タブに行かずに
   await page.locator('#ac-tail-text').fill('SpiTransmit');
   await page.waitForTimeout(200);
   await expect(page.locator('#ac-tail-text-vocab .vocab-warn')).toContainText('Spi_Transmit');
+
+  // 到達条件その5 (BLK-owner-20260924-2259-prune): 追加のフォームは 1 つ。途中に入れるときも同じフォームの
+  // 「追加する位置」で選ぶ (「＋ この位置に挿入」の 2 つ目のフォームは無い)。確定は 6 図種で同じ「+ 追加」。
+  await expect(page.locator('#ac-ins-point')).toHaveCount(0);
+  await expect(page.locator('#ac-tail-add')).toHaveText('+ 追加');
+  const places = await page.locator('#ac-tail-where option').allTextContents();
+  expect(places[0]).toBe('図の末尾');
+  const afterInit = places.findIndex((t) => t.includes('Spi_Init()') && t.includes('の後'));
+  expect(afterInit).toBeGreaterThan(0);
+  await page.locator('#ac-tail-where').selectOption({ index: afterInit });
+  await page.locator('#ac-tail-kind-chip-if').click();
+  await page.locator('#ac-tail-cond').fill('送信バッファ空?');
+  await page.locator('#ac-tail-add').click();
+  await page.waitForTimeout(400);
+  const acLines = (await getEditorText(page)).split('\n').map((l) => l.trim());
+  const initAt = acLines.indexOf(':Spi_Init();');
+  expect(acLines[initAt + 1]).toBe('if (送信バッファ空?) then (yes)');
+  expect(acLines.indexOf('endif')).toBeLessThan(acLines.indexOf('stop'));
+  // BLK-owner-20260927-0745-1: 枠は空の枝で入り、頼んでいない空のアクション `:;` を書かない。
+  // 枝のはじめは中身が無くても「追加する位置」で選べ、足した処理はその枝の中に入る。
+  expect(acLines).not.toContain(':;');
+  const placesIf = await page.locator('#ac-tail-where option').allTextContents();
+  const noHead = placesIf.findIndex((t) => t.includes('送信バッファ空?') && t.includes('no 側のはじめ'));
+  expect(noHead).toBeGreaterThan(0);
+  await page.locator('#ac-tail-kind-chip-action').click();
+  await page.locator('#ac-tail-where').selectOption({ index: noHead });
+  await page.locator('#ac-tail-text').fill('エラー通知');
+  await page.locator('#ac-tail-text').press('Enter');
+  await expect.poll(async () => getEditorText(page)).toContain(':エラー通知;');
+  const acLinesNo = (await getEditorText(page)).split('\n').map((l) => l.trim());
+  expect(acLinesNo[acLinesNo.indexOf('else (no)') + 1]).toBe(':エラー通知;');
+  expect(acLinesNo[acLinesNo.indexOf('else (no)') + 2]).toBe('endif');
+  expect(acLinesNo).not.toContain(':;');
+
+  // BLK-owner-20260925-0312-4: 「start の直後」はフローの先頭として選べ、処理を打って Enter で start の次の行に入る。
+  const places2 = await page.locator('#ac-tail-where option').allTextContents();
+  expect(places2.join('|')).not.toContain('フローのはじめ');
+  const afterStart = places2.findIndex((t) => t.trim().startsWith('start の直後'));
+  expect(afterStart).toBeGreaterThan(0);
+  await page.locator('#ac-tail-kind-chip-action').click();
+  await page.locator('#ac-tail-where').selectOption({ index: afterStart });
+  await expect(page.locator('#ac-tail-add')).toBeEnabled();
+  await expect(page.locator('#ac-tail-where-note')).toBeHidden();
+  await page.locator('#ac-tail-text').fill('クロック有効化');
+  await page.locator('#ac-tail-text').press('Enter');
+  await expect.poll(async () => getEditorText(page)).toContain(':クロック有効化;');
+  const acLines2 = (await getEditorText(page)).split('\n').map((l) => l.trim());
+  expect(acLines2[acLines2.indexOf('start') + 1]).toBe(':クロック有効化;');
 
   // 先輩のファイルは読むだけ (書き換えない)。
   expect(await S.readDoc(page, SENIOR_DIR, 'driver_common_class')).toBe(SENIOR_COMMON_CLASS);
@@ -1027,6 +1323,7 @@ test('手順2 登録簿の組を選ぶだけで、揺れの残る図がまとめ
     { canonical: 'Clock_Ctrl', variants: ['ClockCtrl'] },
   ]);
   await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.waitForSelector('#btn-tab-unify');
 
   await page.locator('#btn-tab-unify').click();
@@ -1098,14 +1395,20 @@ test('手順1-2 先輩側の増分が入る位置つきで並び、チェック�
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'timer_init_sequence', TAKE_SENIOR);
   await page.reload();
-  await page.waitForSelector('#btn-tab-compare');
+  await page.waitForSelector('html[data-app-ready="1"]');
+  await page.waitForSelector('#btn-tab-senior');
   await S.typeDsl(page, TAKE_SELF);
   await S.renameActive(page, 'timer_init_sequence');
 
   // 手順1: 先輩のフォルダを相手にする (自分の保存先は変えない)。
-  await page.locator('#btn-tab-compare').click();
-  await page.locator('#xf-dir').fill(SENIOR_DIR);
-  await page.locator('#btn-xf-load').click();
+  // BLK-owner-20260924-2135-prune: 相手のフォルダはパスを打たず、FILES「読むだけ」で比較中にしたフォルダから取る。
+  // 参照ペインにパスを打つ欄は無い。
+  await openCompareTabs(page);
+  await expect(page.locator('#xf-bar input')).toHaveCount(0);
+  await S.compareFolder(page, 'primary');
+  await openCompareTabs(page);
+  await expect(page.locator('#xf-dir-name')).toHaveText('primary');
+  await expect(page.locator('#xf-dir-hint')).toBeHidden();
   await expect(page.locator('#xf-summary')).toBeVisible();
 
   // 到達条件その1: 増えた 3 要素が、それぞれ「どこへ入るか」つきで並ぶ。
@@ -1137,6 +1440,9 @@ test('手順1-2 先輩側の増分が入る位置つきで並び、チェック�
   await expect(page.locator('#xf-list .xf-row.only-ref')).toHaveCount(0);
   // 先輩のファイルは読むだけ (書き換えない)。
   expect(await S.readDoc(page, SENIOR_DIR, 'timer_init_sequence')).toBe(TAKE_SENIOR);
+  // 相手のフォルダ名を押すと、FILES「読むだけ」のその行へ移る (別のフォルダはそこで選ぶ)。
+  await page.locator('#xf-dir-name').click();
+  await expect(page.locator('#files-panel .files-ro-folder[data-ro-name="primary"]')).toBeFocused();
 });
 
 // BLK-junior-20260917-0323-wish: 同じ手順1〜2 の、状態遷移図 (TIMER) で
@@ -1176,13 +1482,15 @@ test('手順1-2 親状態の中に増えた子状態が入れ子のまま並び�
   await S.clearDir(page, SENIOR_DIR);
   await S.putDoc(page, SENIOR_DIR, 'timer_state', NEST_SENIOR);
   await page.reload();
-  await page.waitForSelector('#btn-tab-compare');
+  await page.waitForSelector('html[data-app-ready="1"]');
+  await page.waitForSelector('#btn-tab-senior');
   await S.typeDsl(page, NEST_SELF);
   await S.renameActive(page, 'timer_state');
 
-  await page.locator('#btn-tab-compare').click();
-  await page.locator('#xf-dir').fill(SENIOR_DIR);
-  await page.locator('#btn-xf-load').click();
+  // BLK-owner-20260924-2135-prune: 相手のフォルダはパスを打たず、FILES「読むだけ」で比較中にしたフォルダから取る。
+  await S.compareFolder(page, 'primary');
+  await openCompareTabs(page);
+  await expect(page.locator('#xf-dir-name')).toHaveText('primary');
   await expect(page.locator('#xf-summary')).toBeVisible();
 
   // 到達条件その1: 子状態 2 つと子の遷移 2 本が、親の中の増分として並ぶ。
@@ -1246,13 +1554,15 @@ test('手順1 先輩に同じ図種が無いことが、突き合わせの答え
   await S.putDoc(page, SENIOR_DIR, 'timer_init_sequence', CLS_SENIOR_SEQ);
   await S.putDoc(page, SENIOR_DIR, 'timer_state', CLS_SENIOR_STATE);
   await page.reload();
-  await page.waitForSelector('#btn-tab-compare');
+  await page.waitForSelector('html[data-app-ready="1"]');
+  await page.waitForSelector('#btn-tab-senior');
   await S.typeDsl(page, CLS_SELF);
   await S.renameActive(page, 'TimerDrv派生クラス図');
 
-  await page.locator('#btn-tab-compare').click();
-  await page.locator('#xf-dir').fill(SENIOR_DIR);
-  await page.locator('#btn-xf-load').click();
+  // BLK-owner-20260924-2135-prune: 相手のフォルダはパスを打たず、FILES「読むだけ」で比較中にしたフォルダから取る。
+  await S.compareFolder(page, 'primary');
+  await openCompareTabs(page);
+  await expect(page.locator('#xf-dir-name')).toHaveText('primary');
   const summary = page.locator('#xf-summary');
   await expect(summary).toBeVisible();
 
@@ -1275,4 +1585,230 @@ test('手順1 先輩に同じ図種が無いことが、突き合わせの答え
     .toContainText('シーケンス図。図種が違います');
   await expect(opts.filter({ hasText: 'timer_state' }))
     .toContainText('状態遷移図。図種が違います');
+});
+
+// BLK-junior-20260917-0523-wish: 図種は合っても部品名が違う相手 (TIMER を含まない
+// driver_common_class) が「対応が付きません。選んでください」に混じり、開いて読むまで
+// TIMER 用でないと分からなかった。部品名を含む同じ図種が 0 枚なら、選ばせずに言い切り、
+// その場で「対応不要（手本なし）」として控えられる。
+const CLS_SENIOR_COMMON = [
+  '@startuml', 'class Spi', 'class Can', 'class Gpio', 'class Uart', 'class Adc', '@enduml',
+].join('\n');
+
+test('手順1 同じ図種でも部品名が違う図しか無ければ、開かずに「無い」と分かり控えられる', async ({ page }) => {
+  await S.bootWithSaveDir(page, MINE_DIR);
+  await S.clearDir(page, MINE_DIR);
+  await S.clearDir(page, SENIOR_DIR);
+  await S.putDoc(page, SENIOR_DIR, 'timer_init_sequence', CLS_SENIOR_SEQ);
+  await S.putDoc(page, SENIOR_DIR, 'timer_state', CLS_SENIOR_STATE);
+  await S.putDoc(page, SENIOR_DIR, 'driver_common_class', CLS_SENIOR_COMMON);
+  await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
+  await page.waitForSelector('#btn-tab-senior');
+  await S.typeDsl(page, CLS_SELF);
+  await S.renameActive(page, 'TimerDrv派生クラス図');
+
+  // BLK-owner-20260924-2135-prune: 相手のフォルダはパスを打たず、FILES「読むだけ」で比較中にしたフォルダから取る。
+  await S.compareFolder(page, 'primary');
+  await openCompareTabs(page);
+  await expect(page.locator('#xf-dir-name')).toHaveText('primary');
+  const summary = page.locator('#xf-summary');
+  await expect(summary).toBeVisible();
+
+  // 到達条件その1: 部品名つきで「無い」と言い切る (候補を開いて読まなくてよい)。
+  await expect(summary).toContainText('TIMER のクラス図がありません');
+  await expect(summary).toContainText('3 枚中 0 枚');
+  await expect(summary).toContainText('先へ進めます');
+  await expect(summary).toHaveClass(/clean/);
+  await expect(page.locator('#xf-list')).toBeHidden();
+  // BLK-junior-20260917-0523-friction: 候補一覧の時点で、部品名を含まない図に印が出る。
+  await expect(page.locator('#xf-file option', { hasText: 'driver_common_class' }))
+    .toContainText('部品名なし。TIMER を含みません');
+
+  // 到達条件その2: その場で「対応不要（手本なし）」として自分の図に控えられる。
+  const keep = page.locator('#xf-keep-verdict');
+  await expect(keep).toBeVisible();
+  await keep.click();
+  await expect(keep).toBeDisabled();
+  await expect.poll(() => getEditorText(page)).toContain("' @peek ");
+  await expect.poll(() => getEditorText(page)).toContain('TIMER の手本なし');
+});
+
+// BLK-builder-20260924-1252-4 (design 4a): 先輩の構成を真似てクラス図を起こすとき、属性の名前・可視性は
+// 右パネルの 1 行 1 レコードで直す。閉じた行は「記号・シグネチャ・編集」だけで、図の属性を押すと同じ行が
+// その場で開き、入力に合わせて「組み立てられる行」が変わる。並べ替えと削除は開いた行の中にある。
+test('手順2 クラスの属性は図で押した行がその場で開き、組み立てられる行を見てから直せる', async ({ page }) => {
+  await S.bootPlain(page);
+  await S.typeDsl(page, ['@startuml', 'class SpiDrv {', '  - rxbuf : int', '  + Spi_Init() : void', '}', '@enduml'].join('\n'));
+  await page.waitForSelector('#overlay-layer rect[data-type="member"]');
+  // 到達条件その1: クラスを選ぶと、属性・メソッドは閉じた 1 行で、右端に「編集」。消すボタンは閉じた行に無い。
+  const cls = page.locator('#preview-svg text', { hasText: 'SpiDrv' }).first();
+  const cb = await cls.boundingBox();
+  await page.mouse.click(cb.x + cb.width / 2, cb.y + cb.height / 2);
+  const row = page.locator('.cl-member-row[data-member-kind="attribute"]').first();
+  await expect(row.locator('.cl-mem-sig')).toHaveText('rxbuf : int');
+  await expect(row.locator('.cl-mem-vis')).toHaveText('−');
+  await expect(row.locator('.cl-mem-edit')).toHaveText('編集');
+  await expect(page.locator('[id^="cl-mem-del-"]')).toHaveCount(0);
+  // 到達条件その2: 図の属性を押すと同じ行が開く (「編集」を押したのと同じ)。
+  const mem = page.locator('#preview-svg text', { hasText: 'rxbuf' }).first();
+  const mb = await mem.boundingBox();
+  await page.mouse.click(mb.x + mb.width / 2, mb.y + mb.height / 2);
+  await expect(page.locator('#cl-mem-preview-0')).toHaveText('- rxbuf : int');
+  // 到達条件その3: 名前と可視性を変えると、押す前に入る行が読める。更新で本文に入る。
+  await page.locator('#cl-mem-name-0').fill('rxBuffer');
+  await page.locator('.cl-vis-btn[data-vis-for="cl-mem-vis-0"][data-vis="#"]').click();
+  await expect(page.locator('#cl-mem-preview-0')).toHaveText('# rxBuffer : int');
+  await page.locator('#cl-mem-update-0').click();
+  await expect.poll(() => getEditorText(page)).toContain('# rxBuffer : int');
+  // 到達条件その4: 更新の後も同じ行が開いたまま。開いた行の「削除」でその行だけ消える。
+  await expect(page.locator('#cl-mem-preview-0')).toHaveText('# rxBuffer : int');
+  await page.locator('#cl-mem-del-0').click();
+  await expect.poll(() => getEditorText(page)).not.toContain('rxBuffer');
+  expect(await getEditorText(page)).toContain('Spi_Init() : void');
+});
+
+// BLK-owner-20260925-0312-1 / BLK-human-20260925-0351: フォームだけで起こした図は、タブを替えるまで
+// タブの本文にも自動保存にも届かず、そのままリロードすると `@startuml / @enduml` に戻って消えた。
+// フォームで足した行も、本文欄で打ったときと同じ時に同じ経路でタブ・保存フォルダ・タブの印に届く。
+test('手順2 フォームだけで足した直後にリロードしても本文が残り、保存フォルダにも書かれている', async ({ page }) => {
+  const dir = DIR + '-form-autosave';
+  await S.bootWithSaveDir(page, dir);
+  await S.clearDir(page, dir);
+  await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]');
+
+  // ＋ で白紙のタブを開き、レールで状態遷移図にして、本文欄に触らず右パネルの追加だけで起こす。
+  await page.locator('#btn-tab-new').click();
+  await page.waitForTimeout(400);
+  await page.locator('#rail-types .rail-btn[data-type="plantuml-state"]').click();
+  await page.waitForTimeout(800);
+  const name = await page.evaluate(() => window.MA.workspace.getActive().name);
+  for (const id of ['Idle', 'Running']) {
+    await page.locator('#st-tail-kind').selectOption('state');
+    await page.locator('#st-tail-id').fill(id);
+    await page.locator('#st-tail-add').click();
+    await page.waitForTimeout(400);
+  }
+  await page.locator('#st-tail-kind').selectOption('transition');
+  await page.waitForSelector('#st-tail-trig');
+  await page.locator('#st-tail-from').selectOption('Idle');
+  await page.locator('#st-tail-to').selectOption('Running');
+  await page.locator('#st-tail-trig').fill('Start');
+  await page.locator('#st-tail-add').click();
+  await page.waitForTimeout(400);
+  expect(await getEditorText(page)).toContain('Idle --> Running : Start');
+
+  // 到達条件その1: タブを替えなくても、タブの本文 (リロードで戻る先) に入っている。
+  const ws = await page.evaluate(() => window.localStorage.getItem('plantuml-workspace') || '');
+  expect(ws).toContain('Idle --> Running : Start');
+
+  // 到達条件その2: 1 回の確定は 1 回の Ctrl+Z で戻り、Ctrl+Y で戻せる (保存の経路と取り違えない)。
+  // 追加の後はフォームの欄に入力の続きが残るので、欄から出てから押す (欄の中の Ctrl+Z は欄の文字を戻す)。
+  await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(300);
+  expect(await getEditorText(page)).not.toContain('Idle --> Running : Start');
+  expect(await getEditorText(page)).toContain('state Running');
+  await page.keyboard.press('Control+y');
+  await page.waitForTimeout(300);
+  expect(await getEditorText(page)).toContain('Idle --> Running : Start');
+
+  // 到達条件その3: 自動保存 (保存先 = ファイル) の debounce のあと、ディスクにも書かれている。
+  await expect.poll(async () => (await S.readDoc(page, dir, name)) || '', { timeout: 5000 })
+    .toContain('Idle --> Running : Start');
+  // 下端の「HH:MM に自動保存」もこの図の名前で進み、タブの印は保存した本文と照らした状態になる
+  // (書けた後に ●/○ が残らない。本文欄で打ったときと同じ)。
+  await expect(page.locator('#status-autosave')).toContainText(name + '.puml');
+  await expect(page.locator('#tab-bar .tab.active .tab-dot')).toHaveCount(0);
+
+  // 到達条件その4: そのままリロードしても、フォームで足した行が消えない。
+  await S.reopenApp(page);
+  await page.waitForTimeout(600);
+  const back = await page.evaluate(() => window.MA.workspace.getActive().dsl);
+  expect(back).toContain('state Idle');
+  expect(back).toContain('Idle --> Running : Start');
+  expect(await getEditorText(page)).toContain('Idle --> Running : Start');
+
+  // BLK-owner-20260930-0311-2: 注釈の本文欄も、他の欄と同じく Enter で確定 (Shift+Enter は改行)。6 図種で同じ。
+  await page.locator('#st-tail-kind').selectOption('note');
+  await page.waitForSelector('#st-tail-ntext');
+  await page.locator('#st-tail-target').selectOption('Running');
+  await page.locator('#st-tail-ntext').click();
+  await page.keyboard.type('起動済み');
+  await page.keyboard.press('Shift+Enter');
+  await page.keyboard.type('停止で戻る');
+  await expect(page.locator('#st-tail-ntext')).toHaveValue('起動済み\n停止で戻る');
+  expect(await getEditorText(page)).not.toContain('起動済み');
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => getEditorText(page)).toContain('起動済み');
+  expect(await getEditorText(page)).toContain('停止で戻る');
+});
+
+// BLK-human-20260925-0352 / BLK-owner-20260925-0312-2: 左レールの図種を押すと、書きかけの図の本文が
+// 別の図種の見本に差し替わり (ファイル名はそのまま)、Ctrl+S で保存済みの図を潰していた。
+// ＋ で開いただけのタブも空の .puml として書かれ、図種を替えると `{名前}_{図種}.puml` が増えていた。
+test('手順2 図種を替えても前の図のファイルの中身と名前が変わらず、保存フォルダに別名ファイルが増えない', async ({ page }) => {
+  const D = DIR + '-rail';
+  await S.bootWithSaveDir(page, D);
+  await S.clearDir(page, D);
+  const rail = (t) => page.locator('#rail-types .rail-btn[data-type="plantuml-' + t + '"]');
+  const active = () => page.evaluate(() => window.MA.workspace.getActive());
+  const tabs = () => page.evaluate(() => window.MA.workspace.list().map((d) => ({ name: d.name, type: d.diagramType, dsl: d.dsl })));
+
+  await S.typeDsl(page, S.GPIO_SEQ);
+  const seqName = (await active()).name;
+  await expect.poll(() => S.readDoc(page, D, seqName)).toContain('participant Gpio_Driver');
+  const seqOnDisk = await S.readDoc(page, D, seqName);
+
+  // 到達条件その1: 利用者の行があるタブでレールの ST を押すと、そのタブは替わらず、状態遷移の新しいタブが開く。
+  await rail('state').click();
+  await expect(page.locator('#diagram-type')).toHaveValue('plantuml-state');
+  let all = await tabs();
+  expect(all.length).toBe(2);
+  expect(all[0]).toEqual({ name: seqName, type: 'plantuml-sequence', dsl: S.GPIO_SEQ });
+  const stName = (await active()).name;
+  expect(stName).not.toBe(seqName);
+  expect(await getEditorText(page)).not.toContain('Gpio_Driver');
+  // 到達条件その2: 見本のままのタブはディスクへ書かない。前の図のファイルは中身も名前もそのまま。
+  await page.waitForTimeout(800);
+  expect(await S.listDir(page, D)).toEqual([seqName]);
+  expect(await S.readDoc(page, D, seqName)).toBe(seqOnDisk);
+
+  // 到達条件その3: 見本のままのタブでレールを押すと、そのタブの図種だけが替わる (名前もタブの数も同じ)。
+  await rail('component').click();
+  await expect(page.locator('#diagram-type')).toHaveValue('plantuml-component');
+  all = await tabs();
+  expect(all.length).toBe(2);
+  expect((await active()).name).toBe(stName);
+  expect((await active()).diagramType).toBe('plantuml-component');
+
+  // 到達条件その4: ＋ で開いてレールを押しただけのタブは、保存フォルダに何も書かない。
+  await page.locator('#btn-tab-new').click();
+  await rail('activity').click();
+  await rail('class').click();
+  await page.waitForTimeout(800);
+  expect(await S.listDir(page, D)).toEqual([seqName]);
+  const clsName = (await active()).name;
+
+  // 到達条件その5: 行を足した時点で、そのタブの名前のまま 1 枚だけ書かれる (`_{図種}` の別名は作らない)。
+  await S.typeDsl(page, ['@startuml', 'class GpioDriver', '@enduml'].join('\n'));
+  await expect.poll(() => S.listDir(page, D)).toEqual(expect.arrayContaining([seqName, clsName]));
+  await page.waitForTimeout(600);
+  const files = await S.listDir(page, D);
+  expect(files.sort()).toEqual([seqName, clsName].sort());
+  expect(files.some((n) => /_(class|component|activity|state|sequence|usecase)$/.test(n))).toBe(false);
+
+  // 到達条件その6: 中身のある図からレールで CMP を押すと、見本のままの CMP タブがあればそこへ移る (タブを増やさない)。
+  await rail('component').click();
+  expect((await active()).name).toBe(stName);
+  expect((await tabs()).length).toBe(3);
+
+  // 到達条件その7: 元の図に戻って Ctrl+S を押しても、シーケンス図のまま保存される。
+  await page.locator('#tab-bar .tab[data-doc-name="' + seqName + '"]').click();
+  await expect(page.locator('#diagram-type')).toHaveValue('plantuml-sequence');
+  await page.keyboard.press('Control+s');
+  await page.waitForTimeout(600);
+  expect(await S.readDoc(page, D, seqName)).toContain('participant Gpio_Driver');
+  expect((await S.listDir(page, D)).sort()).toEqual([seqName, clsName].sort());
 });

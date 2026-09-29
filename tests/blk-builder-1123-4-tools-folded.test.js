@@ -33,7 +33,9 @@ describe('タブ列の既定は畳んだ状態 (BLK-builder-20260908-1123-4)', f
     expect(tm.keepIds()).toContain('btn-tab-new');
     expect(tm.keepIds()).toContain('btn-tab-folder');
     // 機能ボタンは畳む対象。
-    expect(tm.isFoldable('btn-tab-compare')).toBe(true);
+    // BLK-owner-20260923-1509-prune で btn-tab-compare はタブ列から外れたので、
+    // 「畳む対象の機能ボタン」の例を他の道具に差し替える (見ている規則は同じ)。
+    expect(tm.isFoldable('btn-tab-lines')).toBe(true);
     expect(tm.isFoldable('btn-tab-new')).toBe(false);
   });
 });

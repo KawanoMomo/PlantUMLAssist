@@ -6,6 +6,7 @@ window.MA.parserUtils = (function() {
     var lines = text.split('\n');
     var inBlock = false;
     var hasParticipantSeqOnly = false;
+    var hasParticipantKw = false;
     var hasActor = false;
     var hasUsecaseShort = false;
     var hasUsecaseKw = false;
@@ -13,10 +14,12 @@ window.MA.parserUtils = (function() {
     var hasClassKw = false;
     var hasAbstractClassKw = false;
     var hasEnumKw = false;
+    var hasClassOnlyKw = false;
     var hasClassRelation = false;
     var hasStateKw = false;
     var hasActivityKw = false;
     var hasComponentKw = false;
+    var hasComponentElemKw = false;
     var hasComponentBracket = false;
     var hasMessageArrow = false;
 
@@ -28,17 +31,40 @@ window.MA.parserUtils = (function() {
       if (!inBlock) continue;
 
       if (/^(participant|boundary|control|entity|database|queue|collections)\b/.test(t)) hasParticipantSeqOnly = true;
+      // BLK-migrator-20260929-1051: シーケンス図にしか無い宣言は `participant` だけ。database / queue /
+      // collections / boundary / control / entity はコンポーネント・ユースケース図 (PlantUML の DESCRIPTION) にも出る。
+      if (/^participant\b/.test(t)) hasParticipantKw = true;
       if (/^actor\b/.test(t)) hasActor = true;
       if (/^\(.+\)/.test(t)) hasUsecaseShort = true;
+      // BLK-migrator-20260924-0012: ユースケースの略記は行頭に来るとは限らない
+      // (`:User: --> (Use)` / `"Use the application" as (Use)` / `Admin --> (Admin the application)`)。
+      // 矢印の直後・`as` の直後の `(…)`、行頭の `:actor:`、`skinparam actorStyle` もユースケース図の印。
+      // シーケンスのメッセージ文 (`A -> B : call (x)`) は矢印の直後が `(` ではないので当たらない。
+      if (/(-+>|<-+|\.+>|<\.+|--|\.\.)\s*\([^()*][^()]*\)\s*(:.*)?$/.test(t) ||
+          /\bas\s+\([^()]+\)\s*$/.test(t) ||
+          /^:[^:;]+:\s*(-|\.|<|as\b|$)/.test(t) ||
+          /^skinparam\s+actorStyle\b/i.test(t)) {
+        hasUsecaseShort = true;
+      }
       if (/^usecase\b/.test(t)) hasUsecaseKw = true;
       if (/^(package|rectangle)\b.*\{/.test(t)) hasPackage = true;
       if (/^(class|interface|abstract|enum)\b/.test(t)) hasClassKw = true;
       if (/^abstract\s+class\s/.test(t)) hasAbstractClassKw = true;
+      if (/^(class|abstract|enum)\b/.test(t)) hasClassOnlyKw = true;
       if (/^enum\s/.test(t)) hasEnumKw = true;
       if (/\s(<\|--|--\|>|<\|\.\.|\.\.\|>|\*--|--\*|o--|--o)\s/.test(t)) hasClassRelation = true;
       if (/^state\b|^\[\*\]/.test(t)) hasStateKw = true;
       if (/^(start|stop)\b|^:.+;|^if\s+\(|^fork\b/.test(t)) hasActivityKw = true;
       if (/^component\b/.test(t)) hasComponentKw = true;
+      // BLK-migrator-20260923-1409: component 図の要素は `component` だけではない。
+      // AWS のライブラリ図 (`agent "Published Event" as event` + `-->`) が
+      // 「矢印があるから」で sequence と読まれ、選択枠が 1 つも出なかった。
+      // ここに並べるのは sequence の参加者と綴りがぶつからない語だけ
+      // (database / queue / collections / boundary / control / entity は
+      //  参加者の宣言でもあるので入れない)。
+      if (/^(agent|node|artifact|cloud|folder|frame|storage|stack|card|file|hexagon|person)\b/.test(t)) {
+        hasComponentElemKw = true;
+      }
       if (/^\[[^\]*][^\]]*\]/.test(t)) hasComponentBracket = true;
       if (/\s(->|-->|->>|-->>|<-|<--|<<-|<<--)\s/.test(t)) hasMessageArrow = true;
     }
@@ -53,6 +79,11 @@ window.MA.parserUtils = (function() {
       if (!hasClassKw && !hasComponentKw) return 'plantuml-activity';
     }
 
+    // BLK-migrator-20260917-2349: 旧記法 activity (`(*) --> "x"` / `if "c" then` / `-->[label]`)。
+    // `(*)` は usecase の短縮形 `(name)` にも当たるので、usecase 判定より前に拾う。
+    var hasLegacyActivity = /\(\*(top)?\)\s*-+>|-+>\s*\(\*\)|^\s*if\s+"[^"]*"\s+then/m.test(text);
+    if (hasLegacyActivity && !hasClassKw && !hasComponentKw && !hasParticipantSeqOnly) return 'plantuml-activity';
+
     // State: 'state X' keyword OR '[*] -->' pseudo-state
     var hasStateKwExplicit = /^\s*state\s+\w/m.test(text);
     var hasInitialPseudo = /^\s*\[\*\]\s*-->/m.test(text);
@@ -65,6 +96,23 @@ window.MA.parserUtils = (function() {
     // Component takes priority over Class because Component diagrams legally
     // contain `interface` (which would otherwise match hasClassKw).
     if (hasComponentKw) return 'plantuml-component';
+    // 参加者の宣言が 1 つも無い図で component 要素だけが並ぶなら component。
+    // BLK-migrator-20260929-1051: card / stack / file … はシーケンス図に無い語なので、queue / database と
+    // 並んでいても (`card "C"` + `queue "Q"` + `-->`) component。`participant` か actor があるときだけ譲る。
+    if (hasComponentElemKw && !hasParticipantSeqOnly && !hasActor) return 'plantuml-component';
+    if (hasComponentElemKw && !hasParticipantKw && !hasActor && !hasClassOnlyKw && !hasClassRelation) return 'plantuml-component';
+    // BLK-migrator-20260929-1051: `interface` の宣言と `[部品]` 記法だけの図 (ロリポップ) は component。
+    // class にしか無い記法 (class / abstract / enum / 継承・集約線) があるときは class のまま。
+    if (hasComponentBracket && hasClassKw && !hasClassOnlyKw && !hasClassRelation && !hasParticipantKw) {
+      return 'plantuml-component';
+    }
+    // BLK-migrator-20260929-1051: `usecase` の宣言はユースケース図にしか無い。actor 同士の汎化 (`<|--`) が
+    // あっても class にしない (class にしか無い宣言 class / abstract / enum があるときは class)。
+    if (hasUsecaseKw && !hasClassOnlyKw) return 'plantuml-usecase';
+    // BLK-migrator-20260923-1909: `[部品]` 記法と component の要素語 (node / cloud / artifact …) があり、
+    // class にしか無い記法 (class / abstract / enum / 継承・集約線) が無ければ component。
+    // `interface` や `queue` / `collections` は component 図にも出るので、それだけで class / sequence にしない。
+    if (hasComponentBracket && hasComponentElemKw && !hasClassOnlyKw && !hasClassRelation) return 'plantuml-component';
     if (hasAbstractClassKw || hasEnumKw || hasClassRelation) return 'plantuml-class';
     if (hasClassKw) return 'plantuml-class';
     if (hasStateKw) return 'plantuml-state';
@@ -86,6 +134,11 @@ window.MA.parserUtils = (function() {
   // 組み立てている最中(空のシーケンス図に参加者を 1 人足した直後など)に
   // モジュールを勝手に載せ替えてはならない。この関数が true を返す間は
   // 呼び出し側が現在の図種を保つ。
+  // BLK-owner-20260924-2232-2: 境界 (package / rectangle / node / folder / frame / cloud) の
+  // 開き行と閉じ括弧だけの段階も、コンポーネント・ユースケース・クラスのどれにもなり得る。
+  // PlantUML は中身の無い `package "Mcal" { }` をクラス図として描くので、ここで決めさせると
+  // 境界を先に置いた人の右パネルがクラスの追加フォームに替わっていた。
+  var BOUNDARY_OPEN_RE = /^(package|rectangle|node|folder|frame|cloud)\s+(?:"[^"]*"|[^\s{"]+)(?:\s+as\s+[^\s{]+)?(?:\s+<<[^>]*>>)?(?:\s+#\S+)?\s*\{\s*$/;
   function isAmbiguousType(text) {
     if (!text || !text.trim()) return true;
     var lines = text.split('\n');
@@ -98,10 +151,11 @@ window.MA.parserUtils = (function() {
       if (window.MA.regexParts.isEndUml(t)) break;
       if (!inBlock) continue;
       if (/^actor\b/.test(t)) { hasActor = true; continue; }
+      if (t === '}' || BOUNDARY_OPEN_RE.test(t)) continue;
       // actor 以外の実質的な行が 1 つでもあれば、その行が図種を決める
       if (!/^(@|skinparam\b|title\b|hide\b|show\b|scale\b|autonumber\b)/.test(t)) return false;
     }
-    // 中身が無い、または actor 宣言しか無い
+    // 中身が無い、または actor 宣言・空の境界しか無い
     return true;
   }
 

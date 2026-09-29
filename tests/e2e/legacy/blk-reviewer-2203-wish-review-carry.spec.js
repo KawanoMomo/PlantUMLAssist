@@ -34,14 +34,16 @@ async function clearDir(page) {
   }, DIR);
 }
 
+// 保存先の一覧は保存先の右クリック「保存先の一覧を開く」で中央の枠に開く (scenarios/_scenario.js の openFolder と同じ経路)。
+// 開くたびに読み直すので、後から置いたファイルも出る。旧経路 (見出しを畳んで開き直し #folder-panel.open を待つ) は使わない。
+const S = require('../scenarios/_scenario');
 async function openFolder(page) {
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open .folder-item');
+  await S.openFolder(page);
+  await page.waitForSelector('#folder-panel.open.is-list .folder-item');
 }
 
 async function closeFolder(page) {
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForTimeout(150);
+  await S.closeFolderList(page);
 }
 
 async function markSeen(page) {
@@ -80,7 +82,7 @@ test.describe('BLK-reviewer-2203-wish: 無変更の日は前回の指摘をそ�
 
     // 今回の review: 一覧を開く → 変更 0 枚 → 複製ボタン の 3 操作
     await openFolder(page);
-    await expect(page.locator('#folder-panel .folder-summary')).toContainText('すべて前回見た版のまま');
+    await expect(page.locator('#folder-panel .folder-summary:not(.folder-kinds):not(.folder-stamp-summary)')).toContainText('すべて前回見た版のまま');
     const btn = page.locator(CARRY);
     await expect(btn).toBeEnabled();
     await expect(btn).toHaveAttribute('data-carry-count', '2');
@@ -133,7 +135,7 @@ test.describe('BLK-reviewer-2203-wish: 無変更の日は前回の指摘をそ�
     });
 
     await openFolder(page);
-    await expect(page.locator('#folder-panel .folder-summary')).toContainText('すべて前回見た版のまま');
+    await expect(page.locator('#folder-panel .folder-summary:not(.folder-kinds):not(.folder-stamp-summary)')).toContainText('すべて前回見た版のまま');
     await expect(page.locator(CARRY)).toBeDisabled();
     const note = page.locator(NOTE);
     await expect(note).toHaveAttribute('data-carry-reason', 'audit-changed');

@@ -25,6 +25,9 @@ window.MA.workspace = (function() {
 
   var _state = null;   // { activeId, docs: [] }
   var _seq = 0;
+  // BLK-owner-20260929-1111-1: 保存先ごとに「そこに在る .puml の名前」を覚える (一覧を読んだ時点のもの)。
+  // 「＋ 新しい図」の名前 diagramN を、開いているタブだけでなく保存先の図とも重ならないものにする。
+  var _known = {};     // dir → { 小文字の名前: true }
 
   function _newId() {
     _seq++;
@@ -67,6 +70,49 @@ window.MA.workspace = (function() {
     return true;
   }
 
+  function _noteKnown(dir, names) {
+    if (!Array.isArray(names)) return;
+    var m = {};
+    for (var i = 0; i < names.length; i++) {
+      var n = names[i];
+      if (n && typeof n === 'object') n = n.name;
+      if (typeof n !== 'string' || !n) continue;
+      m[n.replace(/\.puml$/i, '').toLowerCase()] = true;
+    }
+    _known[_dir(dir)] = m;
+  }
+
+  // 1 つだけ覚え足す (書こうとして「同じ名前の図がある」と断られた名前)。
+  function noteFolderName(dir, name) {
+    if (typeof name !== 'string' || !name) return;
+    var k = _dir(dir);
+    if (!_known[k]) _known[k] = {};
+    _known[k][name.replace(/\.puml$/i, '').toLowerCase()] = true;
+  }
+
+  // 保存先 dir に同じ名前の図が在るか (Windows のファイル名は大文字小文字を区別しない)。
+  function knownInFolder(name, dir) {
+    var m = _known[_dir(dir)];
+    return !!(m && name && m[String(name).toLowerCase()]);
+  }
+
+  // 「＋ 新しい図」の名前。diagram{開いているタブの数 + 1} から数え、開いているタブにも
+  // 保存先の図にも無い最初の番号にする (diagram2.puml が在れば diagram3)。
+  function newDocName(dir) {
+    var n = (_state ? _state.docs.length : 0) + 1;
+    for (var guard = 0; guard < 10000; guard++, n++) {
+      var name = 'diagram' + n;
+      if (knownInFolder(name, dir)) continue;
+      var taken = false;
+      var docs = _state ? _state.docs : [];
+      for (var i = 0; i < docs.length; i++) {
+        if (String(docs[i].name).toLowerCase() === name) { taken = true; break; }
+      }
+      if (!taken) return name;
+    }
+    return 'diagram' + n;
+  }
+
   function _uniqueName(name, exceptId) {
     var base = sanitizeName(name);
     var used = {};
@@ -95,7 +141,11 @@ window.MA.workspace = (function() {
           name: isValidName(d.name) ? d.name : sanitizeName(d.name),
           diagramType: typeof d.diagramType === 'string' ? d.diagramType : 'plantuml-sequence',
           dsl: typeof d.dsl === 'string' ? d.dsl : '',
+          preview: d.preview === true,
         });
+        // BLK-human-20260925-1150: 保存先を替える前に開いていたタブは、開いたフォルダを持ち続ける。
+        if (typeof d.dir === 'string' && d.dir) docs[docs.length - 1].dir = d.dir;
+        if (d.fresh === true) docs[docs.length - 1].fresh = true;
       }
       if (docs.length === 0) return null;
       var activeId = docs[0].id;
@@ -139,7 +189,11 @@ window.MA.workspace = (function() {
   }
 
   function _copy(d) {
-    return d ? { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl } : null;
+    if (!d) return null;
+    var c = { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl, preview: !!d.preview };
+    if (d.dir) c.dir = d.dir;
+    if (d.fresh) c.fresh = true;
+    return c;
   }
 
   function list() {
@@ -179,6 +233,8 @@ window.MA.workspace = (function() {
   function updateActive(patch) {
     var d = _state ? _find(_state.activeId) : null;
     if (!d || !patch) return null;
+    // 仮のタブ (openPreview) は、中身を 1 か所でも変えた時点で固定のタブになる (次の仮開きで入れ替わらない)。
+    if (typeof patch.dsl === 'string' && d.preview && patch.dsl !== d.dsl) d.preview = false;
     if (typeof patch.dsl === 'string') d.dsl = patch.dsl;
     if (typeof patch.diagramType === 'string' && patch.diagramType) d.diagramType = patch.diagramType;
     persist();
@@ -213,10 +269,22 @@ window.MA.workspace = (function() {
       diagramType: spec.diagramType || 'plantuml-sequence',
       dsl: typeof spec.dsl === 'string' ? spec.dsl : '',
     };
+    // BLK-owner-20260929-1111-1: ＋ で開いた新しい図は、1 度書けるまで「新しい図」の印を持つ。
+    // 印のある図の保存は、保存先に既にある別のファイルを書き換えない (server が 409 で断る)。
+    if (spec.fresh === true) doc.fresh = true;
     _state.docs.push(doc);
     _state.activeId = doc.id;
     persist();
     return _copy(doc);
+  }
+
+  // 新しい図がファイルとして書けた (以後は自分のファイルへの保存)。
+  function markWritten(id) {
+    var d = _find(id);
+    if (!d || !d.fresh) return d ? _copy(d) : null;
+    delete d.fresh;
+    persist();
+    return _copy(d);
   }
 
   // 既に同じ name のタブがあればそれをアクティブにし、無ければ開く。
@@ -227,6 +295,10 @@ window.MA.workspace = (function() {
     var name = sanitizeName(spec.name || '');
     for (var i = 0; i < _state.docs.length; i++) {
       if (_state.docs[i].name === name) {
+        // BLK-human-20260925-1150: 別のフォルダに留めてあるタブと同じ名前のファイルを今の保存先から
+        // 開いた。中身を読み込むなら、そのタブは今の保存先のファイルになる (留めを外す)。
+        // 中身を渡さない (名前で移るだけ) ときは留めたまま (前のフォルダの中身を今の保存先へ流さない)。
+        if (typeof spec.dsl === 'string' && _state.docs[i].dir) delete _state.docs[i].dir;
         if (typeof spec.dsl === 'string') _state.docs[i].dsl = spec.dsl;
         if (spec.diagramType) _state.docs[i].diagramType = spec.diagramType;
         _state.activeId = _state.docs[i].id;
@@ -235,6 +307,38 @@ window.MA.workspace = (function() {
       }
     }
     return open(spec);
+  }
+
+  // BLK-primary-20260924-0805-design (design 10a): 保存先ツリーの行を 1 回押したときの「仮のタブ」。
+  // 仮のタブは常に 1 枚だけで、別の図を仮に開くと同じ位置のタブの中身が入れ替わる
+  // (VS Code のプレビュータブと同じ)。既にタブがある図 (固定・仮) はそのタブへ移るだけ。
+  function openPreview(spec) {
+    spec = spec || {};
+    if (!_state) init({});
+    var name = sanitizeName(spec.name || '');
+    for (var i = 0; i < _state.docs.length; i++) {
+      if (_state.docs[i].name === name) return openOrActivate(spec);
+    }
+    var idx = -1;
+    for (var k = 0; k < _state.docs.length; k++) if (_state.docs[k].preview) { idx = k; break; }
+    var doc = open(spec);
+    var d = _find(doc.id);
+    d.preview = true;
+    if (idx >= 0) {
+      // 開いたタブを前の仮のタブの位置へ置き、前の仮のタブは閉じる。
+      _state.docs.pop();
+      _state.docs.splice(idx, 1, d);
+    }
+    persist();
+    return _copy(d);
+  }
+
+  // 仮のタブを固定にする (ダブルクリック・編集)。
+  function pin(id) {
+    var d = _find(id);
+    if (!d) return null;
+    if (d.preview) { d.preview = false; persist(); }
+    return _copy(d);
   }
 
   // 最後の 1 枚は閉じない (常に何か編集できる状態を保つ)。
@@ -262,6 +366,44 @@ window.MA.workspace = (function() {
     return _copy(d);
   }
 
+  // ── タブの書き先のフォルダ (BLK-human-20260925-1150) ─────────────────────
+  // 保存先を別のフォルダに替えても、開いているタブは開いたときのファイルを指し続ける
+  // (VS Code・IntelliJ と同じ。書き先はタブごと)。dir を持たないタブは今の保存先に従う。
+  // holdDir(dir, skip): dir を持たないタブを dir に留める。skip(doc) が真のタブは留めない
+  // (見本のままのタブ・手元から開いたファイル)。戻り値は留めたタブの数。
+  function holdDir(dir, skip) {
+    if (!_state || !dir) return 0;
+    var n = 0;
+    for (var i = 0; i < _state.docs.length; i++) {
+      var d = _state.docs[i];
+      if (d.dir) continue;
+      if (typeof skip === 'function') {
+        var sk = false;
+        try { sk = !!skip(_copy(d)); } catch (e) { sk = false; }
+        if (sk) continue;
+      }
+      d.dir = String(dir);
+      n++;
+    }
+    if (n) persist();
+    return n;
+  }
+
+  // タブ 1 枚の書き先を決め直す。dir が空ならそのタブは今の保存先に従う。
+  function setDir(id, dir) {
+    var d = _find(id);
+    if (!d) return null;
+    if (dir) d.dir = String(dir); else delete d.dir;
+    persist();
+    return _copy(d);
+  }
+
+  // タブの書き先のフォルダ。留めていなければ fallback (今の保存先)。
+  function dirOf(id, fallback) {
+    var d = _find(id);
+    return (d && d.dir) || fallback || '';
+  }
+
   function reset() {
     _state = null;
     try { window.localStorage.removeItem(KEY); } catch (e) {}
@@ -275,6 +417,18 @@ window.MA.workspace = (function() {
     return fileDir || './autosave';
   }
 
+  // BLK-owner-20260926-0550-3: 保存フォルダに図を書いた・消したことを知らせる (FILES ツリーの保存先が
+  // 読み込み直すまで古いままだった)。聞き手は app.js の保存先の一覧 1 か所。
+  function _announce(what, name, fileDir) {
+    try {
+      var ev;
+      var detail = { what: what, name: String(name || ''), dir: _dir(fileDir) };
+      try { ev = new window.CustomEvent('pua:folder-changed', { detail: detail }); }
+      catch (e) { ev = document.createEvent('CustomEvent'); ev.initCustomEvent('pua:folder-changed', false, false, detail); }
+      window.dispatchEvent(ev);
+    } catch (e) { /* 知らせが届かなくても保存そのものは済んでいる */ }
+  }
+
   function saveToFile(doc, fileDir) {
     if (!doc || !isValidName(doc.name)) return Promise.resolve(false);
     try {
@@ -286,20 +440,39 @@ window.MA.workspace = (function() {
         // doc が図種を持たない経路 (一括の書き戻し) では送らない = 前の控えが残る。
         body: JSON.stringify({
           type: doc.name, dsl: doc.dsl, dir: _dir(fileDir),
+          // BLK-owner-20260929-1111-1: まだ 1 度も書いていない新しい図は、既にある別のファイルへは書かない。
+          freshId: (doc.fresh && doc.id) ? String(doc.id) : undefined,
+          // BLK-owner-20260930-0311-1: 書いたタブの印。自分で書いた続きは、図種の読みが替わっても別名へ回さない。
+          docId: doc.id ? String(doc.id) : undefined,
           kind: (window.MA.savedKind ? window.MA.savedKind.slugOf(doc.diagramType) : '') || undefined,
+          // BLK-migrator-20260918-0349: 手元から開いた図は、開いたときの改行で
+          // 書き戻す。付けないと server は platform の既定 (Windows は CRLF) で
+          // 書き、元が LF のファイルが保存するだけで全行書き換わる。
+          eol: (doc.eol === 'lf' || doc.eol === 'crlf') ? doc.eol : undefined,
         }),
         keepalive: true,
       }).then(function(r) {
+        if (r && r.status === 409) {
+          var why = function(data) {
+            if (window.MA.autoSave && window.MA.autoSave.noteFileConflict) {
+              window.MA.autoSave.noteFileConflict({ name: doc.name, id: doc.id, message: data && data.message });
+            }
+            return false;
+          };
+          return r.json ? r.json().then(why, function() { return why(null); }) : why(null);
+        }
         if (!(r && r.ok)) return false;
+        if (doc.fresh && doc.id) markWritten(doc.id);
         // BLK-junior-20260908-2003: 図種が変わる保存は server が別ファイルへ回す。
         // 回された先は autoSave の知らせに寄せる (聞き手は 1 か所でよい)。
-        if (!r.json) return true;
+        if (!r.json) { _announce('written', doc.name, fileDir); return true; }
         return r.json().then(function(data) {
+          _announce('written', (data && data.savedAs) || doc.name, fileDir);
           if (window.MA.autoSave && window.MA.autoSave.noteFileRenamed) {
             window.MA.autoSave.noteFileRenamed(data);
           }
           return true;
-        }).catch(function() { return true; });
+        }).catch(function() { _announce('written', doc.name, fileDir); return true; });
       }).catch(function() { return false; });
     } catch (e) {
       return Promise.resolve(false);
@@ -310,7 +483,11 @@ window.MA.workspace = (function() {
     try {
       return window.fetch('/autosave?dir=' + encodeURIComponent(_dir(fileDir)))
         .then(function(r) { return r.ok ? r.json() : null; })
-        .then(function(data) { return (data && Array.isArray(data.files)) ? data.files : []; })
+        .then(function(data) {
+          var files = (data && Array.isArray(data.files)) ? data.files : [];
+          if (data) _noteKnown(fileDir, files);
+          return files;
+        })
         .catch(function() { return []; });
     } catch (e) {
       return Promise.resolve([]);
@@ -325,6 +502,7 @@ window.MA.workspace = (function() {
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
           if (!data) return [];
+          if (Array.isArray(data.files)) _noteKnown(fileDir, data.files);
           if (Array.isArray(data.entries)) return data.entries;
           if (Array.isArray(data.files)) {
             return data.files.map(function(n) { return { name: n, mtime: null, hash: null }; });
@@ -365,6 +543,7 @@ window.MA.workspace = (function() {
           else if (Array.isArray(data.files)) {
             entries = data.files.map(function(n) { return { name: n, mtime: null, hash: null }; });
           }
+          _noteKnown(asked, Array.isArray(data.files) ? data.files : entries);
           return {
             entries: entries,
             // 古い server は exists を返さない。その場合は判定しない (null)。
@@ -414,7 +593,7 @@ window.MA.workspace = (function() {
       return window.fetch('/autosave?dir=' + encodeURIComponent(_dir(fileDir))
                           + '&type=' + encodeURIComponent(name), { method: 'DELETE' })
         .then(function(r) {
-          if (r && r.ok) return { ok: true };
+          if (r && r.ok) { _announce('deleted', name, fileDir); return { ok: true }; }
           return { ok: false, error: '保存フォルダから消せませんでした (' + ((r && r.status) || '?') + ')' };
         })
         .catch(function() { return { ok: false, error: '保存フォルダに届きませんでした' }; });
@@ -490,13 +669,23 @@ window.MA.workspace = (function() {
     setActive: setActive,
     open: open,
     openOrActivate: openOrActivate,
+    openPreview: openPreview,
+    pin: pin,
     close: close,
     rename: rename,
     reset: reset,
+    holdDir: holdDir,
+    setDir: setDir,
+    dirOf: dirOf,
     sanitizeName: sanitizeName,
     isValidName: isValidName,
     nameRuleText: nameRuleText,
     saveToFile: saveToFile,
+    markWritten: markWritten,
+    newDocName: newDocName,
+    knownInFolder: knownInFolder,
+    noteFolderNames: _noteKnown,
+    noteFolderName: noteFolderName,
     listFiles: listFiles,
     listFileEntries: listFileEntries,
     listFolder: listFolder,

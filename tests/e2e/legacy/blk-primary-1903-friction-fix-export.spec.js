@@ -53,7 +53,8 @@ async function seed(page) {
   await page.waitForSelector('#preview-svg svg', { timeout: 20000 });
 }
 
-test('Export メニューに、指摘の付いた枚数が名前として出る', async ({ page }) => {
+// 入口は畳んだが、枚数を数える名前は Ctrl+K から引くときに出るので実体は残す。
+test('指摘の付いた枚数が入口の名前として出る', async ({ page }) => {
   await seed(page);
   await page.locator('#btn-export').click();
   await expect(page.locator('#exp-svg-fix')).toHaveText('要修正のみ 2 枚をSVGで保存（zip）');
@@ -74,7 +75,10 @@ test('指摘が 1 件も無ければ押せず、全部詰めるほうへ落ち�
   await expect(page.locator('#exp-svg-fix')).toBeDisabled();
 });
 
-test('2 クリック（Export ▾ + 1 押し）で指摘の付いた 2 枚だけが zip に入る', async ({ page }) => {
+// BLK-owner-20260923-1829-prune: 入口は 📦 資料セット 1 つに畳んだので、
+// Export ▾ → 📦 資料セット → 要修正のみ → 保存 の 4 クリックになる。図が何枚でも
+// 4 クリックのまま (起票時の 6 クリック・枚数に比例する手順に戻っていないこと) を守る。
+test('4 クリック（枚数によらず一定）で指摘の付いた 2 枚だけが zip に入る', async ({ page }) => {
   await seed(page);
 
   let clicks = 0;
@@ -82,7 +86,11 @@ test('2 クリック（Export ▾ + 1 押し）で指摘の付いた 2 枚だけ
 
   const waitDownload = page.waitForEvent('download', { timeout: 120000 });
   await click('#btn-export');
-  await click('#exp-svg-fix');
+  await click('#exp-docset');
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await click('#dsc-fix');
+  await expect(page.locator('#expick-modal')).toBeVisible();
+  await click('#expick-save');
   const download = await waitDownload;
 
   // 指摘.md で名指しされた 2 枚だけ。指摘の無い gpio_init / can_init は入らない。
@@ -90,8 +98,8 @@ test('2 クリック（Export ▾ + 1 押し）で指摘の付いた 2 枚だけ
     .filter((n) => n.endsWith('.svg'));
   expect(names).toEqual(['dma_state.svg', 'dma_transfer_sequence.svg']);
 
-  // 起票時は 2 枚で 6 クリック。図が増えても 2 クリックのまま。
-  expect(clicks).toBe(2);
+  // 起票時は 2 枚で 6 クリック。図が増えても 4 クリックのまま。
+  expect(clicks).toBe(4);
 });
 
 test('印を増やすと次にメニューを開いたときの枚数も増える', async ({ page }) => {

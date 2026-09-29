@@ -4,6 +4,12 @@
 const { test } = require('@playwright/test');
 const { gotoApp, shotOut, saveDirFor } = require('../helpers');
 
+// 保存先の一覧は保存先の右クリック「保存先の一覧を開く」で中央の枠に開き、開くたびに読み直す
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。
+async function openFolder(page) {
+  await require('../scenarios/_scenario').openFolder(page);
+}
+
 const DIR = saveDirFor(__filename);
 const OUT = shotOut('shot-blk-junior-1803-template-guard.png');
 
@@ -25,7 +31,7 @@ test('shot: テンプレには自動保存しない', async ({ page }) => {
     });
   }, { dir: DIR, dsl: '@startuml\nleft to right direction\nactor User\nUser --> (UC1)\n@enduml' });
 
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
   const btn = page.locator('#folder-panel button.folder-role[data-role-name="plantuml-usecase"]');
   await btn.click();

@@ -144,27 +144,75 @@ window.MA.materialExport = (function() {
     return hits[0];
   }
 
-  // plan(files, component, kind) — 押したら何が起きるかの全部。
+  // BLK-junior-20260929-0854: 同じ部品・図種にファイルが複数あると、部品と図種の 2 欄だけでは
+  // 開いている図と別の (名前の短い古い) 図が資料化され、GUI から選び直せなかった。
+  // sourcesFor(files, component, kind) — その部品・図種で元にできるファイル。並びは pickSource と同じ
+  // (先頭が既定)。(資料用) の版は元にしない (元の版が 1 枚も無いときだけ残す)。
+  function sourcesFor(files, component, kind) {
+    var cp = _cp();
+    var g = _group(files, component);
+    if (!cp || !g) return [];
+    var k = _s(kind);
+    var hits = g.files.filter(function(f) { return cp.kindOf(f) === k; });
+    var plain = hits.filter(function(f) { return !cp.variantOf(f); });
+    var list = plain.length ? plain : hits;
+    var first = pickSource(list, k);
+    return first ? [first].concat(list.filter(function(f) { return f !== first; })) : [];
+  }
+
+  function _bare(name) { return _s(name).replace(/\.puml$/i, ''); }
+
+  // sourceOf(files, name) — 開いている図の名前から、資料化の部品・図種・元のファイルを引く。
+  // 開いているのが (資料用) の版なら、同じ名前の元の版を元にする。引けなければ null。
+  function sourceOf(files, name) {
+    var cp = _cp();
+    var want = _bare(name).trim();
+    if (!cp || want === '') return null;
+    var base = want.replace(/[(（]\s*資料用\s*[)）]$/, '');
+    var list = components(files);
+    // 資料用の版を開いているなら元の版を先に探し、無ければ資料用の版そのものを元にする。
+    var tries = base !== want ? [base, want] : [want];
+    for (var t = 0; t < tries.length; t++) {
+      for (var i = 0; i < list.length; i++) {
+        for (var j = 0; j < list[i].files.length; j++) {
+          var f = list[i].files[j];
+          var k = cp.kindOf(f);
+          if (k && _bare(f) === tries[t]) return { component: list[i].component, kind: k, source: f };
+        }
+      }
+    }
+    return null;
+  }
+
+  // plan(files, component, kind, source) — 押したら何が起きるかの全部。
   // 元にするファイル / 形式 / 付ける題名 / 書き出すファイル名 / 保存する名前。
-  function plan(files, component, kind) {
+  // source を渡すと、その部品・図種の候補にある限りそれを元にする (名前と題もそこから作る)。
+  function plan(files, component, kind, source) {
     var g = _group(files, component);
     if (!g) return null;
     var k = _s(kind);
     if (g.kinds.indexOf(k) < 0) return null;
-    var source = pickSource(g.files, k);
-    if (!source) return null;
+    var cands = sourcesFor(files, g.component, k);
+    var want = _s(source);
+    var picked = '';
+    for (var c = 0; c < cands.length && want !== ''; c++) {
+      if (cands[c] === want || _bare(cands[c]) === _bare(want)) picked = cands[c];
+    }
+    var src = picked || cands[0] || pickSource(g.files, k);
+    if (!src) return null;
     var format = formatFor(k);
-    var title = materialTitle(source);
+    var title = materialTitle(src);
     return {
       component: g.component,
       kind: k,
-      source: source,
+      source: src,
       format: format,
       formatLabel: formatLabel(format),
       title: title,
       docName: title,
       filename: title + formatExt(format),
       reason: formatReason(k),
+      others: Math.max(0, cands.length - 1),
     };
   }
 
@@ -172,7 +220,8 @@ window.MA.materialExport = (function() {
   // 出るかが読めること。
   function planText(p) {
     if (!p) return '部品と図種を選ぶと、書き出す形式と名前がここに出ます。';
-    return p.source + ' → ' + p.filename + '（' + p.formatLabel + '）／ ' + p.reason;
+    var more = p.others > 0 ? '（同じ部品・図種にほかに ' + p.others + ' 枚。図種の欄でファイルを選べます）' : '';
+    return p.source + ' → ' + p.filename + '（' + p.formatLabel + '）' + more + '／ ' + p.reason;
   }
 
   function emptyText(files) {
@@ -183,9 +232,21 @@ window.MA.materialExport = (function() {
 
   // doneMessage(p) — 済んだあとに何が残ったかを言う。書き出しただけでは
   // 「保存フォルダにも入ったのか」が分からず、結局一覧を開いて確かめていた。
-  function doneMessage(p) {
+  // BLK-junior-20260928-2255: done (runMaterialPlan の結果 { imageSize, vault }) があれば、書けたことを
+  // 確かめた所だけを言う。画像の大きさは保存フォルダに書けた後の実物の大きさ。庫に入れていなければ庫とは言わない。
+  function doneMessage(p, done) {
     if (!p) return '資料化できませんでした';
-    return '📑 ' + p.title + ' を ' + p.formatLabel + ' で書き出し、保存フォルダと提出物庫に入れました';
+    if (!done) return '' + p.title + ' を ' + p.formatLabel + ' で書き出し、保存フォルダと提出物庫に入れました';
+    var where = done.vault ? '保存フォルダと提出物庫' : '保存フォルダ';
+    var size = Number(done.imageSize);
+    return '' + p.filename + '（' + p.formatLabel + (size > 0 ? '・' + size + ' バイト' : '') + '）を'
+      + where + 'に書き出しました';
+  }
+
+  // 画像の実体を書けなかったときの理由。「成功」とは言わず、どこに・なぜ書けなかったかを言う。
+  function imageFailText(p, where, why) {
+    var name = p && p.filename ? p.filename : '画像';
+    return '画像 ' + name + ' を' + _s(where) + 'に書けませんでした' + (why ? '（' + _s(why) + '）' : '');
   }
 
   function failMessage(p, err) {
@@ -207,10 +268,13 @@ window.MA.materialExport = (function() {
     kindsOf: kindsOf,
     kindsFor: kindsFor,
     pickSource: pickSource,
+    sourcesFor: sourcesFor,
+    sourceOf: sourceOf,
     plan: plan,
     planText: planText,
     emptyText: emptyText,
     doneMessage: doneMessage,
+    imageFailText: imageFailText,
     failMessage: failMessage,
   };
 })();

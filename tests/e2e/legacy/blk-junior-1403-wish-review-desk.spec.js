@@ -37,7 +37,7 @@ test.describe('レビュー机 (BLK-junior-1403-wish)', () => {
     await setEditor(page, WITH_DUP);
     // 基準の図を選ばなくても、図種特有の間違いは出る
     await expect(page.locator('#btn-tab-review')).toHaveClass(/has-finding/);
-    await expect(page.locator('#btn-tab-review')).toHaveText('👁 レビュー 1');
+    await expect(page.locator('#btn-tab-review')).toHaveText('レビュー 1');
 
     await page.locator('#btn-tab-review').click();
     await expect(page.locator('#review-panel')).toHaveClass(/open/);
@@ -58,7 +58,7 @@ test.describe('レビュー机 (BLK-junior-1403-wish)', () => {
     const fixed = WITH_DUP.split('\n')
       .filter((l) => l !== 'Can_Busy --> Can_Error : 異常を検知').join('\n');
     await setEditor(page, fixed);
-    await expect(page.locator('#btn-tab-review')).toHaveText('👁 レビュー −');
+    await expect(page.locator('#btn-tab-review')).toHaveText('レビュー −');
     await expect(page.locator('#btn-tab-review')).not.toHaveClass(/has-finding/);
   });
 
@@ -131,6 +131,6 @@ test.describe('レビュー机 (BLK-junior-1403-wish)', () => {
     await page.locator('#tab-bar .tab[data-doc-name="Clean"]').click();
     await page.waitForTimeout(900);
     // 新しいタブに指摘は無い
-    await expect(page.locator('#btn-tab-review')).toHaveText('👁 レビュー −');
+    await expect(page.locator('#btn-tab-review')).toHaveText('レビュー −');
   });
 });

@@ -118,7 +118,7 @@ describe('自動保存が「どこまで届いたか」を残す', function() {
   });
 });
 
-describe('状態バーの 💾 が届いた先を言い分ける', function() {
+describe('状態バーの が届いた先を言い分ける', function() {
   var meta = { lastSavedAt: '2026-09-14T22:00:00.000Z', lastSavedType: 'plantuml-class' };
 
   test('ファイルに書けた回は書き先の .puml を名乗る', function() {
@@ -159,6 +159,35 @@ describe('状態バーの 💾 が届いた先を言い分ける', function() {
 
   test('保存がまだ 1 度も無ければ何も出さない', function() {
     expect(AST.describe(null, null, '', '').text).toBe('');
+  });
+});
+
+// BLK-owner-20260925-1132-2: 札は今のタブの図の回を言う。前のタブで書いた記録 (diagram1.puml) を、
+// 開いたばかりの別の図 (bug.puml) の札にしない。
+describe('forActive — 札の記録を今のタブの図に合わせる (BLK-owner-20260925-1132-2)', function() {
+  var meta = { lastSavedAt: '2026-09-25T07:35:00.000Z', lastSavedType: 'plantuml-sequence' };
+  var other = { at: '2026-09-25T07:35:00.000Z', fileName: 'diagram1', where: 'file', reason: null };
+
+  test('今の図の記録があればそれを使い、時刻もその記録のもの', function() {
+    var own = { at: '2026-09-25T07:30:00.000Z', fileName: 'bug', where: 'file', reason: null };
+    var r = AST.forActive(own, other);
+    expect(r.last).toBe(own);
+    expect(r.at).toBe(own.at);
+    expect(AST.describe(meta, r.last, '', 'bug', '07:30').text).toBe('07:30 に自動保存 · bug.puml');
+  });
+
+  test('今の図の記録が無ければ、前のタブのファイル名を名乗らず「変更なし · 今の図」', function() {
+    var r = AST.forActive(null, other);
+    var d = AST.describe(meta, r.last, '', 'bug', '07:35');
+    expect(d.text).toBe('変更なし · bug.puml');
+    expect(d.text).not.toContain('diagram1');
+    expect(d.title).toContain('bug.puml');
+  });
+
+  test('ダウンロード保存 (local) と記録が無いときは従来どおり', function() {
+    var local = { at: meta.lastSavedAt, fileName: null, where: 'local', reason: null };
+    expect(AST.forActive(null, local).last).toBe(local);
+    expect(AST.forActive(null, null).last).toBe(null);
   });
 });
 

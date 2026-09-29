@@ -1,22 +1,29 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, switchTypeWithSample } = require('../helpers');
 
 test.describe('State v1.0.0', () => {
   test.describe('α: DSL technical', () => {
-    test('UC-1: switching to State loads template', async ({ page }) => {
+    // BLK-junior-20260909-0703 / BLK-owner-20260925-0312-2: 白紙のタブで図種を選ぶと見本は入れず白紙になり、
+    // 状態遷移図の追加フォーム(種別チップ)から 1 件目を足せる。
+    test('UC-1: switching a blank tab to State gives a blank diagram and the add chips', async ({ page }) => {
       await gotoApp(page);
+      // BLK-releaser-20260930-0417-1: 起動時のタブは前の spec が保存先に残した図を開き直していることがある
+      // (白紙でない)。＋ で白紙のタブを作ってから図種を選ぶ。
+      await page.locator('#btn-tab-new').click();
+      await page.waitForTimeout(300);
       await page.locator('#diagram-type').selectOption('plantuml-state');
       await page.waitForTimeout(500);
       var t = await getEditorText(page);
-      expect(t).toContain('state Idle');
-      expect(t).toContain('[*]');
+      expect(t).toMatch(/^@startuml/);
+      expect(t.trim()).toMatch(/@enduml$/);
+      expect(t).not.toContain('state Idle');
+      await expect(page.locator('#st-tail-kind-chip-state')).toBeVisible();
     });
     test('UC-2: tail-add state emits canonical', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-state');
-      await page.waitForTimeout(500);
-      await page.locator('#st-tail-kind').selectOption('state');
+      await switchTypeWithSample(page, 'plantuml-state');
+      await page.locator('#st-tail-kind-chip-state').click();
       await page.locator('#st-tail-id').fill('Paused');
       await page.locator('#st-tail-add').click();
       await page.waitForTimeout(300);
@@ -25,9 +32,8 @@ test.describe('State v1.0.0', () => {
     });
     test('UC-3: tail-add composite emits state X { }', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-state');
-      await page.waitForTimeout(500);
-      await page.locator('#st-tail-kind').selectOption('composite');
+      await switchTypeWithSample(page, 'plantuml-state');
+      await page.locator('#st-tail-kind-chip-composite').click();
       await page.locator('#st-tail-id').fill('Outer');
       await page.locator('#st-tail-add').click();
       await page.waitForTimeout(300);
@@ -37,9 +43,8 @@ test.describe('State v1.0.0', () => {
     });
     test('UC-4: tail-add transition with full label', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-state');
-      await page.waitForTimeout(500);
-      await page.locator('#st-tail-kind').selectOption('transition');
+      await switchTypeWithSample(page, 'plantuml-state');
+      await page.locator('#st-tail-kind-chip-transition').click();
       await page.locator('#st-tail-from').selectOption('Idle');
       await page.locator('#st-tail-to').selectOption('Active');
       await page.locator('#st-tail-trig').fill('click');
@@ -55,8 +60,7 @@ test.describe('State v1.0.0', () => {
   test.describe('γ: form + overlay', () => {
     test('UC-5: clicking state overlay opens edit panel', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-state');
-      await page.waitForTimeout(2500);
+      await switchTypeWithSample(page, 'plantuml-state');
       var rect = page.locator('#overlay-layer rect[data-type="state"]').first();
       var c = await rect.count();
       if (c === 0) test.skip();
@@ -73,8 +77,7 @@ test.describe('State v1.0.0', () => {
       var errors = [];
       page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-state');
-      await page.waitForTimeout(2500);
+      await switchTypeWithSample(page, 'plantuml-state');
       var rect = page.locator('#overlay-layer rect[data-type="state"]').first();
       if ((await rect.count()) > 0) {
         await rect.click();
@@ -87,8 +90,7 @@ test.describe('State v1.0.0', () => {
 
   test('UC-3 v1.1.0: Behaviors fields write entry/do/exit description lines', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-state');
     var stateRect = page.locator('#overlay-layer rect[data-type="state"]').first();
     if ((await stateRect.count()) === 0) test.skip();
     await stateRect.click();
@@ -108,8 +110,7 @@ test.describe('State v1.0.0', () => {
 
   test('UC-1 v1.1.0: Convert to composite adds empty braces', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-state');
     var stateRect = page.locator('#overlay-layer rect[data-type="state"]').first();
     if ((await stateRect.count()) === 0) test.skip();
     await stateRect.click();
@@ -130,8 +131,7 @@ test.describe('State v1.0.0', () => {
 
   test('UC-2 v1.1.0: Dissolve composite lifts children to top-level', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(500);
+    await switchTypeWithSample(page, 'plantuml-state');
     await page.locator('#editor').fill('@startuml\nstate Driving {\n  state Slow\n  state Fast\n}\n@enduml');
     await page.waitForTimeout(2500);
     var compositeRect = page.locator('#overlay-layer rect[data-type="state"][data-composite="1"]').first();
@@ -151,8 +151,7 @@ test.describe('State v1.0.0', () => {
 
   test('UC-5 v1.1.0: + Outgoing transition modal adds new transition', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(500);
+    await switchTypeWithSample(page, 'plantuml-state');
     await page.locator('#editor').fill('@startuml\nstate A\nstate B\n@enduml');
     await page.waitForTimeout(2500);
     var stateRect = page.locator('#overlay-layer rect[data-type="state"]').first();
@@ -163,9 +162,10 @@ test.describe('State v1.0.0', () => {
     if ((await btn.count()) === 0) test.skip();
     await btn.click();
     await page.waitForTimeout(300);
-    await page.locator('#st-tx-to').selectOption('B');
-    await page.locator('#st-tx-trig').fill('go');
-    await page.locator('#st-tx-confirm').click();
+    // BLK-human-20260923-2000: 「ここから遷移」は右パネルの続けて入れるフォームを開く (モーダルは廃止)。
+    await page.locator('#st-tail-to').selectOption('B');
+    await page.locator('#st-tail-trig').fill('go');
+    await page.locator('#st-tail-add').click();
     await page.waitForTimeout(300);
     var t = await getEditorText(page);
     expect(t).toContain('A --> B');
@@ -174,13 +174,15 @@ test.describe('State v1.0.0', () => {
 
   test('UC-4 v1.0.0: transition From/To dropdowns work (verification)', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(500);
+    await switchTypeWithSample(page, 'plantuml-state');
     await page.locator('#editor').fill('@startuml\nstate A\nstate B\nstate C\nA --> B : go\n@enduml');
     await page.waitForTimeout(2500);
     var trRect = page.locator('#overlay-layer rect[data-type="transition"]').first();
     if ((await trRect.count()) === 0) test.skip();
-    await trRect.click();
+    // 遷移の線は細い当たり (path.link-hit) が枠の rect より手前にあり、locator.click は「別の要素が受ける」と断る。
+    // 利用者と同じく実マウスで枠の真ん中を押す (その位置で一番手前の当たりが同じ遷移を選ぶ)。
+    var trBox = await trRect.boundingBox();
+    await page.mouse.click(trBox.x + trBox.width / 2, trBox.y + trBox.height / 2);
     await page.waitForTimeout(300);
     var toEl = page.locator('#st-tr-to');
     if ((await toEl.count()) === 0) test.skip();
@@ -194,8 +196,7 @@ test.describe('State v1.0.0', () => {
 
   test('UC-8 v1.1.0: hover guide does NOT appear in State mode', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-state');
     var stateRect = page.locator('#overlay-layer rect[data-type="state"]').first();
     if ((await stateRect.count()) === 0) test.skip();
     var box = await stateRect.boundingBox();
@@ -215,13 +216,11 @@ test.describe('State v1.0.0', () => {
     page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });
     await gotoApp(page);
     // Go to State first so currentParsed becomes State-shaped
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-state');
     var stateRectCount = await page.locator('#overlay-layer rect[data-type="state"]').count();
     expect(stateRectCount).toBeGreaterThan(0);
     // Switch back to Sequence — must not throw and the preview must follow
-    await page.locator('#diagram-type').selectOption('plantuml-sequence');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-sequence');
     // Editor should now hold the sequence template
     var t = await getEditorText(page);
     expect(t).toContain('participant');
@@ -250,10 +249,9 @@ test.describe('State v1.0.0', () => {
   // renderSvg() now discards stale responses.
   test('UC-bug2 v1.1.1: tail-added State is selectable via overlay click', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-state');
     // Add a new state via tail-add panel
-    await page.locator('#st-tail-kind').selectOption('state');
+    await page.locator('#st-tail-kind-chip-state').click();
     await page.locator('#st-tail-id').fill('FreshState');
     await page.locator('#st-tail-add').click();
     await page.waitForTimeout(2000);
@@ -275,8 +273,7 @@ test.describe('State v1.0.0', () => {
   // ensure the LATEST text drives the SVG and overlay — not the stale one.
   test('UC-bug2-race v1.1.1: stale render response does not overwrite fresh', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-state');
     // Install fetch interceptor that delays the FIRST /render response 800ms
     await page.evaluate(function() {
       var orig = window.fetch;
@@ -324,9 +321,8 @@ test.describe('State v1.0.0', () => {
   // keeps the original string as the visible label via `state "X" as S1`.
   test('UC-bug2-jp v1.1.2: Japanese-named tail-add State is selectable', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(2500);
-    await page.locator('#st-tail-kind').selectOption('state');
+    await switchTypeWithSample(page, 'plantuml-state');
+    await page.locator('#st-tail-kind-chip-state').click();
     await page.locator('#st-tail-id').fill('状態X');
     await page.locator('#st-tail-add').click();
     await page.waitForTimeout(2500);

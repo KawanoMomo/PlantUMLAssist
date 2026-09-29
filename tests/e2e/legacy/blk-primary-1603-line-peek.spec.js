@@ -68,8 +68,12 @@ test.describe('BLK-primary-20260908-1603: 選ぶ前に DSL 行と図形の対応
     expect(new Set(lines)).toEqual(new Set(['6']));
   });
 
-  test('対応する図形が無い行 (title) では何も光らない', async ({ page }) => {
+  // 題 (title) は図の上の見出しとして枠を持つようになった (光るのは題そのもの)。図形を持たない行は @startuml で見る
+  // (BLK-releaser-20260929-0851-2 で今の画面に合わせた)。
+  test('対応する図形が無い行 (@startuml) では何も光らない', async ({ page }) => {
     await caretToLine(page, 2);
+    expect(new Set(await peekedLines(page))).toEqual(new Set(['2']));
+    await caretToLine(page, 1);
     expect(await peekedLines(page)).toEqual([]);
     await expect(page.locator('#line-numbers .ln.ln-peek')).toHaveCount(0);
   });
@@ -98,7 +102,8 @@ test.describe('BLK-primary-20260908-1603: 選ぶ前に DSL 行と図形の対応
   });
 
   test('peek は選択を壊さない — 選んだ図形は選ばれたまま', async ({ page }) => {
-    await page.locator('#overlay-layer rect[data-line="4"]').first().click();
+    // 遷移は線の枠・ラベル・矢じりの複数枚で当たる。見えているラベルを押す
+    await page.locator('#overlay-layer rect[data-line="4"][data-hit-kind="linklabel"]').first().click();
     await page.waitForTimeout(300);
     await expect(page.locator('#overlay-layer rect.selected').first()).toBeVisible();
     await page.locator('#line-numbers .ln[data-line="6"]').hover();

@@ -197,6 +197,15 @@ class NativeDialog:
             return ''
         return res[0] if isinstance(res, (list, tuple)) else str(res)
 
+    def open_files(self, title, file_types=()):
+        """複数選択の開くダイアログ (BLK-human-20260917-0901)。選んだパスのリスト。"""
+        res = self._window.create_file_dialog(
+            self._webview.OPEN_DIALOG, allow_multiple=True,
+            file_types=tuple(file_types) or ('All files (*.*)',))
+        if not res:
+            return []
+        return [str(x) for x in res] if isinstance(res, (list, tuple)) else [str(res)]
+
     def save_file(self, suggested_name):
         res = self._window.create_file_dialog(
             self._webview.SAVE_DIALOG, save_filename=suggested_name)

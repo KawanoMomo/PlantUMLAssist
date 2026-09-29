@@ -6,12 +6,12 @@ window.MA = window.MA || {};
 // BLK-primary-20260908-1903-wish: 納品パッケージのモーダルが出すのは提出前チェックの
 // 件数と差分の行数だけで、実際にどこが変わったかはタブを 1 枚ずつ切り替えて目で
 // 見比べるしかなかった。行数は「変わった量」は言えるが「客の目に何が違って見えるか」は
-// 言わない。前回提出時点の puml を描き直した SVG と、今の SVG を、
-//   並べる (side)   — 左に前回・右に今
-//   重ねる (overlay) — 前回を薄い色で下に敷き、今を上に重ねる
-// の 2 通りで出し、増えた文字・消えた文字・図形の数の動きを添える。
+// 言わない。変更前の puml を描き直した SVG と、今の SVG を突き合わせ、
+// 増えた文字・消えた文字・図形の数の動きを言う。
 //
-// ここは判断と組み立てだけを持つ。描画 (render) と DOM は app.js の職掌。
+// BLK-primary-20260924-1332-wish: 専用の画面 (#dr-modal) は ▤ 変更サマリボードに畳んだ。
+// 並べる / 重ねる はボードの 🖼 表示の切替 (show-before-after) が持ち、ここに残すのは
+// ボードが図の下に出す「見た目の差」の判定だけ。描画 (render) と DOM は app.js の職掌。
 window.MA.deliveryReview = (function() {
 
   function _list(v) { return Array.isArray(v) ? v : []; }
@@ -132,12 +132,14 @@ window.MA.deliveryReview = (function() {
     };
   }
 
-  // 1 行の言い方。モーダルにそのまま出す。
-  function summaryLine(d) {
+  // 1 行の言い方。ボードの 🖼 表示で図の下にそのまま出す。
+  // base は何と比べたか (▤ 変更サマリボードの「変更前 =」の名前)。省くと前回提出。
+  function summaryLine(d, base) {
+    var b = _str(base) || '前回提出';
     if (!d) return '見比べていません';
     if (d.kind === 'unknown') return '今の図を描けませんでした（見比べられません）';
-    if (d.kind === 'new') return '新規の図です（前回提出には入っていません）・文字 ' + d.afterLabelCount + ' 個';
-    if (d.kind === 'same') return '前回提出と同じに見えます（文字・図形の数に差なし）';
+    if (d.kind === 'new') return '新規の図です（' + b + 'には入っていません）・文字 ' + d.afterLabelCount + ' 個';
+    if (d.kind === 'same') return b + 'と同じに見えます（文字・図形の数に差なし）';
     var parts = [];
     if (d.added.length) parts.push('増えた文字 ' + d.added.length + ' 個');
     if (d.removed.length) parts.push('消えた文字 ' + d.removed.length + ' 個');
@@ -149,73 +151,11 @@ window.MA.deliveryReview = (function() {
     return '見た目が変わっています — ' + parts.join(' ・ ');
   }
 
-  // ── 見比べる対象 ────────────────────────────────────────────────────
-  // change-board 由来の entries (name/status) から、見比べる価値のある順に並べる。
-  // 変更 → 新規 → 変更なし。「何を客に見せることになるか」は変更から見る。
-  var ORDER = { changed: 0, new: 1, same: 2 };
-
-  function plan(entries) {
-    var rows = [];
-    _list(entries).forEach(function(e) {
-      if (!e || !e.name) return;
-      var st = _str(e.status) || 'same';
-      rows.push({
-        name: e.name, status: st, diagramType: e.diagramType || '',
-        order: ORDER[st] == null ? 3 : ORDER[st],
-      });
-    });
-    rows.sort(function(a, b) {
-      if (a.order !== b.order) return a.order - b.order;
-      return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0);
-    });
-    return rows;
-  }
-
-  // 「1 枚目に開く図」。変更のある図があればそれ、無ければ先頭。
-  function firstOf(entries) {
-    var rows = plan(entries);
-    return rows.length ? rows[0].name : null;
-  }
-
-  // 見比べる前に出す見出し。何枚のうち何枚が変更かを、開いた瞬間に言う。
-  function headline(entries) {
-    var rows = plan(entries);
-    var ch = rows.filter(function(r) { return r.status === 'changed'; }).length;
-    var nw = rows.filter(function(r) { return r.status === 'new'; }).length;
-    if (rows.length === 0) return '対象の図がありません';
-    if (ch === 0 && nw === 0) return rows.length + ' 枚すべて前回提出から変わっていません';
-    return rows.length + ' 枚のうち 変更 ' + ch + ' 枚 ・ 新規 ' + nw + ' 枚 を見比べます';
-  }
-
-  // ── 重ね表示 ──────────────────────────────────────────────────────────
-  // 前回を薄い赤、今を通常色で重ねる。SVG そのものは触らず、包む側で色を作る
-  // (PlantUML の SVG は色指定を持つので、filter で上から染める方が確実)。
-  var BEFORE_FILTER = 'grayscale(1) sepia(1) saturate(6) hue-rotate(310deg) opacity(0.45)';
-
-  function overlayCss() {
-    return '.dr-stack{position:relative;}'
-      + '.dr-stack .dr-before{position:absolute;left:0;top:0;filter:' + BEFORE_FILTER + ';pointer-events:none;}'
-      + '.dr-stack .dr-after{position:relative;}'
-      + '.dr-side{display:flex;gap:10px;align-items:flex-start;}'
-      + '.dr-side>div{flex:1;min-width:0;overflow:auto;}';
-  }
-
-  // モード名の行き来。ボタン 1 つで往復させる。
-  function toggleMode(mode) { return mode === 'overlay' ? 'side' : 'overlay'; }
-
-  function modeLabel(mode) { return mode === 'overlay' ? '重ねて表示中' : '並べて表示中'; }
-
   return {
     labelsOf: labelsOf,
     shapeOf: shapeOf,
     shapeLabel: shapeLabel,
     diff: diff,
     summaryLine: summaryLine,
-    plan: plan,
-    firstOf: firstOf,
-    headline: headline,
-    overlayCss: overlayCss,
-    toggleMode: toggleMode,
-    modeLabel: modeLabel,
   };
 })();

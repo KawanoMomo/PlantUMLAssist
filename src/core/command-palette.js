@@ -28,24 +28,27 @@ window.MA.commandPalette = (function() {
   // 分類の正本は tool-menu.js (メニューと同じ並び・同じ言葉)。ここでは写さない
   // — 2 か所に書くと、道具が増えたときにメニューにはあってパレットには無い、が起きる。
   var TOOL_GROUPS = ['make', 'edit', 'find', 'check', 'review', 'give'];
-  var GROUPS = ['add', 'jump', 'selected'].concat(TOOL_GROUPS).concat(['command']);
+  // BLK-human-20260923-1701 (design 10b): 'file' は Ctrl+P で開く「ファイル名から開く」の見出し。
+  // ファイル単位の操作 (一時控え・この図の変遷) もここに入る (入口は FILES ツリーの右クリック)。
+  var GROUPS = ['add', 'jump', 'selected'].concat(TOOL_GROUPS).concat(['file', 'command']);
   var GROUP_LABELS = {
     add: '図に足す / Add',
     jump: '図の要素へ移動 / Jump to element',
     selected: '選択中の要素に対して / Selected',
     make: '図をつくる / Make',
     edit: '書き換える / Edit',
-    find: '探す・見比べる / Find',
+    find: '探す / Find',
     check: '確かめる / Check',
     review: 'レビュー / Review',
     give: '渡す / Deliver',
+    file: 'ファイル / Files',
     command: 'コマンド / Command',
   };
   // 行の左に出す短い分類チップ。見出しの外へ絞り込んでも、その行が何の仲間かが
   // 1 語で分かるようにする (design 7b のパレットは行ごとに分類を出している)。
   var GROUP_CHIPS = {
-    make: '図をつくる', edit: '書き換える', find: '探す・見比べる',
-    check: '確かめる', review: 'レビュー', give: '渡す',
+    make: '図をつくる', edit: '書き換える', find: '探す',
+    check: '確かめる', review: 'レビュー', give: '渡す', file: 'ファイル',
   };
   // 見出しの下に 1 行だけ出す補足。何が起きるか読まずに分かるようにする。
   var GROUP_NOTES = {
@@ -62,7 +65,7 @@ window.MA.commandPalette = (function() {
     var tm = _toolMenu();
     if (!tm || !buttonId) return null;
     var g = tm.groupOf(buttonId);
-    return (g && TOOL_GROUPS.indexOf(g) >= 0) ? g : null;
+    return (g && (TOOL_GROUPS.indexOf(g) >= 0 || g === 'file')) ? g : null;
   }
 
   // メニューに出ている「何をするか」の言い換え。パレットでも同じ言葉にする
@@ -77,9 +80,11 @@ window.MA.commandPalette = (function() {
   // 道具の題 (「名前突合を開く / Name audit」) から、右端に置く短い呼び名を作る。
   // 英語併記と「を開く」等の動詞は落とす — 分類チップと本文で何をするかは
   // もう言えているので、右端は「どの道具か」の 1 語でよい。
+  // BLK-owner-20260924-1212-prune: 言い換えがその呼び名を含むとき (「この図の履歴を見る」と
+  // 「この図の履歴」) も出さない。同じ画面の名前が 1 行に 2 度並ぶと別の行に見える。
   function _toolHint(title, label) {
     var short = toolShortName(title);
-    return short === label ? '' : short;
+    return (!short || String(label).indexOf(short) >= 0) ? '' : short;
   }
 
   function toolShortName(title) {
@@ -252,8 +257,9 @@ window.MA.commandPalette = (function() {
         id: (g === 'command' ? 'command:' : g + ':') + c.id,
         kind: g === 'command' ? 'command' : g,
         group: g,
+        // 分類をコマンド側で直に持つ行 (group: 'find' 等) も、メニュー由来の行と同じチップにする。
         badge: c.badge || (g === 'add' ? '追加' : g === 'selected' ? '選択中'
-          : toolGroup ? groupChip(toolGroup) : 'コマンド'),
+          : groupChip(g) || 'コマンド'),
         title: toolLabel || c.title,
         // 右端は「どの道具か」。言い換えと同じ文字になるなら出さない (同じ語が 2 度並ぶ)。
         hint: toolLabel ? _toolHint(c.title, toolLabel) : (c.hint || ''),
@@ -344,7 +350,28 @@ window.MA.commandPalette = (function() {
         if (best === null || s2 < best) best = s2;
       }
     }
+    if (best === null) best = _groupWordScore(item, q);
     return best;
+  }
+
+  // BLK-builder-20260924-1337-4 (design 7b): 行の左に「確かめる」と出ているのに、
+  // その語を打つと 0 件だった。7b は「確かめ」と打ってその分類の道具を並べる画面で、
+  // 道具の名前を知らない人の入口は分類の語しか無い。分類の語 (チップと見出し) の
+  // 部分一致でも拾う。名指し (題・呼び名・キーワード) で当たらなかった行だけに使い、
+  // 点は部分一致・順序一致の後ろに置く — 題で名指しした行を分類で拾った行が抜かない。
+  // 順序一致は使わず、1 文字では引かない (「す」「e」が複数の分類に当たり、ほぼ全部が出る)。
+  // 分類を持つのは道具の 6 分類とファイルだけ。図に足す / 移動 は図の中身なので対象外。
+  var GROUP_WORD_SCORE = 1500;
+  function _groupWordScore(item, q) {
+    var g = (item && item.group) || 'command';
+    if (q.length < 2) return null;
+    if (TOOL_GROUPS.indexOf(g) < 0 && g !== 'file') return null;
+    var words = [GROUP_CHIPS[g]].concat(_s(GROUP_LABELS[g]).split('/'));
+    for (var i = 0; i < words.length; i++) {
+      var w = _s(words[i]).trim().toLowerCase();
+      if (w && w.indexOf(q) >= 0) return GROUP_WORD_SCORE;
+    }
+    return null;
   }
 
   // q の文字が f にこの順で現れるか (間に何が挟まってもよい)。

@@ -55,9 +55,13 @@ async function seedThree(page) {
   await page.waitForSelector('#preview-svg svg', { timeout: 20000 });
 }
 
+// BLK-owner-20260923-1829-prune: 「図を選んでSVGで保存」の入口は Export ▾ から
+// 📦 資料セット画面の「対象の選び方」へ畳んだ。画面そのものは変わっていない。
 async function openPicker(page) {
   await page.locator('#btn-export').click();
-  await page.locator('#exp-svg-pick').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-pick').click();
   await expect(page.locator('#expick-modal')).toBeVisible();
 }
 
@@ -71,8 +75,7 @@ async function savedNames(page, timeoutMs) {
 test.describe('BLK-primary-1203-wish 提出用 zip の図選び', () => {
   test('Export から図選びの画面を開ける', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#btn-export').click();
-    await expect(page.locator('#exp-svg-pick')).toBeVisible();
+    await openPicker(page);
   });
 
   test('開いている図が印付きで並び、既定は全部選択', async ({ page }) => {
@@ -136,7 +139,9 @@ test.describe('BLK-primary-1203-wish 提出用 zip の図選び', () => {
     await seedThree(page);
     const waitDownload = page.waitForEvent('download', { timeout: 120 * 1000 });
     await page.locator('#btn-export').click();
-    await page.locator('#exp-svg-all').click();
+    // BLK-owner-20260923-2332-prune: 全図の zip は 📦 資料セット →「開いている図すべて」に移った
+    await page.locator('#exp-docset').click();
+    await page.locator('#dsc-open').click();
     const download = await waitDownload;
     expect(readZipNames(fs.readFileSync(await download.path())))
       .toEqual(['Changed.svg', 'Fixed.svg', 'Kept.svg']);

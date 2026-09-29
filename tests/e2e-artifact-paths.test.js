@@ -67,6 +67,26 @@ describe('E2E の成果物の置き場 (BLK-releaser-20260908-0800)', () => {
     expect(td).toContain('rmSync');
   });
 
+  // BLK-builder-20260924-2152-3b: Playwright は起動のたびに outputDir を丸ごと消す。既定の test-results/ のままだと、
+  // unit のコーパス往復テストが書いた test-results/corpus-roundtrip.json (metrics.py の roundtrip_pass の元) が
+  // 全体実行 (unit → E2E) の E2E を始めた時点で消え、メジャー条件の往復テストが「未実行」扱いになる。
+  test('E2E の出力先は test-results の下の専用フォルダで、往復テストの結果を消さない', () => {
+    var cfg = require('../playwright.config.js');
+    var root = path.resolve(__dirname, '..', 'test-results');
+    var cfgDir = path.resolve(__dirname, '..');
+    var dirs = [cfg.outputDir].concat((cfg.projects || []).map(function(p) { return p.outputDir; }))
+      .filter(function(d) { return d != null; })
+      .map(function(d) { return path.resolve(cfgDir, d); });
+    expect(typeof cfg.outputDir).toBe('string');
+    dirs.forEach(function(d) {
+      expect(d.indexOf(root + path.sep)).toBe(0);
+    });
+    var roundtrip = path.join(root, 'corpus-roundtrip.json');
+    dirs.forEach(function(d) {
+      expect(roundtrip.indexOf(d + path.sep)).toBe(-1);
+    });
+  });
+
   test('.gitignore は直下の残骸を握りつぶしていない (残骸は作らないことで消す)', () => {
     var gi = fs.readFileSync(path.join(__dirname, '..', '.gitignore'), 'utf8');
     expect(/^autosave-/m.test(gi)).toBe(false);

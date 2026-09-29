@@ -1,0 +1,20 @@
+' 狙い: participant order (宣言順を無視した create/destroy の出現順)と
+' create/destroy を同一の相手に対して複数回繰り返すパターン
+@startuml
+participant Main
+
+Main -> Main : start
+create Worker
+Main -> Worker : run(job1)
+Worker --> Main : done1
+destroy Worker
+
+create Worker
+Main -> Worker : run(job2)
+Worker --> Main : done2
+destroy Worker
+
+create Logger
+Main -> Logger : write(summary)
+destroy Logger
+@enduml

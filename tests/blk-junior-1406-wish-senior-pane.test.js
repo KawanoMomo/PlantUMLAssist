@@ -103,23 +103,23 @@ describe('据え置きの記憶', function() {
     const got = SP.load(st);
     // BLK-human-20260915-1203 で幅と初回説明も同じ鍵に入った。
     assert.deepStrictEqual(got,
-      { open: true, dir: './primary', name: 'gpio_state.puml', width: SP.DEFAULT_WIDTH, seen: false });
+      { open: true, dir: './primary', name: 'gpio_state.puml', width: SP.DEFAULT_WIDTH, seen: false, mode: 'keep' });
   });
 
   test('壊れた記憶でも画面は開ける (閉じた状態に落とす)', function() {
     const st = store();
     st.setItem(SP.STORE_KEY, '{壊れている');
     assert.deepStrictEqual(SP.load(st),
-      { open: false, dir: '', name: '', width: SP.DEFAULT_WIDTH, seen: false });
+      { open: false, dir: '', name: '', width: SP.DEFAULT_WIDTH, seen: false, mode: 'keep' });
   });
 });
 
 // BLK-junior-20260908-1103: 先輩の図を見る入口が 🧰 ツールの折りたたみの奥にあり、
 // 図種ごとの初回は毎回そこを通っていた。下端の状態バーに常時出して 1 クリックにする。
-describe('BLK-junior-1103 下端の「👀 先輩」', function() {
+describe('BLK-junior-1103 下端の「並べて比較」', function() {
   test('まだ先輩のフォルダを読めていなければ、押せば開くとだけ言う', function() {
     const t = SP.statusText(null, { ready: false });
-    assert.strictEqual(t.label, '👀 先輩 −');
+    assert.strictEqual(t.label, '並べて比較 −');
     assert.strictEqual(t.count, 0);
     assert.ok(t.title.indexOf('押すと開きます') >= 0);
   });
@@ -127,7 +127,7 @@ describe('BLK-junior-1103 下端の「👀 先輩」', function() {
   test('相手が 1 枚に決まっていれば、その図の名前を下端に出す', function() {
     const p1 = pick('gpio_state.puml', NAMES, SENIOR);
     const t = SP.statusText(p1, { ready: true });
-    assert.strictEqual(t.label, '👀 先輩 gpio_state');
+    assert.strictEqual(t.label, '並べて比較 gpio_state');
     assert.strictEqual(t.count, 1);
     assert.ok(t.title.indexOf('読むだけ') >= 0);
   });
@@ -142,7 +142,7 @@ describe('BLK-junior-1103 下端の「👀 先輩」', function() {
   test('当たる図が無ければ − を出し、理由を添える', function() {
     const p1 = pick('adc_state.puml', NAMES, SENIOR);
     const t = SP.statusText(p1, { ready: true });
-    assert.strictEqual(t.label, '👀 先輩 −');
+    assert.strictEqual(t.label, '並べて比較 −');
     assert.strictEqual(t.count, 0);
     assert.strictEqual(t.title, p1.reason);
   });

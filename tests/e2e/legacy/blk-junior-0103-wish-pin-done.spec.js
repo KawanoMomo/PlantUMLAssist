@@ -49,10 +49,10 @@ test.describe('BLK-junior-20260908-0103-wish: 指摘を対応済みにして修�
   test('既読にしただけでは未対応のまま数える (読んだ ≠ 直した)', async ({ page }) => {
     await openState(page);
     await pinLine(page, 4, 'method が無い');
-    await expect(page.locator('#btn-tab-pins')).toHaveText('📌 指摘 1/1');
+    await expect(page.locator('#btn-tab-pins')).toHaveText('指摘 1/1');
     await page.locator('.pin-toggle').first().click();
     await page.waitForTimeout(1200);
-    await expect(page.locator('#btn-tab-pins')).toHaveText('📌 指摘 1/1');
+    await expect(page.locator('#btn-tab-pins')).toHaveText('指摘 1/1');
     await expect(page.locator('#pin-panel .pin-row').first()).toContainText('既読');
   });
 
@@ -61,7 +61,7 @@ test.describe('BLK-junior-20260908-0103-wish: 指摘を対応済みにして修�
     await pinLine(page, 4, 'method が無い');
     await page.locator('.pin-done').first().click();
     await page.waitForTimeout(1200);
-    await expect(page.locator('#btn-tab-pins')).toHaveText('📌 指摘 0/1');
+    await expect(page.locator('#btn-tab-pins')).toHaveText('指摘 0/1');
     expect(await getEditorText(page)).toContain('|done|');
     await expect(page.locator('#pin-panel .pin-head')).toHaveAttribute('data-done', '1');
   });
@@ -114,7 +114,7 @@ test.describe('BLK-junior-20260908-0103-wish: 指摘を対応済みにして修�
     await page.waitForTimeout(1200);
     await page.locator('.pin-reopen').first().click();
     await page.waitForTimeout(1200);
-    await expect(page.locator('#btn-tab-pins')).toHaveText('📌 指摘 1/1');
+    await expect(page.locator('#btn-tab-pins')).toHaveText('指摘 1/1');
     await expect(page.locator('#pin-panel .pin-row').first()).toHaveAttribute('data-pin-state', 'open');
   });
 });

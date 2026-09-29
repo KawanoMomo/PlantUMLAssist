@@ -1,0 +1,14 @@
+@startuml
+mainframe 注釈の枠
+box "ECU" #LightYellow
+participant A
+end box
+participant B
+A -> B : x
+note right of B : memo
+activate B
+B --> A : y
+deactivate B
+== 区切り ==
+... 遅延 ...
+@enduml

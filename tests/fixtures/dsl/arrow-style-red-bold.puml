@@ -1,0 +1,3 @@
+@startuml
+A -[#red,bold]> B : 赤太
+@enduml

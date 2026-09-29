@@ -14,6 +14,8 @@ window.MA = window.MA || {};
 // その 2 つの間 — 「束の版を 1 本の時系列に混ぜ、症状の語で絞る」ところ。ここは
 // その混ぜ方と絞り方だけを置く純関数群で、DOM も fetch も localStorage も触らない
 // (履歴の取り出しは historyOf として呼び出し側から渡す)。描画は app.js。
+// 版の材料は保存フォルダ (server の /version-search。◉ 混入点と同じ道)。fromSearch が
+// その返りを historyOf に渡せる形 (図名 → 新しい順の版) に直す。
 window.MA.depVersionSearch = (function() {
 
   function _s(v) { return v == null ? '' : String(v); }
@@ -46,6 +48,73 @@ window.MA.depVersionSearch = (function() {
     return (hits || []).map(function(h) { return h.text; }).join('\n');
   }
 
+  // 版の当たり行。本文 (dsl) を持つ版はここで数え、保存フォルダの版
+  // (server の /version-search が当たり行だけを返す) は渡された hits を語で絞る。
+  // server は空白で語を分けて「どれかに当たった行」を返すので、句として当たる行だけに揃える。
+  function _hitsOf(v, kw) {
+    if (!v) return [];
+    if (Array.isArray(v.hits) && v.dsl == null) {
+      if (!_s(kw).trim()) return [];
+      return v.hits.filter(function(h) { return h && matches(h.text, kw); })
+        .map(function(h) { return { line: h.line, text: _s(h.text).trim() }; });
+    }
+    return hitLines(v.dsl, kw);
+  }
+
+  // server の刻印 (YYYYMMDD-HHMMSS[.N]、UTC) → 並べ替えと表示に使う ISO 時刻 (UTC)。
+  function stampAt(stamp) {
+    var m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})/.exec(_s(stamp));
+    if (!m) return '';
+    return m[1] + '-' + m[2] + '-' + m[3] + 'T' + m[4] + ':' + m[5] + ':' + m[6] + 'Z';
+  }
+
+  // GET /version-search の返り → 図名ごとの版 (新しい順)。◉ 混入点と同じ材料を読む
+  // (BLK-primary-20260924-1232: 版を読む道を 1 本にする。localStorage の変遷は
+  // ブラウザを起こし直すと空になり、前の run までに保存フォルダへ積んだ版が見えなかった)。
+  // 版番号は古い方から 1、2…。最後の「いまの中身」(current) も 1 つの版として数える。
+  //
+  // 時刻 (at) は「その中身になった時刻」。控えの刻印は「その版が次の保存で置き換えられた
+  // 時刻」なので、版 k の時刻は 1 つ古い版 k-1 の刻印になる。いまの中身は更新時刻
+  // (mtime)。一番古い控えがいつ書かれたかは残っていないので空 (並びは一番古い扱い)。
+  function fromSearch(payload) {
+    var out = {};
+    var files = (payload && Array.isArray(payload.files)) ? payload.files : [];
+    files.forEach(function(f) {
+      if (!f || !f.name) return;
+      var vs = Array.isArray(f.versions) ? f.versions : [];
+      var list = vs.map(function(v, i) {
+        v = v || {};
+        var prev = i > 0 ? (vs[i - 1] || {}) : null;
+        var at = prev && !prev.current ? stampAt(prev.stamp) : '';
+        if (v.current && _s(v.mtime)) at = _s(v.mtime);
+        return {
+          rev: i + 1,
+          stamp: v.current ? '' : _s(v.stamp),
+          current: !!v.current,
+          at: at,
+          hits: (Array.isArray(v.lines) ? v.lines : []).map(function(h) {
+            return { line: h && h.no, text: _s(h && h.text) };
+          }),
+        };
+      });
+      out[f.name] = list.reverse();     // 新しい順
+    });
+    return out;
+  }
+
+  // 届き方の順。依存グラフの外 (hop: null) は連鎖のどの段よりも後ろ。
+  function _hopRank(r) { return r && typeof r.hop === 'number' ? r.hop : 1e6; }
+
+  // 並べ替えの時刻。「いまの中身」は刻印を持たないが、どの控えよりも新しい。
+  function _sortAt(r) { return r && r.current && !r.at ? '\uffff' : _s(r && r.at); }
+
+  // 行に出す「いつ」。時刻が残っていない版 (一番古い控え) は、そう言う。
+  function whenLabel(r) {
+    if (!r) return '';
+    if (r.at) return atLabel(r.at);
+    return r.current ? 'いま' : '日時不明';
+  }
+
   // 1 図ぶん。versions は version-timeline の rows() と同じ「新しい順」で、
   // 各版が dsl / rev / at / label / lines / added / removed を持つ。
   //
@@ -64,8 +133,8 @@ window.MA.depVersionSearch = (function() {
     for (var i = 0; i < list.length; i++) {
       var v = list[i] || {};
       var prev = list[i + 1];            // 新しい順なので i+1 が 1 つ古い版
-      var hits = hitLines(v.dsl, kw);
-      var prevHits = prev ? hitLines(prev.dsl, kw) : [];
+      var hits = _hitsOf(v, kw);
+      var prevHits = prev ? _hitsOf(prev, kw) : [];
       var changed;
       if (!kw) {
         // 語が無いときは「中身が動いた版」を変化と見なす (増減が 0 の版は
@@ -78,7 +147,10 @@ window.MA.depVersionSearch = (function() {
       }
       out.push({
         doc: _s(doc),
-        hop: typeof o.hop === 'number' ? o.hop : 0,
+        stamp: _s(v.stamp),
+        current: !!v.current,
+        // hop が null = 依存グラフの外 (保存フォルダ全体から語で引いた図)。
+        hop: typeof o.hop === 'number' ? o.hop : (o.hop === null ? null : 0),
         via: (o.via || []).slice(),
         rev: typeof v.rev === 'number' ? v.rev : i + 1,
         at: _s(v.at),
@@ -130,12 +202,35 @@ window.MA.depVersionSearch = (function() {
       }));
     });
     rows.sort(function(a, b) {
-      if (a.at !== b.at) return a.at < b.at ? 1 : -1;   // 新しい順
-      if (a.hop !== b.hop) return a.hop - b.hop;        // 直接の図を先に
+      var ta = _sortAt(a), tb = _sortAt(b);
+      if (ta !== tb) return ta < tb ? 1 : -1;           // 新しい順
+      if (a.hop !== b.hop) return _hopRank(a) - _hopRank(b);   // 直接の図を先に (外の図は後)
       return a.doc.localeCompare(b.doc) || b.rev - a.rev;
     });
     if (typeof o.limit === 'number' && o.limit > 0) rows = rows.slice(0, o.limit);
     return rows;
+  }
+
+  // BLK-primary-20260924-2132-wish: 版履歴を依存グラフの影響一覧に絞らず、保存フォルダの
+  // 全図から語で引くときの的。history (fromSearch の返り) に載る図を全部並べ、影響一覧に
+  // 載っている図はその届き方 (hop / via) を持たせる (外の図は hop: null)。
+  function folderTargets(history, impact) {
+    var byName = {};
+    (Array.isArray(impact) ? impact : []).forEach(function(r) {
+      if (r && r.doc && !byName[r.doc]) byName[r.doc] = r;
+    });
+    var h = (history && typeof history === 'object') ? history : {};
+    return Object.keys(h).filter(function(k) { return k.indexOf('__') !== 0; }).map(function(name) {
+      var r = byName[name];
+      return r ? { doc: name, hop: r.hop, via: (r.via || []).slice() }
+               : { doc: name, hop: null, via: [] };
+    });
+  }
+
+  // 行に出す「届き方」。
+  function hopLabel(r) {
+    if (!r || r.hop == null) return '保存フォルダ';
+    return r.hop === 0 ? '直接' : '連鎖 ' + r.hop + ' 段';
   }
 
   // 図ごとのまとめ。一覧の前に「どの図から読むか」を決めるためのもの。
@@ -154,17 +249,18 @@ window.MA.depVersionSearch = (function() {
       var a = acc[r.doc];
       a.versions++;
       a.hits += r.hitCount;
+      var t = _sortAt(r);
       if (r.changed) {
         a.changed++;
-        if (r.at > a.latestChangedAt) a.latestChangedAt = r.at;
+        if (t > a.latestChangedAt) a.latestChangedAt = t;
       }
-      if (r.at > a.latestAt) a.latestAt = r.at;
+      if (t > a.latestAt) a.latestAt = t;
     });
     return order.map(function(k) { return acc[k]; }).sort(function(a, b) {
       if (a.latestChangedAt !== b.latestChangedAt) {
         return a.latestChangedAt < b.latestChangedAt ? 1 : -1;
       }
-      return a.hop - b.hop || a.doc.localeCompare(b.doc);
+      return _hopRank(a) - _hopRank(b) || a.doc.localeCompare(b.doc);
     });
   }
 
@@ -179,23 +275,27 @@ window.MA.depVersionSearch = (function() {
   }
 
   // 一覧の見出し 1 行。
-  function summaryText(rows, keyword, impactCount) {
+  // opts.scope === 'folder' は保存フォルダ全体から引いた回 (impactCount はそのフォルダの図の数)。
+  function summaryText(rows, keyword, impactCount, opts) {
     var kw = _s(keyword).trim();
     var list = rows || [];
     var docs = byDoc(list).length;
     var n = typeof impactCount === 'number' ? impactCount : docs;
+    var folder = !!(opts && opts.scope === 'folder');
     if (!list.length) {
       if (kw) {
-        return '影響 ' + n + ' 図の版履歴に「' + kw + '」を含む版はありません'
+        return (folder ? '保存フォルダ ' + n + ' 図' : '影響 ' + n + ' 図')
+          + 'の版履歴に「' + kw + '」を含む版はありません'
           + '（語を短くするか、保存を重ねると履歴が貯まります）';
       }
       return '影響が届く図を選ぶと、その版履歴を新しい順に並べます';
     }
     var changed = list.filter(function(r) { return r.changed; }).length;
-    var t = (kw ? '「' + kw + '」' : '全部') + ': ' + docs + ' 図 / ' + list.length + ' 版';
+    var t = (kw ? '「' + kw + '」' : '全部') + ': ' + (folder ? '保存フォルダの ' : '')
+      + docs + ' 図 / ' + list.length + ' 版';
     if (changed > 0) t += ' — 書き換わった版 ' + changed;
     var first = firstToOpen(list);
-    if (first) t += ' / 最新の変化は ' + first.doc + ' ' + atLabel(first.at);
+    if (first) t += ' / 最新の変化は ' + first.doc + ' ' + whenLabel(first);
     return t;
   }
 
@@ -214,7 +314,7 @@ window.MA.depVersionSearch = (function() {
   // 1 行ぶんの説明。なぜこの版が並んでいるかを行の中で言い切る。
   function rowText(r) {
     if (!r) return '';
-    var t = r.doc + ' 版' + r.rev + ' ' + atLabel(r.at);
+    var t = r.doc + ' 版' + r.rev + ' ' + whenLabel(r);
     if (r.appeared) t += ' — ここで現れた';
     else if (r.vanished) t += ' — ここで消えた';
     else if (r.changed) t += ' — ここで書き換わった';
@@ -232,6 +332,11 @@ window.MA.depVersionSearch = (function() {
     firstToOpen: firstToOpen,
     summaryText: summaryText,
     atLabel: atLabel,
+    whenLabel: whenLabel,
+    stampAt: stampAt,
+    fromSearch: fromSearch,
+    folderTargets: folderTargets,
+    hopLabel: hopLabel,
     rowText: rowText,
   };
 })();

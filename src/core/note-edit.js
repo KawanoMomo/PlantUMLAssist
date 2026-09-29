@@ -16,6 +16,14 @@ window.MA.noteEdit = (function() {
   // `note|hnote|rnote  位置  対象[, 対象]  [#色]  [: 本文]`
   var SEQ_HEAD_RE = /^(note|hnote|rnote)\s+(left of|right of|over)\s+(.+?)\s*(#[0-9A-Za-z]+)?\s*(?::\s*(.*))?$/i;
   var SEQ_END_RE = /^end\s*(note|hnote|rnote)\s*$/i;
+  // BLK-migrator-20260923-1409: 直前のメッセージに付ける注釈 (`note right` / `note left : 本文`)。
+  // 対象の参加者を書かない。実物の図 (AWS の構成図など) はこの形を多く使い、読めないと
+  // 注釈の枠が出ない。`left of X` とは `of` の有無で見分ける。
+  var SEQ_ATTACHED_RE = /^(note|hnote|rnote)\s+(left|right)\s*(#[0-9A-Za-z]+)?\s*(?::\s*(.*))?$/i;
+  // BLK-migrator-20260929-0459: 全参加者にまたがる注釈 (`note across : 本文` / `hnote across #色` … `end note`)。
+  // 対象の参加者を書かない。読めないと注釈の要素が作られず、描かれた紙に枠が出なかった。
+  // 位置 `across` は読んだまま保ち、本文・色を直しても書き換えない (位置の選択肢には足さない)。
+  var SEQ_ACROSS_RE = /^(note|hnote|rnote)\s+across\b\s*(#[0-9A-Za-z]+)?\s*(?::\s*(.*))?$/i;
 
   function _s(v) { return v == null ? '' : String(v); }
 
@@ -36,7 +44,31 @@ window.MA.noteEdit = (function() {
   // 1 行を見て注釈の頭なら形を返す。block=true は本文が次行から `end note` まで続く形。
   function matchSeqHead(trimmed) {
     var m = _s(trimmed).match(SEQ_HEAD_RE);
-    if (!m) return null;
+    var ac = m ? null : _s(trimmed).match(SEQ_ACROSS_RE);
+    if (ac) {
+      return {
+        shape: ac[1].toLowerCase(),
+        position: 'across',
+        targets: [],
+        color: ac[2] || '',
+        text: ac[3] !== undefined ? ac[3].trim() : '',
+        block: ac[3] === undefined,
+        across: true,
+      };
+    }
+    if (!m) {
+      var a = _s(trimmed).match(SEQ_ATTACHED_RE);
+      if (!a) return null;
+      return {
+        shape: a[1].toLowerCase(),
+        position: a[2].toLowerCase(),
+        targets: [],
+        color: a[3] || '',
+        text: a[4] !== undefined ? a[4].trim() : '',
+        block: a[4] === undefined,
+        attached: true,
+      };
+    }
     var hasColon = m[5] !== undefined;
     return {
       shape: m[1].toLowerCase(),
@@ -75,6 +107,13 @@ window.MA.noteEdit = (function() {
   function formatSeqNote(note, indent) {
     var ind = _s(indent);
     var shape = (note.shape || 'note').toLowerCase();
+    var text0 = _s(note.text);
+    var acrossHead = note.position === 'across';
+    if (acrossHead || (note.attached && (note.position === 'left' || note.position === 'right'))) {
+      var ahead = shape + ' ' + note.position + (note.color ? ' ' + note.color : '');
+      if (text0.indexOf('\n') < 0 && text0) return [ind + ahead + ' : ' + text0];
+      return [ind + ahead].concat(text0.split('\n').map(function(l) { return ind + '  ' + l; })).concat([ind + 'end ' + shape]);
+    }
     var pos = SEQ_POSITIONS.indexOf(_s(note.position).toLowerCase()) >= 0 ? _s(note.position).toLowerCase() : 'over';
     var targets = normalizeTargets(pos, note.targets);
     var head = shape + ' ' + pos + ' ' + targets.join(', ') + (note.color ? ' ' + note.color : '');
@@ -93,8 +132,21 @@ window.MA.noteEdit = (function() {
     var note = readSeqNote(lines, idx);
     if (!note) return text;
     var indent = lines[idx].match(/^(\s*)/)[1];
-    if (field === 'position') note.position = _s(value).toLowerCase();
+    if (field === 'position') {
+      var np = _s(value).toLowerCase();
+      // メッセージに付いた注釈を参加者の横・上に移すには対象が要る。無ければ変えない。
+      if (note.attached && np !== 'left' && np !== 'right') {
+        if (!note.targets.length) return text;
+        note.attached = false;
+      }
+      // 全参加者にまたがる注釈を参加者の横・上に移すにも対象が要る。
+      if (note.position === 'across' && np !== 'across' && !note.targets.length) return text;
+      note.position = np;
+    }
     else if (field === 'targets') {
+      if (note.attached) { note.attached = false; note.position = note.position + ' of'; }
+      // 対象を選んだら、その参加者の上の注釈にする (across は対象を持てない)。
+      if (note.position === 'across') note.position = 'over';
       var t = normalizeTargets(note.position, value);
       if (!t.length) return text;
       note.targets = t;

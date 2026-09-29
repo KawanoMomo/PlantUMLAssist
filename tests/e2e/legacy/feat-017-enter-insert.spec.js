@@ -171,13 +171,10 @@ test.describe('FEAT-017: Enter キーで選択行の直後に挿入 modal を開
     });
     expect(isLabelTa).toBe(true);
 
-    // modal の Escape 挙動は変更前と同じく「閉じない」。
+    // BLK-owner-20260924-2232-4: 窓は Esc で「キャンセル」する (以前は閉じなかった)。
     await page.keyboard.press('Escape');
     await page.waitForTimeout(200);
-    expect(await modalDisplay(page)).toBe('flex');
-
-    await page.locator('#seq-mod-cancel').click();
-    await page.waitForTimeout(200);
+    expect(await modalDisplay(page)).toBe('none');
 
     // Properties パネルの上下移動ボタンが従来どおり描画される。
     await page.evaluate(() => {

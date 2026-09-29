@@ -1,0 +1,16 @@
+' 狙い: !$var の変数、!definelong、%upper() %strlen() %string()、!if の比較
+@startuml
+!$sys = "決済"
+!$max = 3
+!definelong RETRY(target)
+target -> target : 再試行
+!enddefinelong
+participant "$sys 画面" as A
+participant "$sys サーバ" as B
+A -> B : %upper("req") 送信
+!if ($max > 2)
+B -> B : 上限 $max 回まで
+!endif
+RETRY(B)
+B --> A : 文字数 %strlen("決済完了") / %string($max)
+@enduml

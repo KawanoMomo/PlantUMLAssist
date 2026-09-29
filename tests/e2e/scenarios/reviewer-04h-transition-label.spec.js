@@ -21,6 +21,14 @@ test('手順4.11 シーケンスに実在しない遷移ラベルを挙げられ
 const path = require('path');
 const { gotoApp, saveDirFor } = require('../helpers');
 
+// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
+// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
+async function openFolder(page) {
+  // BLK-owner-20260924-0637-1: 旧 📂 一覧は保存先の右クリック「保存先の一覧を開く」で中央の枠に開く。
+  await require('./_scenario').openFolder(page);
+  await page.waitForSelector('#folder-panel.open');
+}
+
 const DIR = saveDirFor(__filename);
 
 // Timer_Driver には Timer_Init しか無い (実物の driver_common_class と同じ形)。
@@ -62,7 +70,7 @@ test('手順4.11 一覧が部品ごとに 3 枚を束ね、クラスに宣言の
   await putFile(page, 'R04h_state', STATE_DSL);
   await putFile(page, 'R04h_seq', SEQ_DSL);
 
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
 
   // 到達条件その1: audit.js を実行せずに、一覧の頭で件数が読める。

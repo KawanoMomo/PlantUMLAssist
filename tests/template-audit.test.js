@@ -125,7 +125,7 @@ describe('template-audit — 作る前にクラスの宣言と突き合わせる
     expect(TA.summaryText(ng, true)).toContain('2 件');
   });
 
-  test('buildIssuesHtml: 「🔍 名前突合」と同じ文言で 1 件 1 行に出す', () => {
+  test('buildIssuesHtml: 「名前突合」と同じ文言で 1 件 1 行に出す', () => {
     const r = TA.auditResult(TIMER_STATE_FROM_ADC, 'timer_state', [CLASS_DOC], 'adc_state');
     const html = TA.buildIssuesHtml(r);
     expect((html.match(/tpl-audit-row/g) || []).length).toBe(2);

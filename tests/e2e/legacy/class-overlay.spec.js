@@ -13,13 +13,22 @@ async function clickEntity(page, locator, opts) {
 
 test.describe('Class diagram (v0.6.0)', () => {
   test.describe('α: DSL technical', () => {
-    test('switching to Class loads template with class + interface', async ({ page }) => {
+    // BLK-junior-20260909-0703 / BLK-owner-20260925-0312-2: 白紙・見本のままのタブで図種を選ぶと、見本 (class User 等) は
+    // 入れず切り替え先の白紙にする。クラス図の追加フォームが出て、そこから 1 件目を足せる。
+    test('switching a blank tab to Class gives a blank class diagram and the class add form', async ({ page }) => {
       await gotoApp(page);
+      // BLK-releaser-20260930-0417-1: 起動時のタブは前の spec が保存先に残した図を開き直していることがある
+      // (白紙でない)。＋ で白紙のタブを作ってから図種を選ぶ。
+      await page.locator('#btn-tab-new').click();
+      await page.waitForTimeout(300);
       await page.locator('#diagram-type').selectOption('plantuml-class');
       await page.waitForTimeout(500);
       var t = await getEditorText(page);
-      expect(t).toContain('class User');
-      expect(t).toContain('interface IAuth');
+      expect(t).toMatch(/^@startuml/);
+      expect(t.trim()).toMatch(/@enduml$/);
+      expect(t).not.toContain('class User');
+      expect(t).not.toContain('interface IAuth');
+      await expect(page.locator('#cl-tail-kind')).toBeVisible();
     });
 
     test('add class via tail-add emits canonical', async ({ page }) => {
@@ -78,8 +87,9 @@ test.describe('Class diagram (v0.6.0)', () => {
       await page.waitForTimeout(200);
       await page.locator('#cl-tail-kind').selectOption('relation');
       await page.locator('#cl-tail-rkind').selectOption('inheritance');
-      await page.locator('#cl-tail-from').selectOption('Animal');
-      await page.locator('#cl-tail-to').selectOption('Dog');
+      // BLK-owner-20260929-0351-1: From は矢の根元 = 子 (Dog)、To は親 (Animal)
+      await page.locator('#cl-tail-from').selectOption('Dog');
+      await page.locator('#cl-tail-to').selectOption('Animal');
       await page.locator('#cl-tail-add').click();
       await page.waitForTimeout(300);
       var t = await getEditorText(page);

@@ -44,6 +44,9 @@ async function gotoApp(page, opts) {
   // so the app opening a little late failed the test before it had begun.
   // The suite-wide `timeout` in playwright.config.js is the budget that matters.
   await page.waitForSelector('#preview-svg');
+  // #preview-svg は HTML の骨格にあり、init (保存先の取り込み /prefs を待って走る) より先に出る。
+  // init が終わるまで画面は押せない (html[data-app-ready] が立つまで pointer-events を切ってある)。
+  await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
   // local (Java) で描画する。online は DSL を plantuml.com へ送るため使わない。
   await page.evaluate(() => {
     var sel = document.getElementById('render-mode');
@@ -74,8 +77,15 @@ async function getEditorLine(page, lineNum) {
   return t.split('\n')[lineNum - 1];
 }
 
+// 実マウスで当たりの真ん中を押す。関係の線は細い当たり (path.link-hit) が枠の rect より手前にあり
+// (BLK-migrator-20260925-1032)、locator.click は「別の要素が受ける」と押す前に断る。利用者が押すのと同じく、
+// その位置で一番手前の当たりが受ける (線の当たりも同じ関係を選ぶ)。
 async function clickOverlayByLine(page, line) {
-  await page.locator('#overlay-layer rect[data-line="' + line + '"]').first().click();
+  const r = page.locator('#overlay-layer rect[data-line="' + line + '"]').first();
+  await r.scrollIntoViewIfNeeded();
+  const b = await r.boundingBox();
+  if (!b) throw new Error('overlay rect for line ' + line + ' has no box');
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
 }
 
 
@@ -90,7 +100,58 @@ async function setDiagramTitle(page, title) {
   await page.waitForTimeout(200);
 }
 
+
+// design 9b (BLK-human-20260923-1601): ツール ▾ は左 6 分類・右小見出しの 2 段パネル。
+// 目当ての項目はその分類を選ばないと右列に出ないので、分類を選んでから押す。
+async function pickTool(page, targetId) {
+  const key = await page.evaluate((id) => window.MA.toolMenu.groupOf(id), targetId);
+  await page.locator('.tool-menu-cat[data-group="' + key + '"]').click();
+  await page.locator('.tool-menu-item[data-target="' + targetId + '"]').click();
+}
+
+// BLK-owner-20260924-2135-prune: 参照ペインの相手のフォルダは、FILES「読むだけ」で比較中にしたフォルダ 1 つ。
+// パスを打つ欄 (#xf-dir + 🔍 探す) は外した。ツリーの「並べて比較」と同じ関数で比較中にし、
+// 並べて比較の枠の相手「別タブの図」から参照ペインを開く (開くと相手のフォルダを読む)。
+async function openCrossRef(page, dir) {
+  await page.evaluate((d) => window.compareReadonlyFolder(d), dir);
+  await page.locator('#senior-target-tabs').click();
+  await page.waitForSelector('#compare-pane:not([hidden])');
+}
+
+// BLK-owner-20260923-1509-prune: 旧 ⇔ 並べて見る (#btn-tab-compare) はタブ列から外れ、
+// 並べて比較の枠の相手「別タブの図」になった (scenarios の junior-02 / primary-04 と同じ経路)。
+// 並べて比較 (FILES「読むだけ」の ⇔) を開き、相手を「別タブの図」にして参照ペインを出す。
+async function openCompareTabs(page) {
+  await page.waitForSelector('#btn-tab-senior');
+  if (await page.locator('#senior-pane').isHidden()) {
+    await page.locator('#btn-tab-senior').click();
+  }
+  await page.locator('#senior-target-tabs').click();
+  await page.waitForSelector('#compare-pane:not([hidden])');
+}
+
+// BLK-junior-20260909-0703 / BLK-owner-20260925-0312-2: 白紙のタブで図種を選ぶと、見本は入れず白紙になる。
+// 旧 spec の多くは見本 (component WebApp / class User 等) を前提に操作するので、図種を選んだあと
+// その図種の見本 (module.template()) を本文に入れて、見本を開いた状態から始める。
+async function switchTypeWithSample(page, type) {
+  await page.locator('#diagram-type').selectOption(type);
+  await page.waitForTimeout(300);
+  await page.evaluate((t) => {
+    var mods = window.MA.modules || {};
+    var mod = null;
+    Object.keys(mods).forEach(function(k) { if (mods[k] && mods[k].type === t) mod = mods[k]; });
+    if (!mod) throw new Error('no module for ' + t);
+    var ed = document.getElementById('editor');
+    ed.value = mod.template();
+    ed.dispatchEvent(new Event('input'));
+  }, type);
+  // 見本の描画 (local の Java) が済んで選択枠が張られるまで待つ。枠を押す spec が空振りで skip しないように。
+  await page.waitForSelector('#overlay-layer rect', { state: 'attached', timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(300);
+}
+
 module.exports = {
+  openCrossRef, openCompareTabs,
   gotoApp, loadFixture, getEditorText, getEditorLine, clickOverlayByLine, setDiagramTitle,
-  saveDirFor, shotOut, E2E_SAVE_ROOT,
+  saveDirFor, shotOut, E2E_SAVE_ROOT, pickTool, switchTypeWithSample,
 };

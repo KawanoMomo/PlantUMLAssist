@@ -14,31 +14,48 @@ window.MA.sequenceAutonumber = (function() {
     return n;
   }
 
-  var LINE_RE = /^\s*autonumber(?:\s+(\d+)(?:\s+(\d+))?)?\s*$/i;
-  // `autonumber stop` / `resume` は本モジュールが書く行ではないので触らない。
-  var CONTROL_RE = /^\s*autonumber\s+(stop|resume)\b/i;
+  // BLK-migrator-20260918-0549: 実物の図は書式指定つきの autonumber を使う
+  // (`autonumber 10 5 "<b>[000]"` / `autonumber "<b>[000]"`)。書式を読めないと
+  // 「番号なし」と出てしまい、そこで番号を触ると 2 本目の autonumber 行が入って
+  // 実物の採番が勝手に変わる。書式もここで読み、書き戻すときはそのまま残す。
+  var LINE_RE = /^\s*autonumber(?:\s+(\d+)(?:\s+(\d+))?)?(?:\s+"((?:[^"\\]|\\.)*)")?\s*$/i;
+  // `autonumber stop` / `resume` / `inc` は本モジュールが書く行ではないので触らない。
+  var CONTROL_RE = /^\s*autonumber\s+(stop|resume|inc)\b/i;
 
   function isAutonumberLine(line) {
-    return typeof line === 'string' && LINE_RE.test(line);
+    if (typeof line !== 'string') return false;
+    if (CONTROL_RE.test(line)) return false;
+    return LINE_RE.test(line);
+  }
+
+  function _fmt(v) {
+    return (typeof v === 'string' && v !== '') ? v : '';
   }
 
   // fmtLine: 既定 (1, 1) なら `autonumber` とだけ書く。設計の意図が読める最短の形にする。
-  function fmtLine(start, step) {
+  // 書式を渡されたらそのまま末尾に付ける (PlantUML の `autonumber [開始 [増分]] ["書式"]`)。
+  function fmtLine(start, step, format) {
     var s = _num(start, 1), st = _num(step, 1);
-    if (s === 1 && st === 1) return 'autonumber';
-    if (st === 1) return 'autonumber ' + s;
-    return 'autonumber ' + s + ' ' + st;
+    var head;
+    if (s === 1 && st === 1) head = 'autonumber';
+    else if (st === 1) head = 'autonumber ' + s;
+    else head = 'autonumber ' + s + ' ' + st;
+    var f = _fmt(format);
+    return f ? head + ' "' + f + '"' : head;
   }
 
-  // read: 今の DSL の状態。行が無ければ { on: false, start: 1, step: 1 }。
+  // read: 今の DSL の状態。行が無ければ { on: false, start: 1, step: 1, format: '' }。
   function read(dsl) {
     var lines = String(dsl == null ? '' : dsl).split('\n');
     for (var i = 0; i < lines.length; i++) {
       if (CONTROL_RE.test(lines[i])) continue;
       var m = lines[i].match(LINE_RE);
-      if (m) return { on: true, start: _num(m[1], 1), step: _num(m[2], 1), line: i + 1 };
+      if (m) {
+        return { on: true, start: _num(m[1], 1), step: _num(m[2], 1),
+                 format: _fmt(m[3]), line: i + 1 };
+      }
     }
-    return { on: false, start: 1, step: 1, line: null };
+    return { on: false, start: 1, step: 1, format: '', line: null };
   }
 
   // apply: on なら @startuml の直後に 1 行だけ置く。off なら消す。
@@ -59,7 +76,14 @@ window.MA.sequenceAutonumber = (function() {
       return lines.join('\n');
     }
 
-    var want = fmtLine(o.start, o.step);
+    // 書式は指定されなければ今の行のものを引き継ぐ。開始・増分を触っただけで
+    // 実物の書式指定が消えると、図の見た目が勝手に変わる。
+    var format = o.format;
+    if (format === undefined && at >= 0) {
+      var cur = lines[at].match(LINE_RE);
+      format = cur ? _fmt(cur[3]) : '';
+    }
+    var want = fmtLine(o.start, o.step, format);
     if (at >= 0) {
       var indent = lines[at].match(/^(\s*)/)[1];
       if (lines[at] === indent + want) return text;

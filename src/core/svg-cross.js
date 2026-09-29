@@ -124,7 +124,7 @@ window.MA.svgCross = (function() {
         : '⚠ この図の SVG は ' + row.of + '.puml の絵です';
     }
     if (!s.rows.length) return '';
-    return '⚠ SVG の出力先クロス ' + s.rows.length + ' 枚（📂一覧で確認）';
+    return '⚠ SVG の出力先クロス ' + s.rows.length + ' 枚（保存先の一覧で確認）';
   }
 
   return {

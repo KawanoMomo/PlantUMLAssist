@@ -5,6 +5,13 @@
 const { test, expect } = require('@playwright/test');
 const { gotoApp, getEditorText, saveDirFor } = require('../helpers');
 
+// 保存先の一覧は FILES の保存先の右クリック「保存先の一覧を開く」で中央の枠に開く
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。旧経路 (見出しを
+// 畳んで開き直し #folder-panel.open を待つ) は FILES の節を開くだけで、一覧の枠は見えないまま待ち続けた。
+async function openFolder(page) {
+  await require('../scenarios/_scenario').openFolder(page);
+}
+
 const SPI_SEQ = '@startuml\nparticipant SpiDrv\nparticipant SpiHw\nSpiDrv -> SpiHw: transfer\n@enduml';
 const CAN_SEQ = '@startuml\nparticipant CanDrv\nparticipant CanHw\nCanDrv -> CanHw: send\n@enduml';
 
@@ -123,7 +130,7 @@ test.describe('BLK-human-1850 保存フォルダ一覧', () => {
       });
     }, dir);
 
-    await page.locator('#btn-tab-folder').click();
+    await openFolder(page);
     await page.waitForSelector('#folder-panel.open .folder-item');
     await page.locator('#folder-panel .folder-item[data-file-name="CAN_state"]').click();
     await page.waitForTimeout(500);

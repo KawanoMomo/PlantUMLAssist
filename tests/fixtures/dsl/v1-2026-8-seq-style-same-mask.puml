@@ -1,0 +1,19 @@
+@startuml
+<style>
+sequenceDiagram {
+  participant {
+    BackGroundColor lightblue
+  }
+  note {
+    BackGroundColor #FFFFCC
+  }
+}
+</style>
+participant 店舗 as S
+participant 倉庫 as W
+participant 決済GW as G
+S -> W : 在庫
+W --> S : ok
+note over G : n
+S -> G : 決済
+@enduml

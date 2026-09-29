@@ -34,21 +34,56 @@ window.MA.pinInbox = (function() {
       if (typeof d.dsl !== 'string') return;
       _pinsOf(d.dsl).forEach(function(p) {
         p.doc = d.name;
+        // BLK-owner-20260923-1409-prune: 出典を札ではなく列で持つ。
+        // 手で書いた指摘 (fromManual) と同じ箱に並べても見分けが付くようにする。
+        p.source = 'audit';
         out.push(p);
       });
     });
     return out;
   }
 
+  // fromManual: 手で書いた指摘 (manual-findings.review の行) を、箱に並ぶ形にする。
+  //
+  // BLK-owner-20260923-1409-prune: 🔖 手動指摘のタブは「指摘を集めて札を付けて一覧する」
+  // という 📥 指摘箱と同じ目的の 2 つ目の入口だった。同じ 1 件が 2 か所で別々に数えられ、
+  // 札の語彙も違った。手で書いた指摘もここで箱の項目にし、出典の絞り込みで出す。
+  // 仕分けの中身 (指紋での持ち越し・要再確認の判定) は manual-findings のまま使う。
+  function fromManual(rows) {
+    var FV = window.MA.findingVocab;
+    return (Array.isArray(rows) ? rows : []).map(function(r) {
+      if (!r) return null;
+      var v = FV ? FV.fromManual(r) : { key: r.keep ? 'open' : 'unknown', why: '' };
+      return {
+        id: 'mf:' + _s(r.id),
+        mfId: _s(r.id),
+        doc: _s(r.doc),
+        line: r.line > 0 ? r.line : 0,
+        text: _s(r.text),
+        author: _s(r.author),
+        at: _s(r.at),
+        state: (v.key === 'reflected') ? 'done' : 'open',
+        stale: !r.keep && (r.status === 'gone' || r.status === 'missing-doc'),
+        source: 'manual',
+        verdictKey: v.key,
+        verdictWhy: v.why,
+        mfRow: r,
+      };
+    }).filter(function(x) { return !!x && !!x.doc; });
+  }
+
   // filter: 受信箱の既定は「自分がまだ見ていない、他人の指摘」。
+  //   source — 'audit' / 'manual' を指定すると、その出典だけを残す (空なら全部)
   //   unreadOnly — 既読 (= 目を通した) を落とす
   //   pendingOnly — 対応済みを落とす。「まだ直っていない指摘」だけを残す
   //   excludeAuthor — 自分が書いた指摘を落とす。大小は問わない
   function filter(items, opts) {
     var o = opts || {};
     var me = _s(o.excludeAuthor).trim().toLowerCase();
+    var src = _s(o.source).trim();
     return (Array.isArray(items) ? items : []).filter(function(p) {
       if (!p) return false;
+      if (src && _s(p.source || 'audit') !== src) return false;
       if (o.unreadOnly && p.state === 'read') return false;
       if (o.pendingOnly && p.state === 'done') return false;
       if (me && _s(p.author).trim().toLowerCase() === me) return false;
@@ -109,8 +144,8 @@ window.MA.pinInbox = (function() {
 
   // badgeText: 道具ボタンの 1 行。図をまたいだ未対応の数がボタンだけで分かる。
   function badgeText(sum) {
-    if (!sum || !sum.total) return '📥 指摘箱 −';
-    return '📥 指摘箱 ' + _pending(sum) + '/' + sum.total;
+    if (!sum || !sum.total) return '指摘箱 −';
+    return '指摘箱 ' + _pending(sum) + '/' + sum.total;
   }
 
   function groupText(g) {
@@ -125,14 +160,47 @@ window.MA.pinInbox = (function() {
     if (!p) return '';
     var where = p.stale ? '行が見つかりません' : ('L' + p.line);
     return '#' + _s(p.id) + ' ' + _s(p.doc) + ' ' + where
+      + ' ' + sourceLabel(p)
       + ' ' + (window.MA.reviewPins ? window.MA.reviewPins.stateLabel(p.state)
         : (p.state === 'read' ? '既読' : '未読'))
       + (p.author ? ' ・ ' + p.author : '')
       + ' ・ ' + _s(p.text);
   }
 
+  // 出典の見出し (列に出す文字)。語彙は finding-vocab が持つ。
+  function sourceLabel(p) {
+    var FV = window.MA.findingVocab;
+    var k = _s(p && p.source) || 'audit';
+    return FV ? FV.source(k).label : (k === 'manual' ? '手で書いた' : '監査が出した');
+  }
+
+  // 同じ図の同じ行に同じ文面があれば 1 件に畳む。出典が違っても二重に数えない
+  // (BLK-owner-20260923-1409-prune: 🔖 と 📥 の別勘定をここで止める)。
+  // 監査が出した側を残す (根拠の機械確認が付いているのはそちら)。
+  function dedupe(items) {
+    var FV = window.MA.findingVocab;
+    if (!FV) return (Array.isArray(items) ? items : []).slice();
+    var seen = {}, out = [];
+    (Array.isArray(items) ? items : []).forEach(function(p) {
+      if (!p) return;
+      var k = FV.countKey(p);
+      if (Object.prototype.hasOwnProperty.call(seen, k)) {
+        // 先に入れたのが手で書いた側なら、監査が出した側で置き換える。
+        var at = seen[k];
+        if (out[at] && out[at].source === 'manual' && p.source !== 'manual') out[at] = p;
+        return;
+      }
+      seen[k] = out.length;
+      out.push(p);
+    });
+    return out;
+  }
+
   return {
     collect: collect,
+    fromManual: fromManual,
+    dedupe: dedupe,
+    sourceLabel: sourceLabel,
     filter: filter,
     groupByDoc: groupByDoc,
     summary: summary,

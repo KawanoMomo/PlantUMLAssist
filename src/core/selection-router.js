@@ -82,7 +82,8 @@ window.MA.selectionRouter = (function() {
     if (!selData || selData.length === 0) return;
     selData.forEach(function(s) {
       var rects = overlayEl.querySelectorAll(
-        'rect[data-type="' + s.type + '"][data-id="' + s.id + '"]'
+        // 楔込みの note の枠 (rect.note-frame) はホバーの見た目だけで、選択の印は付けない。
+        'rect[data-type="' + s.type + '"][data-id="' + s.id + '"]:not(.note-frame)'
       );
       Array.prototype.forEach.call(rects, function(r) { r.classList.add('selected'); });
     });

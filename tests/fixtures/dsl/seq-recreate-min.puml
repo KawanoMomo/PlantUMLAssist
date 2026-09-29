@@ -1,0 +1,9 @@
+@startuml
+participant Main
+create Worker
+Main -> Worker : run1
+destroy Worker
+create Worker
+Main -> Worker : run2
+destroy Worker
+@enduml

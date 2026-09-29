@@ -48,7 +48,9 @@ async function clearDir(page) {
 }
 
 async function openFolder(page) {
-  await page.locator('#btn-tab-folder').click();
+  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
+  // BLK-owner-20260924-0637-1: 旧 📂 一覧は保存先の右クリック「保存先の一覧を開く」で中央の枠に開く。
+  await require('./_scenario').openFolder(page);
   await page.waitForSelector('#folder-panel.open');
 }
 
@@ -85,7 +87,7 @@ test('図種を変えて保存し続けても、前の周の図が消えない',
   expect(state).toContain('IDLE --> RUNNING');
 });
 
-test('📂 一覧が図種を言う。行のバッジと「状態遷移 1」の要約', async ({ page }) => {
+test('一覧が図種を言う。行のバッジと「状態遷移 1」の要約', async ({ page }) => {
   await saveThreeRounds(page);
   await openFolder(page);
 
@@ -117,6 +119,17 @@ test('図種が変わると図名も回された先に合わせ、どこへ保�
     .filter({ hasText: 'diagram1_state' })).toHaveCount(1);
 });
 
+// BLK-owner-20260923-2312-prune: 過去の版を見る画面は「この図の履歴」1 つ。保存先一覧の
+// [履歴 N] は一覧の中に版を広げず、同じ「この図の履歴」を開く (右クリック・⟲ 変遷と同じ画面)。
+async function openHistoryOf(page, name) {
+  await openFolder(page);
+  await expect(page.locator('#folder-panel [data-versions-name="' + name + '"]')).toHaveText(/履歴 \d/);
+  await page.locator('#folder-panel [data-versions-name="' + name + '"]').click();
+  await expect(page.locator('#vt-modal')).toBeVisible();
+  await expect(page.locator('#vt-modal-content strong')).toHaveText('この図の履歴');
+  return page.locator('#vt-body [data-version-list="' + name + '"] .folder-version');
+}
+
 test('同じ図種の上書きは今までどおり。前の中身は「履歴」に残る', async ({ page }) => {
   await putFile(page, 'gpio_state', STATE);
   await page.waitForTimeout(1100);   // server の刻印は秒。版が同じ秒に潰れないように
@@ -130,19 +143,21 @@ test('同じ図種の上書きは今までどおり。前の中身は「履歴�
 
   await openFolder(page);
   await expect(page.locator('#folder-panel [data-versions-name="gpio_state"]')).toHaveText('履歴 1');
-  await page.locator('#folder-panel [data-versions-name="gpio_state"]').click();
-  const list = page.locator('#folder-panel [data-version-list="gpio_state"] .folder-version');
+  const list = await openHistoryOf(page, 'gpio_state');
   await expect(list).toHaveCount(1);
   await expect(list.nth(0)).toContainText('状態遷移');
+  await expect(page.locator('#vt-summary')).toContainText('保存した版 1');
+  // 保存先一覧の中には版を広げない (過去の版を見る画面は 1 つ)。
+  await expect(page.locator('#folder-panel .folder-version')).toHaveCount(0);
 });
 
 test('版を開くと、今の図を上書きせずに別タブで開く', async ({ page }) => {
   await putFile(page, 'gpio_state', STATE);
   await page.waitForTimeout(1100);
   await putFile(page, 'gpio_state', STATE2);
-  await openFolder(page);
-  await page.locator('#folder-panel [data-versions-name="gpio_state"]').click();
-  await page.locator('#folder-panel [data-version-list="gpio_state"] .folder-version').nth(0).click();
+  const list = await openHistoryOf(page, 'gpio_state');
+  await list.nth(0).click();
+  await expect(page.locator('#vt-modal')).toBeHidden();
 
   await expect.poll(async () => {
     return await page.evaluate(() => {
@@ -156,6 +171,72 @@ test('版を開くと、今の図を上書きせずに別タブで開く', async
     return r.ok ? await r.text() : '';
   }, DIR);
   expect(now).toContain('IDLE --> ERROR');
+});
+
+// BLK-owner-20260924-1212-prune: Ctrl+K でこの図の履歴を開く行は「この図の履歴を見る」1 行。
+// 旧名 (変遷) で打っても同じ 1 行が出て、旧名は行の文字に並ばない。
+test('Ctrl+K で「変遷」「履歴」と打っても、この図の履歴を開く行は 1 行', async ({ page }) => {
+  await putFile(page, 'gpio_state', STATE);
+  await page.waitForTimeout(1100);
+  await putFile(page, 'gpio_state', STATE2);
+  await openHistoryOf(page, 'gpio_state');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { document.getElementById('vt-modal').style.display = 'none'; });
+  for (const q of ['変遷', '履歴']) {
+    await page.keyboard.press('Control+k');
+    await page.waitForSelector('#cp-modal.open');
+    await page.locator('#cp-input').fill(q);
+    await page.waitForTimeout(150);
+    const rows = page.locator('.cp-item[data-cp-id$=":tab-versions"]');
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first().locator('.cp-title')).toHaveText('この図の履歴を見る');
+    await expect(page.locator('.cp-item').filter({ hasText: '変遷' })).toHaveCount(0);
+    if (q === '履歴') {
+      await rows.first().click();
+      await expect(page.locator('#vt-modal')).toBeVisible();
+      await expect(page.locator('#vt-modal-content strong')).toHaveText('この図の履歴');
+    } else {
+      await page.keyboard.press('Escape');
+    }
+  }
+});
+
+test('この図の履歴の「比較」で、版を今の図の右に並べる (今の図はそのまま)', async ({ page }) => {
+  await putFile(page, 'gpio_state', STATE);
+  await page.waitForTimeout(1100);
+  await putFile(page, 'gpio_state', STATE2);
+  await openHistoryOf(page, 'gpio_state');
+  await page.locator('#vt-body [data-version-compare][data-version-of="gpio_state"]').first().click();
+  await expect(page.locator('#vt-modal')).toBeHidden();
+
+  // 編集しているのは今の図 (上書きされていない)。右には版が並ぶ。
+  await expect.poll(async () => page.evaluate(() => {
+    const d = window.MA.workspace.getActive();
+    return d ? d.name + '|' + d.dsl : '';
+  })).toContain('gpio_state|');
+  expect(await page.evaluate(() => window.MA.workspace.getActive().dsl)).toContain('IDLE --> ERROR');
+  await expect(page.locator('#compare-pane')).toBeVisible();
+  await expect(page.locator('#compare-select option:checked')).toContainText('gpio_state@');
+});
+
+test('前の版と同じ中身に戻った版には、この図の履歴で「往復」の印が付く', async ({ page }) => {
+  await putFile(page, 'gpio_state', STATE);
+  await page.waitForTimeout(1100);
+  await putFile(page, 'gpio_state', STATE2);
+  await page.waitForTimeout(1100);
+  await putFile(page, 'gpio_state', STATE);
+  await page.waitForTimeout(1100);
+  await putFile(page, 'gpio_state', STATE2);
+  // 控え (新しい順): STATE ← STATE2 ← STATE。いちばん新しい控えが往復。
+  const list = await openHistoryOf(page, 'gpio_state');
+  await expect(list).toHaveCount(3);
+  const rows = page.locator('#vt-body .vt-row');
+  await expect(rows.nth(0)).toHaveAttribute('data-vt-revisit', '1');
+  await expect(rows.nth(0).locator('.vt-badge')).toHaveText('往復');
+  await expect(page.locator('#vt-summary')).toContainText('往復 1');
+  await page.locator('#vt-only-revisit').check();
+  await expect(page.locator('#vt-body .vt-row')).toHaveCount(1);
+  await page.locator('#vt-only-revisit').uncheck();
 });
 
 // BLK-junior-20260909-0403: ユースケース図は自分にも先輩にも手本が 1 枚も無く、
@@ -180,6 +261,21 @@ test('手本が無いユースケース図を、題材名 1 語のひな形か�
 
   // 図として描けている (パースが通り、要素が出そろっている)
   await expect(page.locator('#status-parse')).toContainText('パース OK');
+  // design 9c (BLK-builder-20260924-1759-1): 通ったことは点の色 (緑) で言い、文字は隣の件数と同じ色。
+  await expect(page.locator('#status-parse')).toHaveAttribute('data-dot', 'ok');
+  const look = await page.evaluate(() => {
+    const p = document.getElementById('status-parse');
+    const before = getComputedStyle(p, '::before');
+    return {
+      text: getComputedStyle(p).color,
+      info: getComputedStyle(document.getElementById('status-info')).color,
+      dot: before.color,
+      content: before.content,
+    };
+  });
+  expect(look.text).toBe(look.info);
+  expect(look.content).toBe('"●"');
+  expect(look.dot).not.toBe(look.text);
 });
 
 // BLK-junior-20260916-0546-wish: 手順 1 で先輩 (primary) の図を見るには、📂 一覧が

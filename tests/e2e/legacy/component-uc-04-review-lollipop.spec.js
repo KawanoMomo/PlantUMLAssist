@@ -1,14 +1,13 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, switchTypeWithSample } = require('../helpers');
 
 test.describe('UC-4: レビュー指摘 (lollipop で interface を明示)', () => {
   test.describe('α: DSL technical', () => {
     test('addRelation provides emits canonical -()', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-component');
-      await page.waitForTimeout(300);
-      await page.locator('#co-tail-kind').selectOption('relation');
+      await switchTypeWithSample(page, 'plantuml-component');
+      await page.locator('#co-tail-kind-chip-relation').click();
       await page.locator('#co-tail-rkind').selectOption('provides');
       await page.locator('#co-tail-from').selectOption('WebApp');
       await page.locator('#co-tail-to').selectOption('IAuth');
@@ -19,9 +18,8 @@ test.describe('UC-4: レビュー指摘 (lollipop で interface を明示)', () 
     });
     test('addRelation requires emits canonical )-', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-component');
-      await page.waitForTimeout(300);
-      await page.locator('#co-tail-kind').selectOption('relation');
+      await switchTypeWithSample(page, 'plantuml-component');
+      await page.locator('#co-tail-kind-chip-relation').click();
       await page.locator('#co-tail-rkind').selectOption('requires');
       await page.locator('#co-tail-from').selectOption('IAuth');
       await page.locator('#co-tail-to').selectOption('WebApp');
@@ -35,17 +33,15 @@ test.describe('UC-4: レビュー指摘 (lollipop で interface を明示)', () 
   test.describe('γ: workflow completion', () => {
     test('lollipop options visible in kind selector', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-component');
-      await page.waitForTimeout(300);
-      await page.locator('#co-tail-kind').selectOption('relation');
+      await switchTypeWithSample(page, 'plantuml-component');
+      await page.locator('#co-tail-kind-chip-relation').click();
       var options = await page.locator('#co-tail-rkind option').allTextContents();
       expect(options.some(function(o) { return o.includes('Provides'); })).toBe(true);
       expect(options.some(function(o) { return o.includes('Requires'); })).toBe(true);
     });
     test('parser canonicalizes reverse forms', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-component');
-      await page.waitForTimeout(300);
+      await switchTypeWithSample(page, 'plantuml-component');
       await page.evaluate(() => {
         var ed = document.getElementById('editor');
         ed.value = '@startuml\nIAuth ()- WebApp\n@enduml';

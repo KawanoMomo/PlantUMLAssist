@@ -15,10 +15,10 @@ window.MA.activityInsert = (function() {
     { kind: 'action',   label: 'アクション',        hint: ':処理;' },
     { kind: 'if',       label: '条件分岐 (if)',     hint: 'if / else / endif' },
     { kind: 'while',    label: '繰り返し (while)',  hint: 'while / endwhile' },
-    { kind: 'repeat',   label: '繰り返し (repeat)', hint: 'repeat / repeat while' },
-    { kind: 'fork',     label: '並行処理 (fork)',   hint: 'fork / fork again / end fork' },
-    { kind: 'note',     label: 'ノート',            hint: 'note right' },
-    { kind: 'swimlane', label: 'スイムレーンを分ける', hint: '|レーン名|' },
+    { kind: 'repeat',   label: '後判定の繰り返し (repeat)', hint: 'repeat / repeat while' },
+    { kind: 'fork',     label: '並行 (fork)',   hint: 'fork / fork again / end fork' },
+    { kind: 'note',     label: '注釈 (note)',       hint: 'note right' },
+    { kind: 'swimlane', label: 'レーン (swimlane)', hint: '|レーン名|' },
     { kind: 'break',    label: '中断 (break)',      hint: 'break' },
     { kind: 'detach',   label: '切り離し (detach)', hint: 'detach' },
     { kind: 'kill',     label: '打ち切り (kill)',   hint: 'kill' },
@@ -53,6 +53,9 @@ window.MA.activityInsert = (function() {
     if (idx < 0 || idx >= lines.length) return false;
     // 候補は「この行の後ろ」を指すので、stop / end の行そのものは本体の外。
     if (TERM_RE.test(lines[idx])) return false;
+    // BLK-owner-20260925-0312-4: start の行の後ろ (start の直後) は流れの先頭 = 本体。
+    // start の「前」は候補の position: 'before' が表し、allowedKinds がフローの外として扱う。
+    if (START_RE.test(lines[idx])) return true;
     var sawStart = false;
     for (var i = 0; i < idx; i++) {
       if (START_RE.test(lines[i])) sawStart = true;
@@ -73,8 +76,9 @@ window.MA.activityInsert = (function() {
   }
 
   // その位置に置ける要素だけを返す。フローの外では start / stop / レーンだけ。
-  function allowedKinds(dsl, lineNum) {
-    if (inFlow(dsl, lineNum)) return kinds();
+  // position が 'before' (start の前) なら、行がどこでもフローの外。
+  function allowedKinds(dsl, lineNum, position) {
+    if (position !== 'before' && inFlow(dsl, lineNum)) return kinds();
     var lines = _lines(dsl);
     var hasStart = false, hasTerm = false;
     for (var i = 0; i < lines.length; i++) {
@@ -92,12 +96,66 @@ window.MA.activityInsert = (function() {
     return out;
   }
 
-  function isAllowed(dsl, lineNum, kind) {
-    var list = allowedKinds(dsl, lineNum);
+  function isAllowed(dsl, lineNum, kind, position) {
+    var list = allowedKinds(dsl, lineNum, position);
     for (var i = 0; i < list.length; i++) if (list[i].kind === kind) return true;
     return false;
   }
 
+
+  // ── 開始・停止・終了の置き場所の知らせ (BLK-owner-20260925-0312-4) ──────────────
+  // start / stop / end はどこに書いても PlantUML は描く (2 つ目の start、stop の後の start も通る)ので止めない。
+  // ただ、流れの外や 2 つ目になるのは読み手の意図とずれやすいので、足した後の本文 (after) を見て橙で知らせる。
+  // before → after で 1 行だけ入った前提。知らせることが無ければ ''。
+  var FLOW_SKIP_RE = /^\s*(@startuml|@enduml|title\b|skinparam\b|!|'|\||note\b|end\s*note\b|$)/i;
+  function placementWarning(before, after, kind) {
+    var a = _lines(before);
+    var b = _lines(after);
+    if (b.length !== a.length + 1) return '';
+    var idx = 0;
+    while (idx < a.length && a[idx] === b[idx]) idx++;
+    var word = kind === 'end' ? 'end' : kind;
+    var st = structure(after);
+    var i;
+    if (kind === 'start') {
+      for (i = 0; i < b.length; i++) {
+        if (i !== idx && START_RE.test(b[i])) {
+          return 'start はもう ' + (i < idx ? i + 1 : i) + ' 行目にあります。2 つ目の開始として入ります (PlantUML は描きます)';
+        }
+      }
+      for (i = 0; i < idx; i++) {
+        if (TERM_RE.test(b[i]) && st[i] && st[i].depth === 0) {
+          return b[i].trim() + ' (' + (i + 1) + ' 行目) の後に入ります。流れの外の開始になります (PlantUML は描きます)';
+        }
+      }
+      for (i = 0; i < idx; i++) {
+        if (!FLOW_SKIP_RE.test(b[i])) {
+          return 'start の前に処理があります (' + (i + 1) + ' 行目)。その処理は開始より前 (流れの外) になります';
+        }
+      }
+      return '';
+    }
+    if (kind === 'stop' || kind === 'end') {
+      var depth = st[idx] ? st[idx].depth : 0;
+      for (i = idx + 1; i < b.length; i++) {
+        if (START_RE.test(b[i])) {
+          var hadStartBefore = false;
+          for (var k = 0; k < idx; k++) if (START_RE.test(b[k])) hadStartBefore = true;
+          if (!hadStartBefore) return word + ' が start (' + i + ' 行目) より前に入ります。流れの外の終わりになります (PlantUML は描きます)';
+          break;
+        }
+      }
+      if (depth === 0) {
+        for (i = 0; i < idx; i++) {
+          if (TERM_RE.test(b[i]) && st[i] && st[i].depth === 0) {
+            return b[i].trim() + ' (' + (i + 1) + ' 行目) の後に入ります。もう 1 つの終わりとして流れの外に置かれます (PlantUML は描きます)';
+          }
+        }
+      }
+      return '';
+    }
+    return '';
+  }
 
   // ── 位置の読める説明 (BLK-junior-20260908-0103) ─────────────────────────────
   // 「位置」の候補が行番号と DSL の生コード (例: `8: if (初期化失敗時?) then (異常) の後`)
@@ -191,9 +249,10 @@ window.MA.activityInsert = (function() {
       } else if ((m = t.match(L_SWIMLANE))) {
         self = 'レーン' + _q(m[1]) + 'のはじめ';
       } else if (START_RE.test(t)) {
-        self = 'フローのはじめ';
+        // BLK-owner-20260925-0312-4: 同じ行を指す「前」と「直後」を、何が起きるかで呼び分ける。
+        self = 'start の直後';
       } else if (TERM_RE.test(t)) {
-        self = 'フローの終わりの後';
+        self = t + ' の後 (フローの外)';
       } else if (L_NOTE.test(t)) {
         self = 'ノートの後';
       } else if (t && (m = t.match(L_ACTION)) && t.charAt(0) !== '@' && /:/.test(t)) {
@@ -211,7 +270,7 @@ window.MA.activityInsert = (function() {
     var idx = lineNum - 1;
     var s = (idx >= 0 && idx < st.length) ? st[idx] : null;
     if (!s) return 'L' + lineNum;
-    if (position === 'before') return 'フローのはじめの前 (L' + lineNum + ')';
+    if (position === 'before') return 'start の前 (フローの外) (L' + lineNum + ')';
     var body = s.self;
     if (!body) body = _q(s.text) + 'の後';
     // 分岐や繰り返しの中の行は、どの枠の中かを先に言う。
@@ -314,8 +373,8 @@ window.MA.activityInsert = (function() {
     if (kind === 'if') {
       return [
         { id: 'cond', label: '条件', value: '', placeholder: '例: 受信成功?' },
-        { id: 'thenLabel', label: 'then のラベル', value: 'yes' },
-        { id: 'elseLabel', label: 'else のラベル (空で else なし)', value: 'no' },
+        { id: 'thenLabel', label: 'yes のラベル', value: 'yes' },
+        { id: 'elseLabel', label: 'no のラベル (空で no 側なし)', value: 'no' },
       ];
     }
     if (kind === 'while' || kind === 'repeat') {
@@ -325,7 +384,7 @@ window.MA.activityInsert = (function() {
       ];
     }
     if (kind === 'fork') return [{ id: 'branchCount', label: '枝の数', value: '2' }];
-    if (kind === 'note') return [{ id: 'text', label: 'ノート本文', value: '' }];
+    if (kind === 'note') return [{ id: 'text', label: '注釈の本文', value: '' }];
     if (kind === 'swimlane') return [{ id: 'name', label: 'レーン名', value: '' }];
     return [];   // break / detach / kill / start / stop は入力なし
   }
@@ -458,6 +517,7 @@ window.MA.activityInsert = (function() {
     kinds: kinds,
     labelFor: labelFor,
     inFlow: inFlow,
+    placementWarning: placementWarning,
     allowedKinds: allowedKinds,
     isAllowed: isAllowed,
     pickerKinds: pickerKinds,

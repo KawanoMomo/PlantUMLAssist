@@ -88,8 +88,8 @@ test.describe('BLK-builder-1720-3 State の追加する位置 (design 4c)', () =
     await openState(page, WITH_COMPOSITE);
     await page.locator('#st-tail-kind').selectOption('state');
     await page.locator('#st-tail-id').fill('Inner3');
-    await page.locator('#st-tail-where').selectOption('inside');
-    await page.locator('#st-tail-where-target').selectOption('Outer');
+    // BLK-owner-20260925-0312-3: 親は位置のプルダウンに名前で並ぶ (別欄で選び直さない)。
+    await page.locator('#st-tail-where').selectOption({ label: 'Outer の中' });
     await page.locator('#st-tail-add').click();
     await page.waitForTimeout(400);
 
@@ -102,7 +102,9 @@ test.describe('BLK-builder-1720-3 State の追加する位置 (design 4c)', () =
     await openState(page, WITH_COMPOSITE);
     await page.locator('#st-tail-kind').selectOption('composite');
     const opts = await page.locator('#st-tail-where option').allTextContents();
-    expect(opts).toEqual(['図の末尾', '選んだ状態の中']);
+    expect(opts[0]).toBe('図の末尾');
+    expect(opts).toContain('Outer の中');
+    expect(opts).not.toContain('この遷移の途中');
   });
 
   test('Ctrl+Z 1 手で挟む前の DSL に戻る', async ({ page }) => {

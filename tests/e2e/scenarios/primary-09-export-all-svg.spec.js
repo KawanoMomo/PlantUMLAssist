@@ -5,16 +5,41 @@ const S = require('./_scenario');
 
 const DIR = S.dirFor(__filename);
 
+// BLK-owner-20260923-2332-prune: 開いている図を全部 zip にする範囲は、Export ▾ の独立した項目から
+// 📦 資料セットの「対象の選び方」→「開いている図すべて」に移った。
+async function exportOpenDocs(page, timeout) {
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#dsc-open', { state: 'visible' });
+  const dl = page.waitForEvent('download', { timeout: timeout || 20000 }).catch(() => null);
+  await page.locator('#dsc-open').click();
+  return dl;
+}
+
+// BLK-builder-20260924-2152-4-red: 保存先の一覧の 1 回押しは仮のタブで開き、次の 1 回押しで入れ替わる
+// (BLK-primary-20260924-0805-design)。「開いている全図」を揃えるには、ダブルクリックで固定のタブにして開く。
+async function openPinned(page, name) {
+  await S.openFolder(page);
+  const filter = page.locator('#folder-filter');
+  if (await filter.count()) await filter.fill('');
+  await page.locator('#folder-panel .folder-item[data-file-name="' + name + '"]').first().dblclick();
+  await expect.poll(() => page.evaluate((n) => {
+    const d = window.MA.workspace.list().find((x) => x.name === n);
+    return !!d && !d.preview;
+  }, name)).toBe(true);
+}
+
 test('手順9 開いている全図を SVG の zip で 1 度に書き出せる', async ({ page }) => {
   test.setTimeout(90 * 1000);
   await S.bootWithSaveDir(page, DIR);
   await S.clearDir(page, DIR);
   for (const n of ['spi_init_sequence', 'spi_state', 'can_state']) {
     await S.putDoc(page, DIR, n, S.docFor(n));
-    await S.openFolderItem(page, n);
+    await openPinned(page, n);
   }
 
-  const download = await (await S.exportVia(page, 'exp-svg-all', 60000));
+  const download = await (await exportOpenDocs(page, 60000));
   // 到達条件: zip が 1 本書き出される。
   expect(download).not.toBeNull();
   expect(download.suggestedFilename()).toMatch(/\.zip$/);
@@ -29,11 +54,11 @@ test('手順9 2 度目は前回書き出しからの差分が出て、変わっ�
   await S.clearDir(page, DIR);
   for (const n of NAMES) {
     await S.putDoc(page, DIR, n, S.docFor(n));
-    await S.openFolderItem(page, n);
+    await openPinned(page, n);
   }
 
   // 1 度目。ここが次回の基準になる。
-  expect(await S.exportVia(page, 'exp-svg-all', 60000)).not.toBeNull();
+  expect(await exportOpenDocs(page, 60000)).not.toBeNull();
   await page.waitForFunction(async (d) => {
     const r = await fetch('/autosave?dir=' + encodeURIComponent(d));
     const j = r.ok ? await r.json() : null;
@@ -44,11 +69,13 @@ test('手順9 2 度目は前回書き出しからの差分が出て、変わっ�
   // 控えは localStorage ではなく保存フォルダにあるので開き直しても残る。
   await S.putDoc(page, DIR, 'spi_state', S.docFor('spi_state') + "\n' 追記\n");
   await S.bootWithSaveDir(page, DIR);
-  for (const n of NAMES) await S.openFolderItem(page, n);
+  for (const n of NAMES) await openPinned(page, n);
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-svg-pick').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-pick').click();
   await expect(page.locator('#expick-modal')).toBeVisible();
   // 「初回」ではなく前回書き出しの時点が基準として出る。
   await expect(page.locator('#expick-since')).toContainText('前回SVG 一括出力');
@@ -164,6 +191,45 @@ test('手順9 資料セットを登録すると、タブを開き直さずに保
     if (buf[i] === 0x50 && buf[i + 1] === 0x4b && buf[i + 2] === 0x03 && buf[i + 3] === 0x04) svgs++;
   }
   expect(svgs).toBeGreaterThanOrEqual(picked);
+
+  // BLK-primary-20260918-0249 到達条件その5: zip が保存フォルダに実際に届いている。
+  // 起票の事故は「トーストは成功、ファイルはどこにも無い」だったので、
+  // 画面の文言ではなくフォルダの中身で確かめる。
+  const landed = require('path').join(S.absDirFor(__filename), download.suggestedFilename());
+  expect(require('fs').existsSync(landed)).toBe(true);
+  expect(require('fs').statSync(landed).size).toBe(buf.length);
+});
+
+// BLK-primary-20260918-0249: 届かなかったときに「保存しました」と出ると、
+// ファイルが無いことに画面上で気付けない。保存が断られた回は成功を名乗らない。
+test('手順9 資料セットの zip が保存できなかった回は、成功と表示しない', async ({ page }) => {
+  test.setTimeout(180 * 1000);
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  // 保存先が書けない状況を作る (ディスク不足・権限なしと同じ経路)。
+  await page.route('**/export-zip', (route) => route.fulfill({
+    status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'write failed' }),
+  }));
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-modal', { state: 'visible' });
+  await page.locator('#docset-name').fill('顧客資料');
+  await page.locator('#docset-create').click();
+
+  const row = page.locator('.ds-row[data-set-name="顧客資料"]');
+  await expect(row).toHaveCount(1);
+  await row.locator('.ds-export').click();
+
+  // 到達条件: 保存できなかったことを言い、「保存しました」とは言わない。
+  await expect(page.locator('#docset-status'))
+    .toContainText('zip を保存できませんでした', { timeout: 150000 });
+  await expect(page.locator('#docset-status')).not.toContainText('枚を SVG で保存しました');
 });
 
 // BLK-primary-20260916-0100-wish: 資料セットは登録して zip を出すところまでしか GUI で
@@ -453,4 +519,47 @@ test('手順4 書き出す前に、見出し・注記の有無が図ごとに �
   await first.locator('.dl-note').blur();
   await expect(firstAgain).toBeHidden();
   await expect(page.locator('#dl-rows .dl-row:visible')).toHaveCount(total - 1);
+});
+
+// BLK-primary-20260929-0551: 「新人に引き継ぐ」場面で GPIO の 3 枚だけの資料セットを作る。印を付けるには
+// 保存先の一覧を中央の枠 (is-list) に開くが、Ctrl+K「FILES: 保存先を開く」の行・Import ▾「保存フォルダの図を
+// 開く（一覧）」を押すと、その同じクリックが枠の外を押したと読まれて開いた瞬間に閉じていた。
+// どちらの入口から開いても一覧が残り、印を付けた 3 枚だけが資料セットに入ることを到達条件にする。
+test('手順9 Ctrl+K・Import ▾ から開いた保存先の一覧で 3 枚に印を付け、その 3 枚だけの資料セットを作れる', async ({ page }) => {
+  test.setTimeout(120 * 1000);
+  const PICK = ['gpio_init_sequence', 'gpio_state', 'driver_common_class'];
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of PICK.concat(['spi_state', 'can_state'])) await S.putDoc(page, DIR, n, S.docFor(n));
+  await page.reload();
+  await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
+
+  // 入口 1: Ctrl+K の行をマウスで押す。
+  await page.locator('#btn-command-palette').click();
+  await page.locator('#cp-input').fill('保存先を開く');
+  await page.locator('.cp-item[data-cp-id="command:tab-folder"]').click();
+  await page.waitForTimeout(400);
+  await expect(page.locator('#folder-panel')).toHaveClass(/is-list/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#folder-panel')).not.toHaveClass(/is-list/);
+
+  // 入口 2: Import ▾ の項目。
+  await page.locator('#btn-import').click();
+  await page.locator('#imp-folder').click();
+  await page.waitForTimeout(400);
+  await expect(page.locator('#folder-panel')).toHaveClass(/is-list/);
+
+  for (const n of PICK) await page.locator('#folder-panel .folder-pick[data-pick-name="' + n + '"]').click();
+  await expect(page.locator('#folder-panel')).toHaveClass(/is-list/);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-modal', { state: 'visible' });
+  await expect(page.locator('#docset-pick-count')).toContainText('3 枚（保存先の一覧で印を付けた図）');
+  await page.locator('#docset-name').fill('新人引き継ぎ');
+  await page.locator('#docset-create').click();
+  const sum = page.locator('.ds-row[data-set-name="新人引き継ぎ"] .ds-sum');
+  await expect(sum).toHaveAttribute('data-expected', '3');
+  await expect(sum).toHaveAttribute('data-present', '3');
 });

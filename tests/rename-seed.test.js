@@ -1,6 +1,7 @@
 'use strict';
 // BLK-primary-20260914-1106-friction (差し戻し): 開いた時点で前回の組を欄に入れる。
 // 打ち直す 17 打を消し、利用者が選んだものは上書きしないことを確かめる。
+// 入れるのは [置換] で最後に当てた組だけ (打っただけの組は既定に居座らせない)。
 if (!global.window) {
   var jsdom = require('jsdom');
   var dom = new jsdom.JSDOM('<!DOCTYPE html><html><body></body></html>');
@@ -13,18 +14,35 @@ require('../src/core/rename-seed.js');
 var RS = global.window.MA.renameSeed;
 
 // renameRedo.pairs() の戻りの形 (新しい順)。
-var DONE = { from: 'SpiDrv', to: 'Spi_Driver', state: 'done', remaining: 0 };
-var PENDING = { from: 'AdcDrv', to: 'Adc_Driver', state: 'pending', remaining: 3 };
+// appliedAt は [置換] で当てた日時。打っただけの組は空。
+var DONE = { from: 'SpiDrv', to: 'Spi_Driver', state: 'done', remaining: 0,
+  appliedAt: '2026-09-29T10:00:00Z' };
+var PENDING = { from: 'AdcDrv', to: 'Adc_Driver', state: 'pending', remaining: 3,
+  appliedAt: '2026-09-29T09:00:00Z' };
+// 影響を見るためだけに打って、当てずに閉じた組 (旧称は残っている)。
+var TYPED = { from: 'SpiRegs', to: 'Spi_Registers', state: 'pending', remaining: 7, appliedAt: '' };
 
 describe('renameSeed.pick', () => {
-  test('旧称が残っている組を先に出す (今日直すのはその組だから)', () => {
+  test('最後に当てた組を出す (旧称が残る組でも、後から当てた組の方を入れる)', () => {
     expect(RS.pick([DONE, PENDING])).toEqual(
+      { from: 'SpiDrv', to: 'Spi_Driver', state: 'done', remaining: 0 });
+  });
+
+  test('最後に当てた組に旧称が戻っていれば残り件数を付けて出す', () => {
+    var back = Object.assign({}, PENDING, { appliedAt: '2026-09-29T11:00:00Z' });
+    expect(RS.pick([DONE, back])).toEqual(
       { from: 'AdcDrv', to: 'Adc_Driver', state: 'pending', remaining: 3 });
   });
 
-  test('残りが無ければ直近に当てた組を出す (確かめ直す回)', () => {
-    expect(RS.pick([DONE])).toEqual(
+  test('打っただけで当てなかった組は、新しくても旧称が残っていても入れない', () => {
+    expect(RS.pick([TYPED, DONE])).toEqual(
       { from: 'SpiDrv', to: 'Spi_Driver', state: 'done', remaining: 0 });
+    expect(RS.pick([TYPED])).toBe(null);
+  });
+
+  test('当てた後に逆向きを打っただけでは、当てた組は消えない', () => {
+    var typedBack = { from: 'Spi_Driver', to: 'SpiDrv', state: 'done', remaining: 0, appliedAt: '' };
+    expect(RS.pick([typedBack, DONE]).from).toBe('SpiDrv');
   });
 
   test('組を 1 つも知らなければ何も出さない (空欄を偽の答えで埋めない)', () => {
@@ -32,15 +50,16 @@ describe('renameSeed.pick', () => {
     expect(RS.pick(null)).toBe(null);
   });
 
-  test('逆向きの組は落とす (当てた結果が残っているだけで直す先が無い)', () => {
-    var rows = [{ from: 'Spi_Driver', to: 'SpiDrv', state: 'pending', remaining: 9 }, DONE];
+  test('当てた組どうしの逆向きは古い方を落とす (当てた結果が残っているだけで直す先が無い)', () => {
+    var rows = [{ from: 'Spi_Driver', to: 'SpiDrv', state: 'pending', remaining: 9,
+      appliedAt: '2026-09-29T12:00:00Z' }, DONE];
     // 新しい行 (Spi_Driver→SpiDrv) 自体は残り、その後ろの逆向きだけが落ちる。
     expect(RS.live(rows).length).toBe(1);
     expect(RS.pick(rows).from).toBe('Spi_Driver');
   });
 
   test('from / to が欠けた行は使わない', () => {
-    expect(RS.pick([{ from: 'SpiDrv', to: '', state: 'pending' }])).toBe(null);
+    expect(RS.pick([{ from: 'SpiDrv', to: '', state: 'pending', appliedAt: '2026-09-29T10:00:00Z' }])).toBe(null);
   });
 });
 

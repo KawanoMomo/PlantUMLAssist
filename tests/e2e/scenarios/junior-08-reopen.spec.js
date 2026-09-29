@@ -11,11 +11,45 @@ test('手順8 保存した .puml を一覧から見つけて開き直せる', as
   await S.clearDir(page, DIR);
   await S.putDoc(page, DIR, NAME, S.GPIO_STATE);
 
+  // BLK-owner-20260924-0637-1 / BLK-builder-20260923-1849-3: FILES ツリーの「保存先」節はファイルの行と札だけ。
+  // 旧 📂 一覧の棚は節に積まれず、3 つの見出しがスクロールなしで見える。
+  await expect(page.locator('#folder-panel')).toBeHidden();
+  const tree = await page.evaluate(() => {
+    const vh = window.innerHeight;
+    const bottom = (id) => { const el = document.getElementById(id); return el ? el.getBoundingClientRect().bottom : 1e9; };
+    return { vh, open: bottom('files-sec-open'), target: bottom('btn-tab-folder'), ro: bottom('files-sec-readonly') };
+  });
+  expect(tree.ro, '読むだけの見出しが画面の中').toBeLessThanOrEqual(tree.vh);
+
   await S.openFolder(page);
   const filter = page.locator('#folder-filter');
   if (await filter.count()) { await filter.fill('資料用'); await page.waitForTimeout(400); }
   // 到達条件その1: 名前で見つかる。
   await expect(page.locator('#folder-panel .folder-item[data-file-name="' + NAME + '"]')).toBeVisible();
+  // 保存先の一覧は中央の枠に開く。ファイルの行が棚 (選ぶバー以下) より上にあり、名前が潰れずに読め、横にはみ出さない。
+  const layout = await page.evaluate((name) => {
+    const fp = document.getElementById('folder-panel');
+    const item = fp.querySelector('.folder-item[data-file-name="' + name + '"]');
+    const row = item.closest('.folder-row') || item;
+    const kids = Array.prototype.slice.call(fp.children);
+    const pick = fp.querySelector(':scope > .folder-pickbar');
+    const nameEl = item.querySelector('.folder-name');
+    return {
+      width: fp.getBoundingClientRect().width,
+      rowBeforeShelves: !pick || kids.indexOf(row) < kids.indexOf(pick),
+      nameWidth: nameEl ? nameEl.getBoundingClientRect().width : 0,
+      overflow: fp.scrollWidth - fp.clientWidth,
+    };
+  }, NAME);
+  expect(layout.width, '一覧は節の幅に押し込まれない').toBeGreaterThan(400);
+  expect(layout.rowBeforeShelves, 'ファイルの行が棚より上').toBe(true);
+  expect(layout.nameWidth, '名前が潰れずに読める').toBeGreaterThan(60);
+  expect(layout.overflow, '横はみ出しが無い').toBeLessThanOrEqual(1);
+  // 閉じても保存先節は開いたまま (Esc。1 回目は絞り込みを消し、空の欄での 2 回目で閉じる)。
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#folder-panel')).toBeHidden();
+  await expect(page.locator('#folder-panel')).toHaveClass(/\bopen\b/);
 
   await S.openFolderItem(page, NAME);
   // 到達条件その2: 開き直した本文が保存した内容と一致し、編集中の本文で上書きされていない。
@@ -114,4 +148,554 @@ test('手順8 一度開いた図には、名前を探し直さずに一覧の「
   await page.keyboard.press('Enter');
   await page.waitForTimeout(1400);
   expect(await page.locator('#editor').inputValue()).toContain('GPIOドライバ状態遷移');
+});
+
+// BLK-human-20260923-1701 (design 10b): 開き直す・並べる・名前を変える・消すが、タブ列・ツール ▾・
+// 下端の札に散らばっていて「この図に何ができるか」を入口ごとに探し直していた。
+// FILES ツリーのファイルを右クリックすれば全部そこにある。キーボード (F2 / Delete / ↑↓) と
+// ドラッグ (別の部品のフォルダへ移す) でも同じ操作ができる。
+async function expandPart(page, part) {
+  await S.openFolder(page);
+  const head = page.locator('#files-parts .files-part-head[data-part="' + part + '"]');
+  await expect(head).toBeVisible();
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
+  await expect(head).toHaveAttribute('aria-expanded', 'true');
+}
+function treeFile(page, name) {
+  return page.locator('#files-parts .files-part-file[data-file-name="' + name + '"]');
+}
+async function seedParts(page) {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of ['spi_init_sequence', 'spi_state', 'adc_state']) {
+    await S.putDoc(page, DIR, n, S.docFor(n));
+  }
+  await S.putDoc(page, DIR, 'spi_class', ['@startuml', 'class Spi_Driver', '@enduml'].join('\n'));
+  await page.reload();
+  await page.waitForSelector('#editor');
+}
+
+// BLK-builder-20260924-1310-3 (design 10a「ファイルの頭にはその図種の線画が付きます」): 一覧から
+// 開き直す図を探すとき、名前の末尾の語を読まなくても左レールと同じ線画で図種が分かる。
+test('手順8 FILES ツリーのファイル行の頭に、左レールと同じ図種の線画が付く', async ({ page }) => {
+  await seedParts(page);
+  await expandPart(page, 'spi');
+
+  // 到達条件その1: 部品フォルダの中のファイル行の頭に、その図種の線画がある。
+  const want = { spi_init_sequence: 'plantuml-sequence', spi_state: 'plantuml-state', spi_class: 'plantuml-class' };
+  for (const [name, type] of Object.entries(want)) {
+    const g = treeFile(page, name).locator('.files-row-glyph');
+    await expect(g).toHaveAttribute('data-kind', type);
+    await expect(g.locator('svg')).toBeVisible();
+    // 線画は左レールの同じ図種のボタンと同じ絵。
+    const railSvg = await page.locator('#rail .rail-btn[data-type="' + type + '"] svg').innerHTML();
+    expect(await g.locator('svg').innerHTML()).toBe(railSvg);
+  }
+  // BLK-builder-20260924-2231-1 (design 10a の SPI は spi_init_sequence・…・spi_class・spi_state): 部品フォルダの中は
+  // 名前の順ではなく左レールと同じ図種の順 (SEQ → CLS → ST) に並び、線画が上からレールの順に揃う。
+  const spiRows = page.locator('#files-parts .files-part-file[data-file-name^="spi_"]');
+  await expect(spiRows).toHaveCount(3);
+  expect(await spiRows.evaluateAll((els) => els.map((e) => e.getAttribute('data-file-name'))))
+    .toEqual(['spi_init_sequence', 'spi_class', 'spi_state']);
+  expect(await spiRows.evaluateAll((els) => els.map((e) => e.querySelector('.files-row-glyph').getAttribute('data-kind'))))
+    .toEqual(['plantuml-sequence', 'plantuml-class', 'plantuml-state']);
+  // 名前より前 (行の頭) にある。
+  const gb = await treeFile(page, 'spi_state').locator('.files-row-glyph').boundingBox();
+  const nb = await treeFile(page, 'spi_state').locator('.files-row-name').boundingBox();
+  expect(gb.x + gb.width).toBeLessThanOrEqual(nb.x + 1);
+
+  // BLK-builder-20260924-1923-4 (design 10a「一番上のフォルダが保存先で、その下は部品ごとのフォルダ」):
+  // 部品のフォルダは保存先のフォルダ (「▾ {フォルダ} 保存先」) の 1 段下に入り、その中の図はさらに 1 段下。
+  // 保存先の行の ▾ を押すと部品のフォルダをまとめて畳み、次に開いたときも畳んだまま。以前は部品のフォルダが保存先の行より左に並んでいた。
+  const caret = page.locator('#files-target-caret');
+  const target = page.locator('#top-save-target');
+  const spiHead = page.locator('#files-parts .files-part-head[data-part="spi"]');
+  await expect(caret).toBeVisible();
+  await expect(caret).toHaveAttribute('aria-expanded', 'true');
+  const textX = async (loc) => loc.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return el.getBoundingClientRect().left + parseFloat(cs.paddingLeft);
+  });
+  const tx = await textX(target);
+  const px = await textX(spiHead);
+  const fx = await textX(treeFile(page, 'spi_state'));
+  expect(px).toBeGreaterThan(tx);
+  expect(fx).toBeGreaterThan(px);
+  await caret.click();
+  await expect(caret).toHaveAttribute('aria-expanded', 'false');
+  await expect(spiHead).toBeHidden();
+  await expect(target).toBeVisible();
+  // 読み込み直しても畳んだまま (起動のたびに localStorage を空にする init を、この 1 回だけ止める)。
+  await page.evaluate(() => window.localStorage.setItem('pua.e2e.keep', '1'));
+  await page.reload();
+  await page.evaluate(() => window.localStorage.removeItem('pua.e2e.keep'));
+  await S.openFolder(page);
+  await expect(page.locator('#files-target-caret')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toBeHidden();
+  await page.locator('#files-target-caret').click();
+  await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toBeVisible();
+  await expandPart(page, 'spi');
+
+  // 到達条件その2: 開いて「開いている図」に並んだ行にも、そのタブの図種の線画が付く。
+  await treeFile(page, 'spi_state').click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 状態遷移');
+  const openRow = page.locator('#files-body-open .files-row[data-file-name="spi_state"]');
+  await expect(openRow.locator('.files-row-glyph')).toHaveAttribute('data-kind', 'plantuml-state');
+
+  // BLK-builder-20260924-1701-1 (design 10a「クリックで開き、ダブルクリックでタブとして固定」): 1 回押しで開いた図は
+  // 仮のタブで、行の名前もタブと同じ斜体。開いている図の行をダブルクリックするとタブが固定になり、行も斜体が外れる。
+  // 以前は行に 📌 が付くだけで、タブは仮のまま残っていた。
+  const tab = page.locator('#tab-bar .tab[data-doc-name="spi_state"]');
+  await expect(tab).toHaveAttribute('data-preview', '1');
+  await expect(openRow).toHaveAttribute('data-preview', '1');
+  await expect(openRow.locator('.files-row-name')).toHaveCSS('font-style', 'italic');
+  await openRow.dblclick();
+  await expect(tab).not.toHaveAttribute('data-preview', '1');
+  await expect(page.locator('#files-body-open .files-row[data-file-name="spi_state"]')).not.toHaveAttribute('data-preview', '1');
+  await expect(page.locator('#files-body-open .files-row[data-file-name="spi_state"] .files-row-name')).toHaveCSS('font-style', 'normal');
+  expect(await page.locator('#files-body-open').textContent()).not.toContain('📌');
+
+  // BLK-builder-20260924-1350-3 (design 10a / 9a): 節見出しは「名前 + 右端の件数」を 1 回だけ。
+  // 「読むだけ」の入口は絵文字ではなくレールと同じ 1px 線画。名前は何をするかで「読むだけのフォルダの図を調べる」
+  // (BLK-owner-20260924-1836-prune。以前は「他フォルダを覗く」)。
+  await expect(page.locator('#files-sec-open .files-sec-label')).toHaveText('開いている図');
+  await expect(page.locator('#files-count-open')).toHaveText(/^[1-9]\d*$/);
+  const peek = page.locator('#btn-tab-peek');
+  await expect(peek).toHaveAttribute('aria-label', '読むだけのフォルダの図を調べる');
+  await expect(peek.locator('svg')).toBeVisible();
+  expect(await peek.textContent()).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u);
+
+  // BLK-builder-20260924-1358-3 (design 10a / 7a): レールの FILES はロゴ P の直下・図種の列の上にあり、
+  // 印は図種と同じ線画。押せばツリーが畳まれ、もう一度押せば開く。
+  const railFiles = page.locator('#rail-files');
+  await expect(railFiles.locator('svg.rail-glyph')).toBeVisible();
+  const fb = await railFiles.boundingBox();
+  const sb = await page.locator('#rail-types .rail-btn').first().boundingBox();
+  expect(fb.y + fb.height).toBeLessThanOrEqual(sb.y);
+  await railFiles.click();
+  await expect(page.locator('#files-panel')).toHaveClass(/collapsed/);
+  await railFiles.click();
+  await expect(page.locator('#files-panel')).not.toHaveClass(/collapsed/);
+});
+
+// BLK-builder-20260924-1317-3 (design 10a「12 図 未反映 1 控え 1」): ツリー下端の 1 行は、開いている
+// タブではなく保存先の図の数。一覧を開く前に、保存先に何枚あるかがそこで読める。
+test('手順8 FILES ツリー下端の 1 行は、開いているタブではなく保存先の図の数を出す', async ({ page }) => {
+  await seedParts(page);
+  await S.openFolder(page);
+  // 保存先には 4 図 (spi_init_sequence / spi_state / adc_state / spi_class)。
+  await expect(page.locator('#files-count-target')).toHaveText('4');
+  // 到達条件: 開いているタブの数 (1) ではなく、保存先の 4 図を数える。
+  const tabs = await page.locator('#files-body-open .files-row').count();
+  expect(tabs).not.toBe(4);
+  await expect(page.locator('#files-summary')).toHaveText(/^4 図/);
+});
+
+// BLK-builder-20260924-2255-2 (design 10a「一時控えは「控え」」・下端「12 図 未反映 1 控え 1」): 右クリックで
+// 一時控えにした図がツリーから消え、部品の枚数から外れて未作成の略号に出ていた。控えは「控え」の札で残る。
+test('手順8 一時控えにした図は FILES ツリーに「控え」の札で残り、枚数にも入る', async ({ page }) => {
+  await seedParts(page);
+  await expandPart(page, 'spi');
+  const head = page.locator('#files-parts .files-part-head[data-part="spi"]');
+  await expect(head).toContainText('3 / 6');
+
+  await treeFile(page, 'spi_class').click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="draft"]').click();
+
+  // 到達条件その1: 行は消えず、札が「控え」。部品の枚数・未作成の略号・保存先の件数・下端の 1 行は控えも数える。
+  await expect(treeFile(page, 'spi_class')).toBeVisible();
+  await expect(treeFile(page, 'spi_class')).toHaveAttribute('data-marks', '控え');
+  await expect(head).toContainText('3 / 6');
+  await expect(page.locator('#files-parts .files-part-missing-kind[data-part="spi"][data-kind="class"]')).toHaveCount(0);
+  await expect(page.locator('#files-count-target')).toHaveText('4');
+  await expect(page.locator('#files-summary')).toHaveText('4 図 · 控え 1');
+
+  // 到達条件その2: 控えの行を押せば開ける。
+  await treeFile(page, 'spi_class').click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('class Spi_Driver');
+
+  // 保存先の一覧 (中央の枠) では今までどおり控えを畳む。
+  await S.openFolder(page);
+  await expect(page.locator('#folder-panel .folder-draft-toggle')).toContainText('一時控え 1 件を出す');
+  await expect(page.locator('#folder-panel .folder-item[data-file-name="spi_class"]')).toBeHidden();
+  await expect(page.locator('#folder-panel .folder-item[data-file-name="spi_state"]')).toBeVisible();
+});
+
+test('手順8 FILES ツリーのファイルを右クリックすると 10b の操作が揃い、「開く」で開き直せる', async ({ page }) => {
+  await seedParts(page);
+  await expandPart(page, 'spi');
+
+  await treeFile(page, 'spi_state').click({ button: 'right' });
+  const menu = page.locator('#files-ctx-menu');
+  await expect(menu).toBeVisible();
+  // 到達条件その1: ファイル単位の操作がこの 1 か所に揃う。
+  const labels = await menu.locator('.files-ctx-item .files-ctx-label').allTextContents();
+  expect(labels).toEqual([
+    '開く', '右に並べて開く', '読むだけのフォルダの同じ図と比較', '前回保存版と比較',
+    '過去のコミットと比較…', 'この図の履歴を表示', '名前を変更', '複製', '別のフォルダへ移動…',
+    '一時控えにする', 'SVG で書き出す', 'エクスプローラで場所を開く', '削除',
+  ]);
+  // Git でない保存先では「過去のコミットと比較」は押せない。
+  await expect(menu.locator('[data-action="cmp-commit"]')).toBeDisabled();
+  await expect(menu.locator('[data-action="rename"] .files-ctx-key')).toHaveText('F2');
+
+  // 到達条件その2: 「開く」でその図が開く。
+  await menu.locator('[data-action="open"]').click();
+  await expect(menu).toBeHidden();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 状態遷移');
+
+  // 到達条件その3: Esc でメニューが閉じる。
+  await treeFile(page, 'spi_class').click({ button: 'right' });
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+
+  // 到達条件その4: フォルダの右クリックは「そこに作る」。部品のフォルダは実在のフォルダではないので
+  // 保存先 / 読むだけ は出さない。
+  await page.locator('#files-parts .files-part-head[data-part="spi"]').click({ button: 'right' });
+  await expect(menu.locator('.files-ctx-item .files-ctx-label')).toHaveText(['新しい図', '6 図種をまとめて作る']);
+  await page.keyboard.press('Escape');
+  await page.locator('#btn-tab-folder').click({ button: 'right' });
+  await expect(menu.locator('.files-ctx-item .files-ctx-label'))
+    // BLK-primary-20260925-0232-design: 別のフォルダを保存先に替える入口を足した。
+    .toHaveText(['新しい図', '6 図種をまとめて作る', '保存先にする', '読むだけにする', '別のフォルダを保存先にする…', '保存先の一覧を開く']);
+  await page.keyboard.press('Escape');
+});
+
+test('手順8 右クリックの「複製」、F2 で名前変更、Delete で削除 (確認あり) がツリーの上でできる', async ({ page }) => {
+  await seedParts(page);
+  await expandPart(page, 'spi');
+
+  // 複製 → spi_state_copy がツリーとフォルダに増える。
+  await treeFile(page, 'spi_state').click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="copy"]').click();
+  await expect(treeFile(page, 'spi_state_copy')).toBeVisible();
+  expect(await S.readDoc(page, DIR, 'spi_state_copy')).toContain('SPI 状態遷移');
+
+  // F2 → 行の名前がその場で入力欄になる → 打って Enter → 付け替わる (前の名前のファイルは残らない)。
+  // design 10b (BLK-builder-20260924-1917-1): 以前はブラウザの入力窓が画面の上端に出ていた。
+  let dialogs = 0;
+  const onDialog = (d) => { dialogs++; d.dismiss(); };
+  page.on('dialog', onDialog);
+  await treeFile(page, 'spi_state_copy').focus();
+  await page.keyboard.press('F2');
+  const input = page.locator('#files-panel #files-rename-input');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('spi_state_copy');
+  // 入力欄は行のあった場所 (SPI の中) に出て、行は隠れる。
+  await expect(page.locator('#files-parts .files-part-body #files-rename-input')).toHaveCount(1);
+  await expect(treeFile(page, 'spi_state_copy')).toBeHidden();
+  // Esc で取り消すと行が戻り、名前は変わらない。
+  await page.keyboard.press('Escape');
+  await expect(input).toHaveCount(0);
+  await expect(treeFile(page, 'spi_state_copy')).toBeFocused();
+  // 決まりに合わない名前は欄の下に理由が出て、欄は開いたまま。
+  await page.keyboard.press('F2');
+  await page.keyboard.type('spi/state');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#files-rename-note')).toBeVisible();
+  await expect(input).toBeVisible();
+  expect(await S.readDoc(page, DIR, 'spi_state_copy')).toContain('SPI 状態遷移');
+  await input.fill('');
+  await page.keyboard.type('spi_state_v2');
+  await page.keyboard.press('Enter');
+  await expect(treeFile(page, 'spi_state_v2')).toBeVisible();
+  page.off('dialog', onDialog);
+  expect(dialogs).toBe(0);
+  await expect(treeFile(page, 'spi_state_copy')).toHaveCount(0);
+  expect(await S.readDoc(page, DIR, 'spi_state_copy')).toBeNull();
+
+  // ↑↓ で行を移れる (Enter で開く・→ ← で開閉と同じ行の並び)。
+  await treeFile(page, 'spi_state_v2').focus();
+  await page.keyboard.press('ArrowUp');
+  const up = await page.evaluate(() => document.activeElement && document.activeElement.getAttribute('data-file-name'));
+  expect(up).not.toBe('spi_state_v2');
+
+  // Delete → 確認で「いいえ」なら消えない、「はい」で消える。
+  await treeFile(page, 'spi_state_v2').focus();
+  page.once('dialog', (d) => d.dismiss());
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(300);
+  expect(await S.readDoc(page, DIR, 'spi_state_v2')).toContain('SPI 状態遷移');
+  await treeFile(page, 'spi_state_v2').focus();
+  page.once('dialog', (d) => d.accept());
+  await page.keyboard.press('Delete');
+  await expect(treeFile(page, 'spi_state_v2')).toHaveCount(0);
+  expect(await S.readDoc(page, DIR, 'spi_state_v2')).toBeNull();
+});
+
+// BLK-builder-20260924-2316-3 (design 10b「↑↓ で移動、Enter で開く」): 図を開くとツリーが描き直され、
+// 押した行が外れてフォーカスが body に落ちていた。↓ Enter ↓ Enter と図を順に開いて見ていけるよう、
+// 開いた後も同じ行にフォーカスを戻す (マウスで押して開いた後も、↑↓ で隣の図へ移れる)。
+test('手順8 ツリーの図を Enter で開いた後も、続けて ↓ で次の図へ移って Enter で開ける', async ({ page }) => {
+  await seedParts(page);
+  await expandPart(page, 'spi');
+  const focused = () => page.evaluate(() => document.activeElement && document.activeElement.getAttribute('data-file-name'));
+
+  await treeFile(page, 'spi_init_sequence').focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 初期化');
+  await expect(treeFile(page, 'spi_init_sequence')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  expect(await focused()).toBe('spi_class');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('class Spi_Driver');
+  await expect(treeFile(page, 'spi_class')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  expect(await focused()).toBe('spi_state');
+
+  // マウスで押して開いた後も、その行から ↑ で上の図へ移れる。
+  await treeFile(page, 'spi_state').click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 状態遷移');
+  await expect(treeFile(page, 'spi_state')).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  expect(await focused()).toBe('spi_class');
+});
+
+// BLK-builder-20260924-2336-3 (design 10a「⌕ ファイル名・部品名で絞り込む」): 絞り込み欄に図の名前を打つと、
+// 当たった図が畳んだ部品のフォルダの奥に隠れ、見出しだけが残っていた。打っている間は当たったフォルダを開いて描く。
+test('手順8 FILES の絞り込み欄に図の名前を打つと、畳んだ部品のフォルダの中の当たった図がそのまま見えて開ける', async ({ page }) => {
+  await seedParts(page);
+  await S.openFolder(page);
+  const adcHead = page.locator('#files-parts .files-part-head[data-part="adc"]');
+  await expect(adcHead).toHaveAttribute('aria-expanded', 'false');
+  await expect(treeFile(page, 'adc_state')).toBeHidden();
+
+  await page.locator('#files-filter').click();
+  await page.keyboard.type('adc');
+  await expect(adcHead).toHaveAttribute('aria-expanded', 'true');
+  await expect(treeFile(page, 'adc_state')).toBeVisible();
+  await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toHaveCount(0);
+  await treeFile(page, 'adc_state').click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('ADC 状態遷移');
+
+  // 絞り込みを消すと、部品のフォルダは元の開閉 (畳んだまま) に戻る。
+  await page.locator('#files-filter').fill('');
+  await expect(adcHead).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('手順8 ファイルを別の部品のフォルダへドラッグすると、その部品の名前に付け替わる', async ({ page }) => {
+  await seedParts(page);
+  await expandPart(page, 'spi');
+  await treeFile(page, 'spi_class').dragTo(page.locator('#files-parts .files-part-head[data-part="adc"]'));
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'adc_class')) || '').toContain('Spi_Driver');
+  expect(await S.readDoc(page, DIR, 'spi_class')).toBeNull();
+  await expect(page.locator('#files-parts .files-part-head[data-part="adc"]')).toContainText('ADC 2 / 6');
+
+  // design 10b (BLK-builder-20260924-1831-2): 右クリック「別のフォルダへ移動…」は絶対パスを打たせず、
+  // 同じメニューの中に行き先 (今いる部品以外の部品のフォルダ → 隣の保存フォルダ → パスを入力…) を並べる。
+  await treeFile(page, 'spi_init_sequence').click({ button: 'right' });
+  const menu = page.locator('#files-ctx-menu');
+  await menu.locator('[data-action="move"]').click();
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('.files-ctx-title')).toHaveText('spi_init_sequence の移動先');
+  await expect(menu.locator('[data-action="move-part"] .files-ctx-label')).toHaveText(['ADC']);
+  await expect(menu.locator('.files-ctx-item').last()).toHaveAttribute('data-action', 'move-path');
+  // 先頭の行き先 (ADC) に手が乗っていて、Enter でドラッグと同じ移し方になる。
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeHidden();
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'adc_init_sequence')) || '').toContain('@startuml');
+  expect(await S.readDoc(page, DIR, 'spi_init_sequence')).toBeNull();
+});
+
+// BLK-builder-20260924-1735-3 (design 10a「展開すると、まだ作っていない図種が薄い文字で出て、押すとその場で作れます」):
+// 前は「未作成 3 図種」を押すと 🧩 部品ビューが開くだけで、作るには ➕ 部品を起こす で部品名を打ち直していた。
+test('手順8 部品フォルダの「＋ 未作成 N 図種」の略号を押すと、その図種の図をその場で作って開く', async ({ page }) => {
+  await seedParts(page);
+  await expandPart(page, 'spi');
+  const row = page.locator('#files-parts .files-part-missing[data-part="spi"]');
+  await expect(row).toHaveText('＋未作成 3 図種（UC・CMP・ACT）');
+
+  // 略号 1 つ = その図種だけ。部品名は打たない。
+  await row.locator('.files-part-missing-kind[data-kind="usecase"]').click();
+  await expect(page.locator('#tab-bar .tab[data-doc-name="spi_usecase"]')).toHaveCount(1);
+  await expect(page.locator('#top-file-name')).toContainText('spi_usecase');
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('usecase');
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'spi_usecase')) || '').toContain('@startuml');
+  await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toContainText('SPI 4 / 6');
+  await expect(treeFile(page, 'spi_usecase')).toBeVisible();
+  await expect(row).toHaveText('＋未作成 2 図種（CMP・ACT）');
+  await expect(page.locator('#peek-modal')).toBeHidden();
+
+  // 行頭の ＋ = 残りをまとめて。
+  await row.locator('.files-part-missing-all').click();
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'spi_activity')) || '').toContain('@startuml');
+  expect(await S.readDoc(page, DIR, 'spi_component')).toContain('@startuml');
+  await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toContainText('SPI 6 / 6');
+  await expect(row).toHaveCount(0);
+  // 既にあった図は書き換えない。
+  expect(await S.readDoc(page, DIR, 'spi_state')).toContain('SPI 状態遷移');
+
+  // BLK-builder-20260924-1803-3: 未作成が多くても行を … で切り詰めず、どの略号も見えて押せる (折り返す)。
+  await expandPart(page, 'adc');
+  const adc = page.locator('#files-parts .files-part-missing[data-part="adc"]');
+  // BLK-builder-20260924-2231-1: 略号は左レールと同じ図種の順 (SEQ・UC・CMP・CLS・ACT・ST)。
+  await expect(adc).toHaveText('＋未作成 5 図種（SEQ・UC・CMP・CLS・ACT）');
+  const edge = await page.evaluate(() => document.getElementById('files-panel').getBoundingClientRect().right);
+  const kinds = adc.locator('.files-part-missing-kind');
+  await expect(kinds).toHaveCount(5);
+  for (let i = 0; i < 5; i++) {
+    await expect(kinds.nth(i)).toBeVisible();
+    const box = await kinds.nth(i).boundingBox();
+    expect(box && box.x + box.width <= edge).toBe(true);
+  }
+  await kinds.last().click();
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'adc_activity')) || '').toContain('@startuml');
+});
+
+// BLK-owner-20260926-0550-3: ＋ で起こした図に 1 行足すと自動保存でディスクには書かれるのに、FILES ツリーの保存先には
+// 読み込み直すまで行が出なかった (見出しの件数・下端の「N 図」も古いまま)。外で消えた図の行も残った。
+// 書いた時に行が出て、外での増減はウィンドウにフォーカスが戻った時に拾う。件数・行・下端・ディスクは同じ数を言う。
+test('手順8 ＋ で起こした図に 1 行足すと、読み込み直さずに保存先の部品フォルダに行が出る (外で消えた図はフォーカスで消える)', async ({ page }) => {
+  await seedParts(page);
+  await expect(page.locator('#files-count-target')).toHaveText('4');
+  await page.locator('#btn-tab-new').click();
+  const name = await page.evaluate(() => window.MA.workspace.getActive().name);
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('End');
+  await page.keyboard.type('\nAlice -> Bob : hi');
+  await expect.poll(async () => (await S.readDoc(page, DIR, name)) || '').toContain('Alice -> Bob');
+
+  // 到達条件その1: 読み込み直さずに、その図の行が保存先の下 (部品のフォルダ) に出て、件数・下端が 5 を言う。
+  await expect(treeFile(page, name)).toHaveCount(1);
+  const where = await treeFile(page, name).evaluate((el) => {
+    const body = el.closest('.files-part-body');
+    return body ? body.getAttribute('data-part-body') : '';
+  });
+  if (where) await expect(page.locator('#files-parts .files-part-head[data-part="' + where + '"]')).toBeVisible();
+  else await expect(treeFile(page, name)).toBeVisible();
+  await expect(page.locator('#files-count-target')).toHaveText('5');
+  await expect(page.locator('#files-summary')).toHaveText(/^5 図/);
+  expect((await S.listDir(page, DIR)).length).toBe(5);
+  // 書いた図の行から開き直せる (押すとその図が開く)。
+  const closedHead = page.locator('#files-parts .files-part-head[data-part="' + where + '"][aria-expanded="false"]');
+  if (where && await closedHead.count()) await closedHead.click();
+  await treeFile(page, name).click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('Alice -> Bob');
+
+  // 到達条件その2: 外で消えた図は、ウィンドウにフォーカスが戻った時に行が消え、件数・下端も 4 に戻る。
+  await page.evaluate(async (d) => fetch('/autosave?dir=' + encodeURIComponent(d) + '&type=adc_state', { method: 'DELETE' }), DIR);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(treeFile(page, 'adc_state')).toHaveCount(0);
+  await expect(page.locator('#files-count-target')).toHaveText('4');
+  await expect(page.locator('#files-summary')).toHaveText(/^4 図/);
+  expect((await S.listDir(page, DIR)).length).toBe(4);
+});
+
+test('手順8 Ctrl+P で同じ検索欄がファイル名に絞られて開き、名前を打って Enter で開ける', async ({ page }) => {
+  await seedParts(page);
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+p');
+  await expect(page.locator('#cp-modal')).toHaveClass(/open/);
+  await expect(page.locator('#cp-foot')).toContainText('ファイル');
+  await page.keyboard.type('adc_state');
+  await expect(page.locator('#cp-list .cp-item').first()).toContainText('adc_state');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('ADC 状態遷移');
+});
+
+test('手順8 右クリックから「右に並べて開く」「前回保存版と比較」「この図の履歴」へそのまま入れる', async ({ page }) => {
+  await seedParts(page);
+  await expandPart(page, 'spi');
+  const menu = page.locator('#files-ctx-menu');
+
+  // 今の図 (spi_init_sequence) を開いたまま、spi_state を右の枠に並べる。
+  await treeFile(page, 'spi_init_sequence').click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 初期化シーケンス');
+  await treeFile(page, 'spi_state').click({ button: 'right' });
+  await menu.locator('[data-action="open-side"]').click();
+  await expect(page.locator('#compare-pane')).toBeVisible();
+  // 左 (編集中) は元の図のまま、右に並べた図が出る。
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 初期化シーケンス');
+  await expect(page.locator('#compare-pane')).toContainText('spi_state');
+  await page.locator('#btn-compare-close').click();
+
+  // 前回保存版と比較 → その図を開いて ± 差分の面。
+  await treeFile(page, 'spi_state').click({ button: 'right' });
+  await menu.locator('[data-action="cmp-saved"]').click();
+  await expect(page.locator('#compare-pane')).toBeVisible();
+  await expect(page.locator('#compare-pane')).toHaveClass(/mode-diff/);
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 状態遷移');
+
+  // この図の履歴 → 変遷の画面。
+  await treeFile(page, 'spi_class').click({ button: 'right' });
+  await menu.locator('[data-action="history"]').click();
+  await expect(page.locator('#vt-modal')).toBeVisible();
+});
+
+test('手順8 外から .puml をツリーに落とすと保存先へ取り込む (複数可、同名は上書きしない。部品フォルダに落とせばその部品へ)', async ({ page }) => {
+  await seedParts(page);
+  await S.openFolder(page);
+  // ブラウザの外からのドロップは Playwright の実マウスでは作れないので、落ちた後の取り込みの道を直に通す。
+  const msg = await page.evaluate(async () => {
+    const f1 = new File(['@startuml\ntitle TIMER 状態遷移\n[*] --> Idle\n@enduml\n'], 'timer_state.puml');
+    const f2 = new File(['@startuml\nclass X\n@enduml\n'], 'spi_state.puml');
+    const f3 = new File(['x'], 'memo.png');
+    await window.MA.fileMenuUi.importFiles([f1, f2, f3]);
+    return (document.getElementById('status-save-result') || {}).textContent || '';
+  });
+  expect(await S.readDoc(page, DIR, 'timer_state')).toContain('TIMER 状態遷移');
+  // 同じ名前の図は上書きしない。
+  expect(await S.readDoc(page, DIR, 'spi_state')).toContain('SPI 状態遷移');
+  expect(msg).toContain('1 枚を保存先へ取り込みました');
+  await expect(page.locator('#files-parts .files-part-head[data-part="timer"]')).toBeVisible();
+
+  // BLK-builder-20260924-1915-4 (design 10b「外から .puml をツリーに落とすと、そのフォルダへ取り込みます」):
+  // 部品フォルダ (ADC) の見出しに落とすと、その部品の下に入る名前で取り込む。
+  // 外からのファイルのドロップは実マウスでは作れないので、drop イベントを見出しに届ける (落ちた先の判定を通す)。
+  const adcHead = page.locator('#files-parts .files-part-head[data-part="adc"]');
+  await expect(adcHead).toBeVisible();
+  const dt = await page.evaluateHandle(() => {
+    const d = new DataTransfer();
+    d.items.add(new File(['@startuml\ntitle GPT クラス\nclass Gpt\n@enduml\n'], 'gpt_class.puml'));
+    d.items.add(new File(['@startuml\nnote "ADC の申し送り" as N\n@enduml\n'], 'memo.puml'));
+    return d;
+  });
+  await adcHead.dispatchEvent('dragover', { dataTransfer: dt });
+  await expect(adcHead).toHaveClass(/is-drop/);
+  await adcHead.dispatchEvent('drop', { dataTransfer: dt });
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'adc_class')) || '').toContain('GPT クラス');
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'adc_memo')) || '').toContain('ADC の申し送り');
+  // 元の名前 (部品 GPT) では入らない。
+  expect(await S.readDoc(page, DIR, 'gpt_class')).toBeFalsy();
+  await expect(page.locator('#status-save-result')).toContainText('2 枚をADCへ取り込みました');
+  await expect(page.locator('#status-save-result')).toContainText('adc_memo');
+  await expect(adcHead).not.toHaveClass(/is-drop/);
+});
+
+// design 10c と組: 保存先が Git なら、右クリックの「過去のコミットと比較…」が押せて、比較する相手を選ぶ画面が開く。
+test('手順8 保存先が Git なら、右クリックの「過去のコミットと比較…」から比較相手を選べる', async ({ page }) => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execFileSync } = require('child_process');
+  const rel = DIR + '-git';
+  const abs = path.join(__dirname, '..', '..', '..', rel.replace(/^\.\//, ''));
+  fs.rmSync(abs, { recursive: true, force: true });
+  fs.mkdirSync(abs, { recursive: true });
+  const git = (...a) => execFileSync('git', ['-C', abs, ...a], { stdio: 'pipe' }).toString();
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.name', 'junior');
+  git('config', 'user.email', 'junior@example.invalid');
+  git('config', 'core.autocrlf', 'false');
+  fs.writeFileSync(path.join(abs, 'spi_state.puml'), S.docFor('spi_state') + '\n');
+  git('add', '-A');
+  git('commit', '-q', '-m', '初版');
+
+  await S.bootWithSaveDir(page, rel);
+  await expect(page.locator('#files-count-git')).toContainText('main');
+  await expandPart(page, 'spi');
+  await treeFile(page, 'spi_state').click({ button: 'right' });
+  const item = page.locator('#files-ctx-menu [data-action="cmp-commit"]');
+  await expect(item).toBeEnabled();
+  await item.click();
+  await expect(page.locator('#git-pick-modal')).toBeVisible();
+  await expect(page.locator('#git-pick-modal .git-pick-row').filter({ hasText: '初版' })).toHaveCount(1);
+  // BLK-builder-20260924-1818-1: ツリー下端の GIT の見出しの下へ開いて画面の外に切れない (窓の中に収まり、行が見える)。
+  const pb = await page.locator('#git-pick-modal').boundingBox();
+  expect(pb && pb.y >= 0 && pb.y + pb.height <= page.viewportSize().height).toBe(true);
+  await expect(page.locator('#git-pick-modal .git-pick-row').filter({ hasText: '初版' })).toBeInViewport();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 状態遷移');
 });

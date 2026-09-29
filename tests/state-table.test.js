@@ -50,12 +50,15 @@ describe('rowStates', function() {
     expect(ST.rowStates(SAMPLE)).toEqual(['[*]', 'Idle', 'Running']);
   });
 
-  test('遷移の起点にならない状態は行にしない', function() {
+  // BLK-human-20260923-2001: 以前は「遷移の起点にならない状態は行にしない」だった。
+  // 人間の要望で、入れ子を含む全状態を行に出し、空欄から遷移を足せるようにした
+  // (起点の無い状態こそ、表の空欄から最初の遷移を足したい)。
+  test('遷移の起点にならない状態も行にする (空欄から遷移を足せる)', function() {
     var p = {
       states: [{ id: 'A' }, { id: 'B' }, { id: 'Lonely' }],
       transitions: [{ id: 't', from: 'A', to: 'B', trigger: 'x' }],
     };
-    expect(ST.rowStates(p)).toEqual(['A']);
+    expect(ST.rowStates(p)).toEqual(['A', 'B', 'Lonely']);
   });
 });
 
@@ -96,7 +99,8 @@ describe('build', function() {
     };
     var t = ST.build(p);
     expect(t.triggers).toEqual(['Fault']);
-    expect(t.rows.length).toBe(1);
+    // 全状態を行にする (BLK-human-20260923-2001) ので Stop / Retry も行になる。分岐は Busy の 1 セル。
+    expect(t.rows.length).toBe(3);
     expect(t.rows[0].cells[0].text).toBe('Stop [重大] / Retry [軽微]');
     expect(t.rows[0].cells[0].count).toBe(2);
   });
@@ -142,5 +146,54 @@ describe('toCsv', function() {
     var out = ST.toCsv(ST.build(p)).split('\r\n');
     expect(out[0]).toBe('現在の状態 \\ きっかけ,"x""y"');
     expect(out[1]).toBe('"a,b","a,b"');
+  });
+});
+
+// BLK-human-20260923-2001: 入れ子の子状態と、親の中の開始 [*]。
+describe('入れ子の子状態', function() {
+  var NEST = {
+    states: [
+      { id: 'P', label: 'P' },
+      { id: 'P.A', label: 'A', parentId: 'P' },
+      { id: 'P.B', label: 'B', parentId: 'P' },
+      { id: 'Q', label: 'Q' },
+      { id: 'Q.A', label: 'A', parentId: 'Q' },
+    ],
+    transitions: [
+      { id: 't0', from: '[*]', to: 'P', trigger: null, scope: null, line: 2 },
+      { id: 't1', from: '[*]', to: 'A', trigger: null, scope: 'P', line: 4 },
+      { id: 't2', from: 'A', to: 'B', trigger: 'go', scope: 'P', line: 5 },
+      { id: 't3', from: 'B', to: '[*]', trigger: 'end', scope: 'P', line: 6 },
+      { id: 't4', from: 'A', to: 'A', trigger: 'loop', scope: 'Q', line: 10 },
+      { id: 't5', from: 'P', to: 'Q', trigger: 'x', scope: null, line: 12 },
+    ],
+  };
+  var t = ST.build(NEST);
+  function row(id) { return t.rows.filter(function(r) { return r.stateId === id; })[0]; }
+
+  test('子も行になり、親の直後にその中の開始、続けて子が並ぶ', function() {
+    expect(t.rows.map(function(r) { return r.stateId; }))
+      .toEqual(['[*]', 'P', '[*]@P', 'P.A', 'P.B', 'Q', 'Q.A']);
+  });
+  test('子は 親 / 子 で名乗り、字下げの深さを持つ', function() {
+    expect(row('P.A').label).toBe('P / A');
+    expect(row('P.A').depth).toBe(1);
+    expect(row('[*]@P').label).toBe('P / ' + ST.START_LABEL);
+    expect(row('P').hasChildren).toBe(true);
+  });
+  test('同じ素の名前でも、書かれた親の中の子に当てる', function() {
+    var go = t.triggers.indexOf('go');
+    var loop = t.triggers.indexOf('loop');
+    expect(row('P.A').cells[go].text).toBe('P / B');
+    expect(row('P.A').cells[loop]).toBe(null);
+    expect(row('Q.A').cells[loop].to).toBe('Q.A');
+  });
+  test('親の中の終了は（終了）', function() {
+    expect(row('P.B').cells[t.triggers.indexOf('end')].text).toBe(ST.END_LABEL);
+  });
+  test('畳んだ親の中の行が分かる (祖先)', function() {
+    expect(ST.ancestorsOf('P.A', NEST)).toEqual(['P']);
+    expect(ST.ancestorsOf('[*]@P', NEST)).toEqual(['P']);
+    expect(ST.ancestorsOf('P', NEST)).toEqual([]);
   });
 });

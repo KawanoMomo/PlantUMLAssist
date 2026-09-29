@@ -82,4 +82,17 @@ describe('rename-pairs: 置換の組はフォルダの持ち物', function() {
     expect(rows.length).toBe(1);
     expect(rows[0].to).toBe('Spi_Driver');
   });
+
+  // BLK-primary-20260914-1106-friction: [置換] で当てた日時は、打っただけの記録と
+  // 混ざっても消えない (開いた時に欄へ入れる組の見分けに使う)。
+  test('当てた日時 (appliedAt / applied_at) を読み、同じ組では新しい方を残す', function() {
+    var rows = RP.merge(
+      [{ from: 'SpiDrv', to: 'Spi_Driver', at: '2026-09-29T12:00:00Z' }],
+      [{ from: 'SpiDrv', to: 'Spi_Driver', at: '2026-09-29T11:00:00Z', applied_at: '2026-09-29T11:00:00Z' }]
+    );
+    expect(rows.length).toBe(1);
+    expect(rows[0].at).toBe('2026-09-29T12:00:00Z');
+    expect(rows[0].appliedAt).toBe('2026-09-29T11:00:00Z');
+    expect(RP.normalize([{ from: 'A', to: 'B' }])[0].appliedAt).toBe('');
+  });
 });

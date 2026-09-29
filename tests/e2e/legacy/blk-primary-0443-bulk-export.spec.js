@@ -69,11 +69,14 @@ function readZip(buf) {
   return { count, entries };
 }
 
-// Export を開く + 全図をSVGで保存 の 2 クリックだけ。タブ切替は 1 回もしない。
+// Export を開く + 📦 資料セット + 開いている図すべて の 3 クリック。タブ切替は 1 回もしない。
+// BLK-owner-20260923-2332-prune: Export ▾ の独立項目「全図をSVGで保存（zip）」は
+// 📦 資料セットの「対象の選び方」→「開いている図すべて」に移った。
 async function exportAllAndRead(page, timeoutMs) {
   const waitDownload = page.waitForEvent('download', { timeout: timeoutMs });
   await page.locator('#btn-export').click();
-  await page.locator('#exp-svg-all').click();
+  await page.locator('#exp-docset').click();
+  await page.locator('#dsc-open').click();
   const download = await waitDownload;
   const path = await download.path();
   return { filename: download.suggestedFilename(), zip: readZip(fs.readFileSync(path)) };
@@ -82,10 +85,11 @@ async function exportAllAndRead(page, timeoutMs) {
 test.describe('BLK-primary-0443 全図の一括 SVG 書き出し', () => {
   test.beforeEach(async ({ page }) => { await freshWorkspace(page); });
 
-  test('Export メニューに「全図をSVGで保存」がある', async ({ page }) => {
+  test('資料セットの対象に「開いている図すべて」がある', async ({ page }) => {
     await gotoApp(page);
     await page.locator('#btn-export').click();
-    await expect(page.locator('#exp-svg-all')).toBeVisible();
+    await page.locator('#exp-docset').click();
+    await expect(page.locator('#dsc-open')).toBeVisible();
   });
 
   test('11 枚を 2 クリック（Export を開く + 全図をSVGで保存）で書き出せる', async ({ page }) => {

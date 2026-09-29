@@ -1,0 +1,6 @@
+@startuml
+mainframe 動作の枠
+start
+:A;
+stop
+@enduml

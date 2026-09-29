@@ -57,12 +57,13 @@ describe('parseSequence', function() {
 
   test('parses autonumber with start value', function() {
     var r = seq.parseSequence('@startuml\nautonumber 10\nA -> B\n@enduml');
-    expect(r.meta.autonumber).toEqual({ start: 10, step: 1 });
+    // BLK-migrator-20260918-0549: 書式指定 ("<b>[000]") も読むので format が増えた
+    expect(r.meta.autonumber).toEqual({ start: 10, step: 1, format: '' });
   });
 
   test('parses autonumber with start and step', function() {
     var r = seq.parseSequence('@startuml\nautonumber 10 5\nA -> B\n@enduml');
-    expect(r.meta.autonumber).toEqual({ start: 10, step: 5 });
+    expect(r.meta.autonumber).toEqual({ start: 10, step: 5, format: '' });
   });
 
   test('null autonumber when absent', function() {

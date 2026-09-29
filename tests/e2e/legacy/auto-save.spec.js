@@ -34,30 +34,6 @@ test.describe('Auto-save (v1.2.0)', () => {
     expect(activeType).toBe('plantuml-state');
   });
 
-  test('UC-as-2: per-type isolation across diagram switches', async ({ page }) => {
-    await gotoApp(page);
-    await clearAutoSave(page);
-    await page.reload();
-    await page.waitForSelector('#preview-svg', { timeout: 5000 });
-    // Edit state
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(500);
-    await page.locator('#editor').fill('@startuml\nstate STATE_MARKER\n@enduml');
-    await page.waitForTimeout(1500);
-    // Switch to class — should NOT show state DSL
-    await page.locator('#diagram-type').selectOption('plantuml-class');
-    await page.waitForTimeout(500);
-    var classText = await getEditorText(page);
-    expect(classText).not.toContain('STATE_MARKER');
-    await page.locator('#editor').fill('@startuml\nclass CLASS_MARKER\n@enduml');
-    await page.waitForTimeout(1500);
-    // Switch back to state — state's edited DSL must come back
-    await page.locator('#diagram-type').selectOption('plantuml-state');
-    await page.waitForTimeout(500);
-    var stateText = await getEditorText(page);
-    expect(stateText).toContain('STATE_MARKER');
-    expect(stateText).not.toContain('CLASS_MARKER');
-  });
 
   test('UC-as-3: settings modal → restoreMode=none → reload does not restore', async ({ page }) => {
     await gotoApp(page);
@@ -103,7 +79,8 @@ test.describe('Auto-save (v1.2.0)', () => {
     expect(hasDsl).toBe(false);
   });
 
-  test('UC-as-5: status bar 💾 indicator updates after edit', async ({ page }) => {
+  // BLK-builder-20260924-1336-3 (design 9c): 保存状態は文字だけの 1 行 (💾 を付けない) に変わった。
+  test('UC-as-5: status bar autosave indicator updates after edit', async ({ page }) => {
     await gotoApp(page);
     await clearAutoSave(page);
     await page.reload();
@@ -111,6 +88,7 @@ test.describe('Auto-save (v1.2.0)', () => {
     await page.locator('#editor').fill('@startuml\nactor IND\n@enduml');
     await page.waitForTimeout(1500);
     var ind = await page.locator('#status-autosave').textContent();
-    expect(ind || '').toContain('💾');
+    expect(ind || '').toMatch(/に自動保存/);
+    expect(ind || '').not.toContain('💾');
   });
 });

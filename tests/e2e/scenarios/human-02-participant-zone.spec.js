@@ -56,7 +56,7 @@ test.describe('人間 手順 2 — 途中から足した参加者の宣言が上
     await setDsl(page, THREE_MESSAGES);
 
     // 末尾に追加の「参加者」から database DB を足す。
-    await page.locator('#seq-tail-kind').selectOption('participant');
+    await page.locator('#seq-tail-kind-chip-participant').click();
     await page.locator('#seq-tail-ptype').selectOption('database');
     await page.locator('#seq-tail-alias').fill('DB');
     await page.locator('#seq-tail-add').click();
@@ -86,7 +86,7 @@ test.describe('人間 手順 2 — 途中から足した参加者の宣言が上
     await gotoApp(page);
     await setDsl(page, ['@startuml', 'A -> B : req', 'B --> A : res', '@enduml'].join('\n'));
 
-    await page.locator('#seq-tail-kind').selectOption('participant');
+    await page.locator('#seq-tail-kind-chip-participant').click();
     await page.locator('#seq-tail-ptype').selectOption('actor');
     await page.locator('#seq-tail-alias').fill('Ope');
     await page.locator('#seq-tail-add').click();
@@ -103,7 +103,7 @@ test.describe('人間 手順 2 — 途中から足した参加者の宣言が上
     await setDsl(page, THREE_MESSAGES);
 
     for (const [ptype, alias] of [['database', 'DB'], ['queue', 'MQ']]) {
-      await page.locator('#seq-tail-kind').selectOption('participant');
+      await page.locator('#seq-tail-kind-chip-participant').click();
       await page.locator('#seq-tail-ptype').selectOption(ptype);
       await page.locator('#seq-tail-alias').fill(alias);
       await page.locator('#seq-tail-add').click();
@@ -126,5 +126,113 @@ test.describe('人間 手順 2 — 途中から足した参加者の宣言が上
     await expect(page.locator('#preview-svg svg')).toHaveCount(1);
     const order = await participantOrder(page, ['User', 'Front', 'DB', 'MQ']);
     expect(order).toEqual(['User', 'Front', 'DB', 'MQ']);
+  });
+
+  // BLK-human-20260928-2255-1: ＋ で開いた白紙 (`@startuml` / `@enduml` だけ) では、図を押すと挿入のガイド線は出るのに
+  // 何も開かず、図からメッセージを書けなかった。白紙は図の末尾 (@enduml の前) に入れる。
+  test('白紙のシーケンスで図を押すと「ここに挿入」が開き、新しい参加者とメッセージが宣言 → メッセージの順に入る', async ({ page }) => {
+    await gotoApp(page);
+    await setDsl(page, ['@startuml', '@enduml'].join('\n'));
+    await expect(page.locator('#preview-svg svg')).toHaveCount(1);
+    const box = await page.locator('#preview-svg svg').boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.locator('#hover-layer text')).toContainText('2 行目に挿入');
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.locator('#seq-modal')).toBeVisible();
+    await expect(page.locator('#seq-pick-target')).toContainText('2 行目に挿入');
+    // まとめて足す入口も同じメニューにある
+    await expect(page.locator('#seq-pick-scaffold')).toBeVisible();
+
+    await page.locator('#seq-pick-message').click();
+    await page.locator('#seq-mod-from').selectOption('__new__');
+    await page.locator('#seq-mod-to').selectOption('__new__');
+    await page.locator('#seq-mod-new-alias').fill('Bob');
+    await page.locator('#seq-mod-confirm').click();
+    await page.waitForTimeout(800);
+    const lines = (await getEditorText(page)).split('\n').filter((l) => l.trim());
+    expect(lines[0]).toContain('@startuml');
+    expect(lines[1]).toMatch(/^\s*participant\s+Bob\b/);
+    expect(lines[2]).toMatch(/^\s*Bob\s*->\s*Bob\b/);
+    expect(lines[3]).toContain('@enduml');
+  });
+
+  // 同じ窓で「+ 新規追加…」の参加者を足すと、宣言の分だけ下の行がずれるのに挿入先はずらしていなかった
+  // (押したメッセージの後ではなく、その 1 行上に入った)。
+  test('メッセージの間を押して新しい参加者へのメッセージを足すと、押した位置 (そのメッセージの後) に入る', async ({ page }) => {
+    await gotoApp(page);
+    await setDsl(page, THREE_MESSAGES);
+    await expect(page.locator('#overlay-layer rect[data-type="message"][data-line="7"]')).toHaveCount(1);
+    const pt = await page.evaluate(() => {
+      const a = document.querySelector('#overlay-layer rect[data-type="message"][data-line="6"]').getBoundingClientRect();
+      // 6 行目の矢印のすぐ下、7 行目 (Front の自己メッセージ) の枠より左の空き (2 本のライフラインの間)。
+      const b = document.querySelector('#overlay-layer rect[data-type="message"][data-line="7"]').getBoundingClientRect();
+      return { x: Math.min(a.x + a.width * 0.35, b.x - 8), y: a.y + a.height + 4 };
+    });
+    await page.mouse.click(pt.x, pt.y);
+    await expect(page.locator('#seq-pick-target')).toContainText('6 行目の後');
+    await page.locator('#seq-pick-message').click();
+    await page.locator('#seq-mod-from').selectOption('Front');
+    await page.locator('#seq-mod-to').selectOption('__new__');
+    await page.locator('#seq-mod-new-alias').fill('DB');
+    await page.locator('#seq-mod-confirm').click();
+    await page.waitForTimeout(800);
+    const lines = (await getEditorText(page)).split('\n');
+    const decl = lines.findIndex((l) => /^\s*participant\s+DB\b/.test(l));
+    const first = lines.findIndex((l) => l.includes('User -> Front : 申し込む'));
+    expect(decl).toBeGreaterThan(-1);
+    expect(decl).toBeLessThan(first);
+    expect(lines[first + 1]).toMatch(/^\s*Front\s*->\s*DB\b/);
+    expect(lines[first + 2]).toContain('Front -> Front : 内容を確かめる');
+  });
+
+  // BLK-human-20260928-2255-2: 図の末尾に区切り線・注釈・枠がある図で、その下 (最後の部品の下) を押すと
+  // 最後のメッセージの後ろ = 末尾の部品より前に入っていた。押した位置の下に置く。
+  function tailDsl(tail) {
+    return ['@startuml', 'participant App', 'participant Drv',
+      'App -> Drv : init()', 'Drv -> App : ok', 'App -> Drv : read()', 'Drv -> App : data']
+      .concat(tail).concat(['@enduml']).join('\n');
+  }
+  // 末尾の部品 (data-type / data-line) の箱の下、2 本のライフラインの間の空き。
+  async function pointBelow(page, type, line) {
+    return page.evaluate(([t, l]) => {
+      const rs = Array.from(document.querySelectorAll('#overlay-layer rect[data-type="' + t + '"][data-line="' + l + '"]'));
+      const bottom = Math.max.apply(null, rs.map((r) => r.getBoundingClientRect().bottom));
+      const m = document.querySelector('#overlay-layer rect[data-type="message"][data-line="7"]').getBoundingClientRect();
+      return { x: m.x + m.width / 2, y: bottom + 8 };
+    }, [type, String(line)]);
+  }
+
+  test('末尾の区切り線の下を押して区切り線を足すと、その区切り線の後ろ (図の最後) に入る', async ({ page }) => {
+    await gotoApp(page);
+    await setDsl(page, tailDsl(['== 終了処理 ==']));
+    await expect(page.locator('#overlay-layer rect[data-type="source-line"][data-line="8"]').first()).toBeAttached();
+    const pt = await pointBelow(page, 'source-line', 8);
+    await page.mouse.move(pt.x, pt.y);
+    await expect(page.locator('#hover-layer text')).toContainText('9 行目に挿入');
+    await page.mouse.click(pt.x, pt.y);
+    await expect(page.locator('#seq-pick-target')).toContainText('8 行目の後');
+    await page.locator('#seq-pick-other').click();
+    await page.locator('#seq-pick-separator').click();
+    await page.locator('#seq-mod-mtext').fill('最後');
+    await page.locator('#seq-mod-confirm').click();
+    await page.waitForTimeout(800);
+    const lines = (await getEditorText(page)).split('\n').filter((l) => l.trim());
+    expect(lines.slice(-3)).toEqual(['== 終了処理 ==', '== 最後 ==', '@enduml']);
+  });
+
+  test('末尾の複数行の注釈・枠 (alt) の下を押すと、end note / end の後ろに入る', async ({ page }) => {
+    await gotoApp(page);
+    await setDsl(page, tailDsl(['note over App', 'おわり', 'end note']));
+    await expect(page.locator('#overlay-layer rect[data-type="note"][data-line="8"]').first()).toBeAttached();
+    let pt = await pointBelow(page, 'note', 8);
+    await page.mouse.click(pt.x, pt.y);
+    await expect(page.locator('#seq-pick-target')).toContainText('11 行目に挿入（10 行目の後）');
+    await page.keyboard.press('Escape');
+
+    await setDsl(page, tailDsl(['alt ok', 'App -> Drv : x', 'else ng', 'App -> Drv : y', 'end']));
+    await expect(page.locator('#overlay-layer rect[data-type="group"][data-line="8"]').first()).toBeAttached();
+    pt = await pointBelow(page, 'group', 8);
+    await page.mouse.click(pt.x, pt.y);
+    await expect(page.locator('#seq-pick-target')).toContainText('13 行目に挿入（12 行目の後）');
   });
 });

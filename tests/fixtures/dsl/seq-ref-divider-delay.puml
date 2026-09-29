@@ -1,0 +1,20 @@
+@startuml
+participant App
+participant Drv
+== 初期化フェーズ ==
+App -> Drv : Start()
+ref over App, Drv : 初期化シーケンス(別図参照)
+hnote over App : 六角形メモ
+... Some ~~long delay~~ ...
+alt 成功
+  App -> Drv : Read()
+else 失敗
+  Drv --> App : Error
+end
+ref over App, Drv
+  複数行の
+  参照
+end ref
+== <b>動作</b>フェーズ ==
+Drv --> App : Ready
+@enduml

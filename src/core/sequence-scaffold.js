@@ -34,6 +34,11 @@ window.MA.sequenceScaffold = (function() {
     create: '->',
   };
 
+  // まとめて追加で囲める枠 (単発の「ブロック」と同じ語彙)。
+  var BLOCK_KINDS = ['alt', 'opt', 'loop', 'par', 'break', 'critical', 'group'];
+  // else を置ける枠。
+  var ELSE_KINDS = ['alt', 'par', 'critical', 'group'];
+
   var PARTICIPANT_TYPES = [
     'participant', 'actor', 'boundary', 'control',
     'entity', 'database', 'collections', 'queue',
@@ -129,16 +134,36 @@ window.MA.sequenceScaffold = (function() {
         to: take(to).id,
         arrow: normalizeArrow(m.arrow),
         text: _s(m.text),
+        inBlock: _inBlock(m.inBlock),
       });
     });
 
-    return { title: _s(src.title), participants: participants, messages: messages };
+    return { title: _s(src.title), participants: participants, messages: messages, block: _block(src.block) };
   }
 
-  // 「何が足りないか」を返す。UI は確定ボタンの可否とメッセージに使う。
+  // BLK-human-20260923-2002: メッセージ行ごとの「枠」列。'' = 枠の外 / 'main' = 枠の中 / 'else' = else の後。
+  function _inBlock(v) {
+    var t = _s(v);
+    return (t === 'main' || t === 'else') ? t : '';
+  }
+
+  function _block(b) {
+    var src = b || {};
+    var k = _s(src.kind).toLowerCase();
+    return {
+      kind: BLOCK_KINDS.indexOf(k) >= 0 ? k : 'alt',
+      label: _s(src.label),
+      elseLabel: _s(src.elseLabel),
+    };
+  }
+
+  // BLK-human-20260923-1330:「PlantUML として正当な入力を GUI が拒まない」。
+  // errors は本当に生成できないものだけ。意図を確かめたいだけのものは warnings に落とし、
+  // ok は errors だけで決める (警告が出ていても「追加」は押せて、押せば追加される)。
   function validate(spec, text) {
     var s = normalizeSpec(spec, text);
     var errors = [];
+    var warnings = [];
     if (s.participants.length === 0 && s.messages.length === 0) {
       errors.push('参加者かメッセージを 1 つ以上入れてください');
     }
@@ -147,10 +172,38 @@ window.MA.sequenceScaffold = (function() {
       if (seen[p.id]) errors.push('参加者名が重複しています: ' + (p.label || p.id));
       seen[p.id] = true;
     });
+    // 宣言のない参加者名は preview が participant 行を補うので生成はできる。
+    var declared = existingIds(text);
     s.messages.forEach(function(m, i) {
-      if (m.from === m.to) errors.push('メッセージ ' + (i + 1) + ': From と To が同じです');
+      var no = 'メッセージ ' + (i + 1) + ': ';
+      // 自己メッセージ (`A -> A`) は PlantUML の正当な記法。状態更新・タイマ処理で頻出する。
+      if (m.from === m.to) warnings.push(no + 'From と To が同じです (自己メッセージとして追加されます)');
+      [m.from, m.to].forEach(function(id) {
+        if (!declared[id] && !seen[id]) warnings.push(no + '宣言のない参加者です: ' + id + ' (participant 行を補って追加されます)');
+      });
+      if (!m.text) warnings.push(no + 'ラベルが空です (矢印だけが追加されます)');
     });
-    return { ok: errors.length === 0, errors: errors };
+    // 枠 (alt / loop …): else の行が枠の中の行より前にあると、else が枠を開く前に来て壊れる。
+    var firstMain = -1, firstElse = -1;
+    s.messages.forEach(function(m, i) {
+      if (m.inBlock === 'main' && firstMain < 0) firstMain = i;
+      if (m.inBlock === 'else' && firstElse < 0) firstElse = i;
+    });
+    if (firstElse >= 0 && firstMain >= 0 && firstElse < firstMain) {
+      errors.push('else の行は、枠の中の行より後に置いてください');
+    }
+    if (firstElse >= 0 && ELSE_KINDS.indexOf(s.block.kind) < 0) {
+      errors.push(s.block.kind + ' には else を置けません (alt / par を選んでください)');
+    }
+    var span = _blockSpan(s.messages);
+    if (span) {
+      for (var bi = span.first; bi <= span.last; bi++) {
+        if (!s.messages[bi].inBlock) {
+          warnings.push('メッセージ ' + (bi + 1) + ': 枠の中の行に挟まれているので、枠の中に入ります');
+        }
+      }
+    }
+    return { ok: errors.length === 0, errors: errors, warnings: warnings };
   }
 
   function _titleIndex(text) {
@@ -161,21 +214,33 @@ window.MA.sequenceScaffold = (function() {
     return -1;
   }
 
-  // 追加される行だけを返す。UI のプレビューと apply が同じ結果を見る。
-  function preview(text, spec) {
+  // 枠の中の行が並ぶ範囲 (先頭の枠行 〜 最後の枠行)。枠の行が無ければ null。
+  function _blockSpan(messages) {
+    var first = -1, last = -1;
+    for (var i = 0; i < messages.length; i++) {
+      if (!messages[i].inBlock) continue;
+      if (first < 0) first = i;
+      last = i;
+    }
+    return first < 0 ? null : { first: first, last: last };
+  }
+
+  // 追加される行を「題名 / 参加者の宣言 / 本文」に分けて返す。
+  // BLK-human-20260923-2002: 宣言は参加者の欄へ、本文は挿入位置へ入るので、行き先ごとに分ける。
+  function plan(text, spec) {
     var s = normalizeSpec(spec, text);
-    if (s.participants.length === 0 && s.messages.length === 0) return [];
+    var out = { title: '', decls: [], body: [] };
+    if (s.participants.length === 0 && s.messages.length === 0) return out;
     var declared = existingIds(text);
-    var lines = [];
     // タイトルを打ったなら、既定テンプレの `title Sample Sequence` は
     // その場で置き換える (白紙から起こす場面では雛形の題名は残らない)。
-    if (s.title) lines.push('title ' + s.title);
+    if (s.title) out.title = 'title ' + s.title;
 
     var emitted = {};
     function emitParticipant(id, label, type) {
       if (declared[id] || emitted[id]) return;
       emitted[id] = true;
-      lines.push(_decl(type, id, label));
+      out.decls.push(_decl(type, id, label));
     }
     s.participants.forEach(function(p) { emitParticipant(p.id, p.label, p.type); });
     // メッセージにだけ出てきた相手も宣言しておく (図に出る順を保つ)。
@@ -183,10 +248,26 @@ window.MA.sequenceScaffold = (function() {
       emitParticipant(m.from, m.from, 'participant');
       emitParticipant(m.to, m.to, 'participant');
     });
-    s.messages.forEach(function(m) {
-      lines.push(fmtMessage(m.arrow, m.from, m.to, m.text));
+
+    var span = _blockSpan(s.messages);
+    var elseAt = -1;
+    s.messages.forEach(function(m, i) { if (m.inBlock === 'else' && elseAt < 0) elseAt = i; });
+    s.messages.forEach(function(m, i) {
+      var inside = span && i >= span.first && i <= span.last;
+      if (span && i === span.first) {
+        out.body.push(s.block.label ? s.block.kind + ' ' + s.block.label : s.block.kind);
+      }
+      if (i === elseAt) out.body.push(s.block.elseLabel ? 'else ' + s.block.elseLabel : 'else');
+      out.body.push((inside ? '  ' : '') + fmtMessage(m.arrow, m.from, m.to, m.text));
+      if (span && i === span.last) out.body.push('end');
     });
-    return lines;
+    return out;
+  }
+
+  // 追加される行だけを返す。UI のプレビューと apply が同じ結果を見る。
+  function preview(text, spec) {
+    var p = plan(text, spec);
+    return (p.title ? [p.title] : []).concat(p.decls, p.body);
   }
 
   function _insertBeforeEnd(text, newLines) {
@@ -206,35 +287,137 @@ window.MA.sequenceScaffold = (function() {
     return lines.concat(newLines, ['@enduml']).join('\n');
   }
 
+  function _endumlIndex(lines) {
+    for (var i = lines.length - 1; i >= 0; i--) {
+      if (/^\s*@enduml\s*$/i.test(lines[i])) return i;
+    }
+    return -1;
+  }
+
+  function _hasFrame(text) {
+    return /^\s*@(?:start|end)uml\b/im.test(_s(text));
+  }
+
+  // BLK-human-20260923-2002: 挿入位置を決める。anchor = { line, position: 'after'|'before', hint }
+  // (hint はプレビューの当たり判定や「帯の外 / 中」の選択 { zone, bandLine })。
+  // 単発の挿入と同じく sequence-activation-insert.resolve で帯の内 / 外を決める。
+  // 返り値: { anchorLine, position, target (本文を入れる 1 始まりの行。その行の前に入る), zone, part, band,
+  //           needsClose, bandEnd }
+  //   bandEnd … 何も言われなければ帯の末尾 (deactivate の直前) に落ちる位置か。UI はそのとき「帯の外 / 中」を選ばせる。
+  // anchor が無ければ null (= 図の末尾)。
+  function resolveWhere(text, anchor) {
+    if (!anchor || anchor.line == null) return null;
+    var n = parseInt(anchor.line, 10);
+    if (isNaN(n)) return null;
+    var pos = anchor.position === 'before' ? 'before' : 'after';
+    var AI = window.MA.sequenceActivationInsert;
+    var res = AI ? AI.resolve(text, n, pos, anchor.hint) : null;
+    var plain = AI ? AI.resolve(text, n, pos) : null;
+    var bandEnd = !!(plain && plain.zone === 'inside' && plain.band &&
+      plain.target === plain.band.deactivateLine && !plain.band.implicitEnd);
+    if (!res) {
+      return { anchorLine: n, position: pos, target: pos === 'before' ? n : n + 1, zone: 'none', part: null,
+        band: null, needsClose: false, bandEnd: false };
+    }
+    return { anchorLine: n, position: pos, target: res.target, zone: res.zone, part: res.part, band: res.band,
+      needsClose: res.needsClose, bandEnd: bandEnd };
+  }
+
+  // target 行 (1 始まり、その行の前に入る) を囲む枠 (alt / loop …) の開始行の文。無ければ ''。
+  function _enclosingBlock(lines, target) {
+    var stack = [];
+    for (var i = 0; i < target - 1 && i < lines.length; i++) {
+      var t = String(lines[i]).trim();
+      if (/^(alt|opt|loop|par|break|critical|group)(\s|$)/.test(t)) stack.push(t);
+      else if (/^end$/.test(t) && stack.length) stack.pop();
+    }
+    return stack.length ? stack[stack.length - 1] : '';
+  }
+
+  // フォームに出す挿入先の文。「`B --> A : res` の後、帯の外側 (B)」「図の末尾 (@enduml の前)」。
+  function describeWhere(text, where) {
+    if (!where) return '図の末尾 (@enduml の前)';
+    var lines = _s(text).split('\n');
+    var anchor = _s(lines[where.anchorLine - 1]).trim();
+    var parts = ['`' + anchor + '` の' + (where.position === 'before' ? '前' : '後')];
+    if (where.zone === 'inside' && where.band) parts.push('帯の内側 (' + where.part + ')');
+    else if (where.zone === 'outside' && where.band) parts.push('帯の外側 (' + where.part + ')');
+    var blk = _enclosingBlock(lines, where.target);
+    if (blk) parts.push('「' + blk + '」の中');
+    return parts.join('、');
+  }
+
   // 1 手でシーケンス一式を書き込む。不正な spec なら text をそのまま返す
   // (呼び手が validate せずに呼んでも DSL を壊さない)。
-  function apply(text, spec) {
-    var lines = preview(text, spec);
-    if (lines.length === 0) return text;
-    var out = text;
-    // title は 1 本しか置けないので、既にあれば差し替えて挿入行からは外す。
-    if (lines.length && /^title\s/.test(lines[0])) {
-      var idx = _titleIndex(out);
-      if (idx >= 0) {
-        var ls = String(out).split('\n');
-        ls[idx] = ls[idx].match(/^(\s*)/)[1] + lines[0];
-        out = ls.join('\n');
-        lines = lines.slice(1);
+  // where (resolveWhere の返り値) があれば本文はその位置に、無ければ図の末尾に入る。
+  // 宣言はどちらでも参加者の欄 (BLK-human-20260915-1205) に入る。
+  // 返り値: { text, bodyStart, bodyEnd } — 本文が入った 1 始まりの行範囲 (本文が無ければ 0)。
+  function applyAt(text, spec, where) {
+    var p = plan(text, spec);
+    if (!p.title && p.decls.length === 0 && p.body.length === 0) return { text: text, bodyStart: 0, bodyEnd: 0 };
+    // 枠の無い断片は、枠の補完ごと末尾に足す (宣言の欄も挿入位置も無い)。
+    if (!_hasFrame(text)) {
+      var t0 = _insertBeforeEnd(text, (p.title ? [p.title] : []).concat(p.decls, p.body));
+      var e0 = _endumlIndex(t0.split('\n'));
+      return { text: t0, bodyStart: p.body.length ? e0 - p.body.length + 1 : 0, bodyEnd: p.body.length ? e0 : 0 };
+    }
+    var lines = String(text).split('\n');
+    // 本文の入る行 (0 始まりの index。この行の前に入る)。
+    var at = where ? where.target - 1 : _endumlIndex(lines);
+    if (at < 0 || at > lines.length) at = lines.length;
+    var anchorIdx = where ? where.anchorLine - 1 : -1;
+    function insertAt(idx, newLines) {
+      lines.splice.apply(lines, [idx, 0].concat(newLines));
+      if (idx <= at) at += newLines.length;
+      if (anchorIdx >= 0 && idx <= anchorIdx) anchorIdx += newLines.length;
+    }
+    // title は 1 本しか置けないので、既にあれば差し替え、無ければ @startuml の直後に置く。
+    if (p.title) {
+      var ti = _titleIndex(lines.join('\n'));
+      if (ti >= 0) {
+        lines[ti] = lines[ti].match(/^(\s*)/)[1] + p.title;
+      } else {
+        var si = -1;
+        for (var k = 0; k < lines.length; k++) { if (/^\s*@startuml/i.test(lines[k])) { si = k; break; } }
+        insertAt(si + 1, [p.title]);
       }
     }
-    if (lines.length === 0) return out;
-    return _insertBeforeEnd(out, lines);
+    var PZ = window.MA.seqParticipantZone;
+    p.decls.forEach(function(d) {
+      insertAt(PZ ? PZ.find(lines.join('\n')).insertAt : at, [d]);
+    });
+    if (p.body.length === 0) return { text: lines.join('\n'), bodyStart: 0, bodyEnd: 0 };
+    // 閉じ忘れの帯の外に入れるときは、帯を新しい行まで伸ばさないよう先に閉じる (単発の挿入と同じ)。
+    if (where && where.needsClose && where.part) {
+      lines.splice(at, 0, 'deactivate ' + where.part);
+      at += 1;
+    }
+    // 起点の行の字下げに揃える (alt の中などで既存の行が字下げされていれば、それに合わせる)。
+    var indent = anchorIdx >= 0 ? (String(lines[anchorIdx] || '').match(/^(\s*)/) || ['', ''])[1] : '';
+    var body = p.body.map(function(l) { return indent + l; });
+    lines.splice.apply(lines, [at, 0].concat(body));
+    return { text: lines.join('\n'), bodyStart: at + 1, bodyEnd: at + body.length };
+  }
+
+  function apply(text, spec, where) {
+    return applyAt(text, spec, where).text;
   }
 
   return {
     ARROWS: ARROWS,
     PARTICIPANT_TYPES: PARTICIPANT_TYPES,
+    BLOCK_KINDS: BLOCK_KINDS,
+    ELSE_KINDS: ELSE_KINDS,
     existingIds: existingIds,
     normalizeId: normalizeId,
     normalizeSpec: normalizeSpec,
     fmtMessage: fmtMessage,
     validate: validate,
+    plan: plan,
     preview: preview,
+    resolveWhere: resolveWhere,
+    describeWhere: describeWhere,
+    applyAt: applyAt,
     apply: apply,
   };
 })();

@@ -54,7 +54,9 @@ async function seedSet(page) {
 }
 
 async function openSetModal(page) {
-  await page.locator('#btn-tab-set').click();
+  // BLK-owner-20260924-2337-prune: 入口は「既存の図や雛形から新しい図を起こす…」1 つ。窓の上端で「同じ系統の図ぜんぶ」を選ぶ。
+  await page.locator('#btn-tab-template').click();
+  await page.locator('#tpl-kinds .tpl-kind[data-kind="family"]').click();
   await page.waitForTimeout(600);
 }
 

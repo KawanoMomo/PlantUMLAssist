@@ -40,37 +40,12 @@ test('既定のタブ列は横スクロールしない', async ({ page }) => {
   expect(over).toBeLessThanOrEqual(1);
 });
 
-test('畳んでも件数は下端の状態表示に出ている', async ({ page }) => {
-  await gotoApp(page, { foldedTools: true });
-  await expect(page.locator('#status-diff')).toBeVisible();
-  await expect(page.locator('#status-pins')).toBeVisible();
-  await expect(page.locator('#status-inbox')).toBeVisible();
-});
-
-test('畳んだ状態でもツールから機能を開ける', async ({ page }) => {
+// BLK-builder-20260924-1815-3 (design 9b / 9a): 既定のパネルには「タブ列に戻す」を出さない
+// (押すと 9a が外した絵文字の機能ボタンがタブ列に戻っていた)。畳みを解くのは以前に選んだ人の設定だけ。
+test('既定のツールのパネルに「タブ列に戻す」は出ない', async ({ page }) => {
   await gotoApp(page, { foldedTools: true });
   await openToolMenu(page);
-  await page.locator('.tool-menu-item[data-target="btn-tab-compare"]').click();
-  await expect(page.locator('#compare-pane')).toBeVisible();
+  await expect(page.locator('#tool-menu-fold')).toHaveCount(0);
+  await expect(page.locator('#tool-menu')).not.toContainText('タブ列に戻す');
 });
 
-test('「タブ列に戻す」を選べば機能ボタンが並び、次に開いても残る', async ({ page }) => {
-  await gotoApp(page, { foldedTools: true });
-  await openToolMenu(page);
-  await page.locator('#tool-menu-fold').click();
-  await expect(page.locator('#btn-tab-compare')).toBeVisible();
-
-  await page.reload();
-  await page.waitForSelector('#preview-svg');
-  await expect(page.locator('#tab-bar')).not.toHaveClass(/tools-folded/);
-  await expect(page.locator('#btn-tab-compare')).toBeVisible();
-});
-
-test('戻したあとにもう一度畳める', async ({ page }) => {
-  await gotoApp(page);   // helper の既定 (畳まない) で開く
-  await expect(page.locator('#btn-tab-compare')).toBeVisible();
-  await page.locator('#btn-tab-tools').click();
-  await page.locator('#tool-menu-fold').click();
-  await expect(page.locator('#tab-bar')).toHaveClass(/tools-folded/);
-  await expect(page.locator('#btn-tab-compare')).toBeHidden();
-});

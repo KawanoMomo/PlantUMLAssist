@@ -48,7 +48,7 @@ test.describe('BLK-primary-20260907-1403-wish: 提出前チェック', () => {
     await twoDocs(page);
   });
 
-  test('📤 提出前チェックを押すと全図の title / note / 部品名が 1 枚に並ぶ', async ({ page }) => {
+  test('提出前チェックを押すと全図の title / note / 部品名が 1 枚に並ぶ', async ({ page }) => {
     await page.locator('#btn-tab-submit').click();
     await expect(page.locator('#sc-modal')).toBeVisible();
 
@@ -95,7 +95,10 @@ test.describe('BLK-primary-20260907-1403-wish: 提出前チェック', () => {
 
     const flagged = page.locator('#sc-table .sc-flagged');
     await expect(flagged.filter({ hasText: 'Transceiver' })).toHaveCount(1);
-    await expect(flagged.filter({ hasText: 'UART_Drv 通信シーケンス' })).toHaveCount(0);
+    // BLK-owner-20260924-1252-prune: 辞書は「略語以外で出したくない語」になった。社内略語は 🔤 表記統一と
+    // 同じ glossary で数えるので、辞書を書き換えても略語 (UART) の当たりは残る。辞書の語 (前の既定の Drv) は外れる。
+    const titleHits = page.locator('#sc-table .sc-row', { hasText: 'UART_Drv 通信シーケンス' }).locator('td').nth(3);
+    await expect(titleHits).not.toContainText('Drv');
 
     // 閉じて開き直しても辞書はそのまま
     await page.locator('#sc-close').click();

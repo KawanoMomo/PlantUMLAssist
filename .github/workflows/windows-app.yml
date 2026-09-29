@@ -8,6 +8,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '配布物を付け直すタグ(例 v3.0)。タグ push の run が赤だったとき、直した release ブランチから同じ版を作って Release に添付する'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -28,15 +33,60 @@ jobs:
       - name: Build exe
         env:
           # 版の正本は git tag (BLK-human-20260916-0902)。タグ以外の起動では git describe に任せる。
-          APP_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          APP_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || '' }}
         run: pyinstaller packaging/PlantUMLAssist.spec --noconfirm
 
       - name: Build installer
+        env:
+          INPUT_TAG: ${{ inputs.tag || '' }}
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF -replace '^refs/tags/v','' } else { '0.0.0' }
+          # BLK-human-20260917-0900: v2.3 の setup.exe は版 0.0.0 で焼かれ、「アプリと機能」で
+          # 旧版と見分けが付かず更新に見えなかった。タグが取れなければ git describe、それも無ければ止める。
+          $version = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF -replace '^refs/tags/v','' } elseif ($env:INPUT_TAG) { $env:INPUT_TAG -replace '^v','' } else { '' }
+          # 手動実行で tag 入力が無いとき: checkout は浅いので tags を取ってから describe する(取れなければ下で止まる)
+          if (-not $version) { git fetch --tags --force --unshallow 2>$null; $version = ((git describe --tags --abbrev=0 2>$null) -replace '^v','') }
+          if ($version -notmatch '^\d+(\.\d+)+$') { throw "インストーラの版が取れない ($version)" }
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\installer.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
+          # VersionInfo の文字列は末尾に空白・NUL の詰め物が付くことがある(v3.0 で「3.0 」となり照合が赤になった)ので、両端を落として比べる
+          $pv = ((Get-Item "dist\PlantUMLAssist-$version-setup.exe").VersionInfo.ProductVersion -replace '[\s\0]+$','').Trim()
+          if ($pv -ne $version) { throw "setup.exe の版 '$pv' がタグ '$version' と食い違う" }
+          "APP_SETUP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # BLK-human-20260917-0900: 旧版を入れる → 新版を入れる → アンインストール登録が 1 件で版が新しい。
+      - name: Smoke-test upgrade over the previous release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $keys = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                  'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                  'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+          function Entries { @(Get-ItemProperty $keys -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like 'PlantUMLAssist*' }) }
+          function Install($exe) {
+            $p = Start-Process $exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "$exe exit $($p.ExitCode)" }
+          }
+          $old = Join-Path $env:RUNNER_TEMP 'old'
+          New-Item -ItemType Directory $old -Force | Out-Null
+          # 公開済みの最新版 (今打ったタグ自身は除く)
+          $prev = gh release list --repo $env:GITHUB_REPOSITORY --exclude-drafts --json tagName --jq '.[].tagName' |
+                  Where-Object { $_ -ne $env:GITHUB_REF_NAME } | Select-Object -First 1
+          if ($prev) {
+            gh release download $prev --repo $env:GITHUB_REPOSITORY --pattern '*setup.exe' --dir $old
+            Install (Get-ChildItem $old -Filter '*setup.exe' | Select-Object -First 1).FullName
+            Write-Host "installed previous $prev"
+          }
+          Install "dist\PlantUMLAssist-$env:APP_SETUP_VERSION-setup.exe"
+          $e = Entries
+          $e | ForEach-Object { Write-Host "entry: $($_.PSChildName) $($_.DisplayName) $($_.DisplayVersion) $($_.InstallLocation)" }
+          if ($e.Count -ne 1) { throw "アンインストール登録が $($e.Count) 件 (1 件であるべき)" }
+          if ($e[0].DisplayVersion -ne $env:APP_SETUP_VERSION) { throw "登録の版 $($e[0].DisplayVersion) が新版 $env:APP_SETUP_VERSION でない" }
+          $exe = Join-Path $e[0].InstallLocation 'PlantUMLAssist.exe'
+          if (-not (Test-Path $exe)) { throw "更新後に $exe が無い" }
+          Write-Host "upgrade smoke ok ($prev -> $env:APP_SETUP_VERSION)"
 
       # BLK-human-20260915-1200: zip 版だけが起動直後に落ちた。
       # 以前は `dist\PlantUMLAssist\*` を詰めていたので、zip の直下に
@@ -89,9 +139,10 @@ jobs:
             dist/PlantUMLAssist-portable.zip
 
       - name: Attach to the release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: |
             dist/*setup.exe
             dist/PlantUMLAssist-portable.zip

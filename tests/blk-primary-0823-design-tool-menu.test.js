@@ -13,9 +13,13 @@ var tm = W.MA.toolMenu;
 const html = fs.readFileSync(path.resolve(__dirname, '..', 'plantuml-assist.html'), 'utf8');
 
 describe('ツールメニューの分類', function() {
-  test('design 7a の 6 分類がこの順で並ぶ', function() {
+  // BLK-owner-20260918-0329-prune: 「渡す」はこのメニューから外し、Export ▾ の
+  // 「渡す」1 か所に集めた。分類自体は Ctrl+K のために残るので groupOf は 'give' を返す。
+  test('design 7a の分類がこの順で並ぶ (渡す は Export ▾ へ移した)', function() {
     expect(tm.groups().map(function(g) { return g.title; }))
-      .toEqual(['図をつくる', '書き換える', '探す・見比べる', '確かめる', 'レビュー', '渡す']);
+      .toEqual(['図をつくる', '書き換える', '探す', '確かめる', 'レビュー']);
+    expect(tm.menuIds().indexOf('btn-tab-handoff')).toBe(-1);
+    expect(tm.menuIds().indexOf('btn-tab-delivery')).toBe(-1);
   });
 
   test('どの分類も 1 件以上を持ち、項目 id は重複しない', function() {
@@ -33,7 +37,7 @@ describe('ツールメニューの分類', function() {
   // BLK-junior-20260914-1406-wish: ⇔ 先輩の図 を残す側に足した。開いて終わる道具ではなく
   // 画面の枠の出し入れで、畳むと据え置き (深い経路を通らない) の値打ちが消えるため。
   test('タブ列に残すのは 図の出し入れ と 枠の出し入れ だけで、それらは畳まない', function() {
-    expect(tm.keepIds()).toEqual(['btn-tab-new', 'btn-tab-folder', 'btn-tab-senior']);
+    expect(tm.keepIds()).toEqual(['btn-tab-new', 'btn-tab-folder', 'btn-open-file', 'btn-tab-senior']);
     expect(tm.isFoldable('btn-tab-new')).toBe(false);
     expect(tm.isFoldable('btn-tab-folder')).toBe(false);
     expect(tm.isFoldable('btn-tab-senior')).toBe(false);
@@ -72,7 +76,7 @@ describe('タブ列の機能ボタンとの対応', function() {
 describe('メニューの HTML', function() {
   test('分類見出しと項目、Ctrl+K の注記が出る', function() {
     var out = tm.buildMenuHtml();
-    expect(out).toContain('Ctrl+K でも同じ操作が引ける');
+    expect(out).toContain('Ctrl+K でも引けます');
     expect(out).toContain('>レビュー<');
     expect(out).toContain('data-target="btn-tab-board"');
     expect(out).toContain('変更サマリ');

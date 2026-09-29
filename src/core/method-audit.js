@@ -355,6 +355,14 @@ window.MA.methodAudit = (function() {
       issues = part.issues;
       omitted = part.omitted;
     }
+    // BLK-reviewer-20260923-2012-wish: タグは無いが note の自由文で答えている組は、
+    // 指摘に残したまま印 (noteReply) を付け、未解消とは別に数える箱にも入れる。
+    var noteReplied = [];
+    if (OM && OM.markNotes) {
+      var mk = OM.markNotes(issues, OM.collect(list, { notes: true }));
+      issues = mk.items;
+      noteReplied = mk.noteReplied;
+    }
 
     return {
       calls: calls,
@@ -366,6 +374,8 @@ window.MA.methodAudit = (function() {
       issues: issues,
       // 意図的な省略の宣言で外した指摘 (理由・宣言した図つき)。
       omitted: omitted,
+      // issues のうち、note の自由文で応答済み (タグ化待ち) のもの。issues にも残る。
+      noteReplied: noteReplied,
       clean: issues.length === 0,
     };
   }

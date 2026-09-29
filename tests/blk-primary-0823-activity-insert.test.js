@@ -53,10 +53,17 @@ describe('BLK-primary-0823 位置で絞ったメニュー', function() {
     expect(ks.join(' ')).toBe('action if while repeat fork note swimlane break detach kill');
   });
 
+  // BLK-owner-20260925-0312-4: 2 行目 (start) の「前」と「直後」は同じ行を指す。前 (position: 'before') は
+  // フローの外、直後はフローの先頭。以前は行だけで判定し、start の直後もフローの外として止めていた。
   test('start より前ではレーンだけ (start / stop は既にある)', function() {
-    expect(AI.inFlow(MIN, 2)).toBe(false);
-    var ks = AI.allowedKinds(MIN, 2).map(function(k) { return k.kind; });
+    var ks = AI.allowedKinds(MIN, 2, 'before').map(function(k) { return k.kind; });
     expect(ks.join(' ')).toBe('swimlane');
+  });
+
+  test('start の直後はフローの中 (10 種すべてが置ける)', function() {
+    expect(AI.inFlow(MIN, 2)).toBe(true);
+    expect(AI.isAllowed(MIN, 2, 'action')).toBe(true);
+    expect(AI.isAllowed(MIN, 2, 'action', 'before')).toBe(false);
   });
 
   test('start の無い図では start が候補に出る', function() {
@@ -72,8 +79,9 @@ describe('BLK-primary-0823 位置で絞ったメニュー', function() {
   });
 
   test('置けない要素は isAllowed が false を返す', function() {
-    expect(AI.isAllowed(MIN, 2, 'fork')).toBe(false);
-    expect(AI.isAllowed(MIN, 2, 'swimlane')).toBe(true);
+    expect(AI.isAllowed(MIN, 2, 'fork', 'before')).toBe(false);
+    expect(AI.isAllowed(MIN, 2, 'swimlane', 'before')).toBe(true);
+    expect(AI.isAllowed(MIN, 4, 'fork')).toBe(false);
   });
 });
 
@@ -107,9 +115,10 @@ if (act) {
       expect(out[1]).toBe('start');
       expect(out[2]).toBe(':Hello world;');
       expect(out[3]).toBe('if (受信成功?) then (yes)');
-      expect(out[5]).toBe('else (no)');
-      expect(out[7]).toBe('endif');
-      expect(out[8]).toBe('stop');
+      // 枝は空のまま入る (BLK-owner-20260927-0745-1: 利用者が入れていない `:;` を書かない)
+      expect(out[4]).toBe('else (no)');
+      expect(out[5]).toBe('endif');
+      expect(out[6]).toBe('stop');
     });
 
     test('while は endwhile まで入る', function() {

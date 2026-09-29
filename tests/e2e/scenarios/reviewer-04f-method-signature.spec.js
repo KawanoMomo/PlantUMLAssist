@@ -59,7 +59,8 @@ async function pressSave(page) {
   await page.waitForTimeout(700);
   await answerLock(page);
   if (await page.locator('#save-guard-overlay').isHidden().catch(() => true)) {
-    // 錠に答えた直後の押下は保存へ進まないので、もう一度押す。
+    // 帯が出ない (= 止める理由が無い) 保存は、錠に答えた直後の押下が錠の側で
+    // 終わることがあるので、もう一度押して保存まで進める。
     await page.locator('#top-save').click();
     await page.waitForTimeout(700);
   }
@@ -98,10 +99,16 @@ test('手順4.9 宣言の無い呼び出しは、保存を書き込む前に GUI
 
   // クラス図に宣言の無い呼び出しを 1 行足して保存する。
   await S.typeDsl(page, SEQ_GAP);
-  await pressSave(page);
 
+  // 開いて最初の 1 押しで止まる。押し直さない (BLK-builder-20260924-0012-b2-1-red:
+  // 突合の相手になる保存フォルダを読む前に判定して素通りし、最初の保存だけが
+  // 宣言の無い呼び出しのまま書き込まれていた。書けたあとに出る部品名の衝突の帯が
+  // 次の保存の帯に被さり、「このまま保存」が押せなくなっていた)。
+  await answerLock(page);
+  await page.locator('#top-save').click();
   const guard = page.locator('#save-guard-overlay');
   await expect(guard).toBeVisible();
+  await expect(page.locator('#save-clash-overlay')).toBeHidden();
   await expect(page.locator('#sgd-summary')).toContainText('宣言の無いメソッド呼び出し');
   await expect(page.locator('#sgd-list')).toContainText('EnableClock');
   // 足し先の 1 行がそのまま出る (何をすれば消えるかが帯の中で分かる)。
@@ -109,11 +116,16 @@ test('手順4.9 宣言の無い呼び出しは、保存を書き込む前に GUI
 
   // 止まっている間、押した保存は進んでいない。状態バーを空にしてからもう一度
   // 押し、「どこに保存したか」の文言が出ないことで確かめる。
+  // BLK-migrator-20260923-1809: 止めたときは状態バーも「⛔ 保存を止めました」に変える
+  // (帯はプレビュー枠の中なので、大きい図では画面外に送られて何も起きなく見えた)。
+  // 「保存した」と言っていないことが、ここで見たかったこと。
   await page.evaluate(() => { document.getElementById('status-save-result').textContent = ''; });
   await page.locator('#top-save').click();
   await page.waitForTimeout(900);
   await expect(guard).toBeVisible();
-  expect((await page.locator('#status-save-result').textContent()) || '').toBe('');
+  const blockedLine = (await page.locator('#status-save-result').textContent()) || '';
+  expect(blockedLine).toContain('保存を止めました');
+  expect(blockedLine).not.toContain('に保存しました');
 
   // 承知のうえで押せば、そのまま保存できる (作業は止めない)。
   await page.locator('#btn-sgd-save').click();
@@ -155,6 +167,50 @@ test('手順4.9 意図的に省略すると決めた呼び出しは、理由つ�
   expect(saved).toContain('EnableClock(id)');
 
   // 突合はその行を読んで指摘から外すので、次の保存はもう止まらない。
+  await S.typeDsl(page, saved + "\n' 続き");
+  await pressSave(page);
+  await page.waitForTimeout(900);
+  await expect(guard).toBeHidden();
+});
+
+// BLK-reviewer-20260923-2012-wish: primary がタグを使わず note の自由文で
+// 「意図的に割愛」と答えた図。帯はその note を名指しし、「🚫 意図的に省略」を
+// 押すと note の本文が理由欄に入って開く。そのまま押せばタグが 1 行足され、
+// 以後は突合 (reviewer の手順 8 の監査も) で解消扱いになる。note は消さない。
+const CLASS_NOTED = CLASS_DOC.replace('@enduml',
+  'note top of ClockCtrl : ClockCtrl.EnableClock()\\nは呼び先の詳細を意図的に割愛(reviewer依頼2への回答)\n@enduml');
+
+test('手順4.9 note の自由文で答えた呼び出しは、帯が note を名指しし、その本文のまま省略のタグにできる', async ({ page }) => {
+  await bootManualSave(page, DIR);
+  await S.clearDir(page, DIR);
+  await S.putDoc(page, DIR, 'driver_common_class', CLASS_NOTED);
+  await S.putDoc(page, DIR, 'spi_init_sequence', SEQ_OK);
+
+  await S.openFolderItem(page, 'spi_init_sequence');
+  await S.typeDsl(page, SEQ_GAP);
+  await pressSave(page);
+
+  const guard = page.locator('#save-guard-overlay');
+  await expect(guard).toBeVisible();
+  await expect(page.locator('#sgd-summary')).toContainText('note の自由文で応答済み（タグ化待ち）');
+  await expect(page.locator('#sgd-list .sgd-note')).toContainText('driver_common_class');
+  await expect(page.locator('#sgd-list .sgd-note')).toContainText('意図的に割愛');
+
+  // 理由を打たなくても、note の本文が入った状態で開く。
+  await page.locator('#btn-sgd-omit').click();
+  await expect(page.locator('#sgd-omit-row')).toBeVisible();
+  await expect(page.locator('#sgd-omit-reason')).toHaveValue(/意図的に割愛/);
+  await expect(page.locator('#sgd-omit-preview')).toContainText("'@omit-method ClockCtrl.EnableClock");
+
+  await page.locator('#btn-sgd-omit-go').click();
+  await page.waitForTimeout(1500);
+  await expect(guard).toBeHidden();
+
+  const saved = await S.readDoc(page, DIR, 'spi_init_sequence');
+  expect(saved).toMatch(/'@omit-method ClockCtrl\.EnableClock .*意図的に割愛/);
+  // note を書いたクラス図には触らない。
+  expect(await S.readDoc(page, DIR, 'driver_common_class')).toContain('note top of ClockCtrl');
+
   await S.typeDsl(page, saved + "\n' 続き");
   await pressSave(page);
   await page.waitForTimeout(900);

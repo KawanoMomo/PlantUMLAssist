@@ -1,0 +1,18 @@
+' 狙い: タブ/空白混在インデント、行末空白、空行だらけ、日本語参加者名を引用符なしで使用
+@startuml
+participant App
+participant センサ制御
+
+
+
+App -> センサ制御 : Init()   
+		センサ制御 --> App : E_OK
+   
+App ->	センサ制御 : Read()	
+
+
+
+センサ制御 --> App : value
+
+
+@enduml

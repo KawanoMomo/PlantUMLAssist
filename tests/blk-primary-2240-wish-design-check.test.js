@@ -22,7 +22,7 @@ const QUIET_BAR = [
   '<div id="tab-bar" class="tools-folded tools-quiet tools-hide-tool-btn">',
   '  <button class="tab-tool" id="btn-tab-new">＋</button>'.replace('class="tab-tool"', 'class="tab-tool" hidden'),
   '  <button class="tab-tool tool-folded" id="btn-tab-cross">▦</button>',
-  '  <button class="tab-tool tab-tool-mini" id="btn-tab-tools-mini">他 25 件</button>',
+  '  <button class="tab-tool tab-tool-mini" id="btn-tab-tools-mini">ツール ▾</button>',
   '</div>',
 ].join('');
 

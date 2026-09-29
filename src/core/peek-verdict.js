@@ -106,7 +106,7 @@ window.MA.peekVerdict = (function() {
     if (!rec) return null;
     var stale = isStale(rec, nowCount);
     return {
-      mark: stale ? '👀要確認' : '👀手本なし',
+      mark: stale ? '要確認' : '手本なし',
       stale: stale,
       kind: rec.kind,
       title: stale

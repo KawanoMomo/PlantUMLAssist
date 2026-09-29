@@ -48,6 +48,14 @@ window.MA.diagramRail = (function() {
     + '<circle cx="6" cy="5.5" r="1.6"/>'
     + '<circle cx="10.5" cy="10.5" r="1.6"/>';
 
+  // FILES (design 10a / 7a、BLK-builder-20260924-1358-3): 右上を折った紙 1 枚と本文の 2 行。
+  // 文字の ▤ はフォント依存で図種の線画と太さ・大きさが揃わないので、同じ座標系で描く。
+  // files も図種ではないので ITEMS には入れない。
+  GLYPHS['files'] =
+    '<path d="M4 2.5h5.5l3 3v8h-8.5z"/>'
+    + '<path d="M9.5 2.5v3h3"/>'
+    + '<path d="M6 9h4.5M6 11.2h4.5"/>';
+
   // 並び順は design の左レール (SEQ / UC / CMP / CLS / ACT / ST) に合わせる。
   var ITEMS = [
     { type: 'plantuml-sequence',  code: 'SEQ', label: 'Sequence',  title: 'シーケンス図' },

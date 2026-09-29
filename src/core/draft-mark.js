@@ -109,14 +109,14 @@ window.MA.draftMark = (function() {
 
   // 上部の「一時控え」ボタンの文言 (開いている図に対して)。
   function activeLabel(isDraft) {
-    return isDraft ? '🗂 一時控え中' : '🗂 一時控え';
+    return isDraft ? '一時控え中' : '一時控え';
   }
 
   function activeMessage(name, isDraft) {
     var label = _s(name);
     return isDraft
-      ? '🗂 ' + label + ' を一時控えにしました。📂 一覧では畳まれます'
-      : '🗂 ' + label + ' の一時控えを外しました。📂 一覧に成果物として出ます';
+      ? '' + label + ' を一時控えにしました。保存先の一覧では畳まれます'
+      : '' + label + ' の一時控えを外しました。保存先の一覧に成果物として出ます';
   }
 
   function load(storage, fileDir) {

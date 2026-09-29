@@ -2,6 +2,11 @@
 // BLK-reviewer-20260908-0003-wish: audit.js が拾えない手動の指摘は `指摘.md` に自然文で
 // 書くしかなく、次に見るときは全文を読み直していた。指摘に「対象ファイル + 行 + 行の指紋」を
 // 持たせ、開いた時点で「未変更のため前回判定を維持」と「要再確認」に仕分かれるのを実機で見る。
+//
+// BLK-owner-20260923-1409-prune: 🔖 手動指摘のタブは 📥 指摘箱に畳んだ。仕分け (指紋での
+// 持ち越し) はそのままで、入口と札だけが変わる。手で書いた指摘は 📥 指摘箱の出典の
+// 絞り込み「手で書いた」で出し、札は箱と同じ語彙 (未対応 / 確かめられず) になる。
+// この spec が守る手順 — 手で書いた指摘が憶えられ、未変更なら前回判定が続くこと — は同じ。
 const { test, expect } = require('@playwright/test');
 const { gotoApp, saveDirFor } = require('../helpers');
 
@@ -48,13 +53,21 @@ async function putFiles(page, files) {
 
 async function openFindings(page) {
   // 開いているときに押すと閉じてしまう (他のパネルと同じトグル)。開いていなければ押す。
-  const open = await page.locator('#findings-panel.open').count();
-  if (!open) await page.locator('#btn-tab-findings').click();
-  await page.waitForSelector('#findings-panel.open .mf-head');
+  const open = await page.locator('#inbox-panel.open').count();
+  if (!open) await page.locator('#btn-tab-inbox').click();
+  await page.waitForSelector('#inbox-panel.open .ib-head');
   await page.waitForFunction(() => {
-    const h = document.querySelector('#findings-panel .mf-head');
+    const h = document.querySelector('#inbox-panel .ib-head');
     return h && h.textContent.indexOf('読んでいます') < 0;
   });
+  // 出典を「手で書いた」に絞る。旧 🔖 タブと同じ並びがここに出る。
+  await page.selectOption('#inbox-panel #ib-source', 'manual');
+  await page.waitForSelector('#inbox-panel #ib-source');
+}
+
+// 手で書いた指摘の行 (出典で絞った後の箱の行)。
+function mfRows(page) {
+  return page.locator('#inbox-panel .ib-row[data-source="manual"]');
 }
 
 // 台帳に 2 件入れる (dma_seq の Spi_Reset 行 / gpio_state の遷移行)。
@@ -75,7 +88,7 @@ async function seed(page) {
   }, { dma: FILES.R0003_dma_seq, gpio: FILES.R0003_gpio_state, dir: DIR });
 }
 
-test.describe('BLK-reviewer-0003-wish: 手動指摘の台帳', () => {
+test.describe('BLK-reviewer-0003-wish: 手で書いた指摘 (指摘箱の出典「手で書いた」)', () => {
   test.beforeEach(async ({ page }) => {
     await boot(page);
     await clearDir(page);
@@ -87,30 +100,28 @@ test.describe('BLK-reviewer-0003-wish: 手動指摘の台帳', () => {
     await clearDir(page).catch(() => {});
   });
 
-  test('DSL が無変更なら全件「未変更」で、今日読む行が無いと言い切る', async ({ page }) => {
+  test('DSL が無変更なら全件が前回判定のまま (要再確認は出ない)', async ({ page }) => {
     await seed(page);
     await openFindings(page);
-    const head = await page.locator('#findings-panel .mf-head').textContent();
-    expect(head).toContain('2 件すべて未変更のため前回判定を維持');
-    expect(head).toContain('今日読む行はありません');
-    await expect(page.locator('#findings-panel .mf-row[data-mf-keep="1"]')).toHaveCount(2);
-    await expect(page.locator('#findings-panel .mf-row.recheck')).toHaveCount(0);
-    expect(await page.locator('#btn-tab-findings').textContent()).toContain('0/2');
+    await expect(mfRows(page)).toHaveCount(2);
+    // 前回判定 (未解消) を持ち越すので、札は箱の語彙で「未対応」。
+    await expect(mfRows(page).first().locator('.ib-verify')).toHaveText('未対応');
+    await expect(page.locator('#inbox-panel .ib-row[data-reflect="unknown"][data-source="manual"]'))
+      .toHaveCount(0);
+    // 根拠 (未変更のため前回判定を維持) は札ではなく、その場の 1 行に残る。
+    expect(await mfRows(page).first().textContent()).toContain('前回判定を維持');
   });
 
-  test('指摘した行が書き換わった図だけが「要再確認」で先頭に来る', async ({ page }) => {
+  test('指摘した行が書き換わった図だけが「確かめられず」になる', async ({ page }) => {
     await seed(page);
     await putFiles(page, {
       R0003_gpio_state: FILES.R0003_gpio_state.replace('Gpio_Set', 'Gpio_Write'),
     });
     await openFindings(page);
-    const head = await page.locator('#findings-panel .mf-head').textContent();
-    expect(head).toContain('要再確認 1 件');
-    expect(head).toContain('前回判定を維持 1 件');
-    const first = page.locator('#findings-panel .mf-row').first();
-    await expect(first).toHaveClass(/recheck/);
-    expect(await first.textContent()).toContain('R0003_gpio_state');
-    expect(await page.locator('#btn-tab-findings').textContent()).toContain('1/2');
+    const recheck = page.locator('#inbox-panel .ib-row[data-source="manual"][data-reflect="unknown"]');
+    await expect(recheck).toHaveCount(1);
+    expect(await recheck.textContent()).toContain('確かめられず');
+    await expect(page.locator('#inbox-panel .ib-group[data-doc="R0003_gpio_state"]')).toHaveCount(1);
   });
 
   test('上に行が増えただけなら維持のまま、行番号だけ付け直す', async ({ page }) => {
@@ -119,20 +130,21 @@ test.describe('BLK-reviewer-0003-wish: 手動指摘の台帳', () => {
       R0003_dma_seq: FILES.R0003_dma_seq.replace('@startuml', '@startuml\ntitle DMA 転送'),
     });
     await openFindings(page);
-    const row = page.locator('#findings-panel .mf-row[data-mf-id^="R0003_dma_seq"]');
-    // 走査した時点で新しい行番号を控えに憶え直すので、画面では L5 の「未変更」になる。
+    const row = page.locator('#inbox-panel .ib-row[data-mf-id^="R0003_dma_seq"]');
+    // 走査した時点で新しい行番号を控えに憶え直すので、画面では L5 の「未対応」になる。
     expect(await row.getAttribute('data-mf-keep')).toBe('1');
-    expect(await row.textContent()).toContain('R0003_dma_seq:5');
-    expect(await page.locator('#findings-panel .mf-head').textContent()).toContain('今日読む行はありません');
+    await expect(row.locator('.ib-where')).toHaveText('L5');
+    await expect(row.locator('.ib-verify')).toHaveText('未対応');
   });
 
-  test('要再確認の行を押すとその図が開き、該当行が選ばれる', async ({ page }) => {
+  test('確かめられずの行を押すとその図が開き、該当行が選ばれる', async ({ page }) => {
     await seed(page);
     await putFiles(page, {
       R0003_gpio_state: FILES.R0003_gpio_state.replace('Gpio_Set', 'Gpio_Write'),
     });
     await openFindings(page);
-    await page.locator('#findings-panel .mf-row.recheck .mf-where').click();
+    await page.locator('#inbox-panel .ib-row[data-source="manual"][data-reflect="unknown"] .ib-where')
+      .click();
     await page.waitForTimeout(1500);
     const sel = await page.evaluate(() => {
       const ed = /** @type {HTMLTextAreaElement} */ (document.getElementById('editor'));
@@ -147,20 +159,23 @@ test.describe('BLK-reviewer-0003-wish: 手動指摘の台帳', () => {
       R0003_gpio_state: FILES.R0003_gpio_state.replace('Gpio_Set', 'Gpio_Write'),
     });
     await openFindings(page);
-    await page.locator('#findings-panel .mf-row.recheck button[data-mf-act="confirm"]').click();
+    await page.locator('#inbox-panel .ib-row[data-source="manual"][data-reflect="unknown"] button[data-mf-act="confirm"]')
+      .click();
     await page.waitForTimeout(300);
-    await expect(page.locator('#findings-panel .mf-row.recheck')).toHaveCount(0);
-    expect(await page.locator('#findings-panel .mf-head').textContent()).toContain('今日読む行はありません');
+    await expect(page.locator('#inbox-panel .ib-row[data-source="manual"][data-reflect="unknown"]'))
+      .toHaveCount(0);
     // 控えに残るので、開き直しても維持のまま
     await page.keyboard.press('Escape');
     await page.waitForTimeout(200);
     await openFindings(page);
-    expect(await page.locator('#btn-tab-findings').textContent()).toContain('0/2');
+    await expect(mfRows(page)).toHaveCount(2);
+    await expect(page.locator('#inbox-panel .ib-row[data-source="manual"][data-reflect="unknown"]'))
+      .toHaveCount(0);
   });
 
-  test('図を開いて行を選び、その場で指摘を台帳に足せる', async ({ page }) => {
+  test('図を開いて行を選び、その場で指摘を箱に足せる', async ({ page }) => {
     await openFindings(page);
-    expect(await page.locator('#findings-panel .mf-empty').textContent()).toContain('手動の指摘はまだありません');
+    await expect(mfRows(page)).toHaveCount(0);
     // 図を開いて 3 行目にキャレットを置く
     await page.evaluate(() => {
       const ed = /** @type {HTMLTextAreaElement} */ (document.getElementById('editor'));
@@ -170,15 +185,23 @@ test.describe('BLK-reviewer-0003-wish: 手動指摘の台帳', () => {
     });
     await page.waitForTimeout(600);
     await openFindings(page);
-    await page.locator('#mf-text').fill('復帰遷移が無い');
-    await page.locator('#mf-add').click();
-    await page.waitForTimeout(200);
-    await expect(page.locator('#findings-panel .mf-row')).toHaveCount(1);
-    const row = await page.locator('#findings-panel .mf-row').textContent();
+    await page.locator('#inbox-panel #mf-text').fill('復帰遷移が無い');
+    await page.locator('#inbox-panel #mf-add').click();
+    await page.waitForTimeout(300);
+    await expect(mfRows(page)).toHaveCount(1);
+    const row = await mfRows(page).textContent();
     expect(row).toContain('復帰遷移が無い');
-    expect(row).toContain('未変更');
+    expect(row).toContain('手で書いた');
     // 実体 id は「図名#行の指紋」の形
-    const id = await page.locator('#findings-panel .mf-row').getAttribute('data-mf-id');
+    const id = await mfRows(page).getAttribute('data-mf-id');
     expect(id).toMatch(/#[0-9a-f]{8}$/);
+  });
+
+  test('出典を「監査が出した」に戻すと、手で書いた指摘は並ばない', async ({ page }) => {
+    await seed(page);
+    await openFindings(page);
+    await expect(mfRows(page)).toHaveCount(2);
+    await page.selectOption('#inbox-panel #ib-source', 'audit');
+    await expect(mfRows(page)).toHaveCount(0);
   });
 });

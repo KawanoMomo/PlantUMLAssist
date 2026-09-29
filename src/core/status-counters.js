@@ -11,21 +11,30 @@ window.MA = window.MA || {};
 window.MA.statusCounters = (function() {
   // src はタブ列のボタン (件数の出どころ)、id は下端に置くボタン。
   // prefix は下端での見出しで、design の並び (± 差分 / 指摘 / 指摘箱) に合わせて短くする。
+  // BLK-owner-20260923-1409-prune: 「指摘」と「指摘箱」は同じ 1 件を別々に数えていた
+  // (この図の指摘は、指摘箱にも同じものが並ぶ)。指摘箱を全体の勘定にし、指摘はその
+  // 内数と読めるように見出しを変える。内数であることは subsetOf で持つ。
   var ITEMS = [
     { id: 'status-diff',  src: 'btn-tab-diff',  prefix: '± 差分',  title: '前回保存した時点から変わった図の一覧' },
-    { id: 'status-pins',  src: 'btn-tab-pins',  prefix: '指摘',    title: 'この図に付いたレビュー指摘の一覧' },
-    { id: 'status-inbox', src: 'btn-tab-inbox', prefix: '指摘箱',  title: '保存フォルダの図をまたいだ未対応のレビュー指摘' },
+    { id: 'status-pins',  src: 'btn-tab-pins',  prefix: 'うち この図', subsetOf: 'status-inbox',
+      title: '指摘箱の内数。この図に付いた指摘の一覧（同じ 1 件を二重には数えません）' },
+    { id: 'status-inbox', src: 'btn-tab-inbox', prefix: '指摘箱',  title: '保存フォルダの図をまたいだ未対応の指摘（監査が出したものも手で書いたものも 1 つの勘定）' },
   ];
 
   function items() {
     return ITEMS.map(function(it) {
-      return { id: it.id, src: it.src, prefix: it.prefix, title: it.title };
+      return { id: it.id, src: it.src, prefix: it.prefix, title: it.title,
+               subsetOf: it.subsetOf || '' };
     });
   }
 
   // ボタン文字の末尾に出る件数 (「📌 指摘 3」の 3、「± 差分 −」の −)。
   // 数も − も無ければ「−」(まだ数えていない) を返す。
+  // BLK-owner-20260924-1712-prune: 「± 変更 2/10」は変わった図 2 枚 / 開いている図 10 枚。
+  // 件数は分子 (変わった数) で、末尾の総数を拾わない。
   function countToken(text) {
+    var frac = /([0-9]+)\s*\/\s*[0-9]+\s*$/.exec(String(text == null ? '' : text));
+    if (frac) return frac[1];
     var m = /([0-9]+|[−-])\s*$/.exec(String(text == null ? '' : text));
     if (!m) return '−';
     return m[1] === '-' ? '−' : m[1];

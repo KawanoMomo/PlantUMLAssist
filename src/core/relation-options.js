@@ -10,7 +10,18 @@ window.MA.relationOptions = (function() {
 
   // 矢印トークン: 先頭の飾り + 線 (- または .、途中に [#色]) + 末尾の飾り。
   // 例: --> / <|-- / ..> / *-- / o--> / -[#red]> / <|.. / --
-  var ARROW_RE = /^([<>|*o+^]{0,2})((?:-|\.){1,2}(?:\[#[^\]\s]+\])?(?:-|\.){0,2})([<>|*o+^]{0,2})$/;
+  // BLK-migrator-20260918-0249: 線の途中には置き方の指示 (up/down/left/right、
+  // 1 文字の u/d/l/r) も書ける (`-up->` `-[#red]right->`)。これを読めないと
+  // 方向を付けた行がまるごと関係行でなくなり、選択枠も出なくなる。
+  var _DIR = (window.MA.regexParts && window.MA.regexParts.ARROW_DIRECTION)
+    || '(?:up|down|left|right|u|d|l|r)';
+  // BLK-migrator-20260929-2003: 線の中の書式 `[…]` は `#色` だけでなく bold・dashed・thickness=N をカンマで並べてよい
+  // (`-[#red,bold]->` `-[hidden]-` `.[dotted].>`)。読む断片と読み書きの関数は regex-parts の 1 か所 (sequence・state と同じ)。
+  var _STYLE = '(?:' + ((window.MA.regexParts && window.MA.regexParts.ARROW_STYLE) || '\\[[^\\]\\r\\n]*\\]') + ')?';
+  var ARROW_RE = new RegExp(
+    '^([<>|*o+^]{0,2})((?:-|\\.){1,2}' + _STYLE + _DIR + '?' + _STYLE + '(?:-|\\.){0,2})([<>|*o+^]{0,2})$'
+  );
+  function _RP() { return window.MA.regexParts; }
   var MULT_RE = /^"[^"]*"$/;
 
   function isArrow(tok) {
@@ -151,8 +162,7 @@ window.MA.relationOptions = (function() {
   function lineColor(line) {
     var p = parseLine(line);
     if (!p) return null;
-    var m = p.arrow.match(/\[#([^\]\s]+)\]/);
-    return m ? m[1] : '';
+    return _RP().arrowStyleColor(p.arrow);
   }
 
   function setLineColor(line, color) {
@@ -160,10 +170,8 @@ window.MA.relationOptions = (function() {
     if (!p) return line;
     var a = _splitArrow(p.arrow);
     if (!a) return line;
-    var dashes = a.body.replace(/\[#[^\]\s]+\]/, '');
-    var c = (color || '').trim().replace(/^#/, '');
-    var body = c ? dashes.charAt(0) + '[#' + c + ']' + dashes.slice(1) : dashes;
-    p.arrow = a.lead + body + a.tail;
+    // 同じ `[]` の中の bold・dashed などと、書式の置き場所は残す。
+    p.arrow = a.lead + _RP().setArrowStyleColor(a.body, color) + a.tail;
     return formatLine(p);
   }
 
@@ -221,24 +229,85 @@ window.MA.relationOptions = (function() {
     if (!p) return line;
     var a = _splitArrow(p.arrow);
     if (!a) return line;
-    p.arrow = a.lead + a.body.replace(/\[#[^\]\s]+\]/, '') + a.tail;
+    p.arrow = a.lead + _RP().stripArrowStyle(a.body) + a.tail;
     p.leftMult = '';
     p.rightMult = '';
     p.indent = '';
     return formatLine(p);
   }
 
+  // BLK-builder-20260925-0305-1: 線の形 (長さと置き方の指示)。`-down->` は pre 1 / dir down / post 1、
+  // `->` は pre 1、`-->` は pre 2。図種のパーサは長さ 2・指示なしの矢印しか読まないので、
+  // 読むときは readableLine で揃え、書き直すときは applyDecorations で元の形に戻す。
+  var SHAPE_RE = new RegExp('^([-.]{1,2})(' + _DIR + ')?([-.]{0,2})$');
+  function _shapeOfBody(body) {
+    var m = _RP().stripArrowStyle(body).match(SHAPE_RE);
+    if (!m) return null;
+    return { pre: m[1].length, dir: m[2] || '', post: m[3].length };
+  }
+  function _isPlainShape(sh) { return !sh || (sh.pre === 2 && !sh.dir && sh.post === 0); }
+  function _repeat(c, n) { var s = ''; for (var i = 0; i < n; i++) s += c; return s; }
+
+  function arrowShape(line) {
+    var p = parseLine(line);
+    if (!p) return null;
+    var a = _splitArrow(p.arrow);
+    return a ? _shapeOfBody(a.body) : null;
+  }
+
+  function setArrowShape(line, shape) {
+    if (!shape) return line;
+    var p = parseLine(line);
+    if (!p) return line;
+    var a = _splitArrow(p.arrow);
+    if (!a) return line;
+    var style = _RP().arrowStyle(a.body);
+    var c = _RP().stripArrowStyle(a.body).charAt(0) || '-';
+    p.arrow = a.lead + _RP().setArrowStyle(_repeat(c, shape.pre) + (shape.dir || '') + _repeat(c, shape.post), style) + a.tail;
+    return formatLine(p);
+  }
+
+  // 図種のパーサに渡す形: plainLine に加えて、線の長さを 2 に揃え、置き方の指示 (up/down/…) を外す。
+  // `a -down-> b` / `a -> b` / `a <|- b` / `a .up.> b` を `-->` / `<|--` / `..>` と同じ関係として読める。
+  function readableLine(line) {
+    var plain = plainLine(line);
+    var p = parseLine(plain);
+    if (!p) return plain;
+    var a = _splitArrow(p.arrow);
+    if (!a) return plain;
+    var sh = _shapeOfBody(a.body);
+    if (!sh || _isPlainShape(sh)) return plain;
+    var c = a.body.charAt(0);
+    p.arrow = a.lead + c + c + a.tail;
+    return formatLine(p);
+  }
+
   // decorationsOf / applyDecorations: 種別やラベルを書き換えて行を作り直すとき、
-  // 多重度と線の色を落とさないための持ち運び。
+  // 多重度と線の色、線の形 (長さ・置き方の指示) を落とさないための持ち運び。
   function decorationsOf(line) {
     var p = parseLine(line);
-    if (!p) return { leftMult: '', rightMult: '', color: '' };
-    return { leftMult: p.leftMult, rightMult: p.rightMult, color: lineColor(line) || '' };
+    if (!p) return { leftMult: '', rightMult: '', color: '', shape: null, style: [] };
+    var sh = arrowShape(line);
+    // style: 色以外の書式の語 (bold・dashed・thickness=2 …)。色は color で運ぶ。
+    var style = _RP().arrowStyle(p.arrow).filter(function(w) { return w.charAt(0) !== '#'; });
+    return { leftMult: p.leftMult, rightMult: p.rightMult, color: lineColor(line) || '',
+      shape: _isPlainShape(sh) ? null : sh, style: style };
+  }
+
+  function _setBodyStyle(line, words) {
+    var p = parseLine(line);
+    if (!p) return line;
+    var a = _splitArrow(p.arrow);
+    if (!a) return line;
+    p.arrow = a.lead + _RP().setArrowStyle(a.body, words) + a.tail;
+    return formatLine(p);
   }
 
   function applyDecorations(line, deco) {
     if (!deco) return line;
     var out = setMultiplicity(line, deco.leftMult, deco.rightMult);
+    if (deco.shape) out = setArrowShape(out, deco.shape);
+    if (deco.style && deco.style.length) out = _setBodyStyle(out, deco.style);
     return setLineColor(out, deco.color);
   }
 
@@ -281,6 +350,9 @@ window.MA.relationOptions = (function() {
     setLineColor: setLineColor,
     COLORS: COLORS,
     plainLine: plainLine,
+    readableLine: readableLine,
+    arrowShape: arrowShape,
+    setArrowShape: setArrowShape,
     decorationsOf: decorationsOf,
     applyDecorations: applyDecorations,
     noteAt: noteAt,

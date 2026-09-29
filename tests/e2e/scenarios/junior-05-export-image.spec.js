@@ -35,6 +35,20 @@ test('手順5(他の図種) PNG(透過背景)も同じメニューから選べ�
   expect(download.suggestedFilename()).toBe('gpio_seq_doc.png');
 });
 
+// BLK-builder-20260924-1736-2 (design 9a): Export ▾ は上部バーの右端にあり、開いたメニューは窓の中に収まる
+test('手順5 Export ▾ のメニューは窓からはみ出さず、項目が全部読める', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  const vw = page.viewportSize().width;
+  const menuBox = await page.locator('#export-menu').boundingBox();
+  expect(menuBox.x).toBeGreaterThanOrEqual(0);
+  expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(vw);
+  const btnBox = await page.locator('#btn-export').boundingBox();
+  // ボタンの右端にそろえて左へ開く
+  expect(Math.abs((menuBox.x + menuBox.width) - (btnBox.x + btnBox.width))).toBeLessThanOrEqual(2);
+});
+
 // 「資料化」— 部品と図種を選ぶだけで、正しい形式が自動で決まる。
 test('手順5 資料化: 状態遷移図を選ぶと SVG で出て、(資料用) が付いて保存フォルダにも入る', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
@@ -46,7 +60,9 @@ test('手順5 資料化: 状態遷移図を選ぶと SVG で出て、(資料用)
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(600);
 
@@ -77,6 +93,8 @@ test('手順5 資料化: 状態遷移図を選ぶと SVG で出て、(資料用)
 test('手順5 資料化: シーケンス図を選ぶと PNG(透過背景)に切り替わる', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
   await S.clearDir(page, DIR);
+  // 前の回に書いた PNG が残っていると、書けなかったことを見逃す。
+  require('fs').rmSync(path.join(S.absDirFor(__filename), 'GPIOドライバ初期化シーケンス(資料用).png'), { force: true });
   await S.putDoc(page, DIR, 'GPIOドライバ状態遷移', S.GPIO_STATE);
   await S.putDoc(page, DIR, 'GPIOドライバ初期化シーケンス', S.GPIO_SEQ);
   await page.reload();
@@ -84,7 +102,9 @@ test('手順5 資料化: シーケンス図を選ぶと PNG(透過背景)に切�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(600);
 
@@ -99,6 +119,83 @@ test('手順5 資料化: シーケンス図を選ぶと PNG(透過背景)に切�
 
   expect(download).not.toBeNull();
   expect(download.suggestedFilename()).toBe('GPIOドライバ初期化シーケンス(資料用).png');
+
+  // BLK-junior-20260928-2255: 画面は「保存フォルダと提出物庫に入れました」と言うのに、PNG の実体はどちらにも
+  // 無かった。保存フォルダに PNG があり、庫にも同じ大きさの PNG が控えられ、画面はその大きさを言う。
+  const fs = require('fs');
+  const abs = S.absDirFor(__filename);
+  const png = path.join(abs, 'GPIOドライバ初期化シーケンス(資料用).png');
+  await expect(page.locator('#mexp-state')).toContainText('バイト', { timeout: 15000 });
+  expect(fs.existsSync(png)).toBe(true);
+  const bytes = fs.readFileSync(png);
+  expect(bytes.subarray(1, 4).toString('latin1')).toBe('PNG');
+  expect(bytes.length).toBeGreaterThan(100);
+  await expect(page.locator('#mexp-state')).toContainText(bytes.length + ' バイト');
+  await expect(page.locator('#mexp-state')).toContainText('保存フォルダと提出物庫');
+  await expect(page.locator('#mexp-result-text')).toContainText('も置けました');
+  const vault = path.join(abs, '_vault');
+  const vaultPngs = fs.readdirSync(vault).filter((f) => f.endsWith('.png'))
+    .map((f) => fs.statSync(path.join(vault, f)).size);
+  expect(vaultPngs).toContain(bytes.length);
+});
+
+// BLK-junior-20260929-0854: 部品と図種の 2 欄だけで元の図を決めていたので、同じ部品・図種に 2 枚あると
+// 開いている図 (DMAドライバ利用ユースケース図) ではなく名前の短い古い dma_usecase が資料化され、選び直せなかった。
+// 開いている図が既定の元になり、同じ組の別ファイルは図種の欄でファイル名と時刻で選べ、資料用の名前と題はそこから作る。
+test('手順4〜6 資料化(1 枚だけ): 開いている図が元になり、同じ部品・図種の別ファイルは図種の欄で名指しして選べる', async ({ page }) => {
+  const UC = '@startuml\ntitle DMAドライバ利用ユースケース図\nactor App\nusecase "転送開始" as UC1\nApp --> UC1\n@enduml\n';
+  const OLD = UC.replace('title DMAドライバ利用ユースケース図', 'title dma_usecase');
+  const fs = require('fs');
+  const abs = S.absDirFor(__filename);
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const f of ['DMAドライバ利用ユースケース図(資料用).png', 'dma_usecase(資料用).png']) {
+    fs.rmSync(path.join(abs, f), { force: true });
+  }
+  await S.putDoc(page, DIR, 'dma_usecase', OLD);
+  await S.putDoc(page, DIR, 'DMAドライバ利用ユースケース図', UC);
+  await page.reload();
+  await page.waitForTimeout(800);
+  await S.openFolderItem(page, 'DMAドライバ利用ユースケース図');
+  await S.closeFolderList(page);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(800);
+
+  // 到達条件その1: 開いている図が既定の元。押す前に元と出る名前が読める。
+  await expect(page.locator('#mexp-component')).toHaveValue('dma');
+  await expect(page.locator('#mexp-kind')).toHaveValue('ユースケース図');
+  await expect(page.locator('#mexp-plan')).toContainText('DMAドライバ利用ユースケース図 → DMAドライバ利用ユースケース図(資料用).png');
+  await expect(page.locator('#mexp-plan')).toContainText('ほかに 1 枚');
+  // 同じ部品・図種の 2 枚は、図種の欄の中でファイル名で並ぶ。
+  const opts = page.locator('#mexp-kind option[value="ユースケース図"]');
+  await expect(opts).toHaveCount(2);
+  await expect(opts.nth(0)).toHaveAttribute('data-source', 'DMAドライバ利用ユースケース図');
+  await expect(opts.nth(1)).toHaveAttribute('data-source', 'dma_usecase');
+  await expect(opts.nth(1)).toContainText('dma_usecase');
+
+  // 到達条件その2: 別のファイルを選ぶと、出る名前もそれに変わる (選び直せる)。
+  await page.locator('#mexp-kind').selectOption({ index: 1 });
+  await expect(page.locator('#mexp-plan')).toContainText('dma_usecase → dma_usecase(資料用).png');
+  await page.locator('#mexp-kind').selectOption({ index: 0 });
+  await expect(page.locator('#mexp-plan')).toContainText('DMAドライバ利用ユースケース図 → DMAドライバ利用ユースケース図(資料用).png');
+
+  // 到達条件その3: 押すと開いていた図の (資料用) 版が保存フォルダに書かれ、題もその図から作られる。
+  const dl = page.waitForEvent('download', { timeout: 30000 }).catch(() => null);
+  await page.locator('#mexp-run').click();
+  const download = await dl;
+  expect(download).not.toBeNull();
+  expect(download.suggestedFilename()).toBe('DMAドライバ利用ユースケース図(資料用).png');
+  await expect(page.locator('#mexp-state')).toContainText('バイト', { timeout: 15000 });
+  const saved = await S.readDoc(page, DIR, 'DMAドライバ利用ユースケース図(資料用)');
+  expect(saved).toContain('title DMAドライバ利用ユースケース図(資料用)');
+  expect(fs.existsSync(path.join(abs, 'DMAドライバ利用ユースケース図(資料用).png'))).toBe(true);
+  expect(fs.existsSync(path.join(abs, 'dma_usecase(資料用).png'))).toBe(false);
 });
 
 // 資料化の残りが部品をまたいで見える (BLK-junior-20260914-2006-wish)。
@@ -116,7 +213,9 @@ test('手順4 資料化: 開いた時点で部品をまたいだ残りが読め�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(800);
 
@@ -155,7 +254,9 @@ test('手順5 資料化: マスに貼付先の見出しを登録すると、見�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(900);
 
@@ -203,7 +304,9 @@ test('手順5 資料化: マスに貼付先の見出しを登録すると、見�
   await page.waitForTimeout(300);
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(900);
   await expect(page.locator('#mexp-anchor-summary')).toContainText('2 マスすべて登録済み');
@@ -228,7 +331,9 @@ const GPIO_CLASS = [
 async function openMaterialBoard(page) {
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material-board').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-board').click();
   await page.waitForSelector('#mboard-modal', { state: 'visible' });
   await page.waitForTimeout(700);
   await page.locator('#mboard-component').selectOption('GPIOドライバ');
@@ -393,7 +498,9 @@ test('手順4 資料化: 開いた時点で部品ごとの残りが読め、手�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(900);
 
@@ -431,7 +538,9 @@ test('手順5 資料化: 図種欄は［未］の図種が先頭にまとまり�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(900);
 
@@ -471,7 +580,9 @@ test('手順4 資料化: 部品欄の行で、その部品がどの図種を持�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(900);
 
@@ -523,7 +634,9 @@ test('手順5 資料化: 実行後もモーダルが閉じず、保存先に置�
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(600);
 
@@ -555,6 +668,9 @@ test('手順5 資料化: 実行後もモーダルが閉じず、保存先に置�
   expect(saved).toContain('(資料用)');
 
   // 到達条件その2: そのまま次の 1 枚を続けられ、根拠は新しい図に入れ替わる。
+  // BLK-builder-20260924-1351-4 (design 10a / 9a): ボタンは今の画面にある名前 (保存先の一覧) で言い、
+  // 10a で無くなった「📂 一覧」を名指ししない。
+  await expect(page.locator('#mexp-result-open')).toHaveText('この図を保存先の一覧で開く');
   await page.locator('#mexp-result-open').click();
   await expect(page.locator('#mexp-modal')).toBeHidden();
   await expect(page.locator('#folder-panel')).toHaveClass(/open/);
@@ -580,7 +696,9 @@ test('手順4 資料化: 部品の行を 1 押しで、未/古の図種をまと
 
   await page.locator('#btn-export').click();
   await page.waitForSelector('#export-menu', { state: 'visible' });
-  await page.locator('#exp-material').click();
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
   await page.waitForSelector('#mexp-modal', { state: 'visible' });
   await page.waitForTimeout(900);
 
@@ -608,4 +726,60 @@ test('手順4 資料化: 部品の行を 1 押しで、未/古の図種をまと
   await expect(page.locator('tr[data-component="TIMERドライバ"] button.mexp-row-run'))
     .toHaveText('すべて最新', { timeout: 20000 });
   await expect(page.locator('tr[data-component="TIMERドライバ"] button.mexp-row-run')).toBeDisabled();
+});
+
+// BLK-junior-20260923-1409: junior の 1 枚 (IRQ 初期化シーケンス) だけが
+// 「PNGエクスポートに失敗しました (SVG読み込みエラー)」で止まり、download が始まらなかった。
+// PlantUML が svg 末尾に畳む元 DSL の処理命令は画面に入れた時点でコメントに化け、
+// 畳んだ文字列に `--` を含むこの図では書き戻した svg が XML として壊れていた。
+// 3 形式のどれでも書き出せることを、同じ 1 枚で押さえる。
+test('手順5(再現した 1 枚) PNG(透過背景)で書き出せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, S.IRQ_SEQ_FOLDED_DASH);
+  await S.renameActive(page, 'irq_init_sequence');
+
+  // 失敗は alert で出ていたので、出たら握りつぶさず落とす。
+  const alerts = [];
+  page.on('dialog', async (d) => { alerts.push(d.message()); await d.dismiss(); });
+
+  const download = await (await S.exportVia(page, 'exp-png-transparent'));
+  expect(alerts).toEqual([]);
+  expect(download).not.toBeNull();
+  expect(download.suggestedFilename()).toBe('irq_init_sequence.png');
+});
+
+test('手順5(再現した 1 枚) PNGとして保存でも書き出せる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, S.IRQ_SEQ_FOLDED_DASH);
+  await S.renameActive(page, 'irq_init_sequence');
+
+  const alerts = [];
+  page.on('dialog', async (d) => { alerts.push(d.message()); await d.dismiss(); });
+
+  const download = await (await S.exportVia(page, 'exp-png'));
+  expect(alerts).toEqual([]);
+  expect(download).not.toBeNull();
+  expect(download.suggestedFilename()).toBe('irq_init_sequence.png');
+});
+
+test('手順5(再現した 1 枚) SVG は XML として読める形で保存され、埋め込みの元 DSL も残る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.typeDsl(page, S.IRQ_SEQ_FOLDED_DASH);
+  await S.renameActive(page, 'irq_init_sequence');
+
+  const download = await (await S.exportVia(page, 'exp-svg'));
+  expect(download).not.toBeNull();
+  const saved = await download.path();
+  const text = require('fs').readFileSync(saved, 'utf8');
+
+  // 化けたコメントのまま保存されていると、この svg はどのビューアでも開けない。
+  expect(text).not.toContain('<!--?plantuml-src');
+  // 埋め込みは差分・突き合わせが読むので、落とさず処理命令の形で残す。
+  expect(text).toContain('<?plantuml-src');
+  // ブラウザに XML として読ませて、壊れていないことを確かめる。
+  const ok = await page.evaluate((svgText) => {
+    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+    return !doc.querySelector('parsererror');
+  }, text);
+  expect(ok).toBe(true);
 });

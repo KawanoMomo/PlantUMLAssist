@@ -5,6 +5,20 @@
 const { test, expect } = require('@playwright/test');
 const { gotoApp, saveDirFor } = require('../helpers');
 
+// 保存先の一覧は FILES ツリーの「保存先」の右クリック「保存先の一覧を開く」で中央の枠に開く
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。
+// BLK-builder-20260924-1702-2: 旧経路 (見出しを押して #folder-panel.open を待つ) は一覧が
+// 中央の枠へ移ってから見えないまま待ち続けて全件落ちていたので、今の入口に合わせた。
+async function openFolder(page) {
+  if (await page.locator('#folder-panel.is-list').count()) {
+    await page.locator('#folder-list-close').click();
+    await page.waitForSelector('#folder-panel:not(.is-list)', { state: 'attached' });
+  }
+  await page.locator('#btn-tab-folder').click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="open-list"]').click();
+  await page.waitForSelector('#folder-panel.open.is-list');
+}
+
 const DIR = saveDirFor(__filename);
 const TEMPLATE = 'plantuml-usecase-template';
 const TEMPLATE2 = 'plantuml-usecase-template-2';
@@ -46,7 +60,7 @@ async function clearDir(page) {
 }
 
 async function openFromFolder(page, name) {
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
   await page.locator('#folder-panel .folder-item[data-file-name="' + name + '"]').click();
   await page.waitForTimeout(1000);
@@ -72,7 +86,8 @@ test.describe('BLK-junior-20260908-1803-wish: 開いた元ファイルを自動�
 
   test('開いた直後に編集すると、書き込む前に一度だけ確認が出る', async ({ page }) => {
     await openFromFolder(page, TEMPLATE);
-    await expect(page.locator('#top-source-lock')).toHaveText('🔒 ' + TEMPLATE);
+    // BLK-builder-20260924-1702-2 (design 9a): 札は絵文字なし・名前を繰り返さない。
+    await expect(page.locator('#top-source-lock')).toHaveText('書く前に確認');
     await editEditor(page, ORIGINAL + '\n\' 自分のメモ MARKER_A');
     await expect(page.locator('#source-lock-modal')).toBeVisible();
     await expect(page.locator('#source-lock-body')).toContainText(TEMPLATE + '.puml');
@@ -88,7 +103,7 @@ test.describe('BLK-junior-20260908-1803-wish: 開いた元ファイルを自動�
     expect(await readFile(page, TEMPLATE)).toBe(ORIGINAL);
     const copy = await readFile(page, TEMPLATE + '-編集中');
     expect(copy).toContain('MARKER_A');
-    await expect(page.locator('#top-source-lock')).toHaveText('🔒 元ファイル保護');
+    await expect(page.locator('#top-source-lock')).toHaveText('元ファイル保護');
 
     // 打ち続けても確認は二度と出ず、元ファイルは無傷のまま
     await editEditor(page, ORIGINAL + '\n\' 自分のメモ MARKER_B');
@@ -104,7 +119,7 @@ test.describe('BLK-junior-20260908-1803-wish: 開いた元ファイルを自動�
     await page.locator('#source-lock-overwrite').click();
     await page.waitForTimeout(1200);
     expect(await readFile(page, TEMPLATE)).toContain('MARKER_C');
-    await expect(page.locator('#top-source-lock')).toHaveText('✎ ' + TEMPLATE);
+    await expect(page.locator('#top-source-lock')).toHaveText('元ファイルに書く');
   });
 
   test('図名欄で名前を変え終えれば錠は外れ、以後は新しい名前へ書く', async ({ page }) => {
@@ -141,7 +156,7 @@ test.describe('BLK-junior-20260908-1803-wish: 開いた元ファイルを自動�
     await page.waitForTimeout(1000);
     expect(await readFile(page, TEMPLATE2)).toBe(ORIGINAL);
     expect(await readFile(page, TEMPLATE2 + '-編集中')).toContain('MARKER_G');
-    await expect(page.locator('#top-source-lock')).toHaveText('🔒 元ファイル保護');
+    await expect(page.locator('#top-source-lock')).toHaveText('元ファイル保護');
   });
 
   test('チェックを外して答えれば、他のファイルでは今までどおり聞く', async ({ page }) => {

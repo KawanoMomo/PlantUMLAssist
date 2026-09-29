@@ -13,6 +13,19 @@ const { test, expect } = require('@playwright/test');
 const { shotOut, gotoApp } = require('../helpers');
 const S = require('./_scenario');
 
+
+// BLK-owner-20260923-1509-prune: 「並べる」面はタブ列の「並べて比較」1 つになった。
+// 旧 ⇔ 並べて見る (#btn-tab-compare) はその枠の相手「別タブの図」になったので、
+// 台本の手順も 「並べて比較を開く → 相手を選ぶ」を通る。見る中身は変わらない。
+async function openCompareTabs(p) {
+  await p.waitForSelector('#btn-tab-senior');
+  if (await p.locator('#senior-pane').isHidden()) {
+    await p.locator('#btn-tab-senior').click();
+  }
+  await p.locator('#senior-target-tabs').click();
+  await p.waitForSelector('#compare-pane:not([hidden])');
+}
+
 const DIR = S.dirFor(__filename);
 // 顧客に見せる場面は別の保存フォルダで回す (会議の一覧の中身と混ざらない)。
 const DIR2 = S.dirFor(__filename) + '-show';
@@ -22,6 +35,10 @@ const DIR3 = S.dirFor(__filename) + '-hist';
 const DIR4 = S.dirFor(__filename) + '-deliv';
 // 置換を当てる前に、影響範囲の一覧で変更前後の図を見せる場面 (BLK-primary-20260917-0223)。
 const DIR6 = S.dirFor(__filename) + '-impact';
+// 会議で見せる 3〜5 枚をその場で選んで並べる場面 (BLK-primary-20260918-0249-wish)。
+const DIR7 = S.dirFor(__filename) + '-meeting';
+// 顧客向け資料に組み込む前に、資料セットの複数枚をまとめて確かめる場面 (BLK-primary-20260918-0549-friction)。
+const DIR8 = S.dirFor(__filename) + '-docset';
 
 // 手順2 と同じ一括置換を当てる。手順4 が見せるのはその前後なので、
 // ここを踏まないと「変更前」がそもそも存在しない。
@@ -52,7 +69,7 @@ test('手順4 置換の前後を並べて見せられ、その画面を控えら
 
   await bulkRename(page, 'SpiDrv', 'Spi_Driver');
 
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   // 到達条件その1: 変更前後を並べる参照ペインが開き、見せる図を選べる。
   await expect(page.locator('#compare-pane')).toBeVisible();
   const sel = page.locator('#compare-select');
@@ -195,6 +212,16 @@ test('手順4 顧客の前で変更前後を図のまま切り替えて見せら
   await flip.click();                                    // 変更後だけ
   await expect(panes.nth(0)).toBeHidden();
   await expect(panes.nth(1)).toBeVisible();
+  // BLK-primary-20260924-1332-wish: 旧 🔍 提出前レビューの「重ねる」も同じボタンの 1 段。
+  await flip.click();                                    // 重ねる
+  await expect(flip).toHaveText('切替: 重ねる');
+  await expect(entry.locator('.cb-show')).toHaveAttribute('data-side', 'overlay');
+  await expect(panes.nth(0)).toBeVisible();
+  await expect(panes.nth(1)).toBeVisible();
+  // 変更前は変更後と同じ位置に敷かれる (横に並ばない)。
+  const b0 = await panes.nth(0).locator('.cb-pane-body').boundingBox();
+  const b1 = await panes.nth(1).locator('.cb-pane-body').boundingBox();
+  expect(b0 && b1 && Math.abs(b0.x - b1.x) < 4 && Math.abs(b0.y - b1.y) < 4).toBe(true);
   await flip.click();                                    // 並べる に戻る
   await expect(panes.nth(0)).toBeVisible();
   await expect(panes.nth(1)).toBeVisible();
@@ -243,7 +270,7 @@ test('手順4 保存フォルダへ直接書いた回を、後から履歴で選
 
   // 到達条件その1: 1 回の置換が 1 件として残り、当たった図が並ぶ
   // (開いていた図も、開かずに書き戻した図も同じ 1 回)。
-  await page.locator('#btn-tab-compare').click();
+  await openCompareTabs(page);
   await page.locator('#btn-compare-hist').click();
   const entry = page.locator('#compare-hist-list .wh-entry').first();
   await expect(entry).toBeVisible();
@@ -277,7 +304,7 @@ test('手順4 保存フォルダへ直接書いた回を、後から履歴で選
   const page2 = await context.newPage();
   await gotoApp(page2);
   await page2.waitForTimeout(1200);
-  await page2.locator('#btn-tab-compare').click();
+  await openCompareTabs(page2);
   await page2.locator('#btn-compare-hist').click();
   const entry2 = page2.locator('#compare-hist-list .wh-entry').first();
   await expect(entry2.locator('.wh-head')).toContainText('SpiDrv → Spi_Driver');
@@ -651,4 +678,324 @@ test('手順4 影響範囲の一覧に変更前後の図が並び、押した図
 
   await page.locator('#ri-close').click();
   await S.clearDir(page, DIR6);
+});
+
+// BLK-primary-20260918-0249-wish: 会議で見せる図はその場で 3〜5 枚選ぶ。変更サマリボードは
+// 「変わった図」を全部並べるので、見せない図が混ざり、見せたい 3 枚はタブを 1 枚ずつ開き直して
+// ⇔見比べ・±差分・▤ を往復するしかなかった。選んだ 3 枚だけを選んだ順に並べ、
+// 各図の変更前 / 変更後をその場のタブで切り替えられることを確かめる。
+test('手順4 会議で見せる 3 枚を選んで並べ、各図の変更前後をタブで切り替えられる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR7);
+  await S.clearDir(page, DIR7);
+  // 会議で見せる 3 枚と、今日変わったが会議では見せない 1 枚 (混ざる側)。
+  // 4 枚ともタブに並べて置換をかける。1 回押しは仮のタブで次の図に入れ替わるので、
+  // ダブルクリックで固定のタブにする (BLK-primary-20260924-0805-design)。
+  for (const name of ['spi_init_sequence', 'spi_state', 'driver_common_class', 'can_init_sequence']) {
+    await S.putDoc(page, DIR7, name, S.docFor(name, 'SpiDrv'));
+    await S.openFolderItem(page, name, { pin: true });
+  }
+
+  await bulkRename(page, 'SpiDrv', 'Spi_Driver');
+
+  await page.locator('#btn-tab-board').click();
+  await expect(page.locator('#cb-modal')).toBeVisible();
+
+  // 到達条件その1: ボードの各図の見出しから、その場で会議セットに入れられる。
+  const pickOrder = ['spi_init_sequence', 'spi_state', 'driver_common_class'];
+  async function pickFromEntry(name) {
+    const pick = page.locator('#cb-body .cb-entry[data-doc-name="' + name + '"] button.cb-pick');
+    await expect(pick).toHaveText('会議に入れる');
+    await pick.click();
+    await expect(page.locator('#cb-body .cb-entry[data-doc-name="' + name + '"] button.cb-pick'))
+      .toHaveText('会議から外す');
+  }
+  await pickFromEntry('spi_init_sequence');
+
+  // 到達条件その2: 会議で見せたい図が「今回変わっていない」ことはふつうにある
+  // (spi_state は SpiDrv_Init のような修飾名だけなので一括置換で変わらない)。
+  // 変わっていない図はボードに並ばないので、名前で選んで会議セットに入れる。
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="spi_state"]')).toHaveCount(0);
+  await page.locator('#cb-meeting-doc').selectOption('spi_state');
+  await page.locator('#cb-meeting-add').click();
+
+  await pickFromEntry('driver_common_class');
+  await expect(page.locator('#cb-meeting-state')).toContainText('会議セット 3 枚');
+
+  // 到達条件その3: 🎦 会議セットを押すと、選んだ 3 枚だけが選んだ順に並ぶ。
+  // 変わっていない spi_state も並び、会議で見せない図 (diagram1) は落ちる。
+  await page.locator('#cb-meeting').click();
+  const entries = page.locator('#cb-body .cb-entry');
+  await expect(entries).toHaveCount(3);
+  for (let i = 0; i < pickOrder.length; i++) {
+    await expect(entries.nth(i)).toHaveAttribute('data-doc-name', pickOrder[i]);
+  }
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="diagram1"]')).toHaveCount(0);
+
+  // 到達条件その4: 1 枚ごとに 変更前 / 変更後 をタブで切り替えられる。開いた時点は
+  // 「変更前」— 会議は「前はこうでした」から話し始める。
+  const first = page.locator('#cb-body .cb-entry[data-doc-name="spi_init_sequence"]');
+  await expect(first.locator('button.cb-side[data-side="before"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(first.locator('pre.cb-side-dsl')).toContainText('SpiDrv');
+  await expect(first.locator('pre.cb-side-dsl')).not.toContainText('Spi_Driver');
+
+  await first.locator('button.cb-side[data-side="after"]').click();
+  const after = page.locator('#cb-body .cb-entry[data-doc-name="spi_init_sequence"]');
+  await expect(after.locator('button.cb-side[data-side="after"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(after.locator('pre.cb-side-dsl')).toContainText('Spi_Driver');
+
+  // 切り替えは図ごとに独立する (1 枚を変更後にしても、次の図は変更前のまま話し始められる)。
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="spi_state"] button.cb-side[data-side="before"]'))
+    .toHaveAttribute('aria-pressed', 'true');
+
+  // 到達条件その5: 同じ画面のまま差分にも移れる (「どこが変わったの?」にその場で答える)。
+  await page.locator('#cb-body .cb-entry[data-doc-name="spi_state"] button.cb-side[data-side="diff"]').click();
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="spi_state"] table.cb-diff')).toHaveCount(1);
+
+  // 会議ではこの画面をそのまま映す。
+  await page.screenshot({ path: shotOut('primary-04-meeting-set.png'), fullPage: true });
+
+  // 到達条件その6: 会議セットを解くと、いつもの「変わった図を全部」に戻る
+  // (会議の後も同じボードで作業を続けられる)。
+  await page.locator('#cb-meeting').click();
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="diagram1"]')).toHaveCount(1);
+
+  await page.locator('#cb-meeting-clear').click();
+  await expect(page.locator('#cb-meeting-state')).toContainText('会議セットは空です');
+  await page.locator('#cb-close').click();
+  await S.clearDir(page, DIR7);
+});
+
+// BLK-primary-20260924-2232-friction: 会議で見せたい 3 枚が今日は変わっておらず、タブにも開いていない。
+// 会議セットの「名前で選ぶ」欄は開いているタブの図しか出さなかったので、1 枚ごとに
+// 一覧を開く → 図を開く → ▤ を開き直す → 名前を選ぶ → ＋追加 を繰り返していた (3 枚でクリック約 16)。
+// 選ぶ欄に保存先の図も並べ、開き直さずに 1 枚 2 操作 (名前を選ぶ → ＋追加) で入れられることを確かめる。
+const DIR10 = S.dirFor(__filename) + '-meetpick';
+test('手順4 保存先の図を開き直さず、名前を選んで 3 枚を会議セットに入れられる (1 枚 2 操作)', async ({ page }) => {
+  const fs = require('fs');
+  const path = require('path');
+  const abs = S.absDirFor(__filename) + '-meetpick';
+  fs.rmSync(abs, { recursive: true, force: true });
+  await S.bootWithSaveDir(page, DIR10);
+  const SET = ['spi_init_sequence', 'spi_state', 'driver_common_class'];
+  for (const name of SET.concat(['can_init_sequence'])) await S.putDoc(page, DIR10, name, S.docFor(name, 'Spi_Driver'));
+  // 下ごしらえ: 4 枚とも一昨日からある図 (今日は触っていない)。タブには 1 枚も開かない。
+  const twoDaysAgo = new Date(Date.now() - 2 * 86400000);
+  for (const name of SET.concat(['can_init_sequence'])) {
+    fs.utimesSync(path.join(abs, name + '.puml'), twoDaysAgo, twoDaysAgo);
+  }
+  await S.reopenApp(page);
+  const tabsBefore = await page.locator('#tab-bar .tab').count();
+
+  await page.locator('#btn-tab-board').click();
+  await expect(page.locator('#cb-modal')).toBeVisible();
+  // 今日は変わっていないので、ボードの一覧には並ばない ([会議に入れる] では選べない)。
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="spi_state"]')).toHaveCount(0);
+
+  // 到達条件その1: 選ぶ欄に保存先の図が並ぶ (開いているタブの図と分けて出す)。
+  const sel = page.locator('#cb-meeting-doc');
+  await expect(sel.locator('optgroup[label="保存先の図"] option[value="spi_state"]')).toHaveCount(1, { timeout: 10000 });
+
+  // 到達条件その2: 1 枚 2 操作 (名前を選ぶ → ＋追加) で 3 枚続けて入れられる。図は開き直さない。
+  let ops = 0;
+  for (const name of SET) {
+    await sel.selectOption(name); ops++;
+    await page.locator('#cb-meeting-add').click(); ops++;
+  }
+  expect(ops).toBeLessThanOrEqual(2 * SET.length);
+  await expect(page.locator('#cb-meeting-state')).toContainText('会議セット 3 枚');
+  // 入れた図は選ぶ欄で分かる (同じ図を 2 回入れて外してしまわない)。
+  await expect(sel.locator('option[value="spi_state"]')).toHaveText('✓ spi_state');
+  await expect(page.locator('#tab-bar .tab')).toHaveCount(tabsBefore);
+
+  // 到達条件その3: 🎦 会議セットで、開いていない 3 枚が選んだ順に並ぶ。
+  // 変わっていない図なので、変更前 / 変更後は同じ図になる (「新規」扱いにしない)。
+  await page.locator('#cb-meeting').click();
+  const entries = page.locator('#cb-body .cb-entry');
+  await expect(entries).toHaveCount(3);
+  for (let i = 0; i < SET.length; i++) {
+    await expect(entries.nth(i)).toHaveAttribute('data-doc-name', SET[i]);
+  }
+  const st = page.locator('#cb-body .cb-entry[data-doc-name="spi_state"]');
+  await expect(st.locator('pre.cb-side-dsl')).toContainText('Spi_Driver');
+  await st.locator('button.cb-side[data-side="after"]').click();
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="spi_state"] pre.cb-side-dsl')).toContainText('Spi_Driver');
+
+  await page.screenshot({ path: shotOut('primary-04-meeting-folder-pick.png'), fullPage: true });
+
+  await page.locator('#cb-meeting').click();
+  await page.locator('#cb-meeting-clear').click();
+  await expect(page.locator('#cb-meeting-state')).toContainText('会議セットは空です');
+  await page.locator('#cb-close').click();
+  await S.clearDir(page, DIR10);
+});
+
+// BLK-primary-20260918-0549-friction: 顧客向け資料に載せる前の確認で、
+// 図ごとに「保存フォルダの一覧を開く → クリックで開く → 変更前後を出す」を
+// 枚数分繰り返していた (クリック 12 / キー 87)。資料セットには「どの図を渡すか」が
+// 入っているので、その並びをそのまま既存の変更サマリボードに渡して 1 回で並べる。
+test('手順4 資料セットの 3 枚を、開き直さず 1 回の操作で変更前後に並べられる', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR8);
+  await S.clearDir(page, DIR8);
+  const SET = ['spi_init_sequence', 'spi_state', 'driver_common_class'];
+  for (const name of SET) {
+    await S.putDoc(page, DIR8, name, S.docFor(name, 'SpiDrv'));
+    await S.openFolderItem(page, name);
+  }
+
+  // 下ごしらえ: 顧客に渡す 3 枚を資料セットに登録しておく (手順4 の前の状態)。
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-modal', { state: 'visible' });
+  await page.locator('#docset-name').fill('SPI系統');
+  await page.locator('#docset-create').click();
+  await expect(page.locator('#docset-rows .ds-row')).toHaveCount(1);
+  await page.locator('#docset-close').click();
+
+  // 到達条件その1: Ctrl+K からも資料セットの入口を引ける
+  // (これまではセットの行の中にしか無かった)。
+  await S.runCommand(page, '資料セットの変更前後をまとめて見る');
+  await page.waitForTimeout(2000);
+
+  // 到達条件その2: その 1 回で変更サマリボードが開き、セットの 3 枚がその並びで並ぶ。
+  await expect(page.locator('#cb-modal')).toBeVisible();
+  const entries = page.locator('#cb-body .cb-entry');
+  await expect(entries).toHaveCount(SET.length);
+  // セットに入っている 3 枚がそろっている (並びはセット自身の順をそのまま使う)。
+  for (const name of SET) {
+    await expect(page.locator('#cb-body .cb-entry[data-doc-name="' + name + '"]')).toHaveCount(1);
+  }
+
+  // 到達条件その3: 顧客に見せるので図モードで開く (DSL を見せない)。
+  await expect(page.locator('#cb-svg')).toHaveAttribute('aria-pressed', 'true');
+
+  // 到達条件その4: 資料の体裁 も同じく Ctrl+K から辿れる。
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#cb-modal')).toBeHidden();
+  await S.runCommand(page, '資料の体裁');
+  await page.waitForTimeout(1500);
+  await expect(page.locator('#docset-layout')).toBeVisible();
+
+  await page.screenshot({ path: shotOut('primary-04-docset-before-after.png'), fullPage: true });
+  await S.clearDir(page, DIR8);
+});
+
+// BLK-primary-20260924-1332-wish: ボードの「変更前」は今日 0 時、🔍 提出前レビューは前回提出しか無く、
+// 納品していない日にレビュー会議を開くと全部が「新規」になって、前の会議の後に直した差分を見せられなかった。
+// ボードの見出しの「変更前 =」で 今日 0 時 / 前回の会議 / 前回提出 を選べるようにした
+// (前回の会議 = 今日より前に最後に会議セットで並べた時点。保存フォルダに控える)。
+const DIR9 = S.dirFor(__filename) + '-lastmeeting';
+test('手順4 前回の会議を変更前にして、会議の後に直した図だけを変更として見せられる', async ({ page }) => {
+  const fs = require('fs');
+  const path = require('path');
+  const abs = S.absDirFor(__filename) + '-lastmeeting';
+  fs.rmSync(abs, { recursive: true, force: true });
+  await S.bootWithSaveDir(page, DIR9);
+  const NAMES = ['spi_state', 'spi_init_sequence', 'driver_common_class'];
+  for (const name of NAMES) await S.putDoc(page, DIR9, name, S.docFor(name, 'SpiDrv'));
+  // 下ごしらえ: 3 枚は一昨日からある図、前回の会議は昨日 (会議セットで並べた時点の控え)。
+  const twoDaysAgo = new Date(Date.now() - 2 * 86400000);
+  for (const name of NAMES) fs.utimesSync(path.join(abs, name + '.puml'), twoDaysAgo, twoDaysAgo);
+  const y = new Date(Date.now() - 86400000);
+  y.setHours(15, 0, 0, 0);
+  const meetingAt = y.toISOString();
+  await page.evaluate(async (a) => {
+    await fetch('/meeting-log', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir: a.dir, at: a.at }) });
+  }, { dir: DIR9, at: meetingAt });
+  // 会議の後で 2 枚を直す (残り 1 枚は触らない)。
+  await S.putDoc(page, DIR9, 'spi_state', S.docFor('spi_state', 'SpiDriver'));
+  await S.putDoc(page, DIR9, 'spi_init_sequence', S.docFor('spi_init_sequence', 'SpiDriver'));
+  await S.reopenApp(page);
+
+  await page.locator('#btn-tab-board').click();
+  await expect(page.locator('#cb-modal')).toBeVisible();
+  const base = page.locator('#cb-base');
+  // 到達条件その1: 選択肢は 今日 0 時 / 前回の会議 / 前回提出。納品していないので前回提出は選べない。
+  await expect(base.locator('option[value="meeting"]')).not.toHaveAttribute('disabled', /.*/, { timeout: 10000 });
+  await expect(base.locator('option[value="delivery"]')).toHaveAttribute('disabled', /.*/);
+  await expect(base.locator('option[value="delivery"]')).toContainText('まだ納品していません');
+
+  // 到達条件その2: 前回の会議を選ぶと、直した 2 枚が「変更」で並び、触っていない 1 枚は並ばない。
+  await base.selectOption('meeting');
+  // BLK-owner-20260924-1712-prune: 何と比べたかとその日時は「変更前 =」の選択が 1 回だけ言う (見出しに「基準」を並べない)。
+  await expect(base.locator('option:checked')).toContainText('前回の会議 (');
+  await expect(page.locator('#cb-summary')).not.toContainText('基準');
+  const changed = ['spi_state', 'spi_init_sequence'];
+  for (const name of changed) {
+    const e = page.locator('#cb-body .cb-entry[data-doc-name="' + name + '"]');
+    await expect(e).toHaveCount(1, { timeout: 15000 });
+    await expect(e.locator('.cb-count')).toContainText('−', { timeout: 15000 });
+    await expect(e.locator('.cb-cols')).toContainText('変更前 (前回の会議');
+  }
+  await expect(page.locator('#cb-body .cb-entry[data-doc-name="driver_common_class"]')).toHaveCount(0);
+
+  // 到達条件その3: 同じ画面の 🖼 SVGで見る で、図の下に比べた相手の名前で差が出る。
+  await page.locator('#cb-svg').click();
+  const e0 = page.locator('#cb-body .cb-entry[data-doc-name="spi_state"]');
+  await expect(e0.locator('.cb-pane-body svg')).toHaveCount(2, { timeout: 25000 });
+  await expect(e0.locator('.cb-svg-diff')).toContainText('見た目が変わっています', { timeout: 25000 });
+  await expect(e0.locator('.cb-svg-added')).toContainText('SpiDriver');
+  await page.locator('#cb-close').click();
+  fs.rmSync(abs, { recursive: true, force: true });
+});
+
+// BLK-owner-20260924-1712-prune: 「前回保存版と比べる」入口が Ctrl+K に 3 行並び (うち 2 行は同じ枠を開く)、
+// 下端の「± 差分」は変わった図ではなく開いている図の総数を出し、変更サマリボードの見出しは基準を 3 通りに言っていた。
+test('手順4 前回保存からの差分は変わった図の数で出て、Ctrl+K は 2 行、ボードは基準を 1 回だけ言う', async ({ page }) => {
+  const A = '@startuml\nparticipant SpiDrv\nSpiDrv -> Reg : write(CR1)\n@enduml';
+  const B = '@startuml\nparticipant AdcDrv\nAdcDrv -> Reg : read(DR)\n@enduml';
+  const C = '@startuml\nclass SpiDrv\nclass AdcDrv\n@enduml';
+  // 保存先を決めていない状態で開く。bootPlain は localStorage を空にするだけで、server の
+  // .assist-prefs.json (全体実行で先に走った junior-03 が保存先フォルダを書く) を引き継ぐ。
+  // 引き継ぐと直した図が 1 秒後に自動でフォルダへ書かれて「前回保存」が今になり、差分 0 で落ちていた。
+  await S.bootDownloadMode(page);
+  await S.typeDsl(page, A);
+  await page.locator('#btn-tab-new').click();
+  await S.typeDsl(page, B);
+  await page.locator('#btn-tab-new').click();
+  await S.typeDsl(page, C);
+  // 3 枚の今を前回保存の基準にしてから、2 枚だけ直す。
+  await page.locator('#btn-tab-diff').click();
+  await page.locator('#diff-mark-all').click();
+  await expect(page.locator('#diff-panel .diff-head')).toContainText('変更前 = 前回保存 (');
+  await expect(page.locator('#diff-panel .diff-head')).not.toContainText('基準');
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await S.typeDsl(page, C.split('SpiDrv').join('Spi_Driver'));
+  await page.locator('#tab-bar .tab').first().click();
+  await page.waitForTimeout(200);
+  await S.typeDsl(page, A.split('SpiDrv').join('Spi_Driver'));
+
+  // 到達条件その1: 下端の差分は変わった図の数 (2)。開いている図の総数 (3) を拾わない。
+  await expect(page.locator('#status-diff')).toHaveText(/差分 2$/);
+
+  // 到達条件その2: Ctrl+K で「前回保存」と打つと、変わった図の一覧と、この図を前回保存版と比べる行の 2 つ。
+  // どちらも分類は「レビュー」で、旧名 (並べて比較 (この図の前回保存版)) でも引ける。
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('#cp-modal');
+  const input = page.locator('#cp-input');
+  await input.fill('前回保存');
+  const rows = page.locator('#cp-list .cp-item');
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:compare-before"]')).toHaveCount(1);
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:compare-before"] .cp-kind')).toHaveText('レビュー');
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:compare-before"] .cp-title')).toHaveText('前回保存版と比較 / Compare with last save');
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:tab-diff"]')).toHaveCount(1);
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="command:livediff"]')).toHaveCount(0);
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="command:compare-before"]')).toHaveCount(0);
+  await input.fill('並べて比較 (この図の前回保存版)');
+  await expect(rows.first()).toHaveAttribute('data-cp-id', 'review:compare-before');
+  await input.fill('レビュー');
+  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:compare-before"]')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+
+  // 到達条件その3: ボードの見出しは「変更前 = 前回保存 (日時)」の選択 1 か所だけで時点を言い、列見出しも同じ語。
+  await page.locator('#btn-tab-board').click();
+  await expect(page.locator('#cb-modal')).toBeVisible();
+  const base = page.locator('#cb-base');
+  await expect(base).toHaveValue('saved');
+  await expect(base.locator('option:checked')).toContainText('前回保存 (');
+  await expect(page.locator('#cb-summary')).not.toContainText('基準');
+  await expect(page.locator('#cb-body .cb-entry')).toHaveCount(2);
+  await expect(page.locator('#cb-body .cb-entry .cb-cols').first()).toContainText('変更前 (前回保存 ');
+  await page.locator('#cb-close').click();
 });

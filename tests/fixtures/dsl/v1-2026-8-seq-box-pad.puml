@@ -1,0 +1,8 @@
+@startuml
+skinparam ParticipantPadding 30
+box "受注系" #EEF6FF
+participant 画面
+participant 受注API
+end box
+画面 -> 受注API : 登録
+@enduml

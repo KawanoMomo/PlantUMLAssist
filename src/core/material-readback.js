@@ -53,7 +53,7 @@ window.MA.materialReadback = (function() {
     if (saved == null || body === '') {
       return {
         status: 'unreadable', docName: docName, body: '', lines: [], lineCount: 0,
-        text: docName + '.puml の本文を読み直せませんでした。📂 一覧で開いて確かめてください',
+        text: docName + '.puml の本文を読み直せませんでした。FILES の保存先から開いて確かめてください',
       };
     }
     var ls = toLines(body);

@@ -11,7 +11,11 @@
 
 $ErrorActionPreference = 'Stop'
 
-$version = if ($env:PLANTUML_VERSION) { $env:PLANTUML_VERSION } else { '1.2026.2' }
+# The default version lives in one place: PLANTUML_VERSION next to this script
+# (server.py and fetch-plantuml.sh read the same file).
+$here = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$pinned = (Get-Content (Join-Path $here 'PLANTUML_VERSION') -TotalCount 1).Trim()
+$version = if ($env:PLANTUML_VERSION) { $env:PLANTUML_VERSION } else { $pinned }
 $variant = if ($env:PLANTUML_VARIANT) { $env:PLANTUML_VARIANT } else { '' }
 
 $dir = if ($env:PLANTUML_OUT) { $env:PLANTUML_OUT } else { Split-Path -Parent $MyInvocation.MyCommand.Definition }

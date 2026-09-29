@@ -165,7 +165,7 @@ test('指摘を消すと、その応答も残らない', async ({ page }) => {
   expect(dsl).not.toContain("' @pin");
 });
 
-test('📮 指摘箱でも、応答の有無が指摘ごとに並ぶ', async ({ page }) => {
+test('指摘箱でも、応答の有無が指摘ごとに並ぶ', async ({ page }) => {
   await openState(page);
   await pinLine(page, 4, 'Timer_StartConv に対応する method が無い');
   await pinLine(page, 5, 'Timer_Ack の SVG が古い');

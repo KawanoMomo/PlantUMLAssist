@@ -61,7 +61,7 @@ window.MA.saveRedirect = (function() {
 
   // 書き直した後に出す 1 行。何が起きたかを言い切る (黙って閉じない)。
   function doneText(origin) {
-    return '💾 ' + _s(origin) + '.puml に書きました。以後この図の保存も本体へ書きます';
+    return _s(origin) + '.puml に書きました。以後この図の保存も本体へ書きます';
   }
 
   // 保存を押した図が控えへ逸れる状態のまま何度も押されることがあるので、

@@ -1,6 +1,12 @@
 const { test } = require('@playwright/test');
 const { gotoApp, saveDirFor, shotOut } = require('../helpers');
 
+// 保存先の一覧は保存先の右クリック「保存先の一覧を開く」で中央の枠に開き、開くたびに読み直す
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。
+async function openFolder(page) {
+  await require('../scenarios/_scenario').openFolder(page);
+}
+
 // BLK-reviewer-20260907-2203-wish の画面写真。保存フォルダ一覧の下端に
 // 「前回の指摘をそのまま今回の指摘にする」が出ているところを撮る。
 const DIR = saveDirFor(__filename);
@@ -39,16 +45,14 @@ test('shot: 無変更確定ボタン', async ({ page }) => {
     }, { name, dsl, dir: DIR });
   }
 
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
   const mark = page.locator('#folder-panel .folder-mark-seen');
   if (await mark.count()) {
     await mark.click();
     await page.waitForSelector('#folder-panel .folder-item[data-review-status="unchanged"]');
   }
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForTimeout(150);
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
   await page.waitForTimeout(300);
   await page.locator('#folder-panel').screenshot({ path: OUT });

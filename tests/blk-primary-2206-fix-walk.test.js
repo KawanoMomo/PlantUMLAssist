@@ -105,3 +105,39 @@ describe('fix-walk: 見出しと印', function() {
     expect(FW.nextUndone(FW.start('Spi_Driver', rows, {}))).toBe(1);
   });
 });
+
+// BLK-primary-20260924-1132-wish: 変更チケットから入った列は、帯に札の名前 (何の変更か) を出し、
+// 今の図を保存したら「✓ 直した · 次へ」を目立たせる合図を持つ。保存だけでは印を付けない。
+describe('fix-walk: 変更チケットから入った列', function() {
+  test('帯の 1 行に札の名前が出る', function() {
+    var w = FW.start('IRQCtrl', IMPACT, { ticketId: 't1', title: 'IRQCtrl の仕様変更' });
+    expect(FW.labelText(w)).toBe(
+      'IRQCtrl の仕様変更 — 1 / 5 図 · spi_init_sequence (直接) · 残り 5');
+    var done = IMPACT.map(function(r) { return Object.assign({}, r, { done: true }); });
+    expect(FW.labelText(FW.start('IRQCtrl', done, { title: 'IRQCtrl の仕様変更' })))
+      .toBe('IRQCtrl の仕様変更: 5 図すべて手当て済み');
+  });
+
+  test('札の名前は列を送っても保たれる', function() {
+    var w = FW.doneNext(FW.start('IRQCtrl', IMPACT, { title: 'IRQCtrl の仕様変更' }));
+    expect(w.title).toBe('IRQCtrl の仕様変更');
+    expect(FW.go(w, 1).title).toBe('IRQCtrl の仕様変更');
+  });
+
+  test('今の図を保存すると合図が立つ。印は付かない', function() {
+    var w = FW.start('IRQCtrl', IMPACT, { title: 'T' });
+    var s = FW.noteSaved(w, 'spi_init_sequence.puml');
+    expect(FW.isSaved(s)).toBe(true);
+    expect(s.items[0].done).toBe(false);
+    expect(FW.progress(s).done).toBe(0);
+    expect(FW.labelText(s)).toContain('保存しました。直し終えたら「✓ 直した · 次へ」');
+  });
+
+  test('別の図の保存では立たず、次の図へ移ると消える', function() {
+    var w = FW.start('IRQCtrl', IMPACT, {});
+    expect(FW.noteSaved(w, 'spi_state')).toBe(w);
+    var s = FW.noteSaved(w, 'spi_init_sequence');
+    expect(FW.isSaved(FW.go(s, 1))).toBe(false);
+    expect(FW.isSaved(FW.doneNext(s))).toBe(false);
+  });
+});

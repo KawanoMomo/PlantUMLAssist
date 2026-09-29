@@ -30,10 +30,13 @@ window.MA.outline = (function() {
   var IF_OPEN = /^\s*if\s*\((.*?)\)\s*then\b(.*)$/i;
 
   // 矢印(関係)。図種で形は違うが「左辺 矢印 右辺」の並びは共通。
+  // BLK-builder-20260925-0314-1: 名前は日本語 (U+0080 以上) でもよい (`App -> センサ制御 : Init()`)。
   var REL_RE = new RegExp(
-    '^\\s*(\\[\\*\\]|"[^"]*"|\\(.*?\\)|:[^:]*:|[A-Za-z0-9_][A-Za-z0-9_.-]*)' +
-    '\\s*([-.=]{1,2}(?:\\(\\)|o|\\*|\\|>)?[->x]*|<[-.|]{1,2}[a-z]*|<\\|[-.]+|[-.]+\\|>|\\*[-.]+|o[-.]+|\\)[-.]+|[-.]+\\(|[-.]{2,})\\s*' +
-    '(\\[\\*\\]|"[^"]*"|\\(.*?\\)|:[^:]*:|[A-Za-z0-9_][A-Za-z0-9_.-]*)\\s*(?::\\s*(.*))?$'
+    '^\\s*(\\[\\*\\]|"[^"]*"|\\(.*?\\)|:[^:]*:|[A-Za-z0-9_\u0080-\uFFFF][A-Za-z0-9_.\u0080-\uFFFF-]*)' +
+    // BLK-migrator-20260929-1155: 向き (`-right->`) と色・線種 (`-[#red]->`) を挟んだ矢印も 1 本の関係として数える
+    // (state-15 は遷移 6 本を 1 本と数え、下端が「1 state · 1 transition」だった)。
+    '\\s*([-.]+(?:(?:up|down|left|right|u|d|l|r)(?=[-.\\[]))?(?:\\[[^\\]]*\\])?[-.]*>+|[-.=]{1,2}(?:\\(\\)|o|\\*|\\|>)?[->x]*|<[-.|]{1,2}[a-z]*|<\\|[-.]+|[-.]+\\|>|\\*[-.]+|o[-.]+|\\)[-.]+|[-.]+\\(|[-.]{2,})\\s*' +
+    '(\\[\\*\\]|"[^"]*"|\\(.*?\\)|:[^:]*:|[A-Za-z0-9_\u0080-\uFFFF][A-Za-z0-9_.\u0080-\uFFFF-]*)\\s*(?::\\s*(.*))?$'
   );
 
   // 枝分かれとして数えるブロック (block ノードの label と一致させる)。
@@ -63,7 +66,7 @@ window.MA.outline = (function() {
     if (colon && !/^".*"$/.test(body)) { body = colon[1].trim(); note = colon[2].trim(); }
     var stereo = body.match(/^(.*?)\s*(<<[^>]*>>)\s*$/);
     if (stereo) body = stereo[1].trim();
-    var as = body.match(/^(.*?)\s+as\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\s*$/i);
+    var as = body.match(/^(.*?)\s+as\s+([A-Za-z0-9_\u0080-\uFFFF][A-Za-z0-9_.\u0080-\uFFFF-]*)\s*$/i);
     var label, name;
     if (as) {
       label = _unquote(as[1]);
@@ -113,11 +116,21 @@ window.MA.outline = (function() {
     // 「どの親の中か」を付けるために持つ。alt/loop のような括りは親に数えない。
     var declStack = [];
     var sawStart = false, sawEnd = false;
+    // BLK-migrator-20260929-1300: `!ifdef` / `!if` の描かれない枝の行は、構造にも件数にも入れない
+    // (両枝に `A -> B` があると、描かれる 1 本を 2 本と数えていた)。解けない条件の枝は今までどおり数える。
+    var PL = window.MA.preprocLive;
+    var dead = PL ? PL.deadLines(dsl) : {};
 
+    // BLK-migrator-20260929-1351: 手続き・関数・!definelong の本体は展開前の型紙なので数えない
+    // (描かれるのは呼んだ行の展開。本体の `target -> target` を矢印と数えると 1 本多い)。
+    var inBody = false;
     for (var i = 0; i < lines.length; i++) {
       var raw = _clean(lines[i]);
       var line = raw.trim();
       if (line === '') continue;
+      if (inBody) { if (/^!end(?:procedure|function|definelong)\b/i.test(line)) inBody = false; continue; }
+      if (/^!(?:unquoted\s+)?(?:procedure|function|definelong)\b/i.test(line) && !/!return\b/i.test(line)) { inBody = true; continue; }
+      if (dead[i + 1]) continue;
       if (_isComment(raw)) continue;
       if (/^@startuml\b/i.test(line)) { sawStart = true; continue; }
       if (/^@enduml\b/i.test(line)) { sawEnd = true; continue; }
@@ -256,6 +269,9 @@ window.MA.outline = (function() {
         relations++;
         [nodes[n].from, nodes[n].to].forEach(function(end) {
           var name = String(end || '').trim();
+          // BLK-owner-20260923-2332-1: `Idle.Standby` と修飾した端は、`state Idle { state Standby }` の
+          // Standby と同じ状態 (PlantUML は入れ子の子として描く)。別の状態として数えない。
+          if (name.indexOf('.') >= 0) name = name.split('.').pop();
           if (name && name !== '[*]') stateNames[name] = 1;
         });
         continue;

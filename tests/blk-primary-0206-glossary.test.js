@@ -112,4 +112,26 @@ var DOCS = [
   assert.strictEqual(applied[1].dsl.indexOf('DmaCtrl'), -1, applied[1].dsl);
 })();
 
+// --- BLK-owner-20260917-2329-prune: 組は 🔤 表記統一の登録簿へ寄せる ----------
+(function registryMerge() {
+  var rows = G.scan(DOCS);
+  // 登録簿が既に揃える先を知っている略語 (SpiDrv) は表に出さない。
+  var left = G.unregistered(rows, function(t) { return t === 'SpiDrv' ? { canonical: 'Spi_Driver' } : null; });
+  var terms = left.map(function(r) { return r.term; });
+  assert.strictEqual(terms.indexOf('SpiDrv'), -1, terms.join(','));
+  assert.ok(terms.indexOf('DmaCtrl') >= 0, terms.join(','));
+  assert.strictEqual(G.unregistered(rows, null).length, rows.length);
+
+  var prs = [{ from: 'SpiDrv', to: 'Spi_Driver' }, { from: 'IRQCtrl', to: 'IRQ_Controller' }];
+  var ents = G.toEntries(prs);
+  assert.deepStrictEqual(ents[0].variants, ['SpiDrv']);
+  assert.strictEqual(ents[0].canonical, 'Spi_Driver');
+  assert.strictEqual(ents[0].note, '社内略語');
+
+  var r = G.applyPairs(DOCS[0].dsl, prs);
+  assert.strictEqual(r.count, 6);
+  assert.strictEqual(r.dsl.indexOf('SpiDrv'), -1);
+  assert.strictEqual(G.applyPairs(DOCS[2].dsl, prs).count, 0);
+})();
+
 console.log('blk-primary-0206-glossary: ok');

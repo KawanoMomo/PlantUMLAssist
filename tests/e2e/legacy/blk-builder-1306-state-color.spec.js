@@ -2,7 +2,7 @@
 // BLK-builder-20260907-1306-2 / design 5d「UML 要素の網羅一覧」の State 行。
 // State の「その他パレット」に畳まれる 色 を、状態と遷移の両方で選べる。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, clickOverlayByLine } = require('../helpers');
 
 const SAMPLE = [
   '@startuml',
@@ -32,9 +32,10 @@ test.describe('BLK-builder-1306-2 State の色', () => {
     await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
   });
 
+  // 状態は名前で選ぶ (PlantUML 1.2026.8 の配置では SVG の描画順が宣言順と揃わず、先頭の state が Running になる)。
   test('状態を選ぶと「その他（色）」が畳まれた形で出る', async ({ page }) => {
     await openState(page);
-    await page.locator('#overlay-layer rect[data-type="state"]').first().click();
+    await page.locator('#overlay-layer rect[data-type="state"][data-id="Idle"]').first().click();
     await expect(page.locator('#st-more-btn')).toBeVisible();
     await expect(page.locator('#st-more-btn')).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('#st-more')).toBeHidden();
@@ -42,7 +43,7 @@ test.describe('BLK-builder-1306-2 State の色', () => {
 
   test('その他を開いて色を押すと、状態行に色が入る', async ({ page }) => {
     await openState(page);
-    await page.locator('#overlay-layer rect[data-type="state"]').first().click();
+    await page.locator('#overlay-layer rect[data-type="state"][data-id="Idle"]').first().click();
     await page.locator('#st-more-btn').click();
     await expect(page.locator('#st-more')).toBeVisible();
     await page.locator('#st-more-colors .prop-color-swatch[data-value="red"]').click();
@@ -53,7 +54,7 @@ test.describe('BLK-builder-1306-2 State の色', () => {
 
   test('もう一度「既定」を押すと色が消える', async ({ page }) => {
     await openState(page);
-    await page.locator('#overlay-layer rect[data-type="state"]').first().click();
+    await page.locator('#overlay-layer rect[data-type="state"][data-id="Idle"]').first().click();
     await page.locator('#st-more-btn').click();
     await page.locator('#st-more-colors .prop-color-swatch[data-value="green"]').click();
     await page.waitForTimeout(700);
@@ -69,7 +70,9 @@ test.describe('BLK-builder-1306-2 State の色', () => {
 
   test('遷移を選ぶと「その他（線の色）」が出て、線の色を変えられる', async ({ page }) => {
     await openState(page);
-    await page.locator('#overlay-layer rect[data-type="transition"]').first().click();
+    // 遷移の線の当たりには同じ遷移のラベルの当たりが重なる (小さい当たりを手前、BLK-migrator-20260925-1032)。
+    // locator.click は手前の要素が受けると押す前に断るので、利用者と同じく実マウスで Idle --> Running (6 行目) を押す。
+    await clickOverlayByLine(page, 6);
     await expect(page.locator('#st-tr-more-btn')).toBeVisible();
     await page.locator('#st-tr-more-btn').click();
     await page.locator('#st-tr-more-colors .prop-color-swatch[data-value="blue"]').click();
@@ -79,7 +82,7 @@ test.describe('BLK-builder-1306-2 State の色', () => {
 
   test('色を付けた状態のラベルを更新しても色が残る', async ({ page }) => {
     await openState(page);
-    await page.locator('#overlay-layer rect[data-type="state"]').first().click();
+    await page.locator('#overlay-layer rect[data-type="state"][data-id="Idle"]').first().click();
     await page.locator('#st-more-btn').click();
     await page.locator('#st-more-colors .prop-color-swatch[data-value="orange"]').click();
     await page.waitForTimeout(700);

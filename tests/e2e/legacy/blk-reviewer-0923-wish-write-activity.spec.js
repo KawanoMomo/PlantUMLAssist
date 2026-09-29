@@ -42,19 +42,44 @@ async function clearDir(page) {
 async function patchListing(page, fn) {
   await page.route('**/autosave?*', async (route, request) => {
     if (request.method() !== 'GET') return route.continue();
-    const resp = await route.fetch();
-    const body = await resp.json();
-    route.fulfill({ status: 200, contentType: 'application/json',
-                    body: JSON.stringify(fn(body)) });
+    // 一覧を開くと FILES ツリーも同じ GET を読むので、試験の終わりに差し替え中の
+    // GET が残ることがある。閉じたページ・解いた後の route で落ちないよう、その 1 本は捨てる。
+    try {
+      const resp = await route.fetch();
+      const body = await resp.json();
+      await route.fulfill({ status: 200, contentType: 'application/json',
+                            body: JSON.stringify(fn(body)) });
+    } catch (e) { /* ページが閉じた後の残り */ }
   });
 }
 
+// 保存先の一覧は FILES の保存先の右クリック「保存先の一覧を開く」で中央の枠に開く
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。旧経路 (保存先の
+// 見出しを畳んで開き直す) は FILES の節を開くだけで、一覧の枠は見えないまま待ち続けた。
+// 開くたびに読み直すので、後から置いたファイルも出る。
 async function openFolder(page) {
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open .folder-item');
+  await require('../scenarios/_scenario').openFolder(page);
+  await page.waitForSelector('#folder-panel.open.is-list .folder-item');
+  // 開いた直後は FILES ツリーの読み直しが続けて一覧を 1 回描き直す。その GET が
+  // patchListing の後に着くと、押す前に一覧が差し替えた時刻で描き直されて
+  // 「一覧を取り直す」自体が消えることがある。一覧の描き直しが 400ms 止むまで待つ。
+  await page.evaluate(() => new Promise((resolve) => {
+    const el = document.getElementById('folder-panel');
+    let t = null;
+    const mo = new MutationObserver(() => { clearTimeout(t); t = setTimeout(done, 400); });
+    function done() { mo.disconnect(); resolve(); }
+    mo.observe(el, { childList: true });
+    t = setTimeout(done, 400);
+  }));
 }
 
 test.describe('BLK-reviewer-0923-wish: 書き込み中かもしれない図に印を付ける', () => {
+  // 一覧は開くたびに保存先を読み直す (FILES ツリーの保存先節も読む) ので、試験の終わりに
+  // 差し替え中の GET が残る。閉じたページで route.fetch が落ちないよう、残りは捨てて終える。
+  test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  });
+
   test('今しがた保存された図に「書込中?」が付き、名前と経過時間がその場に出る', async ({ page }) => {
     await bootWithDir(page);
     await clearDir(page);

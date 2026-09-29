@@ -101,3 +101,29 @@ describe('sequence: 複数行 note を 1 件として読む', function() {
     expect(r.text).toBe(L(['@startuml', 'note over A', 'x', 'end note', 'A -> B : 1', '@enduml']));
   });
 });
+
+// BLK-migrator-20260923-1409: 直前のメッセージに付ける注釈 (`note right` / `note left : x`)。
+describe('noteEdit メッセージに付ける注釈', function() {
+  test('対象を書かない note right をブロック形で読む', function() {
+    var n = NE.readSeqNote(['note right', '  a', 'end note'], 0);
+    expect(n.attached).toBe(true);
+    expect(n.position).toBe('right');
+    expect(n.targets).toEqual([]);
+    expect(n.text).toBe('a');
+    expect(n.endIdx).toBe(2);
+  });
+  test('1 行形 note left : x を読み、`left of X` とは混ぜない', function() {
+    expect(NE.readSeqNote(['note left : x'], 0).text).toBe('x');
+    expect(NE.readSeqNote(['note left of A : x'], 0).attached).toBe(undefined);
+  });
+  test('本文を直しても `note right` の形のまま書く', function() {
+    var out = NE.updateSeqNote('note right\n  a\nend note', 1, 'text', 'b');
+    expect(out).toBe('note right : b');
+    var out2 = NE.updateSeqNote('note right\n  a\nend note', 1, 'text', 'b\nc');
+    expect(out2).toBe('note right\n  b\n  c\nend note');
+  });
+  test('対象を決めると参加者の横の注釈になる。対象の無いまま over には変えない', function() {
+    expect(NE.updateSeqNote('note right : a', 1, 'targets', ['B'])).toBe('note right of B : a');
+    expect(NE.updateSeqNote('note right : a', 1, 'position', 'over')).toBe('note right : a');
+  });
+});

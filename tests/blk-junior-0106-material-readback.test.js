@@ -49,7 +49,7 @@ describe('material-readback: 保存先の本文を資料化のその場で読む
     expect(r.status).toBe('unreadable');
     expect(r.lineCount).toBe(0);
     expect(r.text).toContain('読み直せませんでした');
-    expect(r.text).toContain('📂 一覧');
+    expect(r.text).toContain('FILES の保存先');
   });
 
   test('空文字が返るのも読めなかった扱いにする', function() {

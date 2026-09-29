@@ -14,8 +14,12 @@ const BASE = 'GPIOドライバ初期化 (レビュー反映)';
 const V1 = ['@startuml', 'title GPIOドライバ初期化アクティビティ', 'start', ':Gpio_Init;', 'stop', '@enduml'].join('\n');
 const V2 = V1.replace(':Gpio_Init;', ':Gpio_Init;\n:Gpio_SetPin;');
 
+// 図種を先に選んでから名前を付ける。図種の切り替えは図名に図種の接尾辞を付けたり
+// 新しいタブを開いたりするので、名前を先に付けると BASE のままにならない (BLK-releaser-20260929-0851-1)。
 async function setup(page) {
   await gotoApp(page);
+  await page.locator('#diagram-type').selectOption('plantuml-activity');
+  await page.waitForTimeout(400);
   await page.evaluate(([dir, name]) => {
     window.MA.autoSave.setConfig({
       enabled: true, debounceMs: 300, restoreMode: 'none',
@@ -23,8 +27,7 @@ async function setup(page) {
     });
     window.MA.workspace.rename(window.MA.workspace.getActiveId(), name);
   }, [DIR, BASE]);
-  await page.locator('#diagram-type').selectOption('plantuml-activity');
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(200);
 }
 
 async function setDsl(page, text) {
@@ -60,7 +63,8 @@ test('図名をここで変えると、タブ名と以降の保存先が変わ�
   await page.locator('#ds-docname').dispatchEvent('change');
   await page.waitForTimeout(600);
 
-  await expect(page.locator('#tab-bar .tab-label').first()).toHaveText('GPIOドライバ初期化 (先輩反映)');
+  // タブは保存されるファイル名 ({図名}.puml) で出る (design 7a / 10a)
+  await expect(page.locator('#tab-bar .tab-label').first()).toHaveText('GPIOドライバ初期化 (先輩反映).puml');
   await expect(page.locator('#ds-name-hint')).toContainText('GPIOドライバ初期化 (先輩反映).puml');
 });
 

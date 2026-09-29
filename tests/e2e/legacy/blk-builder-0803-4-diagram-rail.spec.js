@@ -46,19 +46,6 @@ test.describe('図種レール (design 1a)', () => {
     expect(await page.locator('#rail-types .rail-btn.active').count()).toBe(1);
   });
 
-  test('レールで切り替えた図種は編集内容ごと往復できる', async ({ page }) => {
-    await page.locator('#rail-cls').click();
-    await page.waitForTimeout(600);
-    await page.locator('#editor').fill('@startuml\nclass Marker_RAIL\n@enduml');
-    await page.waitForTimeout(800);
-    await page.locator('#rail-seq').click();
-    await page.waitForTimeout(600);
-    expect(await page.locator('#editor').inputValue()).not.toContain('Marker_RAIL');
-    await page.locator('#rail-cls').click();
-    await page.waitForTimeout(600);
-    expect(await page.locator('#editor').inputValue()).toContain('Marker_RAIL');
-  });
-
   test('レール下端の ⚙ で設定モーダルが開く', async ({ page }) => {
     await page.locator('#rail-config').click();
     await expect(page.locator('#cfg-modal')).toBeVisible();

@@ -93,6 +93,9 @@
       // 「読み直さなくてよい」と分かっている手動指摘。件数からは外して数える
       // (0 件になったのか、見ないことにしただけなのかを潰さない)。
       keep: !!(ref && ref.keep),
+      // BLK-reviewer-20260923-2012-wish (差し戻し 1 回目): note の自由文で答えてある組の印。
+      // --board が「継続」ではなく「タグ化待ち」に別掲するのに使う。
+      noteReply: ref && ref.item && ref.item.noteReply ? ref.item.noteReply : null,
     };
   }
 
@@ -107,15 +110,34 @@
       _list(v.members).forEach(function(m) {
         _docsOf(m.docs).forEach(function(d) { if (docs.indexOf(d) < 0) docs.push(d); });
       });
-      out.push(_row('name.variants', _oneDoc(docs), _s(v.suggested),
+      var r = _row('name.variants', _oneDoc(docs), _s(v.suggested),
         names.join(' / ') + ' が同じ物を指しています。多数派は ' + _s(v.suggested), docs,
-        { item: v }));
+        { item: v });
+      // BLK-owner-20260924-1332-prune: 揃える先を選んで 🔤 表記統一へ渡すための綴りの一覧。
+      r.names = names.filter(function(n) { return n !== ''; });
+      out.push(r);
     });
     _list(res.undeclared).forEach(function(u) {
       var docs = _docsOf(u.docs);
       out.push(_row('name.undeclared', _oneDoc(docs), _s(u.name),
         '矢印にだけ現れ、宣言がありません', docs, { item: u }));
     });
+  }
+
+  // BLK-reviewer-20260923-2012-wish: タグは無いが note の自由文で答えている組
+  // (omit-method.markNotes が noteReply を付けたもの) は、どの note で答えたかを
+  // 理由の後ろに書く。reviewer が puml を開いて note を読み直さずに済むように。
+  function _noteSuffix(it) {
+    var n = it && it.noteReply;
+    if (!n) return '';
+    return '（自由文で応答あり(タグ化待ち): ' + _s(n.doc) + (n.line ? ' ' + n.line + ' 行' : '')
+      + ' の note「' + _s(n.reason) + '」）';
+  }
+
+  // (クラス, メソッド) を比べる鍵。大文字小文字・記号の違いは同じに見る。
+  function _dupKey(cls, method) {
+    function n(v) { return _s(v).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+    return n(cls) + '.' + n(method);
   }
 
   function _fromConsistency(res, out) {
@@ -129,14 +151,19 @@
         'participant として宣言されていますが、どの矢印にも出てきません', null, { item: u }));
     });
     _list(res.methods).forEach(function(m) {
-      out.push(_row('consistency.methods', _s(m.doc), _s(m.target) + '.' + _s(m.method),
-        'シーケンスで呼んでいますが、クラス図の ' + _s(m.target) + ' にこのメソッドがありません',
-        null, { item: m }));
+      var r = _row('consistency.methods', _s(m.doc), _s(m.target) + '.' + _s(m.method),
+        'シーケンスで呼んでいますが、クラス図の ' + _s(m.target) + ' にこのメソッドがありません'
+        + _noteSuffix(m),
+        null, { item: m });
+      r.dupKey = _dupKey(m.target, m.method);
+      out.push(r);
     });
     _list(res.events).forEach(function(e) {
-      out.push(_row('consistency.events', _oneDoc(e.docs), _s(e.event),
+      var r = _row('consistency.events', _oneDoc(e.docs), _s(e.event),
         '状態遷移のイベントに対応するメソッドが ' + (_s(e.cls) || _s(e.owner) || 'クラス図') + ' にありません',
-        e.docs, { item: e }));
+        e.docs, { item: e });
+      r.dupKey = _dupKey(e.cls || e.owner, e.event);
+      out.push(r);
     });
     _list(res.granularity).forEach(function(g) {
       out.push(_row('consistency.granularity', _s(g.onlyIn), _s(g.label),
@@ -166,12 +193,28 @@
     });
   }
 
+  // BLK-owner-20260924-1332-prune: 🔍 名前突合の画面を畳んだので、メソッド突合の中身
+  // (「Timer_Init() を呼んでいるが、Timer のクラスがどの図にも無い」) はこの行で読む。
+  // 言い方は methodAudit.describe が正 (2 つの言い方を持たない)。読めないときだけ従来の短い文。
+  function _methodDescribe(i) {
+    var MA = (typeof window !== 'undefined' && window.MA) ? window.MA : null;
+    var M = MA && MA.methodAudit;
+    if (M && typeof M.describe === 'function') {
+      try { var d = M.describe(i); if (d) return _s(d); } catch (e) { /* 短い文に落とす */ }
+    }
+    return _s(i.kind) === 'no-method'
+      ? 'クラス図に定義がありません'
+      : 'メソッド突合で ' + _s(i.kind) + ' として挙がっています';
+  }
+
   function _fromMethod(res, out) {
     _list(res.issues).forEach(function(i) {
-      out.push(_row('method.issues', _oneDoc(i.docs), _s(i.owner || i.cls) + '.' + _s(i.method),
-        _s(i.kind) === 'no-method'
-          ? 'クラス図に定義がありません'
-          : 'メソッド突合で ' + _s(i.kind) + ' として挙がっています', i.docs, { item: i }));
+      var r = _row('method.issues', _oneDoc(i.docs), _s(i.owner || i.cls) + '.' + _s(i.method),
+        _methodDescribe(i) + _noteSuffix(i), i.docs, { item: i });
+      r.method = _s(i.method);
+      r.issueKind = _s(i.kind);
+      r.dupKey = _dupKey(i.cls || i.owner, i.method);
+      out.push(r);
     });
   }
 
@@ -226,7 +269,20 @@
     if (!_ok(a.consistency) && _ok(a.family)) _fromFamily(a.family.result, rows);
     if (_ok(a.trace)) _fromTrace(a.trace.result, rows);
     // メソッドは consistency/methods と重なる。consistency を見ているなら出さない。
-    if (!_ok(a.consistency) && _ok(a.method)) _fromMethod(a.method.result, rows);
+    // BLK-owner-20260924-1332-prune: 画面 (methodDetail) は 🔍 名前突合を畳んだので、メソッド突合の
+    // 全件 (クラス無し・引数違い・写しにだけ宣言 …) をここで出す。consistency と同じ (クラス, メソッド)
+    // の行は言い方の細かいメソッド突合の側を残し、2 行にしない。CLI の --board は従来どおり。
+    if (inp.methodDetail && _ok(a.consistency) && _ok(a.method)) {
+      var mrows = [];
+      _fromMethod(a.method.result, mrows);
+      var seenM = {};
+      mrows.forEach(function(r) { seenM[r.dupKey] = true; });
+      rows = rows.filter(function(r) {
+        if (r.kind !== 'consistency.methods' && r.kind !== 'consistency.events') return true;
+        return !seenM[r.dupKey];
+      });
+      rows = rows.concat(mrows);
+    } else if (!_ok(a.consistency) && _ok(a.method)) _fromMethod(a.method.result, rows);
     _fromSvg(inp.svg, rows);
     _fromManual(inp.findings, rows);
 
@@ -328,10 +384,31 @@
     return out.join('\n');
   }
 
+  // BLK-owner-20260924-1332-prune: 旧 🔍 名前突合の画面は畳み、ボードをカテゴリで絞って開く。
+  // ツール ▾ の絞り込みや Ctrl+K に打った語から、最初に絞るカテゴリを決める。
+  // 当たらなければ '' (絞らずに開く)。語は小文字で比べる。
+  var QUERY_KINDS = [
+    { kind: 'name.variants', words: ['表記揺れ', '表記ゆれ', '揺れ', 'ゆれ', '名前突合', 'なまえ', 'name audit', 'variant'] },
+    { kind: 'name.undeclared', words: ['宣言なし', '宣言が無い', 'undeclared'] },
+    { kind: 'method.issues', words: ['メソッド突合', 'method audit'] },
+  ];
+
+  function kindForQuery(query) {
+    var q = _s(query).trim().toLowerCase();
+    if (!q) return '';
+    for (var i = 0; i < QUERY_KINDS.length; i++) {
+      var ws = QUERY_KINDS[i].words;
+      for (var j = 0; j < ws.length; j++) {
+        if (q.indexOf(ws[j]) >= 0) return QUERY_KINDS[i].kind;
+      }
+    }
+    return '';
+  }
+
   var api = {
     KINDS: KINDS, LABEL: LABEL, CROSS: CROSS,
     build: build, filter: filter, countBy: countBy, countByDoc: countByDoc,
-    summaryLine: summaryLine, markdown: markdown,
+    summaryLine: summaryLine, markdown: markdown, kindForQuery: kindForQuery,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

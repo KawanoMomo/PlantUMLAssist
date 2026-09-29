@@ -20,7 +20,7 @@ var SEQ_KINDS = [
   { value: 'note', label: '注釈 (note)' },
   { value: 'block', label: 'ブロック (alt/loop/...)' },
   { value: 'activation', label: 'ライフライン (activate/deactivate)' },
-  { value: 'bulk', label: '一括 (複数行)' },
+  { value: 'bulk', label: 'まとめて (複数行)' },
 ];
 
 describe('tail-kind-chips — 「末尾に追加」の種別チップ (design 2b)', () => {
@@ -169,5 +169,27 @@ describe('tail-kind-chips — mount (select が値の持ち主のまま)', () =>
   test('select が無ければ何もせず null を返す', () => {
     global.document.body.innerHTML = '<div></div>';
     expect(chips.mount('nosuch-tail-kind')).toBe(null);
+  });
+
+  // BLK-owner-20260923-2332-prune: 同じ選択肢を同じ順で並べた「種類」プルダウンは画面から外す。
+  // 値の持ち主なので要素は残し、見えない・Tab で止まらない形にする。
+  test('「種類」プルダウンは包む div ごと画面から外れ、Tab でも止まらない', () => {
+    var s = setup('message');
+    var wrap = s.d.getElementById('wrap');
+    expect(wrap.getAttribute('data-tail-kind-select')).toBe('1');
+    expect(wrap.getAttribute('aria-hidden')).toBe('true');
+    expect(wrap.style.position).toBe('absolute');
+    expect(wrap.style.overflow).toBe('hidden');
+    expect(s.sel.getAttribute('tabindex')).toBe('-1');
+    // 隠しても値の受け渡しはそのまま (チップ → select → change)。
+    s.d.getElementById('seq-tail-kind-chip-note').click();
+    expect(s.sel.value).toBe('note');
+    expect(s.changes.join(',')).toBe('note');
+  });
+
+  test('まとめて足す入口はチップ列の 1 つだけ (呼び込みの枠は出さない)', () => {
+    var s = setup('message');
+    expect(s.d.getElementById('seq-tail-kind-bulk-promo')).toBe(null);
+    expect(s.d.getElementById('pane').querySelectorAll('[data-value="bulk"]').length).toBe(1);
   });
 });

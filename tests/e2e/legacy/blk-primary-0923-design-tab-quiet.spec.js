@@ -3,7 +3,7 @@
 // 7a はタブ列の 25 個を「ツール ▾」1 個に畳んだが、7b はその 1 個も置かない。
 // タブ列は図のタブと ＋ / 一覧 だけ、件数は下端の状態表示、機能の入口は Ctrl+K。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('../helpers');
+const { gotoApp, pickTool } = require('../helpers');
 
 // 既定を見るので helper の互換設定 (畳まない) は使わない。
 async function open7b(page) {
@@ -30,42 +30,54 @@ test('既定のタブ列にはボタンが 1 つも無い (図のタブと ＋ /
   }
 });
 
+// 下端の札は件数が 1 以上のときだけ出る (0 件の札は消えて静か。BLK-releaser-20260929-0851-2 で今の画面に合わせた)。
+// 件数を持たせると札が出て、押すとそのパネルが開く。
 test('件数を持つものは下端の状態表示に出て、押せばそのパネルが開く', async ({ page }) => {
   await open7b(page);
   for (const id of ['status-diff', 'status-pins', 'status-inbox',
                     'status-consistency', 'status-eventsync']) {
-    await expect(page.locator('#' + id), id).toBeVisible();
+    await expect(page.locator('#' + id), id).toHaveCount(1);
   }
-  await page.locator('#status-pins').click();
-  await expect(page.locator('#pin-panel')).toHaveClass(/open/);
+  // 遷移のイベントに対応するクラスが無い state 図 → イベント整合の札に件数が出る
+  await page.locator('#diagram-type').selectOption('plantuml-state');
+  await page.locator('#editor').fill('@startuml\n[*] --> Idle\nIdle --> Busy : Adc_StartConv\n@enduml');
+  const badge = page.locator('#status-eventsync');
+  await expect(badge).toBeVisible();
+  await badge.click();
+  await expect(page.locator('#ev-modal')).toBeVisible();
 });
 
 test('機能は Ctrl+K から引ける (ツールの分類メニューも Ctrl+K から開く)', async ({ page }) => {
   await open7b(page);
   await openToolMenu(page);
-  await expect(page.locator('#tool-menu .tool-menu-title')).toHaveText([
-    '図をつくる', '書き換える', '探す・見比べる', '確かめる', 'レビュー', '渡す',
+  // BLK-human-20260923-1601 (design 9b): 分類は左列に 6 つ並ぶ。
+  await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
+    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー', '渡す',
   ]);
-  await page.locator('.tool-menu-item[data-target="btn-tab-board"]').click();
+  await pickTool(page, 'btn-tab-board');
   await expect(page.locator('#cb-modal')).toBeVisible();
 });
 
-test('「ツール ▾ をタブ列に出す」を選べば入口が戻り、次に開いても残る', async ({ page }) => {
+// BLK-builder-20260924-1815-3 (design 9b / 9a): 既定のパネルに「ツール ▾ をタブ列に出す」は出さない
+// (押すと右端のツール ▾ が ＋ の隣へ動くだけだった)。以前に選んだ人には右端へ戻す 1 行だけが出る。
+test('以前に「ツール ▾ をタブ列に出す」を選んだ人は、パネルの 1 行で右端の入口に戻せる', async ({ page }) => {
   await open7b(page);
   await openToolMenu(page);
-  await page.locator('#tool-menu-quiet').click();
-  await expect(page.locator('#btn-tab-tools')).toBeVisible();
-  // 機能ボタンは畳んだまま。戻したのは入口 1 個だけ。
-  await expect(page.locator('#btn-tab-board')).toBeHidden();
+  await expect(page.locator('#tool-menu-quiet')).toHaveCount(0);
+  await page.keyboard.press('Escape');
 
+  await page.evaluate(() => localStorage.setItem('plantuml-tools-quiet', '0'));
   await page.reload();
   await page.waitForSelector('#preview-svg');
   await expect(page.locator('#btn-tab-tools')).toBeVisible();
+  await expect(page.locator('#btn-tab-board')).toBeHidden();
 
-  // もう一度静かにできる。
   await page.locator('#btn-tab-tools').click();
+  await expect(page.locator('#tool-menu-quiet')).toHaveText('ツール ▾ を右端へ戻す');
   await page.locator('#tool-menu-quiet').click();
   await expect(page.locator('#btn-tab-tools')).toBeHidden();
+  await expect(page.locator('#btn-tab-tools-mini')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('plantuml-tools-quiet'))).toBe('1');
 });
 
 test('既定のタブ列は横スクロールしない', async ({ page }) => {

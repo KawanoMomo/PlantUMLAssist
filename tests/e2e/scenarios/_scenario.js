@@ -18,7 +18,10 @@ const KEEP_KEY = 'pua.e2e.keep';
 async function reopenApp(page) {
   await page.evaluate((k) => { try { window.localStorage.setItem(k, '1'); } catch (e) {} }, KEEP_KEY);
   await page.reload();
-  await page.waitForSelector('#editor');
+  // #editor は HTML の骨格にあり、init (保存先の取り込みを待って走る) より先に現れる。
+  // それを待って押すと、ボタンに手が付く前のクリックになって何も起きない
+  // (全体実行で /prefs が遅い回に junior-09 の「開き直してから並べて比較」が落ちていた)。
+  await page.waitForSelector('html[data-app-ready="1"]');
   await page.evaluate((k) => { try { window.localStorage.removeItem(k); } catch (e) {} }, KEEP_KEY);
 }
 
@@ -46,15 +49,17 @@ async function bootPlain(page) {
 }
 
 // 保存先をまだ決めていない状態 (= 保存するとダウンロードになる)。
-async function bootDownloadMode(page) {
-  await page.addInitScript(() => {
+// prevDir: ダウンロードのまま控えている保存フォルダ (既定は ./autosave)。前に使っていたフォルダに
+// 図が残っている状態から保存先を変える手順は、test-results 配下のフォルダを渡して作る。
+async function bootDownloadMode(page, prevDir) {
+  await page.addInitScript((d) => {
     try {
       window.localStorage.clear();
       window.localStorage.setItem('plantuml-autosave-config', JSON.stringify({
-        enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'localStorage', fileDir: './autosave',
+        enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'localStorage', fileDir: d,
       }));
     } catch (e) {}
-  });
+  }, prevDir || './autosave');
   await gotoApp(page);
 }
 
@@ -102,20 +107,62 @@ async function clearTickets(page, dir) {
 }
 
 // 📂 一覧 から名前で開く (junior 手順 1・8、primary の openFolderItem と同じ経路)。
-// 押すたびに開閉が入れ替わるので、開いていないときだけ押す。
+// BLK-owner-20260924-0637-1: 旧 📂 一覧 (点検の部品ごと) は FILES ツリーの「保存先」節には出さず、
+// 保存先の右クリック「保存先の一覧を開く」で中央の枠に開く。開くたびに読み直すので、
+// 台本が後から置いたファイルも出る (以前の「畳んでから開き直す」はこの 1 回で済む)。
 async function openFolder(page) {
-  const panel = page.locator('#folder-panel');
-  const cls = (await panel.getAttribute('class')) || '';
-  if (!/\bopen\b/.test(cls)) await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open');
+  await closeFolderList(page);
+  await page.locator('#btn-tab-folder').click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="open-list"]').click();
+  await page.waitForSelector('#folder-panel.open.is-list');
 }
 
-async function openFolderItem(page, name) {
+// 中央の枠に開いた保存先の一覧を閉じる (ツリーの保存先節は開いたまま)。
+async function closeFolderList(page) {
+  if (await page.locator('#folder-panel.is-list').count()) {
+    await page.locator('#folder-list-close').click();
+    await page.waitForSelector('#folder-panel:not(.is-list)', { state: 'attached' });
+  }
+}
+
+// 1 回押しは仮のタブ (次の 1 回押しで中身が入れ替わる)。何枚もタブに並べておく手順は
+// opts.pin でダブルクリックし、固定のタブにする (BLK-primary-20260924-0805-design)。
+async function openFolderItem(page, name, opts) {
   await openFolder(page);
   const filter = page.locator('#folder-filter');
   if (await filter.count()) await filter.fill('');
-  await page.locator('#folder-panel .folder-item[data-file-name="' + name + '"]').first().click();
+  const item = page.locator('#folder-panel .folder-item[data-file-name="' + name + '"]').first();
+  if (opts && opts.pin) await item.dblclick();
+  else await item.click();
   await page.waitForTimeout(900);
+}
+
+// BLK-owner-20260924-1836-prune: 隣の保存フォルダを覗く窓は、FILES「読むだけ」のそのフォルダの行の
+// 右クリック「このフォルダの図を調べる…」で、そのフォルダを開いた状態で出る (窓の中でフォルダを選ばない)。
+async function peekFolder(page, dirName) {
+  const head = page.locator('#files-sec-readonly');
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
+  const row = page.locator('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"]');
+  await row.waitFor();
+  await row.click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="peek"]').click();
+  await page.waitForSelector('#peek-modal');
+  await page.waitForFunction((n) => {
+    const b = document.getElementById('peek-dir-name');
+    return b && b.textContent === n;
+  }, dirName);
+}
+
+// FILES「読むだけ」のフォルダを右クリック →「並べて比較」で比較中にする (相手のフォルダを選ぶ道はこの 1 本。
+// BLK-owner-20260924-2135-prune)。参照ペインの増分の取り込みも、このフォルダを相手にする。
+async function compareFolder(page, dirName) {
+  const head = page.locator('#files-sec-readonly');
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
+  const row = page.locator('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"]');
+  await row.waitFor();
+  await row.click({ button: 'right' });
+  await page.locator('#files-ctx-menu [data-action="compare"]').click();
+  await page.waitForSelector('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"][data-comparing="1"]');
 }
 
 // 一覧から開いた図は錠がかかっている。直す目的で開いたときは「このファイルを書き換える」を選ぶ。
@@ -182,6 +229,35 @@ const GPIO_STATE = [
   '@enduml',
 ].join('\n');
 
+// BLK-junior-20260923-1409: junior の手順4で書き出せなかった 1 枚 (IRQ 初期化シーケンス)。
+// PlantUML が svg 末尾に畳む元 DSL が、この図ではちょうど `--` を含む文字列になる。
+// 画面に入れた時点でその処理命令はコメントに化けるので、書き戻すと XML として壊れ、
+// PNG 変換の Image が onerror になっていた。**この DSL はそのままにしておくこと**
+// (1 行変えると畳んだ文字列が変わり、再現しなくなる)。
+const IRQ_SEQ_FOLDED_DASH = [
+  "@startuml",
+  "skinparam backgroundColor #FFFFFF",
+  "skinparam defaultFontSize 12",
+  "skinparam defaultFontColor #000000",
+  "skinparam ArrowColor #181818",
+  "skinparam sequenceParticipantBackgroundColor #E3E3F7",
+  "skinparam sequenceParticipantBorderColor #181818",
+  "title IRQドライバ初期化シーケンス",
+  "actor App",
+  "participant Spi_Driver",
+  "participant IRQCtrl",
+  "participant NVIC",
+  "note over IRQCtrl : IRQ系統はClockCtrl/Regsを持たない\\n(IRQCtrlがドライバ層と制御層を兼ねる意図的な構成。\\nreviewer指摘2への回答)",
+  "App -> IRQCtrl : Irq_Init()",
+  "IRQCtrl -> NVIC : SetPriority()",
+  "IRQCtrl -> NVIC : EnableVector()",
+  "NVIC --> IRQCtrl : Ack",
+  "IRQCtrl --> Spi_Driver : Ready",
+  "Spi_Driver --> App : InitDone",
+  "' @pin 1|open|reviewer|2026-09-14T18:09|participant NVIC|NVIC.EnableVector/SetPriority がクラス図に無い(F-02/F-03継続3tick目)",
+  "@enduml",
+].join('\n');
+
 const GPIO_SEQ = [
   '@startuml',
   'title GPIOドライバ初期化シーケンス',
@@ -229,7 +305,35 @@ async function messageClickPoints(page, msgIndex) {
   return page.evaluate((i) => {
     const gs = document.querySelectorAll('#preview-container svg g.message');
     const g = gs[i];
-    if (!g) return null;
+    if (!g) {
+      // BLK-human-20260925-1500: PlantUML 1.2026.7 からメッセージは g.message に入らない (teoz の描き方)。
+      // 上から i 本目の横向きの矢印の線と、その線の上 (1 本前の矢印より下) に書かれた文字をそのメッセージとする。
+      const svg = document.querySelector('#preview-container svg');
+      if (!svg) return null;
+      const lines = Array.from(svg.querySelectorAll('line')).filter((l) => {
+        if (/dasharray:\s*5/.test(l.getAttribute('style') || '')) return false;   // ライフライン
+        const dx = Math.abs(parseFloat(l.getAttribute('x2')) - parseFloat(l.getAttribute('x1')));
+        const dy = Math.abs(parseFloat(l.getAttribute('y2')) - parseFloat(l.getAttribute('y1')));
+        return dy < 0.5 && dx > 16;
+      }).sort((a, b) => parseFloat(a.getAttribute('y1')) - parseFloat(b.getAttribute('y1')));
+      const line = lines[i];
+      if (!line) return null;
+      const lr = line.getBoundingClientRect();
+      // 1 本目の上限はライフラインの上端 (参加者の頭の文字を拾わない)。
+      const lifeTops = Array.from(svg.querySelectorAll('line')).filter((l) => /dasharray:\s*5/.test(l.getAttribute('style') || ''))
+        .map((l) => l.getBoundingClientRect().top);
+      const prev = i > 0 ? lines[i - 1].getBoundingClientRect().bottom : (lifeTops.length ? Math.min(...lifeTops) : -Infinity);
+      const out = [];
+      svg.querySelectorAll('text').forEach((t) => {
+        const r = t.getBoundingClientRect();
+        const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+        if (r.width > 0 && cy > prev && cy < lr.y && cx >= lr.x - 20 && cx <= lr.right + 20) {
+          out.push({ x: cx, y: cy, what: 'text:' + t.textContent });
+        }
+      });
+      out.push({ x: lr.x + lr.width / 2, y: lr.y + lr.height / 2, what: 'arrow' });
+      return out;
+    }
     const pts = [];
     g.querySelectorAll('text').forEach((t) => {
       const r = t.getBoundingClientRect();
@@ -277,7 +381,7 @@ module.exports = {
   PRIMARY_DOCS, docFor,
   dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode, reopenApp,
   putDoc, readDoc, listDir, clearDir, clearTickets,
-  openFolder, openFolderItem, overwriteOpenedFile, typeDsl, renameActive, runCommand, exportVia,
-  GPIO_STATE, GPIO_SEQ,
+  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, peekFolder, compareFolder, typeDsl, renameActive, runCommand, exportVia,
+  GPIO_STATE, GPIO_SEQ, IRQ_SEQ_FOLDED_DASH,
   messageClickPoints, selectedMessageLine, expectMessageHitUniform,
 };

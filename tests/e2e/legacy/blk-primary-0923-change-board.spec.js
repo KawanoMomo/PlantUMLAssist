@@ -91,7 +91,8 @@ test.describe('BLK-primary-0923-wish 変更サマリボード', () => {
     await page.locator('#btn-tab-board').click();
     await expect(page.locator('#cb-body .cb-entry')).toHaveCount(1);
     await expect(page.locator('#cb-body .cb-entry .cb-count')).toContainText('新規');
-    await expect(page.locator('#cb-body .cb-entry .cb-cols')).toContainText('基準なし');
+    // BLK-owner-20260924-1712-prune: 列見出しも「変更前 =」の選択と同じ語で言う (前回保存が無い = 新規)。
+    await expect(page.locator('#cb-body .cb-entry .cb-cols')).toContainText('前回保存なし');
   });
 
   test('既定は差分行だけ、[全文] で変わっていない行も出る', async ({ page }) => {

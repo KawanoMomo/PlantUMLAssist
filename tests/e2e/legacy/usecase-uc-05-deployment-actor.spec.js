@@ -1,20 +1,19 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, switchTypeWithSample } = require('../helpers');
 
 test.describe('UC-5: 横展開 (二次 actor + association/generalization 追加)', () => {
 
   test.describe('α: DSL technical', () => {
     test('add secondary actor + association', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-usecase');
-      await page.waitForTimeout(300);
-      await page.locator('#uc-tail-kind').selectOption('actor');
+      await switchTypeWithSample(page, 'plantuml-usecase');
+      await page.locator('#uc-tail-kind-chip-actor').click();
       await page.locator('#uc-tail-alias').fill('AuthServer');
       await page.locator('#uc-tail-label').fill('External Auth Server');
       await page.locator('#uc-tail-add').click();
       await page.waitForTimeout(200);
-      await page.locator('#uc-tail-kind').selectOption('relation');
+      await page.locator('#uc-tail-kind-chip-relation').click();
       await page.locator('#uc-tail-rkind').selectOption('association');
       await page.locator('#uc-tail-from').selectOption('AuthServer');
       await page.locator('#uc-tail-to').selectOption('Login');
@@ -27,16 +26,16 @@ test.describe('UC-5: 横展開 (二次 actor + association/generalization 追加
 
     test('generalization with parent <|-- child direction canonical', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-usecase');
-      await page.waitForTimeout(300);
-      await page.locator('#uc-tail-kind').selectOption('actor');
+      await switchTypeWithSample(page, 'plantuml-usecase');
+      await page.locator('#uc-tail-kind-chip-actor').click();
       await page.locator('#uc-tail-alias').fill('Admin');
       await page.locator('#uc-tail-add').click();
       await page.waitForTimeout(200);
-      await page.locator('#uc-tail-kind').selectOption('relation');
+      await page.locator('#uc-tail-kind-chip-relation').click();
       await page.locator('#uc-tail-rkind').selectOption('generalization');
-      await page.locator('#uc-tail-from').selectOption('User');
-      await page.locator('#uc-tail-to').selectOption('Admin');
+      // BLK-owner-20260929-0351-1: From は矢の根元 = 子 (Admin)、To は親 (User)
+      await page.locator('#uc-tail-from').selectOption('Admin');
+      await page.locator('#uc-tail-to').selectOption('User');
       await page.locator('#uc-tail-add').click();
       await page.waitForTimeout(300);
       var t = await getEditorText(page);
@@ -47,9 +46,8 @@ test.describe('UC-5: 横展開 (二次 actor + association/generalization 追加
   test.describe('γ: workflow completion', () => {
     test('add secondary actor flow does not block on overlay (form-based works)', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-usecase');
-      await page.waitForTimeout(300);
-      await page.locator('#uc-tail-kind').selectOption('actor');
+      await switchTypeWithSample(page, 'plantuml-usecase');
+      await page.locator('#uc-tail-kind-chip-actor').click();
       await page.locator('#uc-tail-alias').fill('Watchdog');
       await page.locator('#uc-tail-add').click();
       await page.waitForTimeout(300);
@@ -59,13 +57,12 @@ test.describe('UC-5: 横展開 (二次 actor + association/generalization 追加
 
     test('relation kind 変更で association → generalization に切替可能', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-usecase');
-      await page.waitForTimeout(300);
-      await page.locator('#uc-tail-kind').selectOption('actor');
+      await switchTypeWithSample(page, 'plantuml-usecase');
+      await page.locator('#uc-tail-kind-chip-actor').click();
       await page.locator('#uc-tail-alias').fill('Sub');
       await page.locator('#uc-tail-add').click();
       await page.waitForTimeout(200);
-      await page.locator('#uc-tail-kind').selectOption('relation');
+      await page.locator('#uc-tail-kind-chip-relation').click();
       await page.locator('#uc-tail-rkind').selectOption('association');
       await page.locator('#uc-tail-from').selectOption('User');
       await page.locator('#uc-tail-to').selectOption('Sub');

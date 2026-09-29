@@ -1,6 +1,25 @@
 const { test, expect } = require('@playwright/test');
 const { gotoApp, saveDirFor } = require('../helpers');
 
+// 保存先の一覧は FILES の保存先の右クリック「保存先の一覧を開く」で中央の枠に開く
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。旧経路 (保存先の
+// 見出しを畳んで開き直す) は FILES の節を開くだけで、一覧の枠は見えないまま待ち続けた。
+// 開くたびに読み直すので、後から置いたファイルも出る。
+async function openFolder(page) {
+  await require('../scenarios/_scenario').openFolder(page);
+  await page.waitForSelector('#folder-panel.open.is-list');
+  // 開いた直後は FILES ツリーの読み直しが続けて一覧を 1 回描き直す。その間に押すと
+  // 描き直しで消えた古いボタンに当たることがあるので、描き直しが 400ms 止むまで待つ。
+  await page.evaluate(() => new Promise((resolve) => {
+    const el = document.getElementById('folder-panel');
+    let t = null;
+    const mo = new MutationObserver(() => { clearTimeout(t); t = setTimeout(done, 400); });
+    function done() { mo.disconnect(); resolve(); }
+    mo.observe(el, { childList: true });
+    t = setTimeout(done, 400);
+  }));
+}
+
 // BLK-reviewer-20260908-1203: 「一致 / 不一致」までは自動で分かるが、不一致の中身
 // (旧 participant 名が残っている・状態や遷移が欠落している) を primary への指摘文に
 // 書くには、7 枚それぞれで puml と旧 svg を grep で突き合わせていた。
@@ -81,7 +100,7 @@ test.describe('BLK-reviewer-1203: 内容ずれの中身を grep せずに読む'
     let clicks = 0;
     let keys = 0;
 
-    await page.locator('#btn-tab-folder').click(); clicks++;
+    await openFolder(page); clicks++;
     await page.waitForSelector('#folder-panel.open .folder-item');
     // 印だけで「内容ずれ」と分かっている状態 (確かめ直してはいない)
     await expect(page.locator('#folder-svg-content')).toContainText('ずれ 1 枚');
@@ -115,7 +134,7 @@ test.describe('BLK-reviewer-1203: 内容ずれの中身を grep せずに読む'
     expect(await exportSvg(page, 'R1203_c', OLD)).toBe(200);
     await putFile(page, 'R1203_c', NOW);
 
-    await page.locator('#btn-tab-folder').click();
+    await openFolder(page);
     await page.waitForSelector('#folder-panel.open .folder-item');
     await page.locator('#folder-svg-diff-scan').click();
     await expect(page.locator('#folder-svg-diff-head')).toBeVisible({ timeout: 120000 });
@@ -130,7 +149,7 @@ test.describe('BLK-reviewer-1203: 内容ずれの中身を grep せずに読む'
     await putFile(page, 'R1203_d', NOW);
     expect(await exportSvg(page, 'R1203_d', NOW)).toBe(200);
 
-    await page.locator('#btn-tab-folder').click();
+    await openFolder(page);
     await page.waitForSelector('#folder-panel.open .folder-item');
     await expect(page.locator('#folder-svg-diff-scan')).toBeDisabled();
     await expect(page.locator('#folder-svg-diff-head')).toHaveCount(0);

@@ -127,14 +127,19 @@ test('手順4 先輩のシーケンス図から活動図を組み立て、(資�
 test('手順4 新規タブでもタイトルを書けば図名がその名前になる', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
   await S.clearDir(page, DIR);
+  // BLK-owner-20260929-1111-1: 保存先に前から diagram2.puml がある。新しいタブはその名前で開かず、
+  // 打っても既存の図を書き換えない。
+  const KEEP = '@startuml\nAlice -> Bob : ORIGINAL_KEEP_ME\n@enduml\n';
+  await S.putDoc(page, DIR, 'diagram2', KEEP);
 
-  // 新しいタブを開く = 図名は既定名 (diagram2 など)、タイトルは空。
+  // 新しいタブを開く = 図名は既定名 (diagram3 など。保存先の diagram2 とは重ならない)、タイトルは空。
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(400);
   await S.typeDsl(page, S.GPIO_STATE);
   await page.locator('#props-tab-settings').click();
   const auto = await page.locator('#ds-docname').inputValue();
   expect(auto).toMatch(/^diagram/);
+  expect(auto).not.toBe('diagram2');
 
   // 書くのはタイトル 1 か所だけ。
   const title = page.locator('#ds-title');
@@ -150,6 +155,9 @@ test('手順4 新規タブでもタイトルを書けば図名がその名前に
   const saved = await S.readDoc(page, DIR, NAME);
   expect(saved).not.toBeNull();
   expect(saved).toContain('(資料用)');
+  const kept = await S.readDoc(page, DIR, 'diagram2');
+  expect(kept).toContain('ORIGINAL_KEEP_ME');
+  expect(kept).not.toContain('Gpio');
 });
 
 // BLK-junior-20260909-0203-wish: 6 周目のアクティビティ図では、処理順が先輩の

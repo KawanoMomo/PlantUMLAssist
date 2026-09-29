@@ -1,7 +1,7 @@
 const { test } = require('@playwright/test');
 const { gotoApp, shotOut } = require('../helpers');
 
-// BLK-primary-20260908-0003-wish の画面写真。🕸 参照関係を開き、DmaCtrl を選んで
+// BLK-primary-20260908-0003-wish の画面写真。▤ 影響を見る を名前を空のまま開き (BLK-owner-20260924-0852-prune で 🕸 参照関係を寄せた先)、DmaCtrl を選んで
 // 出てくる 3 枚が一覧に並び、タブに印が付いているところを撮る。
 const OUT = shotOut('shot-blk-primary-0003-wish.png');
 
@@ -45,8 +45,9 @@ test('shot: 参照関係グラフ', async ({ page }) => {
   await setDsl(page, CLS);
 
   await page.locator('#btn-tab-xref').click();
+  await page.waitForSelector('#ri-modal', { state: 'visible' });
   await page.waitForTimeout(500);
-  await page.locator('#xref-names .xref-name[data-name="DmaCtrl"]').click();
+  await page.locator('#ri-xref-names .ri-xref-name[data-name="DmaCtrl"]').click();
   await page.waitForTimeout(500);
   await page.screenshot({ path: OUT, fullPage: false });
 });

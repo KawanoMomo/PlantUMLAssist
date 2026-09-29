@@ -1,0 +1,9 @@
+@startuml
+autonumber 10 5 "<b>[000]"
+participant App
+participant Rte
+App -> Rte : Rte_Write_PortName(val)
+Rte --> App : Rte_E_OK
+App -> Rte : Rte_Read_PortName(&val)
+Rte --> App : Rte_E_OK
+@enduml

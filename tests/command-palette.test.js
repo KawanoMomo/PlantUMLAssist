@@ -81,7 +81,7 @@ describe('relationItems', function() {
 
 describe('グループ (design 2a の見出し)', function() {
   var ADD = [{ id: 'msg', group: 'add', title: 'メッセージ', run: function() {} }];
-  var SEL = [{ id: 'act', group: 'selected', title: '⚡ ライフライン推論', run: function() {} }];
+  var SEL = [{ id: 'act', group: 'selected', title: 'ライフライン推論', run: function() {} }];
 
   test('並びは 図に足す → 移動 → 選択中 → コマンド', function() {
     var items = CP.buildItems(ADD.concat(SEL).concat(COMMANDS), DSL);

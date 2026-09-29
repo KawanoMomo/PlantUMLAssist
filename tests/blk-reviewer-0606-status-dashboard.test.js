@@ -104,7 +104,7 @@ test('画面の手動指摘の形 (doc / keep) でも数えられる', () => {
   assert.strictEqual(b.rows[0].findings.open, 1);
 });
 
-test('📌 の未解消は pin-progress の status をそのまま読む', () => {
+test('の未解消は pin-progress の status をそのまま読む', () => {
   const b = SD.build({
     docs: ['a'],
     pins: [

@@ -67,7 +67,9 @@ test.describe('人間 — alt/loop で「どこからどこまで」を囲み、
     await page.locator('.seq-bulk-wrap[data-kind="alt"]').click();
     await expect(page.locator('#seq-wrap-range')).toContainText('2 本のメッセージ (B→C … C→B)');
     await page.locator('#seq-wrap-label').fill('在庫あり');
-    await page.locator('#seq-wrap-confirm').click();
+    // BLK-owner-20260924-2232-4: 「ブロックで囲む」の窓は条件の欄で Enter を押せば確定する (マウス不要)。
+    await page.locator('#seq-wrap-label').press('Enter');
+    await expect(page.locator('#seq-modal')).toBeHidden();
     await page.waitForTimeout(1000);
 
     expect((await getEditorText(page)).split('\n')).toEqual([

@@ -1,0 +1,14 @@
+@startuml
+actor "整備士" as User
+boundary "診断ツールUI" as UI
+control "UDSサービス" as UDS
+entity "DTC情報" as DTC
+database "EEPROM" as EE
+collections "センサ群" as Sensors
+queue "CANメッセージキュー" as MQ
+User -> UI : 故障診断開始
+UI -> UDS : ReadDTC
+...
+UDS -> EE : read
+Sensors -> MQ : push
+@enduml

@@ -15,7 +15,7 @@ var cp = global.window.MA.commandPalette;
 
 describe('describeAction (design 2a)', () => {
   test('ライフライン推論のボタンは「何が起きるか」+ 記法になる', () => {
-    var d = cp.describeAction('⚡ ライフライン推論 (activate/deactivate)');
+    var d = cp.describeAction('ライフライン推論 (activate/deactivate)');
     expect(d.title).toBe('呼び出しの開始・終了を自動で入れる');
     expect(d.hint).toBe('activate');
   });
@@ -45,8 +45,8 @@ describe('describeAction (design 2a)', () => {
   });
 
   test('元のボタンの文字は label として残る (検索に使える)', () => {
-    var d = cp.describeAction('⚡ ライフライン推論 (activate/deactivate)');
-    expect(d.label).toBe('⚡ ライフライン推論 (activate/deactivate)');
+    var d = cp.describeAction('ライフライン推論 (activate/deactivate)');
+    expect(d.label).toBe('ライフライン推論 (activate/deactivate)');
   });
 
   test('空のボタンでも落ちない', () => {
@@ -55,7 +55,7 @@ describe('describeAction (design 2a)', () => {
   });
 
   test('言い換えた候補も、元のボタンの文字で絞り込める', () => {
-    var raw = '⚡ ライフライン推論 (activate/deactivate)';
+    var raw = 'ライフライン推論 (activate/deactivate)';
     var d = cp.describeAction(raw);
     var items = cp.buildItems([{
       id: 'sel-0', group: 'selected', title: d.title, hint: d.hint,

@@ -3,6 +3,12 @@ const path = require('path');
 const { test, expect } = require('@playwright/test');
 const { gotoApp, saveDirFor } = require('../helpers');
 
+// 保存先の一覧は保存先の右クリック「保存先の一覧を開く」で中央の枠に開き、開くたびに読み直す
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。
+async function openFolder(page) {
+  await require('../scenarios/_scenario').openFolder(page);
+}
+
 // BLK-reviewer-20260908-1303 の「できるようになったこと」の画。
 const DIR = saveDirFor(__filename);
 const ABS = path.join(__dirname, '..', '..', '..', DIR);
@@ -54,11 +60,13 @@ test('shot: 文字に現れない食い違いを構造として出す', async ({
   expect(svg).not.toBeNull();
   fs.writeFileSync(path.join(ABS, 'S1303_order.svg'), svg, 'utf-8');
 
-  await page.locator('#btn-tab-folder').click();
+  await openFolder(page);
   await page.waitForSelector('#folder-panel.open .folder-item');
-  await page.locator('#folder-svg-verify').click();
+  // SVG に畳まれた元の DSL と突き合わせるので、一覧を開いた時点で「ずれ 1 枚」と言える
+  // (上書きせずに描き直す「SVG の中身を確かめる」は押す対象が無く押せない)。食い違いの中身は「食い違いの中身を調べる」で出す。
   await expect(page.locator('#folder-svg-content')).toContainText('ずれ 1 枚', { timeout: 120000 });
-  await expect(page.locator('[data-svg-diff="S1303_order"] .diff-structural')).not.toHaveCount(0);
+  await page.locator('#folder-svg-diff-scan').click();
+  await expect(page.locator('[data-svg-diff="S1303_order"] .diff-structural')).not.toHaveCount(0, { timeout: 120000 });
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   await page.locator('#folder-panel').screenshot({ path: OUT });
 });

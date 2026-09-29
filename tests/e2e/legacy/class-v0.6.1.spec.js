@@ -1,14 +1,13 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, switchTypeWithSample } = require('../helpers');
 
 test.describe('Class v0.6.1 polish', () => {
   test.describe('Note on class', () => {
     test('tail-add note kind appends note left of class', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-class');
-      await page.waitForTimeout(500);
-      await page.locator('#cl-tail-kind').selectOption('note');
+      await switchTypeWithSample(page, 'plantuml-class');
+      await page.locator('#cl-tail-kind-chip-note').click();
       await page.waitForTimeout(200);
       await page.locator('#cl-tail-ntarget').selectOption('User');
       await page.locator('#cl-tail-npos').selectOption('left');
@@ -21,8 +20,7 @@ test.describe('Class v0.6.1 polish', () => {
 
     test('multi-line note via class panel emits end note block', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-class');
-      await page.waitForTimeout(2500);
+      await switchTypeWithSample(page, 'plantuml-class');
       var rect = page.locator('#overlay-layer rect[data-type="class"]').first();
       var c = await rect.count();
       if (c === 0) test.skip();
@@ -45,10 +43,9 @@ test.describe('Class v0.6.1 polish', () => {
 
     test('deleting class removes its notes (cascade)', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-class');
-      await page.waitForTimeout(500);
+      await switchTypeWithSample(page, 'plantuml-class');
       // Add a note first
-      await page.locator('#cl-tail-kind').selectOption('note');
+      await page.locator('#cl-tail-kind-chip-note').click();
       await page.waitForTimeout(200);
       await page.locator('#cl-tail-ntarget').selectOption('User');
       await page.locator('#cl-tail-ntext').fill('cascade me');
@@ -62,9 +59,10 @@ test.describe('Class v0.6.1 polish', () => {
       var box = await rect.boundingBox();
       await page.mouse.click(box.x + 10, box.y + 8);
       await page.waitForTimeout(300);
-      // Auto-confirm window.confirm() dialog (cascade delete prompts)
-      page.once('dialog', function(d) { d.accept(); });
+      // BLK-primary-20260930-0257: 確かめる窓はブラウザの confirm ではなくアプリの窓 (#cl-del-modal)。
       await page.locator('#cl-delete').click();
+      await expect(page.locator('#cl-del-message')).toContainText('note 1 つ');
+      await page.locator('#cl-del-confirm').click();
       await page.waitForTimeout(300);
       var t = await getEditorText(page);
       expect(t).not.toContain('class User');
@@ -76,8 +74,7 @@ test.describe('Class v0.6.1 polish', () => {
   test.describe('Member individual click', () => {
     test('clicking member rect selects member and expands inline edit', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-class');
-      await page.waitForTimeout(2500);
+      await switchTypeWithSample(page, 'plantuml-class');
       var memRect = page.locator('#overlay-layer rect[data-type="member"]').first();
       var mc = await memRect.count();
       if (mc === 0) test.skip();
@@ -90,8 +87,7 @@ test.describe('Class v0.6.1 polish', () => {
 
     test('shift+click member coerces to parent class for multi-select connect', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-class');
-      await page.waitForTimeout(2500);
+      await switchTypeWithSample(page, 'plantuml-class');
       var classRect = page.locator('#overlay-layer rect[data-type="class"]').first();
       var iface = page.locator('#overlay-layer rect[data-type="interface"]').first();
       if ((await classRect.count()) === 0 || (await iface.count()) === 0) test.skip();
@@ -113,8 +109,7 @@ test.describe('Class v0.6.1 polish', () => {
       var errors = [];
       page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-class');
-      await page.waitForTimeout(2500);
+      await switchTypeWithSample(page, 'plantuml-class');
       var memRect = page.locator('#overlay-layer rect[data-type="member"]').first();
       var mc = await memRect.count();
       if (mc === 0) test.skip();
@@ -142,8 +137,7 @@ test.describe('Class v0.6.1 polish', () => {
       var errors = [];
       page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-class');
-      await page.waitForTimeout(2500);
+      await switchTypeWithSample(page, 'plantuml-class');
       var c = page.locator('#overlay-layer rect[data-type="class"]').first();
       if ((await c.count()) > 0) {
         // Click top-left header area (avoiding member rect overlap)

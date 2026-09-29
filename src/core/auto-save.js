@@ -58,19 +58,39 @@ window.MA.autoSave = (function() {
     try { return window.localStorage.getItem(key); } catch (e) { return null; }
   }
 
-  function _fileBackendWrite(diagramType, dsl, fileDir) {
+  // BLK-owner-20260924-2232-1: 元に戻す / やり直しで入れた本文の保存は、図種の判定が替わっても
+  // server に別名 (`{名前}_{図種}`) へ回させない。1 回の書き込みで消える印。
+  var _keepNames = {};
+  function keepNameOnce(name) { if (name) _keepNames[String(name)] = true; }
+
+  function _fileBackendWrite(diagramType, dsl, fileDir, freshId, docId) {
     // Fire-and-forget POST to /autosave. We don't await: localStorage
     // already has the canonical sync copy. Errors are logged but don't
     // block the localStorage write.
     // Use window.fetch so test sandboxes can stub it via global.window.fetch.
     try {
-      var body = JSON.stringify({ type: diagramType, dsl: dsl, dir: fileDir || './autosave' });
-      window.fetch('/autosave', {
+      var payload = { type: diagramType, dsl: dsl, dir: fileDir || './autosave' };
+      if (_keepNames[diagramType]) { payload.keepName = true; delete _keepNames[diagramType]; }
+      // BLK-owner-20260929-1111-1: まだ 1 度も書いていない新しい図の印。保存先に同じ名前の
+      // 別の図があれば server は書かずに 409 を返す。
+      if (freshId) payload.freshId = String(freshId);
+      // BLK-owner-20260930-0311-1: 書いたタブの印。自分で書いた続きは、図種の読みが替わっても別名へ回さない。
+      if (docId) payload.docId = String(docId);
+      var body = JSON.stringify(payload);
+      var req = window.fetch('/autosave', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: body,
         keepalive: true,
       }).then(function(r) {
+        if (r && r.status === 409) {
+          var clash = function(data) {
+            noteFileConflict({ name: diagramType, id: freshId || null, message: data && data.message });
+            return null;
+          };
+          return r.json ? r.json().then(clash, function() { return clash(null); }) : clash(null);
+        }
+        if (r && r.ok && freshId) _notifyFreshWritten({ name: diagramType, id: String(freshId) });
         // BLK-junior-20260908-2003: 図種が変わる保存は server が別ファイルへ回す。
         // 回された先を知らせないと、画面の図名と書かれたファイルがずれたまま
         // 次の保存も同じように回り続ける (図名を直すのは app.js)。
@@ -85,7 +105,21 @@ window.MA.autoSave = (function() {
           console.warn('[autoSave] file write failed:', e);
         }
       });
+      _trackWrite(req);
     } catch (e) { /* fetch may not exist in test sandbox; localStorage still works */ }
+  }
+
+  // BLK-junior-20260925-1732-friction: 書きに出た途中の保存。改名の後始末 (rename-sweep) は
+  // 前の名前のファイルを読んで今の図と比べるので、書き終わる前に読むと古い中身と比べてしまう。
+  var _inflight = [];
+  function _trackWrite(req) {
+    if (!req || typeof req.then !== 'function') return;
+    var done = req.then(function() {}, function() {});
+    _inflight.push(done);
+    done.then(function() {
+      var i = _inflight.indexOf(done);
+      if (i >= 0) _inflight.splice(i, 1);
+    });
   }
   function _fileBackendDelete(fileDir) {
     try {
@@ -204,6 +238,42 @@ window.MA.autoSave = (function() {
     if (typeof listener === 'function') _blockedListeners.push(listener);
   }
 
+  // ── 新しい図が保存先の別の図と同じ名前だったとき (BLK-owner-20260929-1111-1) ──
+  // server は書かずに 409 を返す。状態バーは「書かなかった」にし、画面 (app.js) に名前を選ばせる。
+  var _conflictListeners = [];
+  var _freshWrittenListeners = [];
+  function noteFileConflict(info) {
+    info = info || {};
+    var name = String(info.name == null ? '' : info.name);
+    var reason = info.message || ('同じ名前の図が保存先にあります (' + name + '.puml)。この図の名前を選び直すまで書きません');
+    _lastWrite = { at: new Date().toISOString(), diagramType: name, fileName: name,
+                   where: 'blocked', reason: reason };
+    var now = Date.now();
+    var key = 'conflict:' + name;
+    var last = _blockedSeen[key];
+    var quiet = !!(last && (now - last) < BLOCK_QUIET_MS);
+    _blockedSeen[key] = now;
+    var meta = getMeta() || {};
+    for (var j = 0; j < _saveListeners.length; j++) {
+      try { _saveListeners[j](meta); } catch (e) {}
+    }
+    if (quiet) return;
+    for (var i = 0; i < _conflictListeners.length; i++) {
+      try { _conflictListeners[i]({ name: name, id: info.id || null, reason: reason }); } catch (e) {}
+    }
+  }
+  function onFileConflict(listener) {
+    if (typeof listener === 'function') _conflictListeners.push(listener);
+  }
+  function _notifyFreshWritten(info) {
+    for (var i = 0; i < _freshWrittenListeners.length; i++) {
+      try { _freshWrittenListeners[i](info); } catch (e) {}
+    }
+  }
+  function onFreshWritten(listener) {
+    if (typeof listener === 'function') _freshWrittenListeners.push(listener);
+  }
+
   // ── 図種が変わって別ファイルへ回されたとき (BLK-junior-20260908-2003) ────
   var _renamedListeners = [];
 
@@ -247,19 +317,28 @@ window.MA.autoSave = (function() {
   // 解決器は名前の文字列だけを返してもよい (従来どおり)。書かない訳まで知らせたいときは
   // { name: '', reason: 'ask' } の形で返す —— 訳が分かると、画面は「まだディスクに
   // 書いていない」と「書く必要が無い」を言い分けられる (BLK-primary-20260914-2206)。
-  function _fileNameFor(diagramType) {
+  // dsl — 書こうとしている本文 (BLK-owner-20260925-0312-2: 見本・白紙のままなら書かないと決めるのに使う)。
+  function _fileNameFor(diagramType, dsl) {
     if (!_fileNameResolver) return { name: diagramType, reason: null };
     var r;
     try {
-      r = _fileNameResolver(diagramType);
+      r = _fileNameResolver(diagramType, dsl);
     } catch (e) {
       return { name: null, reason: 'error' };   // 名前が分からないなら書かない (取り違えより無書き込み)
     }
-    var n, why = null;
-    if (r && typeof r === 'object') { n = r.name; why = r.reason || null; }
+    var n, why = null, dir = null, fresh = null;
+    if (r && typeof r === 'object') {
+      n = r.name; why = r.reason || null; dir = r.dir ? String(r.dir) : null;
+      fresh = r.freshId ? String(r.freshId) : null;
+    }
     else n = r;
     n = (n == null) ? '' : String(n);
-    return { name: n ? n : null, reason: n ? null : (why || 'no-name') };
+    // BLK-human-20260925-1150: dir はそのタブの書き先のフォルダ (保存先を替える前に開いたタブは
+    // 開いたフォルダ)。打った時点で名前と一緒に決める (debounce の間に保存先が替わっても流れない)。
+    var out = { name: n ? n : null, reason: n ? null : (why || 'no-name') };
+    if (dir) out.dir = dir;
+    if (fresh && out.name) out.freshId = fresh;
+    return out;
   }
 
   // 直近の 1 回の保存が「どこまで届いたか」。画面の 💾 表示はここを読む。
@@ -311,7 +390,7 @@ window.MA.autoSave = (function() {
     _writeJson(KEY_META, meta);
     // If file backend selected, mirror the write to disk via the server.
     var cfg = getConfig();
-    if (fileInfo === undefined) fileInfo = _fileNameFor(diagramType);
+    if (fileInfo === undefined) fileInfo = _fileNameFor(diagramType, dsl);
     var fileName = fileInfo ? fileInfo.name : null;
     var where = 'local', reason = null;
     // fileName が null なら、名前が決まらないタブ (未命名・記号入り) なので
@@ -332,7 +411,6 @@ window.MA.autoSave = (function() {
           _notifyBlocked(fileName, block);
         } else {
           where = 'file';
-          _fileBackendWrite(fileName, dsl, cfg.fileDir);
         }
       }
     }
@@ -342,6 +420,11 @@ window.MA.autoSave = (function() {
       try { _saveListeners[i](meta); } catch (e) { /* listener errors must not block */ }
     }
     if (where === 'deferred') _notifyDeferred({ diagramType: diagramType, reason: reason });
+    // 書きに出すのは「書いた」の記録と知らせの後 (返事 = 409 の「書かなかった」を後から上書きしない)。
+    if (where === 'file') {
+      _fileBackendWrite(fileName, dsl, (fileInfo && fileInfo.dir) || cfg.fileDir,
+                        (fileInfo && fileInfo.freshId) || null, (fileInfo && fileInfo.docId) || null);
+    }
     return meta;
   }
 
@@ -358,6 +441,16 @@ window.MA.autoSave = (function() {
     _doWrite(p.diagramType, p.dsl, p.fileInfo);
   }
 
+  // settle() — 待っている保存 (debounce 中) を今すぐ書き、書きに出た保存が届くまで待つ Promise。
+  // BLK-junior-20260925-1732-friction: タイトル欄を変えた直後 (1 秒の debounce の間) にタブ名を変えると、
+  // 待っていた保存は打った時点の名前 (= 前の名前) で後から書かれ、改名の後始末が済んだ後に
+  // 前の名前のファイルが今の図と同じ中身で作り直されていた。改名の前にここで書き切らせる。
+  function settle() {
+    flush();
+    if (!_inflight.length) return Promise.resolve();
+    return Promise.all(_inflight.slice()).then(function() {});
+  }
+
   function scheduleSave(diagramType, dsl) {
     if (!diagramType) return;
     var cfg = getConfig();
@@ -368,7 +461,7 @@ window.MA.autoSave = (function() {
     _pending = {
       diagramType: diagramType,
       dsl: String(dsl == null ? '' : dsl),
-      fileInfo: _fileNameFor(diagramType),
+      fileInfo: _fileNameFor(diagramType, dsl),
     };
     if (_timerId != null) {
       try { clearTimeout(_timerId); } catch (e) {}
@@ -453,6 +546,7 @@ window.MA.autoSave = (function() {
     init: init,
     scheduleSave: scheduleSave,
     flush: flush,
+    settle: settle,
     restoreFor: restoreFor,
     hasSavedFor: hasSavedFor,
     getMeta: getMeta,
@@ -469,8 +563,12 @@ window.MA.autoSave = (function() {
     getLastWrite: getLastWrite,
     noteFileWritten: noteFileWritten,
     onFileRenamed: onFileRenamed,
+    keepNameOnce: keepNameOnce,
     noteFileRenamed: noteFileRenamed,
     noteFileBlocked: noteFileBlocked,
+    noteFileConflict: noteFileConflict,
+    onFileConflict: onFileConflict,
+    onFreshWritten: onFreshWritten,
     resetFileBlocked: resetFileBlocked,
   };
 })();

@@ -169,13 +169,18 @@ describe('activity buildOverlay: shape classification (real PlantUML SVG signatu
     // (OB.raiseSmallestLast)。小さい当たり判定を手前に置かないと、広げた関係の箱が
     // 要素を覆って押せなくなるため。DOM の並びは描画順ではなくなったので、
     // ここでは「3 つの node がそれぞれ 1 枚ずつ出ている」ことを id で確かめる。
+    // BLK-migrator-20260924-2232: 矢じり (4 点の polygon) には「流れ」の枠が 1 つずつ付く。
+    // 要素の枠は今までどおり 3 つ。流れの枠は矢じりの先の要素の 1 つ前の行を指す。
     var ids = Array.prototype.map.call(
-      overlay.querySelectorAll('rect.selectable'),
+      overlay.querySelectorAll('rect.selectable:not([data-type="flow"])'),
       function(r) { return r.getAttribute('data-id'); });
     expect(ids.length).toBe(3);
     expect(ids.indexOf('__a_0') > -1).toBe(true);
     expect(ids.indexOf('__a_1') > -1).toBe(true);
     expect(ids.indexOf('__a_2') > -1).toBe(true);
+    var flowLines = Array.prototype.map.call(overlay.querySelectorAll('rect[data-type="flow"]'),
+      function(r) { return r.getAttribute('data-line'); }).sort();
+    expect(flowLines).toEqual(['2', '3']);
   });
 
   test('skips overlay generation when shape count mismatches node count', function() {

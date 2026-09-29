@@ -43,14 +43,28 @@ async function rolesOnDisk(page) {
   }, DIR);
 }
 
+// 保存先の一覧は FILES の保存先の右クリック「保存先の一覧を開く」で中央の枠に開く
+// (BLK-owner-20260924-0637-1。scenarios/_scenario.js の openFolder と同じ経路)。旧経路 (保存先の
+// 見出しを畳んで開き直す) は FILES の節を開くだけで、一覧の枠は見えないまま待ち続けた。
+// 開くたびに読み直すので、後から置いたファイルも出る。
 async function openFolder(page) {
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open .folder-item');
+  await require('../scenarios/_scenario').openFolder(page);
+  await page.waitForSelector('#folder-panel.open.is-list .folder-item');
+  // 開いた直後は FILES ツリーの読み直しが続けて一覧を 1 回描き直す。その間に押した
+  // 分類の印は描き直しで消えた古いボタンに当たって数に入らないことがあるので、
+  // 一覧の描き直しが 400ms 止むまで待ってから押す。
+  await page.evaluate(() => new Promise((resolve) => {
+    const el = document.getElementById('folder-panel');
+    let t = null;
+    const mo = new MutationObserver(() => { clearTimeout(t); t = setTimeout(done, 400); });
+    function done() { mo.disconnect(); resolve(); }
+    mo.observe(el, { childList: true });
+    t = setTimeout(done, 400);
+  }));
 }
 
 async function closeFolder(page) {
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open', { state: 'detached' }).catch(() => {});
+  await require('../scenarios/_scenario').closeFolderList(page);
 }
 
 function roleBtn(page, name) {
@@ -103,9 +117,13 @@ test.describe('BLK-reviewer-20260908-0203-wish: 実データ / テンプレの�
 
     await openFolder(page);
     await roleBtn(page, 'R0203_tpl').click();
+    await expect(roleBtn(page, 'R0203_tpl')).toHaveAttribute('data-role', 'data');
     await roleBtn(page, 'R0203_tpl').click();          // テンプレ
+    await expect(roleBtn(page, 'R0203_tpl')).toHaveAttribute('data-role', 'template');
     await roleBtn(page, 'R0203_keep').click();
+    await expect(roleBtn(page, 'R0203_keep')).toHaveAttribute('data-role', 'data');
     await roleBtn(page, 'R0203_keep').click();         // テンプレ
+    await expect(roleBtn(page, 'R0203_keep')).toHaveAttribute('data-role', 'template');
     await roleBtn(page, 'R0203_data').click();         // 実データ
     await expect(roleBtn(page, 'R0203_data')).toHaveAttribute('data-role', 'data');
     await expect(page.locator('#folder-role-summary')).toHaveText(/実データ 1 \/ テンプレ 2 \/ 未分類 0/);
@@ -133,7 +151,9 @@ test.describe('BLK-reviewer-20260908-0203-wish: 実データ / テンプレの�
 
     await openFolder(page);
     await roleBtn(page, 'R0203_tpl').click();
+    await expect(roleBtn(page, 'R0203_tpl')).toHaveAttribute('data-role', 'data');
     await roleBtn(page, 'R0203_tpl').click();
+    await expect(roleBtn(page, 'R0203_tpl')).toHaveAttribute('data-role', 'template');
     await closeFolder(page);
     await putFile(page, 'R0203_tpl', POLLUTED);
     await openFolder(page);
@@ -153,7 +173,9 @@ test.describe('BLK-reviewer-20260908-0203-wish: 実データ / テンプレの�
     await putFile(page, 'R0203_data', DATA);
     await openFolder(page);
     await roleBtn(page, 'R0203_tpl').click();
+    await expect(roleBtn(page, 'R0203_tpl')).toHaveAttribute('data-role', 'data');
     await roleBtn(page, 'R0203_tpl').click();     // テンプレ
+    await expect(roleBtn(page, 'R0203_tpl')).toHaveAttribute('data-role', 'template');
     await roleBtn(page, 'R0203_data').click();    // 実データ
     await expect(roleBtn(page, 'R0203_data')).toHaveAttribute('data-role', 'data');
     expect(Object.keys(await rolesOnDisk(page)).sort().join(',')).toBe('R0203_data,R0203_tpl');

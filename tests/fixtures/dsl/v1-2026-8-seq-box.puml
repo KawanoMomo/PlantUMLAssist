@@ -1,0 +1,14 @@
+' 狙い: box によるparticipantのグルーピング
+@startuml
+box "ECU本体" #LightYellow
+  participant App
+  participant Rte
+end box
+box "外部装置"
+  participant Tester
+end box
+Tester -> App : 診断リクエスト
+App -> Rte : データ取得
+Rte --> App : データ
+App --> Tester : 診断レスポンス
+@enduml

@@ -1,0 +1,11 @@
+@startuml
+skinparam roundCorner 8
+participant A
+participant B
+A -> B : x
+note right of B
+  == 見出し ==
+  一致
+end note
+B --> A : y
+@enduml

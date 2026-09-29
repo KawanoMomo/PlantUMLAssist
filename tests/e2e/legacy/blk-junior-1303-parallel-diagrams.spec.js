@@ -5,7 +5,7 @@
 // 「後で作った方にだけある要素を 1 つ選ぶ」手順が成立しなかった。
 // 片方にだけある要素は無いと言い切り、語の対応表に切り替わることを見る。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, saveDirFor } = require('../helpers');
+const { gotoApp, saveDirFor, openCrossRef } = require('../helpers');
 
 const SELF_DIR = saveDirFor(__filename) + '/self';
 const REF_DIR = saveDirFor(__filename) + '/ref';
@@ -65,10 +65,7 @@ async function setup(page, refDsl) {
   await page.locator('#editor').fill(SELF_DSL);
   await page.waitForTimeout(900);
   await seedRefFolder(page, refDsl);
-  await page.locator('#btn-tab-compare').click();
-  await page.waitForTimeout(400);
-  await page.locator('#xf-dir').fill(REF_DIR);
-  await page.locator('#btn-xf-load').click();
+  await openCrossRef(page, REF_DIR);
   await expect(page.locator('#xf-pick')).toBeVisible();
   await expect(page.locator('#xf-file')).toHaveValue(REF_NAME);
   await expect(page.locator('#xf-summary')).toBeVisible();

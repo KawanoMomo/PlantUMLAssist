@@ -271,17 +271,39 @@ window.MA.consistency = (function() {
     var unused = unusedParticipants(docs);
     var md = methodGapsDetail(docs);
     var methods = md.gaps;
+    // BLK-reviewer-20260923-2012-wish: メソッド突合 (method-audit) と同じく、
+    // `'@omit-method` のタグで意図的な省略と宣言された組は外し、タグは無いが
+    // note の自由文で答えている組は印を付けて未解消とは別に数える。
+    // ここだけタグを読まないと、primary がタグに直しても整合の件数が減らない。
+    var methodOmitted = [];
+    var methodNoteReplied = [];
+    var OM = (typeof window !== 'undefined' && window.MA) ? window.MA.omitMethod : null;
+    if (OM && methods.length) {
+      var part = OM.partition(methods, OM.collect(docs));
+      methods = part.issues;
+      methodOmitted = part.omitted;
+      if (OM.markNotes) {
+        var mk = OM.markNotes(methods, OM.collect(docs, { notes: true }));
+        methods = mk.items;
+        methodNoteReplied = mk.noteReplied;
+      }
+    }
     var granularity = granularityGaps(docs);
     var events = eventGaps(docs);
+    var unresolved = methods.length - methodNoteReplied.length;
     return {
       naming: naming,
       unused: unused,
       methods: methods,
       // 呼び出しへの応答として突合から外したもの。count には数えない。
       methodReplies: md.replies,
+      // `'@omit-method` のタグで外したもの。count には数えない。
+      methodOmitted: methodOmitted,
+      // methods のうち note の自由文で応答済み (タグ化待ち) のもの。count には数えない。
+      methodNoteReplied: methodNoteReplied,
       granularity: granularity,
       events: events,
-      count: naming.length + unused.length + methods.length + granularity.length + events.length,
+      count: naming.length + unused.length + unresolved + granularity.length + events.length,
     };
   }
 

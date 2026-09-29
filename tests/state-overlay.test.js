@@ -16,6 +16,7 @@ var depPaths = [
   '../src/core/parser-utils.js',
   '../src/core/props-renderer.js',
   '../src/core/overlay-builder.js',
+  '../src/core/state-svg-map.js',
   '../src/modules/state.js',
 ];
 depPaths.forEach(function(p) {
@@ -67,5 +68,33 @@ describe('state buildOverlay: entity matching', function() {
     stMod.buildOverlay(svg, parsed, overlay);
     expect(overlay.querySelectorAll('rect[data-type="state"][data-id="Outer.Inner"]').length).toBe(1);
     expect(overlay.querySelectorAll('rect[data-type="state"][data-id="Outer"]').length).toBe(1);
+  });
+});
+
+// BLK-human-20260923-2001: 開始・終了 [*] の丸も選べ、どこの (最上位 / 親) 開始・終了かが id で分かる。
+describe('state buildOverlay: 開始・終了の丸', function() {
+  test('qualified-name から kind と scope を読む', function() {
+    expect(stMod.pseudoFromQualifiedName('.start.', 'start_entity')).toEqual({ kind: 'start', scope: '' });
+    expect(stMod.pseudoFromQualifiedName('Idle..end.Idle', 'end_entity')).toEqual({ kind: 'end', scope: 'Idle' });
+    expect(stMod.pseudoFromQualifiedName('A.B..start.A.B', 'start_entity')).toEqual({ kind: 'start', scope: 'A.B' });
+    expect(stMod.pseudoFromQualifiedName('X', 'entity')).toBe(null);
+  });
+  test('start_entity / end_entity に pseudo の当たり矩形を置く', function() {
+    var svg = makeSvg(
+      '<g class="start_entity" data-qualified-name=".start." data-source-line="1">' +
+        '<ellipse cx="44" cy="16" rx="10" ry="10"/></g>' +
+      '<g class="start_entity" data-qualified-name="Idle..start.Idle" data-source-line="5">' +
+        '<ellipse cx="45" cy="135" rx="10" ry="10"/></g>' +
+      '<g class="end_entity" data-qualified-name="Idle..end.Idle" data-source-line="7">' +
+        '<ellipse cx="45" cy="384" rx="11" ry="11"/><ellipse cx="45" cy="384" rx="6" ry="6"/></g>'
+    );
+    var overlay = document.createElementNS(SVG_NS, 'svg');
+    stMod.buildOverlay(svg, { meta: {}, transitions: [], notes: [], states: [] }, overlay);
+    var ids = Array.prototype.map.call(overlay.querySelectorAll('rect[data-type="pseudo"]'), function(r) {
+      return r.getAttribute('data-id') + ':' + r.getAttribute('data-line');
+    }).sort();
+    expect(ids).toEqual(['end@Idle:8', 'start@:2', 'start@Idle:6']);
+    var endRect = overlay.querySelector('rect[data-id="end@Idle"]');
+    expect(parseFloat(endRect.getAttribute('width'))).toBe(28);
   });
 });

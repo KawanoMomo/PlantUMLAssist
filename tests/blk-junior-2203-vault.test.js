@@ -1,7 +1,6 @@
 'use strict';
 // BLK-junior-20260908-2203-wish: 画像を書き出した瞬間の図を「提出物庫」へ積み、
 // あとの周が同じファイル名で上書きしても前回分が消えないことを固定する。
-// 棚卸しの「あり / なし」も、作業ファイルではなく庫を見て判定する。
 if (!global.window) {
   var jsdom = require('jsdom');
   var dom = new jsdom.JSDOM('<!DOCTYPE html><html><body></body></html>');
@@ -10,12 +9,11 @@ if (!global.window) {
 }
 
 ['../src/core/component-pack.js', '../src/core/version-history.js',
- '../src/core/vault.js', '../src/core/component-inventory.js'].forEach(function(m) {
+ '../src/core/vault.js'].forEach(function(m) {
   try { delete require.cache[require.resolve(m)]; } catch (e) {}
   require(m);
 });
 var V = global.window.MA.vault;
-var CI = global.window.MA.componentInventory;
 
 var STATE_DSL = ['@startuml', 'title GPIOドライバ状態遷移(資料用)',
   '[*] --> Uninit', 'Uninit --> Ready : Gpio_Init', '@enduml'].join('\n');
@@ -95,40 +93,3 @@ describe('vault.rows / pick', function() {
   });
 });
 
-describe('componentInventory × 提出物庫', function() {
-  var rows = V.rows(PAYLOAD);
-
-  test('作業ファイルが上書きで消えていても、庫にあれば「あり」', function() {
-    // 保存フォルダには diagram1 しか残っていない (状態遷移もシーケンスも上書き済み)。
-    var rec = CI.buildOne('GPIOドライバ', [], rows);
-    var st = rec.rows.filter(function(r) { return r.kind === '状態遷移図'; })[0];
-    expect(st.present).toBe(true);
-    expect(st.source).toBe('vault');
-    expect(st.vault.length).toBe(2);
-    expect(rec.missing.indexOf('状態遷移図') >= 0).toBe(false);
-  });
-
-  test('ファイルと庫の両方にあれば source は both', function() {
-    var rec = CI.buildOne('GPIOドライバ', ['GPIOドライバ状態遷移.puml'], rows);
-    var st = rec.rows.filter(function(r) { return r.kind === '状態遷移図'; })[0];
-    expect(st.source).toBe('both');
-  });
-
-  test('庫にしか無い部品も棚卸しに並ぶ (消えたことにしない)', function() {
-    var recs = CI.build(['diagram1.puml'], rows);
-    var rec = CI.pick(recs, 'GPIOドライバ');
-    expect(!!rec).toBe(true);
-    expect(rec.have).toBe(2);
-  });
-
-  test('庫を渡さなければ今までどおりファイル名だけで数える', function() {
-    var rec = CI.buildOne('GPIOドライバ', []);
-    expect(rec.missing.length).toBe(8);
-    expect(rec.rows[0].source).toBe('');
-  });
-
-  test('控える表は、庫にしか無い行をそう書く (開こうとして詰まらせない)', function() {
-    var rec = CI.buildOne('GPIOドライバ', [], rows);
-    expect(CI.text(rec)).toContain('提出物庫 2 件');
-  });
-});

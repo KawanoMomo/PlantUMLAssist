@@ -37,6 +37,7 @@ curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日�
 | --- | --- | --- |
 | `GET /render` | — | `POST /render` の仕様 (別名・比較の注意つき) |
 | `POST /render` | `{text, mode}` | 200 `image/svg+xml` / 400 `{error}` / 422 `{error, line}` |
+| `POST /preproc` | `{text}` | 200 `{ok: true, lines}` (同梱 jar のプリプロセッサで展開した最初の図の行) / 200 `{ok: false, error}` / 400 `{error}` |
 
 `text` は `@startuml … @enduml` の DSL 全文。`dsl` `source` `uml` `puml` `diagram` は別名として
 受理されるが、正式な名前は `text` (別名で送ると `X-PlantUMLAssist-Warning` が付く)。
@@ -81,21 +82,34 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `POST /autosave` | `{type, dir, dsl}` | 図の DSL を保存する |
 | `DELETE /autosave` | `?dir=&type=` | 保存を消す |
 | `POST /autosave-svg` | `{type, dir, svg}` | 書き出した svg を保存する (印を刻む) |
+| `POST /autosave-image` | `{name, dir, image: {ext, base64}}` | 資料化した画像 (png / svg) を保存フォルダに置き、書けた大きさを返す |
 | `GET /autosave-versions` | `?dir=&type=` | 1 枚の図の版の一覧 |
 | `GET /version-search` | `?dir=&q=` | 保存フォルダの全図の版から部品名を探す (混入点の材料) |
 | `GET /version-diff` | `?dir=&type=[&stamp=]` | 1 枚の図の「その版」と「直前の版」の本文を組で返す (全文差分の材料) |
 | `GET /peek-dirs` | — | 保存フォルダの候補を覗く |
+| `GET /git-status` | `?dir=` | 保存先が Git 作業木なら `{repo, branch, ahead, behind, changes:[{code, file, name}]}`。作業木でなければ `{repo:false}`。読むだけで通信しない |
+| `GET /git-log` | `?dir=&file=` | その図 (file 省略で保存先全体) に関係するコミット `{commits:[{hash, short, author, date, message, tags, head, added, removed}]}` |
+| `GET /git-refs` | `?dir=` | ブランチとタグ `{current, branches, tags}` |
+| `GET /git-show` | `?dir=&file=&rev=` | rev 時点の `{file}.puml` の本文 `{text}`。無ければ 404 |
+| `POST /git-commit` | `{dir, message}` | 保存先の変更を全部載せてコミット `{ok, short}`。失敗は 409 `{error}` |
+| `POST /git-pull` | `{dir}` | 取得 (`pull --ff-only`)。画面で押したときだけ呼ぶ |
+| `POST /git-push` | `{dir}` | 送信 (`push`)。画面で押したときだけ呼ぶ。認証は OS の git |
+| `POST /git-checkout` | `{dir, branch}` | ブランチ切り替え |
 | `GET /peek-notes` | `?dir=` | 隣のフォルダに置かれた指摘 (`.md`) を読む |
 | `GET /name-registry` | `?dir=` | 保存フォルダの**親**にある正式表記の登録簿 (`_names.json`。3 人で共有) |
 | `POST /name-registry` | `{dir, entries}` | 正式表記の登録簿を丸ごと置き換える |
 | `GET /cohort-ack` | `?dir=` | 保存フォルダの**親**にある確認済みの組の台帳 (`_cohort-ack.json`。ドメイン突合で内部揺れと確かめた組) |
 | `POST /cohort-ack` | `{dir, entries}` | 確認済みの組の台帳を丸ごと置き換える |
+| `GET /meeting-log` | `?dir=` | 保存フォルダの `_meetings.json` にある、会議セットで並べた日時の控え (古い順)。▤ 変更サマリボードの「変更前 = 前回の会議」が読む |
+| `POST /meeting-log` | `{dir, at}` | 会議セットで並べた日時を 1 つ足す (1 日 1 件。同じ日はその日の最後の時刻に置き換える) |
 | `POST /file-roles` | `{dir, roles}` | `_roles.json` を丸ごと置き換える |
+| `POST /export-zip` | `{dir, name, base64}` | 書き出した zip を保存フォルダに置き、書けたバイト数を返す |
 | `POST /export-log` | — | 書き出しの控えを 1 件足す |
 
 `GET /version-search` の `q` は空白区切りの語 (最大 6 語)。返りは
 `{terms, dir, scanned, files:[{name, versions:[{stamp, current, counts, lines}]}]}` で、
-版は古い順・最後の 1 件が `current: true` (まだ控えになっていない今の中身)。
+版は古い順・最後の 1 件が `current: true` (まだ控えになっていない今の中身。更新時刻 `mtime` (UTC) 付き)。
+`ci=1` を付けると大文字小文字を無視する (▤ 影響を見る の「版履歴を症状の語で探す」が使う)。
 `counts` は語ごとの出現数、`lines` は当たった行だけ (1 版 40 行まで)。本文は返さない。
 どの版で増えたか・混在がどこから始まったかの判定は GUI 側 (`src/core/blame-point.js`)。
 
@@ -125,12 +139,18 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `POST /doc-sets` | `{dir, name, docs}` | 資料セットを 1 つ登録する (同じ名前は置き換え) |
 | `DELETE /doc-sets` | `?dir=&name=` | 資料セットを 1 つ消す |
 | `GET /version` | — | アプリの版・コミット・日付 (`{version, commit, date}`。git tag が正本) |
+| `GET /update-check` | — | 押したときだけ GitHub Releases の latest を 1 回読み `{current, release:{tag_name, html_url, assets}}` か `{current, error}`。落とさない・実行しない |
+| `POST /open-url` | `{url}` | このリポジトリの GitHub の URL だけを既定のブラウザで開く。他の URL は 400 |
+| `POST /file-op` | `{op, dir, name, to?, toDir?}` | FILES ツリーの右クリック (design 10b)。`op` は `rename` / `copy` / `move` / `reveal`。行き先に同名があれば 409 (上書きしない)。過去版は動かさない |
 | `GET /prefs` | — | この機械に保存した設定 |
+| `GET /data-root` | — | 設定と既定の保存先の置き場所 `{dataRoot, sandbox}`(sandbox は `PUA_DATA_ROOT` で起こしたテスト用) |
 | `POST /prefs` | — | 設定を書く |
 | `GET /env` | — | Java / jar の有無、`app` (アプリ版か)、`javaUrl` (Java が無いときの案内先) |
 | `POST /jar-path` | `{path}` | 描画に使う plantuml.jar の場所を設定する。無いファイル・`.jar` でないものは 400 |
 | `POST /pick-jar` | — | アプリ版: ファイルダイアログで jar を選ぶ。Web 版は 409 |
 | `POST /fetch-jar` | — | アプリ版/Windows: `lib/fetch-plantuml.ps1` で公式から jar を取る。使えない環境は 409 |
 | `POST /native-save` | `{fileName, text` または `base64}` | アプリ版: 保存ダイアログを出して書き、`{path}`。やめたら `{canceled:true}`。Web 版は 409 |
+| `POST /native-open` | — | アプリ版: 開くダイアログ (複数選択) で .puml を読み、`{files:[{path, name, text, encoding, bom, eol}]}`。Web 版は 409 |
+| `POST /native-write` | `{path, text, encoding, bom}` | 開いた元の .puml / .plantuml / .uml / .txt へ書き戻す。Shift_JIS は cp932 で書き、書けない字があれば 400。無いファイルには書かない |
 | `POST /heartbeat` | — | 204。無音 300 秒で server は自分で落ちる |
-| `POST /shutdown` | — | 204。停止を予約する (Java は残るので別に止める) |
+| `POST /shutdown` | — | 204。停止を予約する (Java は残るので別に止める)。環境変数 `PUA_NO_IDLE_EXIT=1` で起こした server は何もしない (無音 3 時間で落ちる安全弁だけ残る) |

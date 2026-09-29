@@ -1,0 +1,1078 @@
+{
+ "corpus/activity-01-basic-if.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/activity-02-switch-case.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/activity-03-while-repeat.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/activity-04-fork-split.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/activity-05-partition-swimlane.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/activity-06-note-detach-kill.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/activity-08-connector.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/activity-09-legacy-syntax.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/activity-10-title-header-footer-legend.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/activity-12-action-shapes.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/activity-13-split-merge-detach.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/activity-14-nested-partition-note.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/activity-15-while-label-break.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/activity-16-swimlane-style-block.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "corpus/class-01-basic-visibility.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-02-abstract-interface-enum.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-03-static-abstract-modifiers.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-04-relations-full.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-05-package-namespace.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-06-generics-templates.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-07-stereotype-spot.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-08-note-on-link-hide-show.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-09-together-separators.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-10-lollipop-interface.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-11-visibility-full-mcu.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-12-object-map-diagram.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-sequence"
+ },
+ "corpus/class-13-association-class-role-names.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-14-namespace-colon-hide-circle.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-15-hidden-edge-lr-direction.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/class-16-interface-extends-legend.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/common-01-skinparam-style-block.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/common-02-preprocessor-conditionals.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "corpus/common-03-preprocessor-function-procedure.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/common-04-creole-text-styles.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/common-05-creole-tables-lists-links.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/common-06-sprite-legend.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/common-07-preprocessor-include-function.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/common-08-creole-headers-hr-image.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/common-09-title-header-footer-newpage.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/common-10-skinparam-arrow-note-legend.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/common-11-style-block.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "corpus/common-13-creole-inline-decorations.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/common-14-inline-sprite-bitmap.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "corpus/common-15-scale-mainframe-hide.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/component-01-basic-bracket.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "corpus/component-02-groups.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "corpus/component-03-ports.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "corpus/component-04-arrow-directions.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "corpus/component-05-note-style.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "corpus/component-06-stereotype-full.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "corpus/component-07-title-header-footer-legend.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "corpus/component-08-together-hexagon-url.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "corpus/component-09-lollipop-socket.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-class"
+ },
+ "corpus/component-10-deployment-nodes.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "corpus/component-11-arrow-style-direction.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "corpus/component-12-container-shapes.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-sequence"
+ },
+ "corpus/component-13-preproc-variable-procedure.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "corpus/dirty-01-tabs-blank-trailing.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/dirty-02-fullwidth-longline-backslash.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/dirty-03-filename-doubleblock-caseflip.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/dirty-04-crlf.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/dirty-06-unmatched-block-broken.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-01-basic-arrows.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-02-arrow-shapes-full.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-03-self-message.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-04-autonumber-basic.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-05-autonumber-format.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-06-autonumber-stop-resume.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-07-autonumber-inc.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-08-participant-types.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-09-participant-alias-color-order.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-10-box-grouping.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-11-activate-deactivate-destroy.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-12-return-and-create.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-13-alt-else.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-14-opt-loop-nested.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-15-par-break-critical-group.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-16-ref-and-notes.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-17-hnote-rnote-dividers.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-18-titles-headers-legends.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-19-newpage-mainframe-stereotype.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-20-creole-linebreak-anchor.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-21-teoz-parallel.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-22-preprocessor-comments.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-23-hide-unlinked-note-across.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-24-autoactivate-colored-activation.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-25-skinparam-sequence-specific.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-26-builtin-functions-unquoted.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-28-theme-skinparam-override.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-29-mixed-participant-icons-stereotype.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-30-divider-delay-space.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-31-numbered-message-alignment.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/seq-32-participant-order-create-destroy-mix.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "corpus/state-01-basic-start-end.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-02-composite-nested.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-03-longname-alias.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-04-concurrent-regions.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-05-pseudostates-choice-fork-join.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-06-entry-exit-history.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-07-direction-labels.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-08-description-notes.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-09-colors-style.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-10-hide-empty-json.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-11-hstate-transitions-full.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-12-sdl-pins-stereotypes.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-13-deep-history-composite-links.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-14-vertical-concurrent-bar.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-15-arrow-direction-color.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/state-16-notes-on-link-floating.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "corpus/usecase-01-actor-notation.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-02-usecase-bracket.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-03-rectangle-package.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-04-extends-include.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-class"
+ },
+ "corpus/usecase-05-left-to-right-note.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-06-actorstyle-business.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-07-note-attach-floating.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-08-stereotype-color-alias.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-09-package-together-title.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-10-hide-show-stereotype.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-11-direction-arrows-skinparam.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-12-extend-include-mixed-arrows.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-13-nested-packages.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-14-note-combination.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-15-layout-pragma-ortho.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "corpus/usecase-16-mixed-direction-package-note.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "web/C4-PlantUML/percy__C4_Component Diagram Sample - bigbankplc.puml": {
+  "svg": "DESCRIPTION",
+  "was": ""
+ },
+ "web/C4-PlantUML/percy__C4_Dynamic Diagram Sample - bigbankplc.puml": {
+  "svg": "DESCRIPTION",
+  "was": ""
+ },
+ "web/C4-PlantUML/percy__C4_Sequence Diagram Sample - bigbankplc.puml": {
+  "svg": "SEQUENCE",
+  "was": ""
+ },
+ "web/C4-PlantUML/percy__TestAllAddTags.puml": {
+  "svg": "DESCRIPTION",
+  "was": ""
+ },
+ "web/C4-PlantUML/percy__TestAllElementsWithLegend.puml": {
+  "svg": "DESCRIPTION",
+  "was": ""
+ },
+ "web/C4-PlantUML/percy__TestAllPlantUmlElements.puml": {
+  "svg": "DESCRIPTION",
+  "was": ""
+ },
+ "web/C4-PlantUML/percy__TestLabelsWithLineBreak.puml": {
+  "svg": "DESCRIPTION",
+  "was": ""
+ },
+ "web/C4-PlantUML/percy__TestLegendHidden.puml": {
+  "svg": "DESCRIPTION",
+  "was": ""
+ },
+ "web/C4-PlantUML/percy__TestSequenceSkinparams.puml": {
+  "svg": "SEQUENCE",
+  "was": ""
+ },
+ "web/C4-PlantUML/samples__C4_Component Diagram Sample - bigbankplc.puml": {
+  "svg": "DESCRIPTION",
+  "was": ""
+ },
+ "web/C4-PlantUML/samples__C4_Dynamic Diagram Sample - bigbankplc.puml": {
+  "svg": "DESCRIPTION",
+  "was": ""
+ },
+ "web/C4-PlantUML/samples__C4_Sequence Diagram Sample - bigbankplc.puml": {
+  "svg": "SEQUENCE",
+  "was": ""
+ },
+ "web/aws-icons-for-plantuml/examples__Basic Usage.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/aws-icons-for-plantuml/examples__HelloWorld.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-sequence"
+ },
+ "web/aws-icons-for-plantuml/examples__Raw Image Usage.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/aws-icons-for-plantuml/examples__Raw Sprite Usage.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/aws-icons-for-plantuml/examples__Sequence - Images.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/aws-icons-for-plantuml/examples__Sequence - Simplified.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/aws-icons-for-plantuml/examples__Sequence - Technical.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/aws-icons-for-plantuml/examples__architecture-blog__Figure 2.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/aws-icons-for-plantuml/examples__architecture-blog__Figure 3.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/aws-icons-for-plantuml/examples__architecture-blog__Figure 5(updated).puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/aws-icons-for-plantuml/examples__architecture-blog__Figure 5.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/aws-icons-for-plantuml/examples__cognito-scenario__1-basic-diagram.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/aws-icons-for-plantuml/examples__cognito-scenario__2-visual-updates.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/aws-icons-for-plantuml/examples__cognito-scenario__3-aws-icons-and-colors.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/aws-icons-for-plantuml/examples__s3-upload-workflow__S3 Upload Workflow - sequence.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/aws-icons-for-plantuml/examples__theme-testing__activity.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/aws-icons-for-plantuml/examples__theme-testing__class.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/aws-icons-for-plantuml/examples__theme-testing__deployment.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/aws-icons-for-plantuml/examples__theme-testing__port.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/aws-icons-for-plantuml/examples__theme-testing__state.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/aws-icons-for-plantuml/examples__theme-testing__swimlane.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/aws-icons-for-plantuml/examples__theme-testing__usecase.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svg2Groups.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svg2GroupsInlineStyled.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svg2GroupsWithStyle.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgAzureSvgComplexGradient.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgDiagonalGradientBLTR.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgDiagonalGradientBLTRMonochrome.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgDiagonalGradientTLBR.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgFontWeightMultiWeight.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgFontWeightStandardFonts.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgGradientSprite.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgLinearGradientCircle.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgLinearGradientSpreadPad.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgLinearGradientSpreadReflect.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgLinearGradientSpreadRepeat.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgPolygonDecimalCoords.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgPolygonNegativeCoords.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgPolygonScientificCoords.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgPolygonStar.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgRadialGradient.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgRedCircle.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgRedEllipse.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgRedLine.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgRedPolyLine.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgRedRect.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgRedRectLinearGradient.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgTransformGroup.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgTransformMatrix.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgTransformRotate.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgTransformScale.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/plantuml/src__test__resources__svg-sprites__svgTransformTranslate.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/plantuml/src__test__resources__vega__graphml__GML0000.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/plantuml/src__test__resources__vega__graphml__GML0001.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/plantuml/src__test__resources__vega__migration__HideShow001_Test.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__migration__HideShow002_Test.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__migration__HideShow003_Test.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__migration__HideShow004_Test.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__activity__style-block-unclosed-at-eof.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2712__down_direction.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2712__left_direction.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2712__reported_case.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2712__right_direction.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2727__dump_memory_shown_with_verbose.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2727__dump_memory_silent_by_default.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2727__log_basic.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2727__log_still_clean_with_verbose.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2727__log_with_variable.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2783__composite_with_usymbol_unaffected.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2783__hide_stereotype.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2783__nested_styled_composite.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2783__reported_case.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2814__class_level_note_unaffected.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2814__field_and_method_note.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2814__reported_case.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2814__reversed_order.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2814__stereotype_colors.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2814__three_members.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2846__correct_code.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__group2846__dollar_sign_code.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__simple__A0004.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__simple__A0005.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__simple__ComponentExtraArrows_0001.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__simple__NamespaceSeparatorColon001.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__simple__QualifiedAssoc001.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__simple__QualifiedAssoc002.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__stereogroup__inline-semicolon-property-list.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/plantuml/src__test__resources__vega__nonreg__stereotype__stereotype-selector-with-embedded-space.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/plantuml/src__test__resources__vega__scxml__state1.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__scxml__state2.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__scxml__state3.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__scxml__state4.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__scxml__state5.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__state__composite-autarkic-simple.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__state__composite-non-autarkic-outgoing-only.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__state__composite-non-autarkic-start-end.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__state__composite-siblings-with-transition.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__state__composite-two-levels-nested.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__state__composite-two-levels-non-autarkic.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__state__concurrent-composite-non-autarkic-sibling-link.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__state__concurrent-composite-non-autarkic-start-end.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__state__concurrent-dash-three-regions.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__state__concurrent-dash-two-regions.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__state__concurrent-empty-first-region.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/plantuml/src__test__resources__vega__svg__interactive__SVG0004_Svek.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__svg__interactive__SVG0005_Svek.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/plantuml/src__test__resources__vega__svg__interactive__SVG0006_Svek.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__tikz__tikz-1926-svg.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/plantuml/src__test__resources__vega__tikz__tikz-1926.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/plantuml/src__test__resources__vega__xmi__clazz__XMI0002_class.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__xmi__clazz__XMI0003_class.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/plantuml/src__test__resources__vega__xmi__component__xmi0000.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/puml-themes/examples__activity-ex.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/puml-themes/examples__activity-ex2.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/puml-themes/examples__class-abstract-interface-ex.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/puml-themes/examples__class-ex.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/puml-themes/examples__class-ex2.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-class"
+ },
+ "web/puml-themes/examples__component-ex.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/puml-themes/examples__deployment-ex.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/puml-themes/examples__deployment-with-group-ex.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-component"
+ },
+ "web/puml-themes/examples__object-ex2.puml": {
+  "svg": "CLASS",
+  "was": "plantuml-sequence"
+ },
+ "web/puml-themes/examples__sequence-ex.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/puml-themes/examples__sequence-ex2.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/puml-themes/examples__sequence-group-ex.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/puml-themes/examples__sequence-with-teoz.puml": {
+  "svg": "SEQUENCE",
+  "was": "plantuml-sequence"
+ },
+ "web/puml-themes/examples__state-ex.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/puml-themes/examples__state-ex2.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/puml-themes/examples__state-with-point-ex.puml": {
+  "svg": "STATE",
+  "was": "plantuml-state"
+ },
+ "web/puml-themes/examples__swimlane-ex.puml": {
+  "svg": "ACTIVITY",
+  "was": "plantuml-activity"
+ },
+ "web/puml-themes/examples__usecase-ex.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "web/puml-themes/examples__usecase-ex2.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ },
+ "web/puml-themes/examples__usecase-with-actorstyle-ex.puml": {
+  "svg": "DESCRIPTION",
+  "was": "plantuml-usecase"
+ }
+}
