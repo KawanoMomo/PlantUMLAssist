@@ -13923,8 +13923,14 @@ function setupTabs() {
   _openFolderListView = function() {
     if (!panel.classList.contains('open')) _rememberTargetSec(true);
     panel.classList.add('is-list');
+    // BLK-primary-20260929-0551: Ctrl+K の行・Import ▾ の項目を押して開くと、その同じクリックが
+    // document まで上がって「枠の外を押した」と読まれ、開いた瞬間に閉じていた。
+    // 開いたクリックが上がりきるまで (同じ処理の中) は外側クリックとして数えない。
+    _listOpening = true;
+    setTimeout(function() { _listOpening = false; }, 0);
     openFolderList(true);
   };
+  var _listOpening = false;
   document.addEventListener('keydown', function(ev) {
     if (ev.key !== 'Escape' || !panel.classList.contains('is-list')) return;
     panel.classList.remove('is-list');
@@ -17255,6 +17261,7 @@ function setupTabs() {
 
   document.addEventListener('click', function(ev) {
     if (!panel.classList.contains('open')) return;
+    if (_listOpening) return;   // 一覧を開いたクリックそのもの (BLK-primary-20260929-0551)
     if (panel.contains(ev.target) || ev.target === btnFolder) return;
     // design 10a: 一覧はレール右のツリーの中にある。ツリーの他の節を押した
     // だけで畳むと、「開いている図」を 1 つ選ぶたびに保存先を開き直すことになる。
