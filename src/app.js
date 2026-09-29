@@ -30217,6 +30217,10 @@ var _mexpEntries = [];
 // 利用者が部品欄で選び直した部品。選び直していない間だけ、残りの多い部品を
 // 初期値に差し替える (BLK-junior-20260914-2006)。
 var _mexpPicked = '';
+// BLK-junior-20260929-0854: 資料化の元にするファイル。開いたときは開いているタブの図、
+// 図種の欄で別のファイルを選べばそれ。同じ部品・図種にファイルが複数あっても、
+// 部品と図種の 2 欄だけで名前の短い別の図に決めない。
+var _mexpSource = '';
 
 function _mexpEsc(s) {
   return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) {
@@ -30231,7 +30235,22 @@ function _mexpPlan() {
   var comp = _mexpSel('mexp-component');
   var kind = _mexpSel('mexp-kind');
   if (!ME || !comp || !kind) return null;
-  return ME.plan(_mexpFiles, comp.value, kind.value);
+  var opt = kind.options && kind.selectedIndex >= 0 ? kind.options[kind.selectedIndex] : null;
+  var src = opt ? (opt.getAttribute('data-source') || '') : '';
+  return ME.plan(_mexpFiles, comp.value, kind.value, src || _mexpSource);
+}
+
+// 図種の欄の 1 行。同じ図種にファイルが複数あるときは、ファイル名と保存時刻で行を分ける。
+function _mexpSourceWhen(name) {
+  var MS = window.MA.materialSummary;
+  var bare = String(name || '').replace(/\.puml$/i, '');
+  for (var i = 0; i < _mexpEntries.length; i++) {
+    var e = _mexpEntries[i];
+    if (e && typeof e === 'object' && String(e.name || '').replace(/\.puml$/i, '') === bare) {
+      return (MS && e.mtime) ? MS.timeText(e.mtime) : '';
+    }
+  }
+  return '';
 }
 
 // 図種の選択肢は部品によって変わる。形式は選択肢そのものに出す
@@ -30264,17 +30283,33 @@ function _mexpRenderKinds() {
       }).map(function(x) { return x.r; });
     }
   }
+  // 選んでいる元のファイル (開いているタブの図か、利用者が選び直したもの) がある図種を
+  // 既定にする。そのファイルの行を図種の中で先頭に置く (図種で選ぶと、その行に当たる)。
+  var wantSrc = '';
+  var srcKind = '';
   var html = '';
   for (var i = 0; i < rows.length; i++) {
     var st = mark[rows[i].kind];
-    html += '<option value="' + _mexpEsc(rows[i].kind) + '"'
-      + (st ? ' data-status="' + _mexpEsc(st.status) + '"' : '') + '>'
-      + (st ? '［' + _mexpEsc(st.statusMark) + '］' : '')
-      + _mexpEsc(rows[i].kind) + '（' + _mexpEsc(rows[i].formatLabel) + '）</option>';
+    var srcs = ME.sourcesFor ? ME.sourcesFor(_mexpFiles, comp.value, rows[i].kind) : [];
+    var at = _mexpSource ? srcs.indexOf(_mexpSource) : -1;
+    if (at > 0) srcs = [srcs[at]].concat(srcs.slice(0, at), srcs.slice(at + 1));
+    if (at >= 0) { wantSrc = _mexpSource; srcKind = rows[i].kind; }
+    var head = (st ? '［' + _mexpEsc(st.statusMark) + '］' : '')
+      + _mexpEsc(rows[i].kind) + '（' + _mexpEsc(rows[i].formatLabel) + '）';
+    var many = srcs.length > 1;
+    (many ? srcs : [srcs[0] || '']).forEach(function(src) {
+      var when = many ? _mexpSourceWhen(src) : '';
+      html += '<option value="' + _mexpEsc(rows[i].kind) + '"'
+        + (st ? ' data-status="' + _mexpEsc(st.status) + '"' : '')
+        + (src ? ' data-source="' + _mexpEsc(src) + '"' : '') + '>'
+        + head + (many ? ' — ' + _mexpEsc(String(src).replace(/\.puml$/i, '')) + (when ? '（' + _mexpEsc(when) + '）' : '') : '')
+        + '</option>';
+    });
   }
   kindSel.innerHTML = html;
   var chosen = '';
-  for (var j = 0; j < rows.length; j++) if (rows[j].kind === want) chosen = want;
+  if (srcKind && (!want || want === srcKind)) chosen = srcKind;
+  for (var j = 0; j < rows.length && !chosen; j++) if (rows[j].kind === want) chosen = want;
   // 選び直していないなら、手当ての要る図種を先に選んでおく (済んだ図種で開かない)。
   if (!chosen && MB) {
     var pending = MB.pendingKinds(MB.rows(_mexpEntries, comp.value));
@@ -30283,7 +30318,19 @@ function _mexpRenderKinds() {
     }
   }
   if (chosen) kindSel.value = chosen;
+  if (chosen && chosen === srcKind) _mexpSelectSource(wantSrc);
   _mexpRenderPlan();
+}
+
+// 図種の欄で、その元のファイルの行を選ぶ (図種は変えない)。
+function _mexpSelectSource(src) {
+  var kindSel = _mexpSel('mexp-kind');
+  if (!kindSel || !src) return false;
+  for (var i = 0; i < kindSel.options.length; i++) {
+    var o = kindSel.options[i];
+    if (o.value === kindSel.value && o.getAttribute('data-source') === src) { kindSel.selectedIndex = i; return true; }
+  }
+  return false;
 }
 
 function _mexpRenderPlan() {
@@ -30693,6 +30740,10 @@ function openMaterialExport() {
   _mexpFiles = [];
   _mexpEntries = [];
   _mexpPicked = '';
+  _mexpSource = '';
+  // 前に開いたときの図種を持ち越さない (開いている図の図種で開く)。
+  var kindSel0 = _mexpSel('mexp-kind');
+  if (kindSel0) kindSel0.innerHTML = '';
   _mexpRenderComponents();
   modal.style.display = 'flex';
   // 日時が要る (資料用より元の図が新しいかを残りの表に出すため)。日時の取れない
@@ -30704,6 +30755,11 @@ function openMaterialExport() {
     _mexpFiles = _mexpEntries.map(function(e) {
       return (e && typeof e === 'object') ? String(e.name || '') : String(e == null ? '' : e);
     }).filter(function(n) { return n !== ''; });
+    // BLK-junior-20260929-0854: 開いているタブの図が保存フォルダにあれば、それを既定の元にする
+    // (部品・図種の組から、名前の短い別のファイルを選ばない)。
+    var ME = window.MA.materialExport;
+    var hit = (ME && ME.sourceOf) ? ME.sourceOf(_mexpFiles, _activeDocName()) : null;
+    if (hit) { _mexpPicked = hit.component; _mexpSource = hit.source; }
     _mexpRenderComponents();
   });
 }
@@ -30990,7 +31046,11 @@ function setupMaterialExport() {
   var comp = document.getElementById('mexp-component');
   if (comp) comp.addEventListener('change', function() { _mexpPicked = comp.value; _mexpRenderKinds(); });
   var kind = document.getElementById('mexp-kind');
-  if (kind) kind.addEventListener('change', _mexpRenderPlan);
+  if (kind) kind.addEventListener('change', function() {
+    var o = kind.selectedIndex >= 0 ? kind.options[kind.selectedIndex] : null;
+    _mexpSource = o ? (o.getAttribute('data-source') || '') : '';
+    _mexpRenderPlan();
+  });
   // 貼付先の見出し (BLK-junior-20260914-2106-wish)。入れ終えた時点で覚える
   // (別に「登録」ボタンを押させると、押し忘れたぶんだけ対応が抜ける)。
   var anchor = document.getElementById('mexp-anchor');
