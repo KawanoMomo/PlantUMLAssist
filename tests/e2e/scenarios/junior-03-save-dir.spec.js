@@ -330,3 +330,33 @@ test('手順3 保存先の図を直すとタブ・上部バー・FILES ツリー
   await expect(fileMark).toHaveCount(0);
   expect(await S.readDoc(page, DIR, 'spi_state')).toContain('Idle --> Run');
 });
+
+// BLK-owner-20260930-0311-1: ＋ で開いたシーケンス図に「参加者」で actor を先に 1 人足し、続けて participant を足すと、
+// 本文の図種の読みが (ユースケース → シーケンスへ) 替わったとして、タブ名が黙って `{名前}_sequence` に替わり、
+// 保存フォルダに actor 1 行だけの `{名前}.puml` が残った。タブの名前と書き先は読みが替わっても変えない。
+test('手順3 actor を先に足してから participant を足しても、保存フォルダの図は 1 枚でタブ名は変わらない', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  await page.locator('#rail .rail-btn[data-type="plantuml-sequence"]').click();
+  await page.locator('#btn-tab-new').click();
+  const name = await page.evaluate(() => window.MA.workspace.getActive().name);
+  const add = async (ptype, alias) => {
+    await page.locator('#seq-tail-kind-chip-participant').click();
+    await page.locator('#seq-tail-ptype').selectOption(ptype);
+    await page.locator('#seq-tail-alias').fill(alias);
+    await page.locator('#seq-tail-alias').press('Enter');
+  };
+  await add('actor', 'P4');
+  await expect.poll(async () => (await S.readDoc(page, DIR, name)) || '').toContain('actor P4');
+  await add('participant', 'Q4');
+  await expect.poll(async () => (await S.readDoc(page, DIR, name)) || '').toContain('participant Q4');
+  await page.waitForTimeout(800);   // 回される書き込みがあれば、ここまでに届く
+
+  // 到達条件: タブ名はそのまま、保存フォルダの図は 1 枚 (actor 1 行だけのファイルも `_sequence` も無い)。
+  expect(await page.evaluate(() => window.MA.workspace.getActive().name)).toBe(name);
+  await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', name);
+  expect(await S.listDir(page, DIR)).toEqual([name]);
+  const saved = await S.readDoc(page, DIR, name);
+  expect(saved).toContain('actor P4');
+  expect(saved).toContain('participant Q4');
+});

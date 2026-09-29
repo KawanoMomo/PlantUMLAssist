@@ -15784,13 +15784,15 @@ function setupTabs() {
         if (!d || d.action === 'ask') return { name: '', reason: 'ask' };   // 返事を待つ間は書かない
         if (d.action === 'skip') return { name: '', reason: 'unchanged' };  // 開いたときのまま。書かない
         if (d.name) {   // 控えの名前へ逃がす (逃がさないときは今の名前)
-          return (doc.fresh && d.name === name) ? { name: d.name, dir: _docDir(doc), freshId: doc.id }
-            : { name: d.name, dir: _docDir(doc) };
+          return (doc.fresh && d.name === name) ? { name: d.name, dir: _docDir(doc), freshId: doc.id, docId: doc.id }
+            : { name: d.name, dir: _docDir(doc), docId: doc.id };
         }
       }
       // BLK-human-20260925-1150: 書き先のフォルダもタブごと (保存先を替える前に開いたタブは開いたフォルダ)。
       // BLK-owner-20260929-1111-1: まだ 1 度も書いていない新しい図は印を添える (既にある別の図へは書かない)。
-      return doc.fresh ? { name: name, dir: _docDir(doc), freshId: doc.id } : { name: name, dir: _docDir(doc) };
+      // BLK-owner-20260930-0311-1: 書いたタブの印も添える (自分で書いた続きは図種の読みが替わっても別名へ回さない)。
+      return doc.fresh ? { name: name, dir: _docDir(doc), freshId: doc.id, docId: doc.id }
+        : { name: name, dir: _docDir(doc), docId: doc.id };
     });
 
     // BLK-owner-20260929-1111-1: 新しい図の名前が保存先の別の図と重なった。書かずに名前を選ばせる。

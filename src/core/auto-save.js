@@ -63,7 +63,7 @@ window.MA.autoSave = (function() {
   var _keepNames = {};
   function keepNameOnce(name) { if (name) _keepNames[String(name)] = true; }
 
-  function _fileBackendWrite(diagramType, dsl, fileDir, freshId) {
+  function _fileBackendWrite(diagramType, dsl, fileDir, freshId, docId) {
     // Fire-and-forget POST to /autosave. We don't await: localStorage
     // already has the canonical sync copy. Errors are logged but don't
     // block the localStorage write.
@@ -74,6 +74,8 @@ window.MA.autoSave = (function() {
       // BLK-owner-20260929-1111-1: まだ 1 度も書いていない新しい図の印。保存先に同じ名前の
       // 別の図があれば server は書かずに 409 を返す。
       if (freshId) payload.freshId = String(freshId);
+      // BLK-owner-20260930-0311-1: 書いたタブの印。自分で書いた続きは、図種の読みが替わっても別名へ回さない。
+      if (docId) payload.docId = String(docId);
       var body = JSON.stringify(payload);
       var req = window.fetch('/autosave', {
         method: 'POST',
@@ -421,7 +423,7 @@ window.MA.autoSave = (function() {
     // 書きに出すのは「書いた」の記録と知らせの後 (返事 = 409 の「書かなかった」を後から上書きしない)。
     if (where === 'file') {
       _fileBackendWrite(fileName, dsl, (fileInfo && fileInfo.dir) || cfg.fileDir,
-                        (fileInfo && fileInfo.freshId) || null);
+                        (fileInfo && fileInfo.freshId) || null, (fileInfo && fileInfo.docId) || null);
     }
     return meta;
   }

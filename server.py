@@ -2276,6 +2276,7 @@ class Handler(BaseHTTPRequestHandler):
     # 元の図の mtime (刻印より 2 秒以上前) にして印にし、上限で捨てるときも最新の 1 つは残す。
     _OWN_WRITES = {}        # 書いた .puml のパス (小文字) → 書き終えた直後の mtime_ns
     _FRESH_OWNERS = {}      # 新しい図が作ったファイルのパス (小文字) → その図の印 (freshId)
+    _WRITERS = {}           # 書いた .puml のパス (小文字) → 最後に書いたタブの印 (docId)
     ORIGIN_GAP = 2          # 元の版の印: 版の mtime が刻印より この秒数以上前
 
     @staticmethod
@@ -2287,6 +2288,18 @@ class Handler(BaseHTTPRequestHandler):
             Handler._OWN_WRITES[self._path_key(file_path)] = file_path.stat().st_mtime_ns
         except OSError:
             pass
+
+    def _written_by(self, file_path, doc_id):
+        """そのファイルを最後に書いたのがこのタブで、その後に外で書き換わっていないか。
+
+        BLK-owner-20260930-0311-1: ＋ で開いたシーケンス図に actor を先に足すと本文はユースケースと読まれ、
+        続けて participant を足すと図種の読みが替わったとして `{名前}_sequence` へ回されていた
+        (タブ名が黙って替わり、actor 1 行の `{名前}.puml` が残る)。自分で書いた続きは読みが替わっても回さない。
+        """
+        if not doc_id:
+            return False
+        return (Handler._WRITERS.get(self._path_key(file_path)) == doc_id
+                and self._is_own_write(file_path))
 
     def _is_own_write(self, file_path):
         try:
@@ -3350,7 +3363,11 @@ class Handler(BaseHTTPRequestHandler):
         # BLK-junior-20260908-2003: 図種が変わる保存は上書きではなく別ファイルへ回す。
         # BLK-owner-20260924-2232-1: 元に戻す / やり直しで入れた本文は、図種が替わっても
         # 名前を回さない (名前を変えるのは利用者が図名を直したときだけ)。
-        if data.get('keepName') is True:
+        # BLK-owner-20260930-0311-1: このタブが書いた続き (docId が最後の書き手と同じで、外で書き換わっていない) も回さない。
+        # タブの名前と書き先は、本文の図種の読みが替わっても変えない (1 つのタブが書くファイルは 1 枚)。
+        doc_id = data.get('docId')
+        doc_id = doc_id if isinstance(doc_id, str) and doc_id else None
+        if data.get('keepName') is True or self._written_by(self._autosave_file_path(save_dir, dt), doc_id):
             target, prev_kind, new_kind = dt, '', dsl_kind(dsl)
         else:
             target, prev_kind, new_kind = self._resolve_save_target(save_dir, dt, dsl)
@@ -3382,6 +3399,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(500, {'error': f'write failed: {e}'})
             return
         self._note_own_write(file_path)
+        if doc_id:
+            Handler._WRITERS[self._path_key(file_path)] = doc_id
         if fresh_id:
             Handler._FRESH_OWNERS[self._path_key(file_path)] = fresh_id
         meta = {
