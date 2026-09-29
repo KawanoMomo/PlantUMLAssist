@@ -171,8 +171,23 @@ window.MA.sequenceOverlay = (function() {
   function _addBoxRects(svgEl, parsedData, overlayEl) {
     var boxes = (parsedData.boxes || []).slice();
     if (!boxes.length) return;
-    var rects = _boxRectsInSvg(svgEl);
     var headTop = _firstHeadTop(svgEl);
+    // BLK-migrator-20260929-1651: 囲みは参加者の頭を上下にまたぐ rect (頭より上で始まり、頭より下まで続く)。
+    // 頭より前に出る枠線つきの rect には、囲みでないもの (PlantUML の警告の帯 — 古い skinparam を使うと図の先頭に
+    // 「Please use CSS style instead of skinparam …」を描く) もあり、並び順だけで対応させると 1 番目の囲みの当たりが
+    // 図の上端の帯に置かれ、見出しの文字から外れていた。skinparam の名前ごとの補正は足さず、囲みの形で見分ける。
+    // 1.2026.7 以降は参加者の頭に class が無いので、ライフライン (点線の line) の上端を包むかで見る。
+    var lifelines = _q(svgEl, 'line').filter(function(l) {
+      return /stroke-dasharray/.test(l.getAttribute('style') || '');
+    }).map(function(l) {
+      return { x: parseFloat(l.getAttribute('x1')), y: Math.min(parseFloat(l.getAttribute('y1')), parseFloat(l.getAttribute('y2'))) };
+    }).filter(function(p) { return !isNaN(p.x) && !isNaN(p.y); });
+    var rects = _boxRectsInSvg(svgEl).filter(function(r) {
+      if (lifelines.length) {
+        return lifelines.some(function(p) { return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h; });
+      }
+      return isNaN(headTop) || (r.y < headTop && r.y + r.h > headTop);
+    });
     var n = Math.min(rects.length, boxes.length);
     for (var i = 0; i < n; i++) {
       var r = rects[i];
