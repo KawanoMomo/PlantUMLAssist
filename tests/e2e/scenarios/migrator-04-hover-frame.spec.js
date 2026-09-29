@@ -2857,6 +2857,33 @@ test('migrator 手順 4 — 複合状態に付けた note と中の状態の not
     .toEqual(['note:6']);
 });
 
+// BLK-migrator-20260930-0323: 手続き (!procedure) が描いた遷移は、SVG の線の行が手続きの本文を指し、パーサの遷移 (呼んだ行) と
+// 組にならず線・矢じり・ラベルに枠が出なかった (state-22)。行で組にならない線は両端の名前で遷移に当てる。
+test('migrator 手順 4 — !procedure が描いた state 図の遷移の線・矢じり・ラベルに、呼んだ行の遷移の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, ['@startuml', '!procedure $ok($from, $to)', '  $from --> $to : 成功', '!endprocedure',
+    'state V', 'state C', '$ok(V, C)', '@enduml'].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="transition"]').first()).toBeAttached({ timeout: 20000 });
+  const pts = await page.evaluate(() => {
+    const g = document.querySelector('#preview-svg svg g.link');
+    const p = g.querySelector('path');
+    const at = p.getPointAtLength(p.getTotalLength() / 2);
+    const q = new DOMPoint(at.x, at.y).matrixTransform(p.getScreenCTM());
+    const hb = g.querySelector('polygon').getBoundingClientRect();
+    return { line: { x: q.x, y: q.y }, head: { x: hb.left + hb.width / 2, y: hb.top + hb.height / 2 } };
+  });
+  for (const [what, pt] of [['線', pts.line], ['矢じり', pts.head]]) {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(pt.x, pt.y);
+    await page.waitForTimeout(100);
+    const lit = await page.evaluate(() => Array.from(new Set(Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+      .map((r) => r.getAttribute('data-type') + '@' + r.getAttribute('data-line')))).join(','));
+    expect(lit, what).toBe('transition@7');
+  }
+  const lbl = await hoverHit(page, '成功');
+  expect(lbl.hit && lbl.hit.type + '@' + lbl.hit.line).toBe('transition@7');
+});
+
 // BLK-migrator-20260929-1651: 古い skinparam (ParticipantPadding) を使うと PlantUML は図の先頭に警告の帯を描き、
 // 1 番目の box の当たりがその帯に置かれて、見出しの文字にホバーしても枠が出なかった。囲みはライフラインの上端を包む rect で見分ける。
 test('migrator 手順 4 — ParticipantPadding のあるシーケンス図でも box の見出しを指すと box の枠が出る', async ({ page }) => {
