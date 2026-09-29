@@ -2578,3 +2578,14 @@ test('migrator 手順 4 — メンバー・クラス・状態を指す note の�
     await page.evaluate(() => window.MA.selection.clearSelection());
   }
 });
+
+// BLK-migrator-20260929-1651: 古い skinparam (ParticipantPadding) を使うと PlantUML は図の先頭に警告の帯を描き、
+// 1 番目の box の当たりがその帯に置かれて、見出しの文字にホバーしても枠が出なかった。囲みはライフラインの上端を包む rect で見分ける。
+test('migrator 手順 4 — ParticipantPadding のあるシーケンス図でも box の見出しを指すと box の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, ['@startuml', 'skinparam ParticipantPadding 30', 'box "受注系" #EEF6FF', 'participant 画面',
+    'participant 受注API', 'end box', '画面 -> 受注API : 登録', '@enduml'].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="box"]')).toHaveCount(1, { timeout: 20000 });
+  const h = await hoverHit(page, '受注系');
+  expect(h.hit && h.hit.type + '@' + h.hit.line).toBe('box@3');
+});
