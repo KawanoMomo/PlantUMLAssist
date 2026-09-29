@@ -161,6 +161,8 @@ window.MA.generatedPart = (function() {
     Array.prototype.forEach.call(propsEl.querySelectorAll('input, select, textarea, button'), function(c) {
       c.disabled = true;
       c.setAttribute('data-generated-lock', '1');
+      c.style.opacity = '0.55';          // 押せないことが見て分かるように薄くする
+      c.style.cursor = 'not-allowed';
     });
     Array.prototype.forEach.call(propsEl.querySelectorAll('[contenteditable]'), function(c) {
       c.setAttribute('contenteditable', 'false');
