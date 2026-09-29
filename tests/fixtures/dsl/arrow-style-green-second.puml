@@ -1,0 +1,4 @@
+@startuml
+A -> B : x
+B --[#green]> A : 残数
+@enduml

@@ -2650,3 +2650,22 @@ test('migrator 手順 4 — ParticipantPadding のあるシーケンス図でも
   const h = await hoverHit(page, '受注系');
   expect(h.hit && h.hit.type + '@' + h.hit.line).toBe('box@3');
 });
+
+// BLK-migrator-20260929-2003: 矢印の線の中の書式 `[…]` を「最初の - の直後の #色」しか読まず、`-[bold]>` `-[dashed]>` `-[#red,bold]>`
+// `--[#green]>` のメッセージに枠が出なかった。書式だけの図では参加者まで全要素が枠なし。書式は全図種共通の 1 か所で読む。
+test('migrator 手順 4 — 矢印に書式 [bold] [dashed] [#red,bold] --[#green] を書いたシーケンス図でも、参加者とメッセージに本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, ['@startuml', 'A -[bold]> B : 太', '@enduml'].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(1, { timeout: 20000 });
+  for (const [label, want] of [['太', 'message@2'], ['A', 'participant@2'], ['B', 'participant@2']]) {
+    const h = await hoverHit(page, label);
+    expect(h.hit && h.hit.type + '@' + h.hit.line, label).toBe(want);
+  }
+  await typeDsl(page, ['@startuml', 'A -> B : x', 'B --[#green]> A : 残数', 'A -[#red,bold]> B : 赤太', 'A -[dashed]> B : 破',
+    '@enduml'].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(4, { timeout: 20000 });
+  for (const [label, want] of [['x', 'message@2'], ['残数', 'message@3'], ['赤太', 'message@4'], ['破', 'message@5']]) {
+    const h = await hoverHit(page, label);
+    expect(h.hit && h.hit.type + '@' + h.hit.line, label).toBe(want);
+  }
+});

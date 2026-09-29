@@ -134,16 +134,16 @@ window.MA.modules.plantumlSequence = (function() {
   // PlantUML は ASCII 以外の文字も名前に使えるので、名前の文字に U+0080 以上を許す
   // (読めないとメッセージが一覧から消え、順番で当てている枠が以後ずれる)。
   var MSG_RE_FROM = '(\\[|\\]|\\?|[A-Za-z_\\u0080-\\uFFFF][A-Za-z0-9_\\u0080-\\uFFFF]*|"[^"]+")';
-  // design 5d「Sequence のその他パレット: 線色」: 色は矢印の最初の `-` の直後に
-  // `[#色]` として入る (`-[#red]->` / `<-[#red]--`)。矢印の形はそのまま残るので、
-  // 読む側は「色を挟んだ形」も同じ矢印として認識できる必要がある。
-  var ARROW_COLOR_PART = '(?:\\[#[A-Za-z0-9_]+\\])?';
+  // design 5d「Sequence のその他パレット: 線色」: 色は矢印の線の中に `[#色]` として入る (`-[#red]->`)。
+  // BLK-migrator-20260929-2003: 線の中の `[…]` は色だけでなく bold・dashed などをカンマで並べてよく、
+  // 置き場所も最初の `-` の直後に限らない (`--[#green]>` `-[#red,bold]>` `-[dashed]>`)。読む断片は
+  // regex-parts の ARROW_STYLE 1 か所に置き、矢印の線 (`-`) のどの後ろにも挟めるものとして読む。
+  var _RP = window.MA.regexParts || {};
+  var ARROW_STYLE_PART = '(?:' + (_RP.ARROW_STYLE || '\\[[^\\]\\r\\n]*\\]') + ')?';
   function _reEsc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-  // 1 つの矢印トークンを「色を挟んでもよい」正規表現の断片にする。
+  // 1 つの矢印トークンを「線の中に書式を挟んでもよい」正規表現の断片にする。
   function _arrowAlt(a) {
-    var i = a.indexOf('-');
-    if (i < 0) return _reEsc(a);
-    return _reEsc(a.slice(0, i + 1)) + ARROW_COLOR_PART + _reEsc(a.slice(i + 1));
+    return a.split('').map(function(ch) { return _reEsc(ch) + (ch === '-' ? ARROW_STYLE_PART : ''); }).join('');
   }
   // 長いトークンから並べる (`->o` `->\` を `->` より先に)。
   var MSG_ARROW_ALT = ARROWS
@@ -158,6 +158,16 @@ window.MA.modules.plantumlSequence = (function() {
   // そのメッセージが一覧から消え、順番で当てている枠が以後 1 つずつずれる。
   // 群の番号は MSG_RE と同じ (1=送り元 2=矢印 3=送り先 4=本文)。本文は空でもよい。
   var MSG_ACT_RE = new RegExp('^' + MSG_RE_FROM + '\\s*(' + MSG_ARROW_ALT + ')\\s*' + MSG_RE_FROM + '\\s*(?:\\+\\+|--|\\*\\*|!!)+(?:[ \\t]+[^:]*?)?(?:\\s*:\\s*(.*))?$');
+  // BLK-migrator-20260929-2003: 上の 2 つで読めない矢印の行 (一覧に無い形 `o->o` `<->>` など) も、送り元・線・送り先・本文の
+  // 並びなら PlantUML は 1 本のメッセージとして描く。読めない 1 行のせいで、その行でしか出てこない参加者まで一覧から消えると
+  // 図全体の当て方が崩れる (参加者の頭もライフラインも枠なし)。線 (`-`・書式 `[…]`) と矢じり (`<` `>` `\` `/`) を含む形だけを
+  // 最後の受け皿として読み、群の番号は MSG_RE と同じにする (書き換えは MSG_RE で読める行だけが対象なので、この行は変えない)。
+  var LOOSE_MSG_RE = new RegExp('^' + MSG_RE_FROM + '\\s*((?:<<?|[ox\\\\/]{1,2})?(?:-' + ARROW_STYLE_PART + ')+(?:>>?|[\\\\/]{1,2})?[ox]?)\\s*' +
+    MSG_RE_FROM + '\\s*(?:\\+\\+|--|\\*\\*|!!)*(?:\\s*:\\s*(.*))?$');
+  function _looseMessage(src) {
+    var m = String(src).match(LOOSE_MSG_RE);
+    return m && /[<>\\\/]/.test(window.MA.regexParts.stripArrowStyle(m[2])) ? m : null;
+  }
   // BLK-builder-20260925-0314-1: teoz (`!pragma teoz true`) の `& B -> C : hi` は直前のメッセージと
   // 同じ高さに並べる印。印の後ろは普通のメッセージとして読み、書き換えでも印 (と字下げ) は残す。
   var MSG_LEAD_RE = /^(\s*(?:&\s*)?)/;
@@ -572,7 +582,7 @@ window.MA.modules.plantumlSequence = (function() {
       }
 
       var msgSrc = trimmed.slice(_msgLead(trimmed).length);
-      var mm = msgSrc.match(MSG_RE) || msgSrc.match(MSG_ACT_RE);
+      var mm = msgSrc.match(MSG_RE) || msgSrc.match(MSG_ACT_RE) || _looseMessage(msgSrc);
       if (mm) {
         // design 2d: `[` / `]` は「図の外」を表す疑似端点であり、参加者ではない。
         // 参加者一覧に混ぜると左レールや Outline に `[` が並んでしまう。
@@ -817,22 +827,18 @@ window.MA.modules.plantumlSequence = (function() {
   // ─── design 5d: 線の色 / Line color ─────────────────────────────────
   // UseCase / Component / Class の「その他の設定」と同じ 6 色を、Sequence の
   // メッセージにも出す。色は矢印の形 (`-->` / `->>` …) を壊さずに差し替える。
-  var ARROW_COLOR_RE = /\[#([A-Za-z0-9_]+)\]/;
-  function stripArrowColor(arrow) { return String(arrow == null ? '' : arrow).replace(ARROW_COLOR_RE, ''); }
-  function arrowColor(arrow) {
-    var m = String(arrow == null ? '' : arrow).match(ARROW_COLOR_RE);
-    return m ? m[1] : '';
-  }
+  // BLK-migrator-20260929-2003: 書式 `[…]` の読み書きは regex-parts の 1 か所を使う。色を替えても
+  // 同じ `[]` の中の bold・dashed などは残し、書式の置き場所 (`--[#green]>` の 2 本目の後ろ) も動かさない。
+  // stripArrowColor は線の形 (パレットのどの矢印か) を見るためのもので、書式を丸ごと外す。
+  function stripArrowColor(arrow) { return window.MA.regexParts.stripArrowStyle(arrow); }
+  function arrowColor(arrow) { return window.MA.regexParts.arrowStyleColor(arrow); }
   // 片羽根 `->\` だけは PlantUML が `-[#red]>\` を受け付けない (構文エラー)。
   // 色を付けられない矢印はパレットを閉じ、理由をその場に出す。
   function arrowSupportsColor(arrow) { return stripArrowColor(arrow).indexOf('\\') < 0; }
   function setArrowColor(arrow, color) {
-    var base = stripArrowColor(arrow);
-    var c = String(color == null ? '' : color).trim().replace(/^#/, '');
-    if (!c || !arrowSupportsColor(base)) return base;
-    var i = base.indexOf('-');
-    if (i < 0) return base;
-    return base.slice(0, i + 1) + '[#' + c + ']' + base.slice(i + 1);
+    var a = String(arrow == null ? '' : arrow);
+    if (!arrowSupportsColor(a)) return window.MA.regexParts.setArrowStyleColor(a, '');
+    return window.MA.regexParts.setArrowStyleColor(a, color);
   }
   // 色見本は他図種と同じ 6 色 (relation-options が正本)。読み込み順に依存しないよう
   // 呼ばれた時点で引き、無ければ同じ内容の控えを使う。
@@ -887,13 +893,26 @@ window.MA.modules.plantumlSequence = (function() {
     return updateMessage(text, lineNum, 'arrow', setArrowColor(m[2], color));
   }
 
+  function _messageArrow(text, lineNum) {
+    var lines = String(text == null ? '' : text).split('\n');
+    var idx = lineNum - 1;
+    if (idx < 0 || idx >= lines.length) return '';
+    var m = lines[idx].slice(_msgLead(lines[idx]).length).trim().match(MSG_RE);
+    return m ? m[2] : '';
+  }
+  // 形を選び直した矢印へ、元の矢印の書式を運ぶ。選んだ形が自分の色を持てばその色。色を持てない形 (片羽根) なら色だけ外す。
+  function _carryArrowStyle(toArrow, fromArrow) {
+    var out = window.MA.regexParts.carryArrowStyle(toArrow, fromArrow);
+    return arrowSupportsColor(out) ? out : window.MA.regexParts.setArrowStyleColor(out, '');
+  }
+
   // design 2d:「その他の矢印」パレットの 1 行を、選択中のメッセージ行に適用する。
   // 矢印だけを変える行と、相手を図の外 (`[` / `]`) に付け替える行がある。
   // 図の外に付け替えたあと通常の矢印を選び直すと、外れていた側は元の相手に戻す。
   function applyArrowSpec(text, lineNum, key) {
     var spec = findArrowSpec(key);
-    // 分節ボタン (色を持たない 4 種) は、いま付いている線の色を引き継ぐ。
-    if (!spec) return updateMessage(text, lineNum, 'arrow', setArrowColor(key, messageColor(text, lineNum)));
+    // 分節ボタン (色を持たない 4 種) は、いま付いている線の書式 (色・bold・dashed …) を引き継ぐ。
+    if (!spec) return updateMessage(text, lineNum, 'arrow', _carryArrowStyle(key, _messageArrow(text, lineNum)));
     var lines = text.split('\n');
     var idx = lineNum - 1;
     if (idx < 0 || idx >= lines.length) return text;
@@ -903,8 +922,8 @@ window.MA.modules.plantumlSequence = (function() {
     var from = unquote(m[1]), to = unquote(m[3]), label = m[4] || '';
     from = spec.from || (isOuterEnd(from) ? outerFallback(text, lineNum, 'from') : from);
     to = spec.to || (isOuterEnd(to) ? outerFallback(text, lineNum, 'to') : to);
-    // design 5d: 形を選び直しても線の色は保つ (色は別のパレットの持ち物)。
-    var specArrow = arrowColor(spec.arrow) ? spec.arrow : setArrowColor(spec.arrow, arrowColor(m[2]));
+    // design 5d: 形を選び直しても線の色は保つ (色は別のパレットの持ち物)。bold・dashed などの語も残す。
+    var specArrow = _carryArrowStyle(spec.arrow, m[2]);
     lines[idx] = indent + fmtMessage(from, to, specArrow, label);
     return lines.join('\n');
   }
