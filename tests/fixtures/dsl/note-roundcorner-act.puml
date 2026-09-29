@@ -1,0 +1,10 @@
+@startuml
+skinparam roundCorner 8
+start
+:処理;
+note right
+  == 見出し ==
+  本文
+end note
+stop
+@enduml

@@ -2231,6 +2231,51 @@ test('migrator 手順 4 — note に Creole の表・箇条書き・リンクを
   }
 });
 
+// BLK-migrator-20260929-1858: `skinparam roundCorner` を付けると note の紙と折り返しが円弧入りの path で描かれ、
+// 紙が見つからず、sequence では Creole の見出し (`== 見出し ==`) のある note に枠が出なかった。6 図種とも、
+// 角の丸い note の見出し・本文に note の行の枠が出て、押すと note の行が選ばれる。
+test('migrator 手順 4 — roundCorner を付けた図でも、6 図種とも見出しのある note の見出し・本文に note の行の枠が出て、押すと note の行', async ({ page }) => {
+  await bootPlain(page);
+  const NOTE = ['  == 見出し ==', '  本文', 'end note'];
+  const cases = [
+    ['sequence', ['participant A', 'participant B', 'A -> B : x', 'note right of B'], ['B --> A : y'], 6],
+    ['class', ['class Foo', 'note right of Foo'], [], 4],
+    ['state', ['state S', 'note right of S'], [], 4],
+    ['activity', ['start', ':処理;', 'note right'], ['stop'], 5],
+    ['usecase', ['actor U', 'usecase UC', 'U --> UC', 'note right of UC'], [], 6],
+    ['component', ['component C', 'note right of C'], [], 4],
+  ];
+  for (const [kind, head, tail, noteLine] of cases) {
+    await typeDsl(page, ['@startuml', 'skinparam roundCorner 8'].concat(head, NOTE, tail, ['@enduml']).join(String.fromCharCode(10)));
+    await expect(page.locator('#preview-svg svg text').filter({ hasText: '見出し' })).toHaveCount(1, { timeout: 20000 });
+    await expect(page.locator('#overlay-layer rect[data-line="' + noteLine + '"]')).not.toHaveCount(0, { timeout: 20000 });
+    const got = [];
+    for (const w of ['見出し', '本文']) {
+      const box = await page.evaluate((l) => {
+        const t = Array.prototype.find.call(document.querySelectorAll('#preview-svg svg text'),
+          (n) => (n.textContent || '').trim() === l);
+        if (!t) return null;
+        const r = t.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      }, w);
+      expect(box, kind + ': ' + w + ' が描かれている').not.toBeNull();
+      await page.mouse.move(3, 3);
+      await page.mouse.move(box.x, box.y);
+      got.push(w + '=' + await page.evaluate(() => {
+        const r = document.querySelector('#overlay-layer .hit-hover');
+        return r ? r.getAttribute('data-line') : null;
+      }));
+      if (w === '見出し') {
+        await page.evaluate(() => window.MA.selection.setSelected([]));
+        await page.mouse.click(box.x, box.y);
+        await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).map((s) => Number(s.line))),
+          { message: kind + ': 見出しを押すと note の行', timeout: 5000 }).toEqual([noteLine]);
+      }
+    }
+    expect(got, kind).toEqual(['見出し=' + noteLine, '本文=' + noteLine]);
+  }
+});
+
 // BLK-builder-20260926-1243-2: corpus seq-11 / seq-12 (ok と記録済み) の退行。`create` で作った参加者の頭は、それを作る
 // メッセージの高さに描かれ、メッセージの枠 (矢印と文言の和) の中に入る。頭を指すとメッセージの枠が出ていた。
 test('migrator 手順 4 — create で途中に作った参加者の頭を指すと、作ったメッセージではなくその参加者の枠が出る', async ({ page }) => {
