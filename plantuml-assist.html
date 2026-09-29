@@ -4576,7 +4576,13 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   font-family: var(--font-mono);
   color: var(--text-primary);
 }
-#symptom-results .sym-kind { color: var(--text-secondary); white-space: nowrap; }
+#symptom-results .sym-kind { color: var(--text-secondary); white-space: nowrap; margin-left: auto; }
+/* BLK-primary-20260925-1732-wish: 影響を見るの行と同じ「ここから順に直す」 */
+#symptom-results .sym-walk {
+  border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);
+  border-radius: 3px; cursor: pointer; font-size: 10px; padding: 0 5px; white-space: nowrap;
+}
+#symptom-results .sym-walk:hover { border-color: var(--accent); color: var(--accent); }
 #symptom-results .sym-matched { color: var(--text-secondary); }
 #symptom-results .sym-hit {
   display: flex;
@@ -6655,6 +6661,14 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
    マウスが乗った行に対応する図形を薄く光らせる。選択 (青の実線) と見分けが
    付くよう、破線の琥珀にする */
 #overlay-layer rect.selectable.peek:not(.selected) {
+  fill: rgba(255, 190, 90, 0.16);
+  stroke: rgba(255, 190, 90, 0.85);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+/* BLK-primary-20260925-1732-wish: 症状検索の列で開いた図の、当たった語と「流れ」で対応の無い名前の行。
+   DSL と図の相互ジャンプ (キャレット行の対応表示 peek) と同じ琥珀の破線 */
+#overlay-layer rect.selectable.sym-mark:not(.selected) {
   fill: rgba(255, 190, 90, 0.16);
   stroke: rgba(255, 190, 90, 0.85);
   stroke-width: 1.5;
