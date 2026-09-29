@@ -4,6 +4,13 @@
 // 応答は突合から外し、外した件数だけをパネルに出す。
 const { test, expect } = require('@playwright/test');
 const { gotoApp } = require('../helpers');
+const S = require('../scenarios/_scenario');
+
+// 下端の「● 整合 N」は指摘が 0 件のとき消える (BLK-owner の札の整理)。0 件の図でも窓は Ctrl+K「整合性チェックを開く」で開ける。
+async function openConsistency(page) {
+  await S.runCommand(page, '整合性チェックを開く');
+  await expect(page.locator('#ck-modal')).toBeVisible();
+}
 
 const CLS = '@startuml\nclass Adc_Driver {\n  + Adc_Init() : void\n}\nclass App\n@enduml';
 // 3 件の応答 (Ack / Ready / Done) と、本物の欠落 1 件 (Adc_Reset)。
@@ -71,12 +78,12 @@ test.describe('BLK-reviewer-1703-wish 応答をメソッド突合から外す', 
     await page.locator('#btn-tab-new').click();
     await typeDsl(page, '@startuml\nparticipant App\nparticipant Adc_Driver\nApp -> Adc_Driver : Adc_Init()\n@enduml');
     await renameActive(page, 'Model_Seq');
-    await page.locator('#status-consistency').click();
+    await openConsistency(page);
     await expect(page.locator('#ck-summary')).toHaveAttribute('data-method-replies', '0');
     await expect(page.locator('#ck-method-replies')).toHaveCount(0);
   });
 
-  test('応答だけの図はバッジが「整合 OK」になる', async ({ page }) => {
+  test('応答だけの図は指摘 0 件で、下端の「● 整合」の札が消える', async ({ page }) => {
     await gotoApp(page);
     await typeDsl(page, CLS);
     await renameActive(page, 'Model_Class');
@@ -84,6 +91,9 @@ test.describe('BLK-reviewer-1703-wish 応答をメソッド突合から外す', 
     await typeDsl(page, ['@startuml', 'participant App', 'participant Adc_Driver',
       'App -> Adc_Driver : Adc_Init()', 'Adc_Driver --> App : Ack', '@enduml'].join('\n'));
     await renameActive(page, 'Model_Seq');
-    await expect(page.locator('#status-consistency')).toHaveText('整合 OK');
+    await expect(page.locator('#status-consistency')).toBeHidden();
+    await openConsistency(page);
+    await expect(page.locator('#ck-summary')).toHaveAttribute('data-methods', '0');
+    await expect(page.locator('#ck-summary')).toHaveAttribute('data-method-replies', '1');
   });
 });

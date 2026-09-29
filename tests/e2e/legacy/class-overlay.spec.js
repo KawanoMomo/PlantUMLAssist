@@ -13,13 +13,18 @@ async function clickEntity(page, locator, opts) {
 
 test.describe('Class diagram (v0.6.0)', () => {
   test.describe('α: DSL technical', () => {
-    test('switching to Class loads template with class + interface', async ({ page }) => {
+    // BLK-junior-20260909-0703 / BLK-owner-20260925-0312-2: 白紙・見本のままのタブで図種を選ぶと、見本 (class User 等) は
+    // 入れず切り替え先の白紙にする。クラス図の追加フォームが出て、そこから 1 件目を足せる。
+    test('switching a blank tab to Class gives a blank class diagram and the class add form', async ({ page }) => {
       await gotoApp(page);
       await page.locator('#diagram-type').selectOption('plantuml-class');
       await page.waitForTimeout(500);
       var t = await getEditorText(page);
-      expect(t).toContain('class User');
-      expect(t).toContain('interface IAuth');
+      expect(t).toMatch(/^@startuml/);
+      expect(t.trim()).toMatch(/@enduml$/);
+      expect(t).not.toContain('class User');
+      expect(t).not.toContain('interface IAuth');
+      await expect(page.locator('#cl-tail-kind')).toBeVisible();
     });
 
     test('add class via tail-add emits canonical', async ({ page }) => {
