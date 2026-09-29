@@ -14,13 +14,12 @@ async function setSaveDir(page, dir) {
   await page.waitForTimeout(200);
 }
 
+// 保存先の一覧は FILES ツリーの「保存先」の右クリック「保存先の一覧を開く」で中央の枠に開く
+// (scenarios/_scenario.js の openFolder と同じ経路)。旧経路 (見出しを畳んで開き直し #folder-panel.open を待つ) は
+// 一覧が中央の枠へ移ってから見えないまま待ち続けていた (BLK-releaser-20260929-0851-1)。
+const S = require('../scenarios/_scenario');
 async function openFolder(page) {
-  const open = await page.evaluate(() => {
-    var el = document.getElementById('folder-panel');
-    return !!(el && el.classList.contains('open'));
-  });
-  if (open) await page.locator('#btn-tab-folder').click();
-  await page.locator('#btn-tab-folder').click();
+  await S.openFolder(page);
   await page.waitForTimeout(700);
 }
 

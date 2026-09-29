@@ -32,9 +32,15 @@ async function setup(page) {
   await expect(page.locator('#overlay-layer rect[data-type="relation"]').first()).toBeAttached();
 }
 
+// 関係 1 本の overlay。矢印は線の枠 (data-hit-kind="link") と矢じりの枠 ("linkhead") の 2 枚で
+// 当たるようになったので、線の枠の方を指す (BLK-releaser-20260929-0851-1)。
+function edgeOf(page, line) {
+  return page.locator('#overlay-layer rect[data-type="relation"][data-hit-kind="link"][data-line="' + line + '"]');
+}
+
 // IrqCtrl への点線 (DSL 9 行目) の overlay。
 function irqEdge(page) {
-  return page.locator('#overlay-layer rect[data-type="relation"][data-line="9"]');
+  return edgeOf(page, 9);
 }
 
 test.describe('BLK-junior-1703: 矢印に乗せると相手が出る', () => {
@@ -47,7 +53,7 @@ test.describe('BLK-junior-1703: 矢印に乗せると相手が出る', () => {
     await expect(hint).toContainText('依存');
 
     // もう 1 本の点線 (Power_Ctrl 向き) に乗せれば文言が入れ替わる
-    await page.locator('#overlay-layer rect[data-type="relation"][data-line="10"]').hover({ force: true });
+    await edgeOf(page, 10).hover({ force: true });
     await expect(hint).toContainText('GpioDrv ..> Power_Ctrl');
   });
 
@@ -75,7 +81,7 @@ test.describe('BLK-junior-1703: 矢印に乗せると相手が出る', () => {
     page.on('console', () => {});
 
     // 乗せて相手を確かめる (クリックしない)
-    await page.locator('#overlay-layer rect[data-type="relation"][data-line="10"]').hover({ force: true });
+    await edgeOf(page, 10).hover({ force: true });
     await expect(page.locator('#edge-hint')).toContainText('Power_Ctrl');
     await irqEdge(page).hover({ force: true });
     await expect(page.locator('#edge-hint')).toContainText('IrqCtrl');

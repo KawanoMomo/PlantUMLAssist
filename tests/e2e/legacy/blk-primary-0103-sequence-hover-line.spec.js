@@ -7,7 +7,11 @@ const { gotoApp, loadFixture } = require('../helpers');
 // resolveInsertLine を公開しておらず、汎用の「+ ここに挿入」が図の全幅に
 // 伸びるだけで、どの行に入るのか読めなかった。
 
-// 2 本目と 3 本目のメッセージの隙間の座標。
+// 1 本目と 2 本目のメッセージの隙間の座標。
+// メッセージの当たり矩形は矢印の上のラベルまで含む高さになり、上下の矩形が接して
+// 2 本の中点はどちらかの矩形の中に入る (矩形の上ではガイドは出ず、選択が優先)。
+// 1 本目の列のまま 1 本目の矩形のすぐ下へ下り、矩形に当たらない最初の点を隙間とする
+// (BLK-releaser-20260929-0851-1)。
 async function gapBetweenMessages(page) {
   return page.evaluate(() => {
     var rects = Array.prototype.slice.call(
@@ -17,7 +21,12 @@ async function gapBetweenMessages(page) {
       return { line: parseInt(r.getAttribute('data-line'), 10), top: b.top, bottom: b.bottom, mid: b.top + b.height / 2, x: b.left + b.width / 2 };
     }).sort(function(a, b) { return a.mid - b.mid; });
     if (boxes.length < 2) return null;
-    return { x: boxes[0].x, y: (boxes[0].mid + boxes[1].mid) / 2, upper: boxes[0].line };
+    var x = boxes[0].x;
+    for (var y = boxes[0].bottom + 1; y < boxes[1].bottom; y += 1) {
+      var el = document.elementFromPoint(x, y);
+      if (el && !(el.getAttribute && el.getAttribute('data-type'))) return { x: x, y: y, upper: boxes[0].line };
+    }
+    return null;
   });
 }
 

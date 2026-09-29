@@ -4,7 +4,12 @@
 // 関係を渡す手段が無かった。開いている図を 1 プロジェクトとして扱い、部品名を
 // 押すとその名前が出る図がタブ上でハイライトされ、一覧から該当行へ運べる。
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('../helpers');
+const { gotoApp, saveDirFor } = require('../helpers');
+
+// ▤ に載る図の束は「開いているタブ + 保存フォルダ」。既定の ./autosave には他の spec が残した図が
+// 入っているので、この spec だけの空の保存先を指し、保存は localStorage に取る (フォルダには書かない)。
+// 数えるのは開いた 3 枚だけになる (BLK-releaser-20260929-0851-1)。
+const DIR = saveDirFor(__filename);
 
 const SPI = [
   '@startuml', 'participant Spi_Driver', 'participant DmaCtrl',
@@ -63,7 +68,13 @@ async function openXref(page) {
 
 test.describe('BLK-primary-20260908-0003-wish 参照関係グラフ (▤ 影響を見る の中)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
+    await page.addInitScript((d) => {
+      try {
+        window.localStorage.clear();
+        window.localStorage.setItem('plantuml-autosave-config',
+          JSON.stringify({ enabled: true, debounceMs: 300, restoreMode: 'none', backend: 'localStorage', fileDir: d }));
+      } catch (e) {}
+    }, DIR);
   });
 
   test('タブバーの旧「参照関係」の入口は ▤ 影響を見る を開く', async ({ page }) => {

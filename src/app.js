@@ -33604,7 +33604,8 @@ function _dsShowRenameNotice(el) {
 // 新しい名前で書いてから前の名前を消す。中身が違うなら別物なので残し、
 // rename-guard の知らせ (戻す口) に任せる。
 // 返り値は Promise<文字列 or ''> で、呼び出し側が知らせに出す。
-function _sweepRenamedFile(from, to, dsl) {
+// out (任意) には決めた処置 (out.action = 'none' | 'move' | 'keep') を入れて返す。
+function _sweepRenamedFile(from, to, dsl, out) {
   var ws = window.MA.workspace;
   var RS = window.MA.renameSweep;
   if (!ws || !RS) return Promise.resolve('');
@@ -33623,6 +33624,7 @@ function _sweepRenamedFile(from, to, dsl) {
     return ws.loadFile(from, dir);
   }).then(function(oldDsl) {
     var p = RS.plan({ from: from, to: to, saved: true, oldDsl: oldDsl, currentDsl: body });
+    if (out && p) out.action = p.action;
     if (!p || p.action === 'none') return '';
     if (p.action === 'keep') return p.text;
     return Promise.resolve(ws.saveToFile({ name: to, dsl: body }, dir)).then(function(ok) {
@@ -33667,15 +33669,35 @@ function _dsRenameActive(next) {
   ws.rename(id, to);
   var name = _dsActiveDocName();
   var note = RG ? RG.notice({ from: from, to: name, saved: saved, version: version }) : null;
+  // BLK-releaser-20260929-0851-1: 付け替え (BLK-junior-20260915-0307) は前の名前のファイルが
+  // 今の図と同じなら消す。そのファイルが前周の完了物に今回の編集が紛れ込んだもの
+  // (BLK-junior-20260908-1603) なら、前周の版は控えにしか残らない。付け替えた後も
+  // 「直前の版に戻す」を残す。戻す口は付け替えが済んでから出す (途中で戻すと、戻した版を付け替えが消す)。
+  var restorable = !!(note && note.canRestore);
+  var restoreDsl = version ? version.dsl : '';
   _dsRenameNotice = note
-    ? { text: note.text, canRestore: note.canRestore, from: from, dsl: version ? version.dsl : '' }
+    ? { text: note.text, canRestore: false, from: from, dsl: restoreDsl }
     : null;
   renderTabs();
   renderDiagramSettings(true);
   // 前の名前のファイルが今の図そのものなら付け替える (残して二重にしない)。
-  _sweepRenamedFile(from, name, mmdText).then(function(text) {
-    if (!text) return;
-    _dsRenameNotice = { text: text, canRestore: false, from: from, dsl: '' };
+  var sweep = {};
+  _sweepRenamedFile(from, name, mmdText, sweep).then(function(text) {
+    // 中身が今の図と違うので残した (keep) ファイルは、今回の編集が紛れ込んだものではない
+    var offer = restorable && sweep.action !== 'keep';
+    if (!text) {
+      if (offer && _dsRenameNotice && _dsRenameNotice.from === from) {
+        _dsRenameNotice.canRestore = true;
+        renderDiagramSettings(true);
+      }
+      return;
+    }
+    _dsRenameNotice = {
+      text: offer
+        ? text + '。名前を変える前の版を ' + from + '.puml として残すなら、右のボタンで戻せます'
+        : text,
+      canRestore: offer, from: from, dsl: offer ? restoreDsl : '',
+    };
     setSaveStatus(text);
     renderDiagramSettings(true);
   });
