@@ -1943,6 +1943,15 @@ class Handler(BaseHTTPRequestHandler):
                     add(child)
         except OSError:
             pass
+        # BLK-owner-20260925-0416-prune: 以前「＋参照」で足したフォルダ (keep) も並べる。
+        # 参照タブ列を外しても、利用者が足したフォルダは「読むだけ」節に残す (隣でなくなっても消えない)。
+        for raw in urllib.parse.parse_qs(parsed.query).get('keep', [])[:8]:
+            if not raw.strip():
+                continue
+            try:
+                add(self._autosave_resolve_dir(raw))
+            except (OSError, ValueError):
+                pass
         # 図が 1 枚も無いフォルダは行き先にならない (自分の保存先だけは空でも残す)。
         entries = [e for e in entries if e['files'] > 0 or e['current']]
         self._send_json(200, {'current': str(cur), 'parent': str(parent), 'dirs': entries})
