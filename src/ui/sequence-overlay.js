@@ -103,11 +103,15 @@ window.MA.sequenceOverlay = (function() {
     var from = (meta && meta.startUmlLine) || 1;
     var stop = (meta && meta.newpageLine) || Infinity;
     var out = [];
+    var inStyle = false;
     for (var i = from - 1; i < lines.length; i++) {
       var ln = i + 1;
       if (ln >= stop) break;
       var t = lines[i].trim();
       if (ln > from && /^@enduml/i.test(t)) break;
+      // BLK-migrator-20260930-0255: `<style>` の中の `note {` は見た目の指定で、注釈ではない (描かれた紙を取り合わない)。
+      if (inStyle) { if (/<\/style>/i.test(t)) inStyle = false; continue; }
+      if (/^<style\b/i.test(t)) { inStyle = !/<\/style>/i.test(t); continue; }
       if (covered[ln]) continue;
       if (meta && meta.deadLines && meta.deadLines[ln]) continue;   // 描かれない枝の注釈
       var m = t.match(_NOTE_OPEN_RE);
@@ -542,8 +546,28 @@ window.MA.sequenceOverlay = (function() {
     });
     var restC = [], restP = participants.filter(function(p) { return used.indexOf(p) < 0; });
     cols.forEach(function(c, i) { if (!owner[i]) restC.push(i); });
-    if (restC.length && restC.length === restP.length) restC.forEach(function(ci, k) { owner[ci] = restP[k]; });
+    if (restC.length && restC.length === restP.length) { restC.forEach(function(ci, k) { owner[ci] = restP[k]; }); return owner; }
+    // BLK-migrator-20260930-0255: 人数が合わない (本文から読んだ参加者に描かれない者が混ざる・読み落としがある) ときも、
+    // 左から順に「伏せ字の表示名と字数・ASCII の字が食い違わない」次の参加者を当てる。1 人の読み違いで全員の枠を外さない。
+    var from = 0;
+    restC.forEach(function(ci) {
+      for (var k = from; k < restP.length; k++) {
+        if (_titleFits(cols[ci].title, restP[k])) { owner[ci] = restP[k]; from = k + 1; return; }
+      }
+    });
     return owner;
+  }
+  // 伏せ字の表示名 (ASCII 以外が '.') に、参加者の別名・表示名 (1 行目) のどれかが字数と ASCII の字で合うか。
+  function _titleFits(title, p) {
+    var first = String(p.label || '').split(/\\n|\n/)[0];
+    return [p.id, _maskName(first), _maskName(p.label)].some(function(c) {
+      c = String(c || '');
+      if (!title || c.length !== title.length) return false;
+      for (var i = 0; i < c.length; i++) {
+        if (title.charAt(i) !== '.' && c.charAt(i) !== '.' && title.charAt(i) !== c.charAt(i)) return false;
+      }
+      return true;
+    });
   }
   // 線の端より上 (dir<0) / 下 (dir>0) にある。文字の外接矩形は字の下がりのぶん線の端を数 px 越える。
   function _onSide(s, edgeY, dir) {
