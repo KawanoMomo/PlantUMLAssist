@@ -1,12 +1,11 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, switchTypeWithSample } = require('../helpers');
 
 test.describe('UseCase overlay-driven', () => {
   test('clicking actor in SVG selects it', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-usecase');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-usecase');
     var actorRect = page.locator('#overlay-layer rect[data-type="actor"]').first();
     var count = await actorRect.count();
     if (count === 0) test.skip();
@@ -19,8 +18,7 @@ test.describe('UseCase overlay-driven', () => {
 
   test('clicking same actor twice toggles selection off', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-usecase');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-usecase');
     var actorRect = page.locator('#overlay-layer rect[data-type="actor"]').first();
     var count = await actorRect.count();
     if (count === 0) test.skip();
@@ -34,8 +32,7 @@ test.describe('UseCase overlay-driven', () => {
 
   test('shift+click on second element opens multi-select connect panel', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-usecase');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-usecase');
     var actorRect = page.locator('#overlay-layer rect[data-type="actor"]').first();
     var ucRect = page.locator('#overlay-layer rect[data-type="usecase"]').first();
     var aCount = await actorRect.count();
@@ -51,8 +48,7 @@ test.describe('UseCase overlay-driven', () => {
 
   test('multi-select connect creates relation in DSL', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-usecase');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-usecase');
     var actorRect = page.locator('#overlay-layer rect[data-type="actor"]').first();
     var ucRect = page.locator('#overlay-layer rect[data-type="usecase"]').first();
     var aCount = await actorRect.count();
@@ -72,8 +68,7 @@ test.describe('UseCase overlay-driven', () => {
     var errors = [];
     page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-usecase');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-usecase');
     var actorRect = page.locator('#overlay-layer rect[data-type="actor"]').first();
     if ((await actorRect.count()) > 0) {
       await actorRect.click();
@@ -87,9 +82,8 @@ test.describe('UseCase overlay-driven', () => {
   // actor is selectable (parser ACTOR_KW_RE only accepts ASCII identifiers).
   test('UC-bug-jp v1.1.2: Japanese-named actor is selectable', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-usecase');
-    await page.waitForTimeout(2000);
-    await page.locator('#uc-tail-kind').selectOption('actor');
+    await switchTypeWithSample(page, 'plantuml-usecase');
+    await page.locator('#uc-tail-kind-chip-actor').click();
     await page.locator('#uc-tail-alias').fill('管理者');
     await page.locator('#uc-tail-add').click();
     await page.waitForTimeout(2500);

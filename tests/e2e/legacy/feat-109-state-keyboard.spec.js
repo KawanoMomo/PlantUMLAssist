@@ -6,6 +6,7 @@
 // (docs/images は git status --porcelain の保護対象のため書かない)。
 const path = require('path');
 const { test, expect } = require('@playwright/test');
+const { switchTypeWithSample } = require('../helpers');
 
 const SHOT_DIR = path.join(__dirname, '..', '..', '..', 'test-results', 'feat-109');
 
@@ -14,8 +15,9 @@ const SHOT_DIR = path.join(__dirname, '..', '..', '..', 'test-results', 'feat-10
 async function bootState(page) {
   await page.goto('/');
   await page.waitForSelector('#preview-svg', { timeout: 5000 });
-  await page.locator('#diagram-type').selectOption('plantuml-state');
-  await page.waitForTimeout(500);
+  await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
+  // 白紙のタブで図種を選ぶと見本は入らない (BLK-junior-20260909-0703)。上の行番号の見本を入れてから始める。
+  await switchTypeWithSample(page, 'plantuml-state');
 }
 
 async function selectByLine(page, line) {

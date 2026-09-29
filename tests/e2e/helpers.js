@@ -130,8 +130,28 @@ async function openCompareTabs(page) {
   await page.waitForSelector('#compare-pane:not([hidden])');
 }
 
+// BLK-junior-20260909-0703 / BLK-owner-20260925-0312-2: 白紙のタブで図種を選ぶと、見本は入れず白紙になる。
+// 旧 spec の多くは見本 (component WebApp / class User 等) を前提に操作するので、図種を選んだあと
+// その図種の見本 (module.template()) を本文に入れて、見本を開いた状態から始める。
+async function switchTypeWithSample(page, type) {
+  await page.locator('#diagram-type').selectOption(type);
+  await page.waitForTimeout(300);
+  await page.evaluate((t) => {
+    var mods = window.MA.modules || {};
+    var mod = null;
+    Object.keys(mods).forEach(function(k) { if (mods[k] && mods[k].type === t) mod = mods[k]; });
+    if (!mod) throw new Error('no module for ' + t);
+    var ed = document.getElementById('editor');
+    ed.value = mod.template();
+    ed.dispatchEvent(new Event('input'));
+  }, type);
+  // 見本の描画 (local の Java) が済んで選択枠が張られるまで待つ。枠を押す spec が空振りで skip しないように。
+  await page.waitForSelector('#overlay-layer rect', { state: 'attached', timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(300);
+}
+
 module.exports = {
   openCrossRef, openCompareTabs,
   gotoApp, loadFixture, getEditorText, getEditorLine, clickOverlayByLine, setDiagramTitle,
-  saveDirFor, shotOut, E2E_SAVE_ROOT, pickTool,
+  saveDirFor, shotOut, E2E_SAVE_ROOT, pickTool, switchTypeWithSample,
 };

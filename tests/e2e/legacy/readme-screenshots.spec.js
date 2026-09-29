@@ -2,7 +2,7 @@
 // Generates screenshots for README.md feature documentation.
 // Run: npx playwright test tests/e2e/readme-screenshots.spec.js --workers=1
 const { test } = require('@playwright/test');
-const { gotoApp } = require('../helpers');
+const { gotoApp, switchTypeWithSample } = require('../helpers');
 const path = require('path');
 
 const OUT_DIR = path.join(__dirname, '..', '..', '..', 'docs', 'images');
@@ -29,15 +29,13 @@ test.describe('README screenshots', () => {
 
   test('03 — usecase: overlay-driven default', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-usecase');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-usecase');
     await page.screenshot({ path: path.join(OUT_DIR, '03-usecase-default.png'), fullPage: false });
   });
 
   test('04 — usecase: click actor to select + edit', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-usecase');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-usecase');
     var actorRect = page.locator('#overlay-layer rect[data-type="actor"]').first();
     if ((await actorRect.count()) > 0) {
       await actorRect.click();
@@ -48,8 +46,7 @@ test.describe('README screenshots', () => {
 
   test('05 — usecase: multi-select connect (Shift+click)', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-usecase');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-usecase');
     var actorRect = page.locator('#overlay-layer rect[data-type="actor"]').first();
     var ucRect = page.locator('#overlay-layer rect[data-type="usecase"]').first();
     if ((await actorRect.count()) > 0 && (await ucRect.count()) > 0) {
@@ -62,18 +59,18 @@ test.describe('README screenshots', () => {
 
   test('06 — component: overlay-driven default', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-component');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-component');
     await page.screenshot({ path: path.join(OUT_DIR, '06-component-default.png'), fullPage: false });
   });
 
   test('07 — component: click relation to edit (kind switch)', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-component');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-component');
     var relRect = page.locator('#overlay-layer rect[data-type="relation"]').first();
     if ((await relRect.count()) > 0) {
-      await relRect.click();
+      // 関係の線は細い当たり (path.link-hit) が枠の rect より手前にあるので、実マウスで枠の真ん中を押す。
+      var relBox = await relRect.boundingBox();
+      await page.mouse.click(relBox.x + relBox.width / 2, relBox.y + relBox.height / 2);
       await page.waitForTimeout(500);
       await page.screenshot({ path: path.join(OUT_DIR, '07-component-relation-selected.png'), fullPage: false });
     }
@@ -81,8 +78,7 @@ test.describe('README screenshots', () => {
 
   test('08 — component: multi-select connect with 4 kind options', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-component');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-component');
     var c = page.locator('#overlay-layer rect[data-type="component"]').first();
     var i = page.locator('#overlay-layer rect[data-type="interface"]').first();
     if ((await c.count()) > 0 && (await i.count()) > 0) {
@@ -95,10 +91,9 @@ test.describe('README screenshots', () => {
 
   test('09 — component: with port (block form)', async ({ page }) => {
     await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-component');
-    await page.waitForTimeout(2500);
+    await switchTypeWithSample(page, 'plantuml-component');
     // Add port via property panel
-    await page.locator('#co-tail-kind').selectOption('port');
+    await page.locator('#co-tail-kind-chip-port').click();
     await page.locator('#co-tail-parent').selectOption('WebApp');
     await page.locator('#co-tail-alias').fill('p1');
     await page.locator('#co-tail-add').click();

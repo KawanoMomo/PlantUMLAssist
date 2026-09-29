@@ -1,14 +1,13 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, switchTypeWithSample } = require('../helpers');
 
 test.describe('UC-5: 横展開 (ports を追加して詳細ブロック化)', () => {
   test.describe('α: DSL technical', () => {
     test('addPort emits port inside parent component block', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-component');
-      await page.waitForTimeout(300);
-      await page.locator('#co-tail-kind').selectOption('port');
+      await switchTypeWithSample(page, 'plantuml-component');
+      await page.locator('#co-tail-kind-chip-port').click();
       await page.locator('#co-tail-parent').selectOption('WebApp');
       await page.locator('#co-tail-alias').fill('p1');
       await page.locator('#co-tail-add').click();
@@ -19,8 +18,7 @@ test.describe('UC-5: 横展開 (ports を追加して詳細ブロック化)', ()
     });
     test('parser links port parentComponentId', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-component');
-      await page.waitForTimeout(300);
+      await switchTypeWithSample(page, 'plantuml-component');
       await page.evaluate(() => {
         var ed = document.getElementById('editor');
         ed.value = '@startuml\ncomponent W\nport p1\n@enduml';
@@ -39,21 +37,19 @@ test.describe('UC-5: 横展開 (ports を追加して詳細ブロック化)', ()
   test.describe('γ: workflow completion', () => {
     test('port option visible in kind selector', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-component');
-      await page.waitForTimeout(300);
-      var options = await page.locator('#co-tail-kind option').allTextContents();
-      expect(options.some(function(o) { return o.includes('Port'); })).toBe(true);
+      await switchTypeWithSample(page, 'plantuml-component');
+      // 種類のプルダウンは種別チップに置き換わった(選択肢名も「ポート (port)」)。チップが出ていることを見る。
+      await expect(page.locator('#co-tail-kind-chip-port')).toBeVisible();
     });
     test('multi-port workflow keeps both inside same component block', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-component');
-      await page.waitForTimeout(300);
-      await page.locator('#co-tail-kind').selectOption('port');
+      await switchTypeWithSample(page, 'plantuml-component');
+      await page.locator('#co-tail-kind-chip-port').click();
       await page.locator('#co-tail-parent').selectOption('WebApp');
       await page.locator('#co-tail-alias').fill('p1');
       await page.locator('#co-tail-add').click();
       await page.waitForTimeout(200);
-      await page.locator('#co-tail-kind').selectOption('port');
+      await page.locator('#co-tail-kind-chip-port').click();
       await page.locator('#co-tail-parent').selectOption('WebApp');
       await page.locator('#co-tail-alias').fill('p2');
       await page.locator('#co-tail-add').click();

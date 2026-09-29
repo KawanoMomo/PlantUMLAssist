@@ -1,14 +1,13 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, switchTypeWithSample } = require('../helpers');
 
 test.describe('UC-6: polish (要求 ID 命名見直し / renameWithRefs)', () => {
 
   test.describe('α: DSL technical', () => {
     test('renameWithRefs updates actor id and follows references', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-usecase');
-      await page.waitForTimeout(300);
+      await switchTypeWithSample(page, 'plantuml-usecase');
       var newT = await page.evaluate(() => {
         var t = document.getElementById('editor').value;
         return window.MA.modules.plantumlUsecase.renameWithRefs(t, 'User', 'Admin');
@@ -20,8 +19,7 @@ test.describe('UC-6: polish (要求 ID 命名見直し / renameWithRefs)', () =>
 
     test('renameWithRefs preserves quoted labels', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-usecase');
-      await page.waitForTimeout(300);
+      await switchTypeWithSample(page, 'plantuml-usecase');
       await page.evaluate(() => {
         var ed = document.getElementById('editor');
         ed.value = '@startuml\nactor "User Admin" as U\nusecase Login\nU --> Login\n@enduml';
@@ -41,8 +39,7 @@ test.describe('UC-6: polish (要求 ID 命名見直し / renameWithRefs)', () =>
   test.describe('γ: workflow completion', () => {
     test('renameWithRefs is single operation (one button click triggers it)', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-usecase');
-      await page.waitForTimeout(300);
+      await switchTypeWithSample(page, 'plantuml-usecase');
       // editor で actor 行を click し、property panel を開かせる
       // (overlay 未実装なので、selection は内部 API で setSelected を直接呼ぶ)
       await page.evaluate(() => {
@@ -65,8 +62,7 @@ test.describe('UC-6: polish (要求 ID 命名見直し / renameWithRefs)', () =>
 
     test('rename preserves Undo (history.pushHistory called)', async ({ page }) => {
       await gotoApp(page);
-      await page.locator('#diagram-type').selectOption('plantuml-usecase');
-      await page.waitForTimeout(300);
+      await switchTypeWithSample(page, 'plantuml-usecase');
       // Capture state before rename, push history, apply rename
       await page.evaluate(() => {
         window.MA.history.pushHistory();
@@ -74,6 +70,8 @@ test.describe('UC-6: polish (要求 ID 命名見直し / renameWithRefs)', () =>
         var newT = window.MA.modules.plantumlUsecase.renameWithRefs(t, 'User', 'Admin');
         var ed = document.getElementById('editor');
         ed.value = newT;
+        // 本文の書き換えは input で本文の持ち主 (mmdText) に届ける。届けないと Ctrl+Z は書き換え前を「今」と見る。
+        ed.dispatchEvent(new Event('input'));
       });
       await page.waitForTimeout(200);
       var afterText = await getEditorText(page);
