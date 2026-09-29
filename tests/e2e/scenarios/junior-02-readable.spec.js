@@ -1729,6 +1729,20 @@ test('手順2 フォームだけで足した直後にリロードしても本文
   expect(back).toContain('state Idle');
   expect(back).toContain('Idle --> Running : Start');
   expect(await getEditorText(page)).toContain('Idle --> Running : Start');
+
+  // BLK-owner-20260930-0311-2: 注釈の本文欄も、他の欄と同じく Enter で確定 (Shift+Enter は改行)。6 図種で同じ。
+  await page.locator('#st-tail-kind').selectOption('note');
+  await page.waitForSelector('#st-tail-ntext');
+  await page.locator('#st-tail-target').selectOption('Running');
+  await page.locator('#st-tail-ntext').click();
+  await page.keyboard.type('起動済み');
+  await page.keyboard.press('Shift+Enter');
+  await page.keyboard.type('停止で戻る');
+  await expect(page.locator('#st-tail-ntext')).toHaveValue('起動済み\n停止で戻る');
+  expect(await getEditorText(page)).not.toContain('起動済み');
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => getEditorText(page)).toContain('起動済み');
+  expect(await getEditorText(page)).toContain('停止で戻る');
 });
 
 // BLK-human-20260925-0352 / BLK-owner-20260925-0312-2: 左レールの図種を押すと、書きかけの図の本文が

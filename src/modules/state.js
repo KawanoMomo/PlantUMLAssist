@@ -1425,7 +1425,7 @@ window.MA.modules.plantumlState = (function() {
             { value: 'right', label: 'Right', selected: true },
             { value: 'left', label: 'Left' }
           ]) +
-          '<div style="margin-bottom:6px;"><label style="display:block;font-size:10px;color:var(--text-secondary);">本文</label><textarea id="st-tail-ntext" style="width:100%;min-height:50px;"></textarea></div>' +
+          '<div style="margin-bottom:6px;"><label style="display:block;font-size:10px;color:var(--text-secondary);">本文 (Enter で追加 / Shift+Enter で改行)</label><textarea id="st-tail-ntext" style="width:100%;min-height:50px;"></textarea></div>' +
           P.primaryButtonHtml('st-tail-add', '+ 追加');
       } else if (kind === 'bulk') {
         html2 =

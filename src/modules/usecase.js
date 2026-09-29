@@ -717,7 +717,7 @@ window.MA.modules.plantumlUsecase = (function() {
             { value: 'top',    label: 'Top' },
             { value: 'bottom', label: 'Bottom' },
           ]) +
-          '<label style="display:block;font-size:10px;color:var(--text-secondary);">本文</label>' +
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);">本文 (Enter で追加 / Shift+Enter で改行)</label>' +
           '<textarea id="uc-tail-ntext" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;"></textarea>' +
           P.primaryButtonHtml('uc-tail-add', '+ 追加');
       } else if (kind === 'bulk') {
