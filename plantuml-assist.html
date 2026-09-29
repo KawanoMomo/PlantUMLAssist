@@ -3989,6 +3989,8 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #ns-rows .ns-at:hover { background: var(--bg-tertiary); }
 #ns-rows .ns-at .ns-line { color: var(--text-secondary); margin-right: 6px; }
 #ns-rows .ns-empty, #ns-hint { color: var(--text-secondary); font-size: 11px; padding: 6px 2px; }
+#ns-rows .ns-chain-head { color: var(--text-secondary); font-size: 11px; padding: 8px 2px 4px; border-top: 1px dashed var(--border); margin-top: 6px; }
+#ns-rows .ns-row.ns-chain { border-style: dashed; }
 #ns-hint .ns-top-name { cursor: pointer; text-decoration: underline; margin-right: 8px; }
 /* BLK-owner-20260924-0852-prune: 旧 🕸 参照関係の左列。名前が空のまま開いたときの下段は
    「図をまたぐ部品名」(名前と枚数)。押すとその名前で引き直す。 */
@@ -4039,6 +4041,10 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #dg-impact td.dg-via { color: var(--text-secondary); word-break: break-all; }
 #dg-impact tr.dg-doc[data-hop="0"] td.dg-hop { color: var(--accent); }
 #dg-impact tr.dg-doc[data-hop] td.dg-hop { white-space: nowrap; }
+/* BLK-primary-20260926-1708-wish: 影響先の行を押すと下段「出てくる行」がその図の当たり行に絞られる */
+#dg-impact tr.dg-doc { cursor: pointer; }
+#dg-impact tr.dg-doc:hover td { background: var(--bg-tertiary); }
+#dg-impact tr.dg-doc[data-focus="1"] td { background: var(--bg-tertiary); box-shadow: inset 0 -1px 0 var(--accent); }
 /* 影響先へのまとめ note (BLK-primary-20260915-0007)。一覧のすぐ下に出す
    (見た一覧と打つ先が同じ画面にないと、結局 1 枚ずつ開き直すことになる)。 */
 /* BLK-primary-20260917-0123-wish: 影響先の版履歴を症状の語で探す欄。 */

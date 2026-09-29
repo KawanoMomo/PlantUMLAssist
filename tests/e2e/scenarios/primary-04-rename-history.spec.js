@@ -1284,3 +1284,70 @@ test.describe('primary 手順 4: 不具合対応で当たった図を順に開�
     await expect(ov.locator('rect.sym-mark')).toHaveCount(0);
   });
 });
+
+// BLK-primary-20260926-1708-wish / -friction: 場面「仕様変更で影響範囲を洗う」。▤ 影響を見る の影響先は
+// 「図名・届き方・経由した部品名」だけで、その図の何行が当たっているかは 1 枚ずつ開き「次へ」を枚数ぶん押して
+// DSL を目で探すしかなかった (12 図でクリック 16〜17)。下段「出てくる行」に連鎖で届く図の当たり行 (経由した部品名) も
+// 並べ、影響先の行を押せばその図の当たり行へ絞る。部品名が遷移ラベルにだけ出る図も直接の影響先に入る。
+const IM_CLASS = '@startuml\nclass Spi_Driver\nclass Dma_Ctrl\nSpi_Driver ..> Dma_Ctrl : 転送\n@enduml';
+const IM_SEQ = '@startuml\nparticipant Spi_Driver\nparticipant Hw_Ctrl\nSpi_Driver -> Hw_Ctrl : Init\n@enduml';
+const IM_DMA = '@startuml\nparticipant Dma_Ctrl\nparticipant Irq_Ctrl\nDma_Ctrl -> Irq_Ctrl : Raise\n@enduml';
+const IM_STATE = '@startuml\nstate Idle\nstate Busy\nIdle --> Busy : Spi_Driver.Start()\n@enduml';
+const IM_UART = '@startuml\nparticipant Uart_Driver\nparticipant Hw_Ctrl2\nUart_Driver -> Hw_Ctrl2 : Init\n@enduml';
+
+test.describe('primary 手順 4: 仕様変更で影響範囲を洗う (影響先の当たり行を開かずに読む)', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    await clearDir(page);
+    await putFile(page, 'spi_class', IM_CLASS);
+    await putFile(page, 'spi_init_sequence', IM_SEQ);
+    await putFile(page, 'dma_sequence', IM_DMA);
+    await putFile(page, 'spi_state', IM_STATE);
+    await putFile(page, 'uart_init_sequence', IM_UART);
+    await page.waitForTimeout(500);
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+  });
+  test('影響先ぜんぶの当たり行が下段に並び、影響先の行を押すとその図の行だけに絞れる (図は開かない)', async ({ page }) => {
+    const tabsBefore = await page.evaluate(() => window.MA.workspace.list().map((d) => d.name).sort());
+    await runCmd(page, '影響を見る');
+    await page.waitForSelector('#ri-modal', { state: 'visible' });
+    await page.fill('#ns-q', 'Spi_Driver');
+    await page.waitForTimeout(400);
+
+    // 到達条件その1: 遷移ラベルにだけ Spi_Driver を持つ spi_state も「直接」の影響先に入る。
+    await expect(page.locator('#dg-impact tr.dg-doc[data-doc="spi_state"]')).toHaveAttribute('data-hop', '0');
+    await expect(page.locator('#dg-impact tr.dg-doc[data-doc="dma_sequence"]')).toHaveAttribute('data-hop', '1');
+    await expect(page.locator('#dg-impact tr.dg-doc[data-doc="uart_init_sequence"]')).toHaveCount(0);
+
+    // 到達条件その2: 下段に直接の図の当たり行と、連鎖で届く図の経由した部品名 (Dma_Ctrl) の行が役割つきで並ぶ。
+    const rows = page.locator('#ns-rows');
+    await expect(rows.locator('.ns-row[data-name="spi_state"] .ns-at')).toContainText('Spi_Driver.Start()');
+    const chain = rows.locator('.ns-row.ns-chain[data-name="dma_sequence"]');
+    await expect(chain).toHaveAttribute('data-hop', '1');
+    await expect(chain.locator('.ns-where')).toContainText('経由 Dma_Ctrl');
+    await expect(chain.locator('.ns-at[data-line="4"]')).toContainText('4:呼び出し');
+    await expect(chain.locator('.ns-at[data-line="4"]')).toContainText('Dma_Ctrl -> Irq_Ctrl : Raise');
+    await expect(page.locator('#ns-summary')).toContainText('連鎖で届く図 1 枚');
+
+    // 到達条件その3: 影響先の行を押すと下段がその図の当たり行だけになり、もう一度押すと全部に戻る。
+    await page.locator('#dg-impact tr.dg-doc[data-doc="dma_sequence"] td.dg-doc-name').click();
+    await expect(page.locator('#dg-impact tr.dg-doc[data-doc="dma_sequence"]')).toHaveAttribute('data-focus', '1');
+    await expect(rows.locator('.ns-row')).toHaveCount(1);
+    await expect(page.locator('#ns-summary')).toContainText('dma_sequence の当たり行 2 行');
+    await page.locator('#dg-impact tr.dg-doc[data-doc="spi_class"] td.dg-doc-name').click();
+    await expect(rows.locator('.ns-row')).toHaveCount(1);
+    await expect(rows.locator('.ns-row[data-name="spi_class"] .ns-at')).toHaveCount(2);
+    await page.locator('#dg-impact tr.dg-doc[data-doc="spi_class"] td.dg-doc-name').click();
+    await expect(page.locator('#dg-impact tr.dg-doc[data-focus="1"]')).toHaveCount(0);
+    expect(await rows.locator('.ns-row').count()).toBeGreaterThanOrEqual(4);
+
+    // 到達条件その4: ここまでで図は 1 枚も開いていない (読むだけ)。
+    const tabsAfter = await page.evaluate(() => window.MA.workspace.list().map((d) => d.name).sort());
+    expect(tabsAfter).toEqual(tabsBefore);
+  });
+});

@@ -18612,6 +18612,7 @@ function toggleRenameImpact(open, seedName) {
   // 出てくる行が同じ語で並ぶ。名前を持たずに開いたとき、依存グラフが先頭に出す部品名を語に入れない。
   _dgVerKw = from;
   _dgVerLastName = null;
+  _nsFocusDoc = '';
   modal.style.display = 'flex';
   renderDepGraph();
   var q = document.getElementById('ns-q');
@@ -18735,6 +18736,14 @@ function _dgDocs() {
   });
 }
 
+// 影響が届く図。矢印・宣言で辿れる図に、名前がラベルや note にだけ出る図を「直接」として足す
+// (BLK-primary-20260926-1708-friction: 遷移ラベルにだけ部品名を持つ状態遷移図が影響先から漏れていた)。
+function _dgImpact(graph, name, hops) {
+  var DG = window.MA.depGraph;
+  var impact = DG.impactDocs(graph, name, hops);
+  return DG.withMentions ? DG.withMentions(impact, _dgDocs(), name) : impact;
+}
+
 function _dgSvgHtml(view) {
   var DG = window.MA.depGraph;
   var esc = window.MA.htmlUtils.escHtml;
@@ -18784,7 +18793,9 @@ function _dgImpactHtml(impact) {
   html += '<table><thead><tr><th>図</th><th>届き方</th><th>経由した部品名</th><th></th></tr></thead><tbody>';
   list.forEach(function(r) {
     var mark = _fwMarkAttrs(r.doc);
-    html += '<tr class="dg-doc" data-doc="' + esc(r.doc) + '" data-hop="' + r.hop + '"' + mark + '>'
+    html += '<tr class="dg-doc" data-doc="' + esc(r.doc) + '" data-hop="' + r.hop + '"' + mark
+      + (r.doc === _nsFocusDoc ? ' data-focus="1"' : '')
+      + ' title="押すと、下の「出てくる行」がこの図の当たり行だけになります (もう一度押すと全部に戻ります)">'
       + '<td class="dg-doc-name">' + esc(r.doc) + '</td>'
       + '<td class="dg-hop">' + (r.hop === 0 ? '直接' : '連鎖 ' + r.hop + ' 段') + '</td>'
       + '<td class="dg-via">' + esc((r.via || []).join(', ')) + '</td>'
@@ -19174,6 +19185,7 @@ function renderDepGraph() {
     if (_dgVerLastName !== null) _dgVerKw = null;
     _dgVerLastName = _dgName;
   }
+  if (_nsFocusName !== _dgName) { _nsFocusDoc = ''; _nsFocusName = _dgName; }
   var opts = '';
   names.forEach(function(n) {
     opts += '<option value="' + esc(n.name) + '"' + (n.name === _dgName ? ' selected' : '') + '>'
@@ -19182,7 +19194,7 @@ function renderDepGraph() {
   sel.innerHTML = opts;
 
   var view = DG.forName(graph, _dgName);
-  var impact = DG.impactDocs(graph, _dgName, _dgHops);
+  var impact = _dgImpact(graph, _dgName, _dgHops);
   canvas.innerHTML = _dgSvgHtml(view);
   impactEl.innerHTML = _dgImpactHtml(impact);
   if (sumEl) sumEl.textContent = DG.summaryText(view, impact);
@@ -19216,6 +19228,17 @@ function renderDepGraph() {
   if (walkBtn) walkBtn.addEventListener('click', function() {
     startFixWalk(_dgName, impact, { hops: _dgHops });
   });
+  // BLK-primary-20260926-1708-wish: 影響先の行を押すと、下段「出てくる行」をその図の当たり行へ絞る
+  // (図を 1 枚ずつ開いて DSL を目で探さない)。同じ行をもう一度押すと全部に戻る。ボタン (ここから順に直す) は別。
+  var docRows = impactEl.querySelectorAll('tr.dg-doc');
+  for (var k = 0; k < docRows.length; k++) {
+    (function(tr) {
+      tr.addEventListener('click', function(ev) {
+        if (ev.target && ev.target.closest && ev.target.closest('button')) return;
+        focusImpactDoc(tr.getAttribute('data-doc'));
+      });
+    })(docRows[k]);
+  }
   // 打つ先は「今出ている一覧」。名前・連鎖段数を変えたら選び直す。
   _dgNoteImpact = impact;
   // 版履歴の的も「今出ている一覧」。名前・連鎖段数を変えたら追従する。
@@ -19302,6 +19325,88 @@ function openNameSearchHit(docName, line) {
   }, function() { /* 読めない図は開かない */ });
 }
 
+// BLK-primary-20260926-1708-wish: 上段の影響先の行で絞った図 ('' = 絞らない) と、そのときの部品名。
+var _nsFocusDoc = '';
+var _nsFocusName = '';
+
+function focusImpactDoc(doc) {
+  _nsFocusDoc = (!doc || doc === _nsFocusDoc) ? '' : String(doc);
+  _nsFocusName = _dgName;
+  // 下段の名前は上段の部品名にそろえる (名前欄が空・別の語のままだと、絞った図の行が出ない)。
+  var q = document.getElementById('ns-q');
+  if (q && _nsFocusDoc && q.value.trim() !== _dgName) q.value = _dgName;
+  var rows = document.querySelectorAll('#dg-impact tr.dg-doc');
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].getAttribute('data-doc') === _nsFocusDoc) rows[i].setAttribute('data-focus', '1');
+    else rows[i].removeAttribute('data-focus');
+  }
+  renderRenameImpactBoard();
+  var box = document.getElementById('ri-occ');
+  if (_nsFocusDoc && box && box.scrollIntoView) { try { box.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+  return _nsFocusDoc;
+}
+
+// 名前の文字が出てこない影響先 (連鎖で届いた図など) の当たり行。経由した部品名の行を読む。
+// 返すのは [{ doc, hop, via, lines, open }]。名前で当たった図 (hits) は重ねない。
+function _nsImpactExtras(query, hits) {
+  var IS = window.MA.impactScan;
+  if (!IS || !IS.linesFor || !query || query !== _dgName) return [];
+  var seen = {};
+  (hits || []).forEach(function(h) { seen[h.name] = true; });
+  var byName = {};
+  _dgDocs().forEach(function(d) { byName[d.name] = d; });
+  var WS = window.MA.workspace;
+  var out = [];
+  (_dgNoteImpact || []).forEach(function(r) {
+    if (!r || seen[r.doc] || !byName[r.doc]) return;
+    var names = [query].concat(r.via || []);
+    var lines = IS.linesFor(byName[r.doc].dsl, names);
+    if (!lines.length) return;
+    out.push({ doc: r.doc, hop: r.hop, via: r.via || [], lines: lines,
+      open: !!(WS && WS.findByName && WS.findByName(r.doc)) });
+  });
+  return out;
+}
+
+function _nsExtraRow(x) {
+  var row = document.createElement('div');
+  row.className = 'ns-row ns-chain';
+  row.setAttribute('data-name', x.doc);
+  row.setAttribute('data-hop', String(x.hop));
+  row.setAttribute('data-count', String(x.lines.length));
+  row.setAttribute('data-open', x.open ? '1' : '0');
+  var line1 = document.createElement('div');
+  line1.className = 'ns-doc';
+  var nm = document.createElement('span');
+  nm.className = 'ns-name';
+  nm.textContent = x.doc;
+  line1.appendChild(nm);
+  var cnt = document.createElement('span');
+  cnt.className = 'ns-count';
+  cnt.textContent = x.lines.length + ' 行';
+  line1.appendChild(cnt);
+  var where = document.createElement('span');
+  where.className = 'ns-where';
+  where.textContent = (x.hop === 0 ? '直接' : '連鎖 ' + x.hop + ' 段')
+    + (x.via.length ? ' · 経由 ' + x.via.join(', ') : '') + (x.open ? ' / 開いている' : ' / 未オープン');
+  line1.appendChild(where);
+  row.appendChild(line1);
+  x.lines.forEach(function(a) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ns-at';
+    btn.setAttribute('data-line', String(a.line));
+    var ln = document.createElement('span');
+    ln.className = 'ns-line';
+    ln.textContent = a.line + ':' + a.label;
+    btn.appendChild(ln);
+    btn.appendChild(document.createTextNode(a.text));
+    btn.addEventListener('click', function() { openNameSearchHit(x.doc, a.line); });
+    row.appendChild(btn);
+  });
+  return row;
+}
+
 var _NS_KIND_LABEL = { sequence: 'シーケンス', state: '状態遷移', class: 'クラス' };
 var _NS_ROLE_LABEL = { decl: '宣言', call: '呼び出し', ref: '本文' };
 
@@ -19325,14 +19430,33 @@ function renderNameSearch() {
     renderRiXrefNames(box);
     return [];
   }
-  if (!res.hitDocs) {
+  var extras = _nsImpactExtras(res.query, res.hits);
+  var focus = (_nsFocusDoc && res.query === _dgName) ? _nsFocusDoc : '';
+  var hits = focus ? res.hits.filter(function(h) { return h.name === focus; }) : res.hits;
+  if (focus) extras = extras.filter(function(x) { return x.doc === focus; });
+  if (head && extras.length && !focus) {
+    head.textContent += ' / 連鎖で届く図 ' + extras.length + ' 枚（経由した部品名の行）';
+  }
+  if (head && focus) {
+    var nLines = 0;
+    hits.forEach(function(h) { nLines += h.at.length; });
+    extras.forEach(function(x) { nLines += x.lines.length; });
+    head.textContent = focus + ' の当たり行 ' + nLines + ' 行（上の影響先の行で絞っています。同じ行をもう一度押すと全部に戻ります）';
+    head.setAttribute('data-focus', focus);
+  } else if (head) {
+    head.removeAttribute('data-focus');
+  }
+  box.setAttribute('data-focus', focus);
+  if (!hits.length && !extras.length) {
     var empty = document.createElement('div');
     empty.className = 'ns-empty';
-    empty.textContent = 'この名前を使っている図はありません（綴りが違うか、まだどこにも出ていません）';
+    empty.textContent = focus
+      ? focus + ' には「' + res.query + '」も経由した部品名も出てきません'
+      : 'この名前を使っている図はありません（綴りが違うか、まだどこにも出ていません）';
     box.appendChild(empty);
     return [];
   }
-  res.hits.forEach(function(h) {
+  hits.forEach(function(h) {
     var row = document.createElement('div');
     row.className = 'ns-row';
     row.setAttribute('data-name', h.name);
@@ -19375,7 +19499,17 @@ function renderNameSearch() {
     });
     box.appendChild(row);
   });
-  return res.hits;
+  // BLK-primary-20260926-1708-wish: 名前の文字は無いが影響が届く図 (連鎖) も、経由した部品名の行を同じ一覧で読む。
+  if (extras.length) {
+    if (!focus) {
+      var ch = document.createElement('div');
+      ch.className = 'ns-chain-head';
+      ch.textContent = '連鎖で届く図 ' + extras.length + ' 枚 — 経由した部品名の行';
+      box.appendChild(ch);
+    }
+    extras.forEach(function(x) { box.appendChild(_nsExtraRow(x)); });
+  }
+  return hits.concat(extras.map(function(x) { return { name: x.doc }; }));
 }
 
 // 下段の名前を打ち替えたら、上段の依存グラフもその名前が図の束にあれば追う。
@@ -19711,7 +19845,7 @@ function makeTicketFromDepGraph() {
     return Promise.resolve(null);
   }
   var graph = DG.build(_dgDocs());
-  var impact = DG.impactDocs(graph, _dgName, _dgHops);
+  var impact = _dgImpact(graph, _dgName, _dgHops);
   if (!impact.length) return Promise.resolve(null);
   var ticket = CT.fromImpact(_dgName, impact, { hops: _dgHops });
   return saveTicket(ticket).then(function(res) {
@@ -19848,7 +19982,7 @@ function setupTicketBoard() {
     var run = function() {
       var graph = DG.build(_dgDocs());
       var hops = (typeof cur.hops === 'number') ? cur.hops : 2;
-      var next = CT.refresh(cur, DG.impactDocs(graph, cur.subject, hops));
+      var next = CT.refresh(cur, _dgImpact(graph, cur.subject, hops));
       saveTicket(next).then(function() { renderTicketBoard(); });
     };
     if (_fiEnabled()) loadFolderImpact(true).then(run);
