@@ -28106,7 +28106,16 @@ function _sclDirs() {
 }
 
 // 突合に掛ける図をそろえる。隣は控えでよいが、自分は読み直す。
+// BLK-releaser-20260930-0802-1: 隣のフォルダの一覧 (_peekDirs) は、以前は保存先の一覧の参照タブ列が
+// 起動時に読んでいた。参照タブ列を外した (BLK-owner-20260925-0416-prune) ので、FILES「読むだけ」を
+// 開かないまま保存すると一覧が空で、自分のフォルダしか突き合わせずに「衝突なし」と言っていた。
+// 突合の前に一覧を自分で読みに行く (読めていれば読み直さない)。
 function _sclCollect() {
+  var ensure = (typeof _ensurePeekDirs === 'function') ? _ensurePeekDirs() : Promise.resolve(false);
+  return ensure.catch(function() { return false; }).then(_sclCollectDirs);
+}
+
+function _sclCollectDirs() {
   var dirs = _sclDirs();
   var mineDir = null, others = [];
   dirs.forEach(function(d) { if (d.current) mineDir = d; else others.push(d); });
