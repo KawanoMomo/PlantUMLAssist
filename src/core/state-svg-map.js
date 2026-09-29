@@ -163,6 +163,39 @@ window.MA.stateSvgMap = (function() {
 
   function _classOf(g) { return _s(g.getAttribute('class')); }
 
+  // BLK-migrator-20260929-1155: PlantUML 1.2026.8 は修飾名の ASCII 以外の文字を `.` に置き換えて書く
+  // (`待機` → `..`、`Run.待機` → `Run...`、`親` の中の開始 → `...start..`)。修飾名が壊れていれば、
+  // 名前は描いた文字 (その <g> の最初の <text>) から、入れ物はその <g> を包む複合状態の <g> から読む。
+  function _brokenQn(qn) {
+    var s = _s(qn);
+    if (!s) return true;
+    return s.split('.').some(function(seg) { return !seg; });
+  }
+  function _ownText(g) {
+    var kids = g.children || [];
+    for (var i = 0; i < kids.length; i++) {
+      if ((kids[i].tagName || '').toLowerCase() === 'text') return _s(kids[i].textContent).trim();
+    }
+    return '';
+  }
+  // DSL に出てくる状態か (宣言がある、または遷移の端に書かれている)。
+  function _knownState(parsed, name) {
+    if (!name) return false;
+    if (_findState(parsed, name)) return true;
+    var short = shortName(name);
+    return ((parsed && parsed.transitions) || []).some(function(tr) {
+      return _bareEnd(tr.from) === short || _bareEnd(tr.to) === short;
+    });
+  }
+  // その <g> を包む複合状態の <g> に付けた状態の id (無ければ null = 最上位か、入れ子にしない古い SVG)。
+  function _enclosingStateId(g) {
+    for (var n = g.parentNode; n && n.getAttribute; n = n.parentNode) {
+      if ((n.tagName || '').toLowerCase() === 'svg') return null;
+      if (n.__stId !== undefined && _isComposite(n)) return n.__stId;
+    }
+    return null;
+  }
+
   // BLK-human-20260925-1500: PlantUML 1.2026.7 からは複合状態も <g class="entity" data-qualified-name> になり、
   // 中の状態・遷移・fork の棒をその <g> の中に入れて描く (1.2026.6 までは名前の無い <g> と外枠の rect)。
   // 中に名前の付いた <g> を持つ entity を複合状態と見る。
@@ -407,6 +440,12 @@ window.MA.stateSvgMap = (function() {
       if (!isCluster && !/(^|\s)(entity|start_entity|end_entity)(\s|$)/.test(cls)) return;
       if (/^GMN/.test(qn)) return;   // 注記は呼び手が別に当てる
       var ps = isCluster ? null : pseudoOf(qn, cls);
+      // 壊れた修飾名の開始・終了 (`...start..`) は、包む複合状態の <g> を入れ物にする。
+      if (ps && _brokenQn(qn.replace(/\.(start|end)\./, '#'))) {
+        var enc = _enclosingStateId(g);
+        if (enc !== null) ps = { kind: ps.kind, scope: enc };
+        else if (ps.scope && !_knownState(parsed, ps.scope)) ps = { kind: ps.kind, scope: '' };
+      }
       if (ps) {
         var ells = Array.prototype.map.call(g.querySelectorAll('ellipse, circle'), shapeBox);
         var pb = union(ells);
@@ -416,6 +455,13 @@ window.MA.stateSvgMap = (function() {
         return;
       }
       var r = resolveState(parsed, qn);
+      if (_brokenQn(qn) || !_knownState(parsed, r.id)) {
+        var tn = _ownText(g);
+        var encId = _enclosingStateId(g);
+        if (tn && encId && _knownState(parsed, encId + '.' + tn)) r = resolveState(parsed, encId + '.' + tn);
+        else if (tn && _knownState(parsed, tn)) r = resolveState(parsed, tn);
+      }
+      g.__stId = r.id;
       var box;
       if (isCluster) {
         // 入れ物自身の外枠と見出し (直の子) だけ。中の状態・遷移まで和集合に入れない。

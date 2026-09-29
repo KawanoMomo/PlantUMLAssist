@@ -2389,3 +2389,55 @@ test('migrator 手順 4 — 枠 ok と記録した実物の図は、基準で枠
   }
   expect(lines, '基準より当たりが減った点 (test-results/hit-baseline-report.json)').toEqual([]);
 });
+
+// BLK-migrator-20260929-1155: 日本語名の状態と [*] を含む state 図 (corpus の state-12〜16) で、遷移の線・矢じり・ラベルに
+// 枠が出なかった。状態の名前を ASCII でしか読まず遷移が 1 本も読めていなかったのと、PlantUML 1.2026.8 が修飾名の日本語を `.` に
+// 置き換える (`待機` → `..`) ためで、遷移は描いた側の行 (data-source-line) で、名前の壊れた状態は描いた文字と包む複合状態で当てる。
+test('migrator 手順 4 — 日本語名の状態と [*] の state 図で、遷移の線・矢じり・ラベルと状態に本人の枠が出る', async ({ page }) => {
+  await bootPlain(page);
+  // 描いた遷移の線の途中 (長さの 4 割の点) と矢じりの中心を、画面の座標で返す。
+  const linkPoints = (i) => page.evaluate((k) => {
+    const g = document.querySelectorAll('#preview-svg svg g.link')[k];
+    const p = g.querySelector('path');
+    const m = p.getScreenCTM();
+    const at = p.getPointAtLength(p.getTotalLength() * 0.4);
+    const head = g.querySelector('polygon').getBoundingClientRect();
+    return { line: { x: at.x * m.a + m.e, y: at.y * m.d + m.f }, head: { x: head.left + head.width / 2, y: head.top + head.height / 2 } };
+  }, i);
+  const hitAt = async (pt) => {
+    let hit = null;
+    for (let i = 0; i < 5 && !(hit && hit.hover); i++) {
+      await page.mouse.move(3, 3);
+      await page.mouse.move(pt.x + (i % 2), pt.y);
+      await page.waitForTimeout(100 + i * 100);
+      hit = await page.evaluate(() => {
+        const r = document.querySelector('#overlay-layer rect.hit-hover');
+        return r ? { type: r.getAttribute('data-type'), line: r.getAttribute('data-line'), hover: true } : null;
+      });
+    }
+    return hit ? hit.type + '@' + hit.line : 'なし';
+  };
+
+  await typeDsl(page, '@startuml\n[*] --> 待機\n待機 --> B : go\n@enduml');
+  await expect(page.locator('#overlay-layer rect[data-type="transition"]').first()).toBeAttached({ timeout: 20000 });
+  for (const [i, line] of [[0, '2'], [1, '3']]) {
+    const pts = await linkPoints(i);
+    expect(await hitAt(pts.line), '遷移 ' + i + ' の線').toBe('transition@' + line);
+    expect(await hitAt(pts.head), '遷移 ' + i + ' の矢じり').toBe('transition@' + line);
+  }
+  const go = await hoverHit(page, 'go');
+  expect(go.hit && go.hit.type + '@' + go.hit.line).toBe('transition@3');
+  const st = await hoverHit(page, '待機');
+  expect(st.hit && st.hit.type + '@' + st.hit.line).toBe('state@2');
+
+  // 複合状態の名前も中の状態も日本語 (修飾名は `.` / `...A` / `...start..`)
+  await typeDsl(page, '@startuml\nstate 親 {\n  [*] --> 子A\n  子A --> 子B : 行く\n}\n[*] --> 親\n@enduml');
+  await expect(page.locator('#overlay-layer rect[data-type="transition"]')).not.toHaveCount(0, { timeout: 20000 });
+  const lbl = await hoverHit(page, '行く');
+  expect(lbl.hit && lbl.hit.type + '@' + lbl.hit.line).toBe('transition@4');
+  const child = await hoverHit(page, '子B');
+  expect(child.hit && child.hit.type + '@' + child.hit.line).toBe('state@4');
+  // 中の開始は複合状態 親 の開始 (最上位の開始と取り違えない)
+  await expect(page.locator('#overlay-layer rect[data-type="pseudo"][data-id="start@親"]')).toHaveCount(1);
+  await expect(page.locator('#overlay-layer rect[data-type="pseudo"][data-id="start@"]')).toHaveCount(1);
+});

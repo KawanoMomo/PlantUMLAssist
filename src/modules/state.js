@@ -6,7 +6,10 @@ window.MA.modules.plantumlState = (function() {
   var RP = window.MA.regexParts;
   var DU = window.MA.dslUtils;
   var OB = window.MA.overlayBuilder;
-  var ID = RP.IDENTIFIER;
+  // BLK-migrator-20260929-1155: PlantUML は状態の名前に日本語 (`待機` / `子A`) をそのまま書ける。
+  // ASCII の識別子しか読まないと、日本語名の状態に繋がる遷移が 1 本も読めず、遷移の枠・状態欄の数が落ちていた。
+  // シーケンス図の参加者 (sequence.js の MSG_RE_FROM) と同じく、U+0080 以降の文字も名前の文字として読む。
+  var ID = '[A-Za-z_\\u0080-\\uFFFF][A-Za-z0-9_\\u0080-\\uFFFF]*';
 
   // BLK-builder-20260907-1306-2 (design 5d): 状態行の色 (`state Foo #red`) を読む。
   // 色はステレオタイプの後・`{` の前に置く (PlantUML の並び)。
