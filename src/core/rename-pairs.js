@@ -24,9 +24,12 @@ window.MA.renamePairs = (function() {
 
   // normalize(pairs) — server から来た組を、履歴と同じ形 {from, to, at} にする。
   // from か to が欠けたものは組ではないので落とす。
+  // appliedAt は [置換] で当てた最後の日時 (BLK-primary-20260914-1106-friction)。
+  // 打っただけで当てなかった組は空のまま。server の applied_at も同じ意味で読む。
   function normalize(pairs) {
     return (Array.isArray(pairs) ? pairs : []).map(function(p) {
-      return { from: _s(p && p.from), to: _s(p && p.to), at: _s(p && p.at) };
+      return { from: _s(p && p.from), to: _s(p && p.to), at: _s(p && p.at),
+        appliedAt: _s(p && (p.appliedAt || p.applied_at)) };
     }).filter(function(p) { return p.from !== '' && p.to !== ''; });
   }
 
@@ -42,9 +45,10 @@ window.MA.renamePairs = (function() {
       var prev = seen[key];
       if (prev) {
         if (_time(r.at) > _time(prev.at)) prev.at = r.at;
+        if (_time(r.appliedAt) > _time(prev.appliedAt)) prev.appliedAt = r.appliedAt;
         return;
       }
-      var row = { from: r.from, to: r.to, at: r.at };
+      var row = { from: r.from, to: r.to, at: r.at, appliedAt: r.appliedAt };
       seen[key] = row;
       out.push(row);
     });

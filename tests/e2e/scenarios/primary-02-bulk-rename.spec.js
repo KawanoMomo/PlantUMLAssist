@@ -2,6 +2,8 @@
 // primary 台本 手順2: 全図横断で部品名 SpiDrv を Spi_Driver に統一する(⇄ 一括置換・全図適用)。
 // 台本の主戦場。手順10 の手数の計測もこの操作を対象にしている。
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
 const S = require('./_scenario');
 
 const DIR = S.dirFor(__filename);
@@ -294,6 +296,61 @@ test('手順2 過去に当てた置換の組が、打つ前に「適用済み / 
   await expect(page.locator('#rename-from')).toHaveValue('SpiDrv');
   await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
   await expect(page.locator('#btn-rename-apply')).toBeEnabled();
+});
+
+// BLK-primary-20260914-1106-friction (curator 書き直し): 影響を見るためだけに打って
+// 当てずに閉じた組 (旧称が残る組) は、次に開いたときの既定にしない。両欄に入るのは
+// 最後に [置換] で当てた組だけ。打った組は履歴の行には残る。
+// 組はフォルダに残り続けるので、他のケースに混ざらないよう専用のフォルダで行う。
+test('手順2 当てずに閉じた組は居座らず、開き直すと最後に当てた組が両欄に入る', async ({ page }) => {
+  const dir = DIR + '-seed';
+  fs.rmSync(path.join(S.absDirFor(__filename) + '-seed', '_renames'), { recursive: true, force: true });
+  await S.bootWithSaveDir(page, dir);
+  await S.clearDir(page, dir);
+  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, dir, n, S.docFor(n, 'SpiDrv'));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+
+  // 組 A を当てる。
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.locator('#rename-from').fill('SpiDrv');
+  await page.locator('#rename-to').fill('Spi_Driver');
+  await page.waitForTimeout(900);
+  await page.locator('#btn-rename-apply').click();
+  await page.waitForTimeout(1500);
+  // 当てた直後は結果の 1 行が残り、今当てた組で欄が埋め戻されない
+  // (下端のバッジの数え直しが組を読み直しても「見つかりません」で上書きしない)。
+  await expect(page.locator('#rename-summary')).toContainText('置換しました');
+  await expect(page.locator('#rename-from')).toHaveValue('');
+
+  // 組 B を打って件数だけ見て、当てずに閉じる。
+  await page.locator('#rename-from').fill('Hw_Ctrl');
+  await page.locator('#rename-to').fill('Hw_Controller');
+  await page.waitForTimeout(900);
+  await expect(page.locator('#btn-rename-apply')).toBeEnabled();
+  await page.locator('#rename-to').press('Escape');
+  await page.waitForTimeout(900);
+
+  // 到達条件その1: 開き直すと両欄に A が入る (B は履歴の行に残る)。
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.waitForTimeout(1200);
+  await expect(page.locator('#rename-from')).toHaveValue('SpiDrv');
+  await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
+  await expect(page.locator('#rename-redo-rows button.rr-row[data-from="Hw_Ctrl"][data-to="Hw_Controller"]'))
+    .toHaveAttribute('data-state', 'pending');
+
+  // 到達条件その2: 別のブラウザで開き直しても同じ (当てた組はフォルダ側の記録で見分ける)。
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+  await page.keyboard.press('Control+h');
+  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
+  await page.waitForTimeout(1200);
+  await expect(page.locator('#rename-from')).toHaveValue('SpiDrv');
+  await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
+  await expect(page.locator('#rename-from')).toBeFocused();
+  fs.rmSync(path.join(S.absDirFor(__filename) + '-seed', '_renames'), { recursive: true, force: true });
 });
 
 // BLK-primary-20260914-1306-friction: 上のケースは「当たった置換」が履歴に残ることに

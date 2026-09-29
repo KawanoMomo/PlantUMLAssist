@@ -10,9 +10,11 @@ window.MA = window.MA || {};
 // 打ち始めてしまう。省力ルートは在るのに、画面がそこへ連れて行っていない。
 //
 // ここが決めるのは「開いた瞬間に何を入れておくか」だけ。
-//   - 旧称がまだ残っている組があれば、それを入れる (今日直す組がそれだから)
-//   - 無ければ直近に当てた組を入れる (確かめ直す回はこれ。ヒット 0 件で「済んでいる」と読める)
-//   - 組を 1 つも知らなければ何も入れない (空の欄を偽の答えで埋めない)
+//   - [置換] で最後に当てた組を入れる (確かめ直す回はこれ。ヒット 0 件で「済んでいる」と読める)
+//   - 打っただけで当てなかった組は入れない。影響を見るためだけに打った組
+//     (SpiRegs → Spi_Registers を打って件数を見て閉じた等) が次回以降の既定に居座ると、
+//     本来の組を確かめるたびに居座った組を消して打ち直すことになる
+//   - 当てた組を 1 つも知らなければ何も入れない (空の欄を偽の答えで埋めない)
 // 利用者が選んだもの (図の選択・エディタの選択) は組より強い。そちらが入っている
 // ときは触らない —— これは「打ち直しを省く」機能であって、指示を上書きする機能ではない。
 //
@@ -35,17 +37,27 @@ window.MA.renameSeed = (function() {
     });
   }
 
+  function _time(at) {
+    var t = Date.parse(_s(at));
+    return isNaN(t) ? 0 : t;
+  }
+
   // pick(rows) — 入れておく組。rows は renameRedo.pairs() の戻り (新しい順)。
+  // appliedAt (当てた日時) を持つ行だけが候補で、その中で最後に当てた組を返す。
+  // 残り件数は今の図から数えた値 (当てた後に旧称が戻っていれば pending)。
+  // 打っただけの組は逆向き判定にも使わない (当てた A→B の後に B→A を打って閉じただけで
+  // A→B が消えないように、当てた組どうしを当てた順に並べてから live に通す)。
   function pick(rows) {
-    var list = live(rows);
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].state === 'pending') {
-        return { from: list[i].from, to: list[i].to, state: 'pending',
-          remaining: Number(list[i].remaining) || 0 };
-      }
-    }
+    var applied = (Array.isArray(rows) ? rows : []).filter(function(r) {
+      return r && _time(r.appliedAt) > 0;
+    }).sort(function(a, b) { return _time(b.appliedAt) - _time(a.appliedAt); });
+    var list = live(applied);
     if (!list.length) return null;
-    return { from: list[0].from, to: list[0].to, state: 'done', remaining: 0 };
+    var r = list[0];
+    if (r.state === 'pending') {
+      return { from: r.from, to: r.to, state: 'pending', remaining: Number(r.remaining) || 0 };
+    }
+    return { from: r.from, to: r.to, state: 'done', remaining: 0 };
   }
 
   // seed(rows, current) — 今の欄の中身を見て、入れるべきなら組を返す。
