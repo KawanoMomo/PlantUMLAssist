@@ -15593,6 +15593,7 @@ function setupTabs() {
         try { renderAutoSaveStatus(); } catch (e) {}
         if (!target) return;
         var dir = _docDir(target);
+        if (WS.noteFolderName) WS.noteFolderName(dir, target.name);   // 次の名前の候補から外す
         var msg = info.reason || ('同じ名前の図が保存先にあります (' + target.name + '.puml)');
         if (window.MA.toast) {
           try {

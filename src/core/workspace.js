@@ -82,6 +82,14 @@ window.MA.workspace = (function() {
     _known[_dir(dir)] = m;
   }
 
+  // 1 つだけ覚え足す (書こうとして「同じ名前の図がある」と断られた名前)。
+  function noteFolderName(dir, name) {
+    if (typeof name !== 'string' || !name) return;
+    var k = _dir(dir);
+    if (!_known[k]) _known[k] = {};
+    _known[k][name.replace(/\.puml$/i, '').toLowerCase()] = true;
+  }
+
   // 保存先 dir に同じ名前の図が在るか (Windows のファイル名は大文字小文字を区別しない)。
   function knownInFolder(name, dir) {
     var m = _known[_dir(dir)];
@@ -662,6 +670,7 @@ window.MA.workspace = (function() {
     newDocName: newDocName,
     knownInFolder: knownInFolder,
     noteFolderNames: _noteKnown,
+    noteFolderName: noteFolderName,
     listFiles: listFiles,
     listFileEntries: listFileEntries,
     listFolder: listFolder,

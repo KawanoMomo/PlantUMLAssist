@@ -97,6 +97,15 @@ describe('BLK-owner-20260929-1111-1 新しい図の名前は保存先の図と�
     expect(ws.knownInFolder('diagram2', './other')).toBe(true);
   });
 
+  test('断られた名前を 1 つ覚え足すと、次の候補から外れる', function() {
+    boot();
+    listing([]);
+    ws.listFiles('./d');
+    expect(ws.newDocName('./d')).toBe('diagram2');
+    ws.noteFolderName('./d', 'diagram2');
+    expect(ws.newDocName('./d')).toBe('diagram3');
+  });
+
   test('listFolder の一覧でも覚える', function() {
     boot();
     global.window.fetch = function() {
