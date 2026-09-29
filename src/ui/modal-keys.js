@@ -66,8 +66,39 @@ window.MA.modalKeys = (function() {
   }
   // BLK-owner-20260925-0312-4: 末尾に追加の本文欄 (textarea) のうち data-enter="submit" のものは、
   // Enter で確定・Shift+Enter で改行 (アクティビティの処理欄・注釈欄)。
+  // BLK-owner-20260930-0311-2: 注釈の本文欄 (`{図種}-tail-ntext`) は図種を問わずこの 1 か所で Enter 確定にする
+  // (状態遷移・クラス・ユースケースは改行が入るだけで行が書かれなかった)。まとめて入れる欄は改行のまま。
+  var TAIL_NOTE_AREA_RE = /-tail-ntext$/;
   function isTailEnterArea(el) {
-    return !!el && el.tagName === 'TEXTAREA' && el.getAttribute && el.getAttribute('data-enter') === 'submit';
+    if (!el || el.tagName !== 'TEXTAREA' || !el.getAttribute) return false;
+    if (el.getAttribute('data-enter') === 'submit') return true;
+    return TAIL_NOTE_AREA_RE.test(el.id || '') && !!(el.closest && el.closest('[id$="-tail-detail"]'));
+  }
+
+  // BLK-owner-20260930-0311-2: 末尾に追加の欄のうち既定の値を持つもの (条件分岐の yes / no、枝の数 …) は、
+  // 押す・Tab で入ると値全体が選ばれた状態になり、打てば置き換わる (値の後ろに付け足して `yesyes` にならない)。
+  // 既定のまま (value が描いたときの値と同じ) の欄だけ。打ちかけの欄はキャレットをそのまま置く。
+  function isDefaultField(el) {
+    if (!el || el.tagName !== 'INPUT' || !TEXT_TYPES.test(String(el.type || 'text').toLowerCase())) return false;
+    if (/^(checkbox|radio)$/i.test(el.type || '')) return false;
+    if (!el.closest || !el.closest('[id$="-tail-detail"]')) return false;
+    return el.value !== '' && el.value === el.defaultValue;
+  }
+  function onTailFocus(e) {
+    var el = e.target;
+    if (!isDefaultField(el)) return;
+    try { el.select(); } catch (err) { return; }
+    // 押して入ったとき、ボタンを離した時点でブラウザが選択をキャレットに戻すので、その 1 回だけ止める。
+    el._maSelectOnUp = true;
+  }
+  function onTailMouseUp(e) {
+    var el = e.target;
+    if (!el || !el._maSelectOnUp) return;
+    el._maSelectOnUp = false;
+    e.preventDefault();
+  }
+  function onTailBlur(e) {
+    if (e.target && e.target._maSelectOnUp) e.target._maSelectOnUp = false;
   }
   function onTailKey(e) {
     if (e.key !== 'Enter' || e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
@@ -95,6 +126,9 @@ window.MA.modalKeys = (function() {
       doc._maTailKeys = true;
       doc.addEventListener('keydown', onTailKey);
       doc.addEventListener('rle-enter', onTailRle);
+      doc.addEventListener('focusin', onTailFocus);
+      doc.addEventListener('mouseup', onTailMouseUp, true);
+      doc.addEventListener('focusout', onTailBlur);
     }
   }
 
@@ -103,5 +137,6 @@ window.MA.modalKeys = (function() {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function() { init(document); });
   }
 
-  return { init: init, bindModal: bindModal, EDIT_MODALS: EDIT_MODALS };
+  return { init: init, bindModal: bindModal, EDIT_MODALS: EDIT_MODALS,
+    isTailEnterArea: isTailEnterArea, isDefaultField: isDefaultField };
 })();
