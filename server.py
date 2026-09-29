@@ -5,6 +5,7 @@ Serves static files + /render endpoint for PlantUML local/online rendering.
 import atexit
 import base64
 import binascii
+import calendar
 import collections
 import hashlib
 import json
@@ -2109,6 +2110,77 @@ class Handler(BaseHTTPRequestHandler):
             return
         entry['prevStamp'] = stamps[0]
 
+    # BLK-owner-20260929-1111-1: 1 字ごとの自動保存が 20 回続くと、上書き前の中身 (他で書かれた・
+    # 前から置いてあった図) の版が「古い方から捨てる」で真っ先に消え、戻せない上書きになっていた。
+    # 版は 2 種類ある: 打ちかけの途中 (直前にこの server が自動保存で書いた中身) と、
+    # それ以外 (保存先に元からあった・外で書かれた中身 = 元の版)。元の版は版ファイルの mtime を
+    # 元の図の mtime (刻印より 2 秒以上前) にして印にし、上限で捨てるときも最新の 1 つは残す。
+    _OWN_WRITES = {}        # 書いた .puml のパス (小文字) → 書き終えた直後の mtime_ns
+    _FRESH_OWNERS = {}      # 新しい図が作ったファイルのパス (小文字) → その図の印 (freshId)
+    ORIGIN_GAP = 2          # 元の版の印: 版の mtime が刻印より この秒数以上前
+
+    @staticmethod
+    def _path_key(path):
+        return str(path).replace(chr(92), '/').lower()
+
+    def _note_own_write(self, file_path):
+        try:
+            Handler._OWN_WRITES[self._path_key(file_path)] = file_path.stat().st_mtime_ns
+        except OSError:
+            pass
+
+    def _is_own_write(self, file_path):
+        try:
+            return Handler._OWN_WRITES.get(self._path_key(file_path)) == file_path.stat().st_mtime_ns
+        except OSError:
+            return False
+
+    @staticmethod
+    def _stamp_epoch(stamp):
+        base = str(stamp).partition('.')[0]
+        try:
+            return calendar.timegm(time.strptime(base, '%Y%m%d-%H%M%S'))
+        except (ValueError, OverflowError):
+            return None
+
+    def _is_origin_version(self, save_dir, dt, stamp):
+        at = self._stamp_epoch(stamp)
+        if at is None:
+            return False
+        try:
+            mtime = self._version_path(save_dir, dt, stamp).stat().st_mtime
+        except OSError:
+            return False
+        return mtime <= at - self.ORIGIN_GAP
+
+    def _versions_to_drop(self, save_dir, dt):
+        """上限を超えた版のうち捨てる刻印。元の版が上限の内に 1 つも無ければ、最新の元の版は残す。"""
+        stamps = self._version_stamps(save_dir, dt)
+        if len(stamps) <= self.VERSIONS_KEEP:
+            return []
+        keep = stamps[:self.VERSIONS_KEEP]
+        if not any(self._is_origin_version(save_dir, dt, s) for s in keep):
+            for s in stamps[self.VERSIONS_KEEP:]:
+                if self._is_origin_version(save_dir, dt, s):
+                    keep = stamps[:self.VERSIONS_KEEP - 1] + [s]
+                    break
+        return [s for s in stamps if s not in keep]
+
+    def _fresh_clash(self, file_path, fresh_id, dsl):
+        """新しい図 (まだ 1 度も書いていないタブ) の書き込みが、既にある別のファイルに当たるか。"""
+        if not fresh_id:
+            return False
+        key = self._path_key(file_path)
+        try:
+            if not file_path.exists():
+                return False
+            if Handler._FRESH_OWNERS.get(key) == fresh_id:
+                return False   # この図が作ったファイル (続きの保存)
+            old = file_path.read_text(encoding='utf-8')
+        except OSError:
+            return True        # 読めないものは上書きしない
+        return old.replace(chr(13) + chr(10), chr(10)) != str(dsl).replace(chr(13) + chr(10), chr(10))
+
     def _stash_version(self, save_dir, dt, new_dsl):
         """上書きの直前に、今ある中身を `_versions/` へ退避する。
 
@@ -2120,26 +2192,37 @@ class Handler(BaseHTTPRequestHandler):
             if not file_path.exists():
                 return
             old = file_path.read_text(encoding='utf-8')
+            old_mtime = file_path.stat().st_mtime
         except OSError:
             return
         if old == new_dsl:
             return
+        origin = not self._is_own_write(file_path)
         vdir = self._versions_dir(save_dir)
         try:
             vdir.mkdir(parents=True, exist_ok=True)
             stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
             target = self._version_path(save_dir, dt, stamp)
             # 同じ秒に 2 回保存しても前の退避を潰さない (末尾に連番を足す)。
+            # 連番は同じ秒の一番大きい番号の次から (上限で捨てた番号を使い直すと、新しい版が古い版に並ぶ)。
             n = 1
+            if target.exists():
+                same = [self._stamp_key(s)[1] for s in self._version_stamps(save_dir, dt)
+                        if str(s).partition('.')[0] == stamp]
+                n = max(same + [0]) + 1
             while target.exists():
                 target = self._version_path(save_dir, dt, '%s.%d' % (stamp, n))
                 n += 1
             _atomic_write_text(target, old)
+            if origin:
+                at = self._stamp_epoch(stamp)
+                if at is not None:
+                    t = min(old_mtime, at - self.ORIGIN_GAP)
+                    os.utime(target, (t, t))
         except OSError:
             return
-        # 上限を超えた分は古い方から捨てる。
-        stamps = self._version_stamps(save_dir, dt)
-        for old_stamp in stamps[self.VERSIONS_KEEP:]:
+        # 上限を超えた分は古い方から捨てる (元の版の最新 1 つは残す)。
+        for old_stamp in self._versions_to_drop(save_dir, dt):
             try:
                 self._version_path(save_dir, dt, old_stamp).unlink()
             except OSError:
@@ -3101,6 +3184,15 @@ class Handler(BaseHTTPRequestHandler):
         else:
             target, prev_kind, new_kind = self._resolve_save_target(save_dir, dt, dsl)
         file_path = self._autosave_file_path(save_dir, target)
+        # BLK-owner-20260929-1111-1: 新しい図 (＋ で開いてまだ 1 度も書いていないタブ) の書き込みが
+        # 保存先に既にある別の図に当たるなら書かない。名前を選び直すのは画面の側。
+        fresh_id = data.get('freshId')
+        fresh_id = fresh_id if isinstance(fresh_id, str) and fresh_id else None
+        if fresh_id and self._fresh_clash(self._autosave_file_path(save_dir, dt), fresh_id, dsl):
+            self._send_json(409, {'error': 'exists', 'conflict': True, 'name': dt,
+                                  'message': '同じ名前の図が保存先にあります (' + dt + '.puml)。'
+                                             'この図の名前を選び直すまで書きません'})
+            return
         # BLK-human-20260925-1250: 改行の指定が無い (保存先の一覧から開いた図など) ときは、
         # 上書きする相手 (無ければ名前を回す前の元の図) の改行を引き継ぐ。
         # 既定の改行で書くと LF のファイルが 1 行直しただけで全行 CRLF に変わる。
@@ -3118,6 +3210,9 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as e:
             self._send_json(500, {'error': f'write failed: {e}'})
             return
+        self._note_own_write(file_path)
+        if fresh_id:
+            Handler._FRESH_OWNERS[self._path_key(file_path)] = fresh_id
         meta = {
             'lastSavedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             'lastSavedType': target,

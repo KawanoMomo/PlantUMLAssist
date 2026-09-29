@@ -63,7 +63,7 @@ window.MA.autoSave = (function() {
   var _keepNames = {};
   function keepNameOnce(name) { if (name) _keepNames[String(name)] = true; }
 
-  function _fileBackendWrite(diagramType, dsl, fileDir) {
+  function _fileBackendWrite(diagramType, dsl, fileDir, freshId) {
     // Fire-and-forget POST to /autosave. We don't await: localStorage
     // already has the canonical sync copy. Errors are logged but don't
     // block the localStorage write.
@@ -71,6 +71,9 @@ window.MA.autoSave = (function() {
     try {
       var payload = { type: diagramType, dsl: dsl, dir: fileDir || './autosave' };
       if (_keepNames[diagramType]) { payload.keepName = true; delete _keepNames[diagramType]; }
+      // BLK-owner-20260929-1111-1: まだ 1 度も書いていない新しい図の印。保存先に同じ名前の
+      // 別の図があれば server は書かずに 409 を返す。
+      if (freshId) payload.freshId = String(freshId);
       var body = JSON.stringify(payload);
       var req = window.fetch('/autosave', {
         method: 'POST',
@@ -78,6 +81,14 @@ window.MA.autoSave = (function() {
         body: body,
         keepalive: true,
       }).then(function(r) {
+        if (r && r.status === 409) {
+          var clash = function(data) {
+            noteFileConflict({ name: diagramType, id: freshId || null, message: data && data.message });
+            return null;
+          };
+          return r.json ? r.json().then(clash, function() { return clash(null); }) : clash(null);
+        }
+        if (r && r.ok && freshId) _notifyFreshWritten({ name: diagramType, id: String(freshId) });
         // BLK-junior-20260908-2003: 図種が変わる保存は server が別ファイルへ回す。
         // 回された先を知らせないと、画面の図名と書かれたファイルがずれたまま
         // 次の保存も同じように回り続ける (図名を直すのは app.js)。
@@ -225,6 +236,42 @@ window.MA.autoSave = (function() {
     if (typeof listener === 'function') _blockedListeners.push(listener);
   }
 
+  // ── 新しい図が保存先の別の図と同じ名前だったとき (BLK-owner-20260929-1111-1) ──
+  // server は書かずに 409 を返す。状態バーは「書かなかった」にし、画面 (app.js) に名前を選ばせる。
+  var _conflictListeners = [];
+  var _freshWrittenListeners = [];
+  function noteFileConflict(info) {
+    info = info || {};
+    var name = String(info.name == null ? '' : info.name);
+    var reason = info.message || ('同じ名前の図が保存先にあります (' + name + '.puml)。この図の名前を選び直すまで書きません');
+    _lastWrite = { at: new Date().toISOString(), diagramType: name, fileName: name,
+                   where: 'blocked', reason: reason };
+    var now = Date.now();
+    var key = 'conflict:' + name;
+    var last = _blockedSeen[key];
+    var quiet = !!(last && (now - last) < BLOCK_QUIET_MS);
+    _blockedSeen[key] = now;
+    var meta = getMeta() || {};
+    for (var j = 0; j < _saveListeners.length; j++) {
+      try { _saveListeners[j](meta); } catch (e) {}
+    }
+    if (quiet) return;
+    for (var i = 0; i < _conflictListeners.length; i++) {
+      try { _conflictListeners[i]({ name: name, id: info.id || null, reason: reason }); } catch (e) {}
+    }
+  }
+  function onFileConflict(listener) {
+    if (typeof listener === 'function') _conflictListeners.push(listener);
+  }
+  function _notifyFreshWritten(info) {
+    for (var i = 0; i < _freshWrittenListeners.length; i++) {
+      try { _freshWrittenListeners[i](info); } catch (e) {}
+    }
+  }
+  function onFreshWritten(listener) {
+    if (typeof listener === 'function') _freshWrittenListeners.push(listener);
+  }
+
   // ── 図種が変わって別ファイルへ回されたとき (BLK-junior-20260908-2003) ────
   var _renamedListeners = [];
 
@@ -277,14 +324,18 @@ window.MA.autoSave = (function() {
     } catch (e) {
       return { name: null, reason: 'error' };   // 名前が分からないなら書かない (取り違えより無書き込み)
     }
-    var n, why = null, dir = null;
-    if (r && typeof r === 'object') { n = r.name; why = r.reason || null; dir = r.dir ? String(r.dir) : null; }
+    var n, why = null, dir = null, fresh = null;
+    if (r && typeof r === 'object') {
+      n = r.name; why = r.reason || null; dir = r.dir ? String(r.dir) : null;
+      fresh = r.freshId ? String(r.freshId) : null;
+    }
     else n = r;
     n = (n == null) ? '' : String(n);
     // BLK-human-20260925-1150: dir はそのタブの書き先のフォルダ (保存先を替える前に開いたタブは
     // 開いたフォルダ)。打った時点で名前と一緒に決める (debounce の間に保存先が替わっても流れない)。
     var out = { name: n ? n : null, reason: n ? null : (why || 'no-name') };
     if (dir) out.dir = dir;
+    if (fresh && out.name) out.freshId = fresh;
     return out;
   }
 
@@ -358,7 +409,6 @@ window.MA.autoSave = (function() {
           _notifyBlocked(fileName, block);
         } else {
           where = 'file';
-          _fileBackendWrite(fileName, dsl, (fileInfo && fileInfo.dir) || cfg.fileDir);
         }
       }
     }
@@ -368,6 +418,11 @@ window.MA.autoSave = (function() {
       try { _saveListeners[i](meta); } catch (e) { /* listener errors must not block */ }
     }
     if (where === 'deferred') _notifyDeferred({ diagramType: diagramType, reason: reason });
+    // 書きに出すのは「書いた」の記録と知らせの後 (返事 = 409 の「書かなかった」を後から上書きしない)。
+    if (where === 'file') {
+      _fileBackendWrite(fileName, dsl, (fileInfo && fileInfo.dir) || cfg.fileDir,
+                        (fileInfo && fileInfo.freshId) || null);
+    }
     return meta;
   }
 
@@ -509,6 +564,9 @@ window.MA.autoSave = (function() {
     keepNameOnce: keepNameOnce,
     noteFileRenamed: noteFileRenamed,
     noteFileBlocked: noteFileBlocked,
+    noteFileConflict: noteFileConflict,
+    onFileConflict: onFileConflict,
+    onFreshWritten: onFreshWritten,
     resetFileBlocked: resetFileBlocked,
   };
 })();
