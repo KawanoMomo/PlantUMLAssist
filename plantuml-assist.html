@@ -5232,6 +5232,20 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
   font-weight: bold;
 }
 
+/* BLK-owner-20260930-0111-1: 図で選んだ部品の行。本文欄の上に重ねる帯と、行番号の色 */
+#editor-jump-band {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(90, 160, 255, 0.16);
+  border-left: 3px solid var(--accent);
+  box-sizing: border-box;
+}
+#editor-jump-band[hidden] { display: none; }
+#line-numbers .ln.ln-jump {
+  color: var(--accent);
+  font-weight: bold;
+}
+
 /* design 5c: 挿入先の行に重ねる「← N 行目に挿入」。
    高さ 19.5px は #editor の line-height (13px * 1.5) と揃える */
 #insert-marker {
@@ -8021,6 +8035,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
         <!-- design 5c: 挿入メニューを開いている間、入る行に「← N 行目に挿入」を重ねる -->
         <div id="insert-marker" hidden></div>
+        <!-- BLK-owner-20260930-0111-1: 図で選んだ部品の行に重ねる帯 (本文欄へは focus を移さない) -->
+        <div id="editor-jump-band" hidden></div>
       </div>
       <!-- 構造ビュー。行を選ぶと DSL タブに戻ってその行へ飛ぶ -->
       <div id="outline-pane">

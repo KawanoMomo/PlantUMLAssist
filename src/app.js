@@ -717,6 +717,7 @@ function init() {
     if (suppressSync) return;
     window.MA.history.pushHistory();
     mmdText = editorEl.value;
+    clearJumpBand();   // 本文を打つと行がずれるので、図で選んだ行の帯は下ろす
     updateLineNumbers();
     // タブの本文 (workspace)・自動保存・差分の印・指摘の引き直しは scheduleRefresh の
     // syncEditedText が、フォームや窓からの書き換えと同じ 1 本の経路で行う (BLK-owner-20260925-0312-1)。
@@ -727,6 +728,7 @@ function init() {
     if (lineNumbersEl) lineNumbersEl.scrollTop = editorEl.scrollTop;
     // design 5c: 挿入先マーカーはエディタの座標で置くので、追随させる。
     if (window.MA.insertMarker) window.MA.insertMarker.sync();
+    syncJumpBand();   // BLK-owner-20260930-0111-1: 図で選んだ行の帯も追随させる
   });
 
   // ── BLK-primary-20260908-1603: 選ぶ前の対応表示 (peek) ──
@@ -1490,6 +1492,24 @@ function init() {
     return false;
   }
 
+  // 図で 1 つだけ選んでいる部品 (↑↓ の候補に入らない参加者なども含む)。
+  function _kbdSingleSelected() {
+    var sel = (window.MA.selection && window.MA.selection.getSelected)
+      ? (window.MA.selection.getSelected() || []) : [];
+    return sel.length === 1 ? sel[0] : null;
+  }
+
+  // BLK-owner-20260930-0111-1 (design 5b): ↑↓ の候補に入らない部品 (シーケンス図の参加者) を図で押して Delete を
+  // 押したら、右パネルの「✕ 削除」と同じことをする (宣言の行が無い参加者の断り・元に戻すトーストもボタンの側が持つ)。
+  function _kbdDeleteViaPanel() {
+    var one = _kbdSingleSelected();
+    if (!one || one.type !== 'participant') return false;
+    var btn = document.querySelector('#props-content .seq-delete-line');
+    if (!btn || btn.disabled) return false;
+    btn.click();
+    return true;
+  }
+
   // FEAT-109: キーボード選択の対象要素を DSL 行順で返す。
   // 図種モジュールが任意実装 kbdSelectables(parsed) を持てばそれに委譲し、
   // 無ければ従来どおり relations の kind==='message' にフォールバックする。
@@ -1529,7 +1549,8 @@ function init() {
       || ((e.ctrlKey || e.metaKey) && !e.altKey && (k || '').toLowerCase() === 'd')
       || (e.altKey && !e.ctrlKey && !e.metaKey && (k === 'ArrowUp' || k === 'ArrowDown'));
     if (!edits || _kbdInTypingTarget() || _kbdModalOpen()) return;
-    var cur = _kbdSelectedItem();
+    // 参加者のように ↑↓ の候補に入らない部品も、図で押して選んでいれば断る (BLK-owner-20260930-0111-1)
+    var cur = _kbdSelectedItem() || _kbdSingleSelected();
     var gen = cur ? _generatedOf(cur) : null;
     if (!gen) return;
     e.preventDefault();
@@ -1547,7 +1568,10 @@ function init() {
     // modal 表示中は二重発火させない (FEAT-017 [AC-5])。
     if (_kbdModalOpen()) return;
     var cur = _kbdSelectedItem();
-    if (!cur) return;
+    if (!cur) {
+      if ((key === 'Delete' || key === 'Backspace') && _kbdDeleteViaPanel()) e.preventDefault();
+      return;
+    }
 
     // FEAT-138 (UI-016 / HFR-073): 選択中 message の矢印を 1 打で `->` / `-->` に切り替える。
     // ARROWS の順序・剰余には依存せず、`-->` を既定の相手とする 2 値切替である。
@@ -4440,6 +4464,7 @@ function updateLineNumbers() {
   if (IM) {
     lineNumbersEl.innerHTML = IM.gutterHtml(count, IM.getTarget(),
       window.MA.htmlUtils && window.MA.htmlUtils.escHtml);
+    _markJumpGutter();
     return;
   }
   var out = '';
@@ -34269,11 +34294,8 @@ function updateSelectionNotice(sel) {
 // 図と DSL は行番号でしか結ばれていないので、対応を目で数えるしかなかった。
 // 設定 (エディタタブ) で切れる。DSL タブを開いていないときは動かさない
 // (構造タブを見ている最中に裏で textarea だけが動いても何も起きないため)。
-// キーボードで選択を移している最中かどうか。design 5a の「選んだ行へ飛ぶ」は
-// 図をクリックした場面のために textarea へ focus を移すが、↑↓ などキー操作で
-// 選択が動いた場面で同じことをすると、次の 1 打が textarea に吸われて
-// FEAT-012 / FEAT-109 の連打も Esc の選択解除も効かなくなる。
-// キー由来の選択変更ではスクロールと行のハイライトだけ行い、focus は移さない。
+// キーボードで選択を移している最中かどうか。「選んだ行へ飛ぶ」はどの経路でも textarea へ
+// focus を移さない (BLK-owner-20260930-0111-1) ので、今は呼び出しの印として残すだけ。
 var _kbdNavSelect = false;
 function kbdSetSelected(items) {
   _kbdNavSelect = true;
@@ -34281,30 +34303,75 @@ function kbdSetSelected(items) {
   finally { _kbdNavSelect = false; }
 }
 
+// BLK-owner-20260930-0111-1: 図を押しても本文欄へは focus を移さず、行を選択状態にもしない。
+// 以前は図のクリックのたびに textarea を focus して行全体を選んでいたので、続く Enter で行が空行 2 つに、
+// 文字キーで行がその 1 文字に置き換わり、そのまま自動保存されていた (design 5b の図の編集キーは
+// 「入力中」とみなされて素通しされ、効かなかった)。行はスクロールと帯 (#editor-jump-band) で見せ、
+// キャレットはその行の頭に置くだけにする (本文を打ちたい人は本文欄を押せばその場にキャレットが立つ)。
+var _jumpLine = null;
+function _editorLineHeight() {
+  var style = window.getComputedStyle(editorEl);
+  var lh = parseFloat(style.lineHeight);
+  if (!isFinite(lh)) lh = (parseFloat(style.fontSize) || 13) * 1.5;
+  return lh;
+}
+function syncJumpBand() {
+  var band = document.getElementById('editor-jump-band');
+  var EJ = window.MA.editorJump;
+  if (!band || !EJ || !editorEl) return;
+  // 折り返し表示 (設定の「折り返す」) では行と高さが対応しないので、ずれた行を指す帯は出さない。
+  var wrapped = window.getComputedStyle(editorEl).whiteSpace !== 'pre';
+  var box = (_jumpLine === null || wrapped) ? null : EJ.bandBox(_jumpLine, {
+    lineHeight: _editorLineHeight(),
+    padTop: parseFloat(window.getComputedStyle(editorEl).paddingTop) || 0,
+    scrollTop: editorEl.scrollTop,
+    viewportHeight: editorEl.clientHeight,
+  });
+  if (!box || !box.visible) { band.hidden = true; return; }
+  band.style.left = editorEl.offsetLeft + 'px';
+  band.style.width = editorEl.clientWidth + 'px';
+  band.style.top = (editorEl.offsetTop + box.top) + 'px';
+  band.style.height = box.height + 'px';
+  band.setAttribute('data-line', String(_jumpLine));
+  band.hidden = false;
+}
+function _markJumpGutter() {
+  if (!lineNumbersEl) return;
+  var old = lineNumbersEl.querySelectorAll('.ln-jump');
+  for (var i = 0; i < old.length; i++) old[i].classList.remove('ln-jump');
+  if (_jumpLine === null) return;
+  var ln = lineNumbersEl.querySelector('.ln[data-line="' + _jumpLine + '"]');
+  if (ln) ln.classList.add('ln-jump');
+}
+function clearJumpBand() {
+  if (_jumpLine === null) return;
+  _jumpLine = null;
+  syncJumpBand();
+  _markJumpGutter();
+}
+
 function jumpEditorToSelection(sel) {
   var EJ = window.MA.editorJump;
   if (!EJ || !editorEl) return;
-  if (currentEditorPrefs && currentEditorPrefs.clickToLine === false) return;
-  if (_outlineTab && _outlineTab !== 'dsl') return;
+  if (currentEditorPrefs && currentEditorPrefs.clickToLine === false) { clearJumpBand(); return; }
+  if (_outlineTab && _outlineTab !== 'dsl') { clearJumpBand(); return; }
   var line = EJ.targetLine(sel);
-  if (line === null) return;
+  if (line === null) { clearJumpBand(); return; }
   var range = EJ.lineRange(editorEl.value, line);
-  if (!range) return;
-  var style = window.getComputedStyle(editorEl);
-  var lineHeight = parseFloat(style.lineHeight);
-  if (!isFinite(lineHeight)) lineHeight = (parseFloat(style.fontSize) || 13) * 1.5;
+  if (!range) { clearJumpBand(); return; }
   editorEl.scrollTop = EJ.scrollTopFor(range.line, {
-    lineHeight: lineHeight,
+    lineHeight: _editorLineHeight(),
     viewportHeight: editorEl.clientHeight,
     scrollTop: editorEl.scrollTop,
   });
-  // 行を選択状態にして、どこへ来たのかを見えるようにする。focus を奪うのは
-  // クリック元が図 (textarea の外) のときだけなので、入力中の邪魔にはならない。
+  // 本文欄で打っている最中 (focus が本文欄にある) ならキャレットは動かさない。
+  // そうでなければ行の頭に置く (行全体は選ばない: 後で本文欄に入ったときの 1 打で行が消えない)。
   try {
-    if (!_kbdNavSelect) editorEl.focus({ preventScroll: true });
-    editorEl.setSelectionRange(range.start, range.end);
+    if (document.activeElement !== editorEl) editorEl.setSelectionRange(range.start, range.start);
   } catch (e) {}
+  _jumpLine = range.line;
   updateLineNumbers();
+  syncJumpBand();
 }
 
 // design 2b: 1 枚目のタブは「追加」(無選択) / 「選択中」(選択あり)。
