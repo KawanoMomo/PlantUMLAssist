@@ -139,6 +139,65 @@ test('手順5 資料化: シーケンス図を選ぶと PNG(透過背景)に切�
   expect(vaultPngs).toContain(bytes.length);
 });
 
+// BLK-junior-20260929-0854: 部品と図種の 2 欄だけで元の図を決めていたので、同じ部品・図種に 2 枚あると
+// 開いている図 (DMAドライバ利用ユースケース図) ではなく名前の短い古い dma_usecase が資料化され、選び直せなかった。
+// 開いている図が既定の元になり、同じ組の別ファイルは図種の欄でファイル名と時刻で選べ、資料用の名前と題はそこから作る。
+test('手順4〜6 資料化(1 枚だけ): 開いている図が元になり、同じ部品・図種の別ファイルは図種の欄で名指しして選べる', async ({ page }) => {
+  const UC = '@startuml\ntitle DMAドライバ利用ユースケース図\nactor App\nusecase "転送開始" as UC1\nApp --> UC1\n@enduml\n';
+  const OLD = UC.replace('title DMAドライバ利用ユースケース図', 'title dma_usecase');
+  const fs = require('fs');
+  const abs = S.absDirFor(__filename);
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const f of ['DMAドライバ利用ユースケース図(資料用).png', 'dma_usecase(資料用).png']) {
+    fs.rmSync(path.join(abs, f), { force: true });
+  }
+  await S.putDoc(page, DIR, 'dma_usecase', OLD);
+  await S.putDoc(page, DIR, 'DMAドライバ利用ユースケース図', UC);
+  await page.reload();
+  await page.waitForTimeout(800);
+  await S.openFolderItem(page, 'DMAドライバ利用ユースケース図');
+  await S.closeFolderList(page);
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-one').click();
+  await page.waitForSelector('#mexp-modal', { state: 'visible' });
+  await page.waitForTimeout(800);
+
+  // 到達条件その1: 開いている図が既定の元。押す前に元と出る名前が読める。
+  await expect(page.locator('#mexp-component')).toHaveValue('dma');
+  await expect(page.locator('#mexp-kind')).toHaveValue('ユースケース図');
+  await expect(page.locator('#mexp-plan')).toContainText('DMAドライバ利用ユースケース図 → DMAドライバ利用ユースケース図(資料用).png');
+  await expect(page.locator('#mexp-plan')).toContainText('ほかに 1 枚');
+  // 同じ部品・図種の 2 枚は、図種の欄の中でファイル名で並ぶ。
+  const opts = page.locator('#mexp-kind option[value="ユースケース図"]');
+  await expect(opts).toHaveCount(2);
+  await expect(opts.nth(0)).toHaveAttribute('data-source', 'DMAドライバ利用ユースケース図');
+  await expect(opts.nth(1)).toHaveAttribute('data-source', 'dma_usecase');
+  await expect(opts.nth(1)).toContainText('dma_usecase');
+
+  // 到達条件その2: 別のファイルを選ぶと、出る名前もそれに変わる (選び直せる)。
+  await page.locator('#mexp-kind').selectOption({ index: 1 });
+  await expect(page.locator('#mexp-plan')).toContainText('dma_usecase → dma_usecase(資料用).png');
+  await page.locator('#mexp-kind').selectOption({ index: 0 });
+  await expect(page.locator('#mexp-plan')).toContainText('DMAドライバ利用ユースケース図 → DMAドライバ利用ユースケース図(資料用).png');
+
+  // 到達条件その3: 押すと開いていた図の (資料用) 版が保存フォルダに書かれ、題もその図から作られる。
+  const dl = page.waitForEvent('download', { timeout: 30000 }).catch(() => null);
+  await page.locator('#mexp-run').click();
+  const download = await dl;
+  expect(download).not.toBeNull();
+  expect(download.suggestedFilename()).toBe('DMAドライバ利用ユースケース図(資料用).png');
+  await expect(page.locator('#mexp-state')).toContainText('バイト', { timeout: 15000 });
+  const saved = await S.readDoc(page, DIR, 'DMAドライバ利用ユースケース図(資料用)');
+  expect(saved).toContain('title DMAドライバ利用ユースケース図(資料用)');
+  expect(fs.existsSync(path.join(abs, 'DMAドライバ利用ユースケース図(資料用).png'))).toBe(true);
+  expect(fs.existsSync(path.join(abs, 'dma_usecase(資料用).png'))).toBe(false);
+});
+
 // 資料化の残りが部品をまたいで見える (BLK-junior-20260914-2006-wish)。
 // 部品を 1 つ選ぶまで図種の残りが見えないと、GPIO がほぼ済んでいて TIMER が
 // 丸ごと未着手でも、部品欄を選び直すまで分からなかった。
