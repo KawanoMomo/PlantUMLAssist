@@ -94,6 +94,26 @@ describe('targetLine', function() {
   });
 });
 
+// BLK-owner-20260930-0111-1: 図を押したら本文欄へは focus を移さず、行の上に帯を重ねる。その帯の位置。
+describe('bandBox', function() {
+  test('行の上端は padding + (行 - 1) × 行の高さ − スクロール量', function() {
+    expect(EJ.bandBox(3, { lineHeight: 19.5, padTop: 8, scrollTop: 0, viewportHeight: 400 }))
+      .toEqual({ top: 47, height: 19.5, visible: true });
+    expect(EJ.bandBox(3, { lineHeight: 19.5, padTop: 8, scrollTop: 20, viewportHeight: 400 }).top).toBe(27);
+  });
+
+  test('スクロールで見えない行は visible: false (端に貼り付いた帯を出さない)', function() {
+    expect(EJ.bandBox(1, { lineHeight: 20, padTop: 8, scrollTop: 100, viewportHeight: 400 }).visible).toBe(false);
+    expect(EJ.bandBox(50, { lineHeight: 20, padTop: 8, scrollTop: 0, viewportHeight: 400 }).visible).toBe(false);
+  });
+
+  test('行番号でないものは null', function() {
+    expect(EJ.bandBox(null, {})).toBe(null);
+    expect(EJ.bandBox(0, {})).toBe(null);
+    expect(EJ.bandBox('x', {})).toBe(null);
+  });
+});
+
 describe('settingsTabs.normalizeEditorPrefs — clickToLine', function() {
   test('未設定なら有効 (design 5a のトグルは入りで on)', function() {
     expect(ST.normalizeEditorPrefs({}).clickToLine).toBe(true);

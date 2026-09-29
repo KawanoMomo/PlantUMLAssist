@@ -2019,13 +2019,82 @@ test('migrator 手順 4 — !definelong・変数・%関数で書いた sequence 
   await expect(page.locator('#generated-part-note'), '!while の参加者は理由の 1 行が出る').toContainText('L3 の繰り返し (!while)');
   await expect(page.locator('#seq-edit-alias'), 'Alias 欄は読むだけ').toBeDisabled();
   await expect(page.locator('#props-content .seq-delete-line'), '✕ 削除も押せない').toBeDisabled();
-  await page.evaluate(() => { const a = document.activeElement; if (a && a.blur) a.blur(); });
+  // BLK-owner-20260930-0111-1: 利用者と同じく、図を押した直後にそのままキーを押す (blur しない)。
+  // 図を押しても本文欄にフォーカスは移らず、Delete・d は本文を書き換えずに断る。
+  expect(await page.evaluate(() => document.activeElement && document.activeElement.id), '図を押しても本文欄にフォーカスは移らない').not.toBe('editor');
   await page.keyboard.press('Delete');
+  await expect(page.locator('#ma-toast'), '断って理由を言う').toContainText('書き換えませんでした');
+  await page.keyboard.press('d');
   expect(await page.evaluate(() => document.getElementById('editor').value), '本文は 1 字も変わらない').toBe(whileDsl);
   const tr = await hoverHit(page, '転送');
   await page.mouse.click(tr.box.x, tr.box.y);
   await expect(page.locator('#props-content .seq-delete-line'), '普通の行は ✕ 削除を押せる').toBeEnabled();
   await expect(page.locator('#generated-part-note')).toHaveCount(0);
+});
+
+// BLK-owner-20260930-0111-1: 図の部品を押すと本文欄にフォーカスが移ってその行全体が選ばれ、続けて押した Enter で行が空行 2 つに、
+// 文字キーで行がその 1 文字に置き換わって自動保存されていた (design 5b の図の編集キーは素通しされて効かなかった)。
+// 図を押したら本文欄は行を光らせるだけにし、キーは選んだ部品に効かせる。実マウスで押して、そのままキーを押す。
+test('migrator 手順 4 — 図の部品を押した直後のキーは本文の行を書き換えず、Delete・d・Ctrl+D は選んだ部品に効く', async ({ page }) => {
+  await bootPlain(page);
+  const dsl = ['@startuml', 'participant A', 'participant Z', 'A -> Z : req', 'Z --> A : ack', '@enduml'].join('\n');
+  const text = () => page.evaluate(() => document.getElementById('editor').value);
+  const active = () => page.evaluate(() => document.activeElement && document.activeElement.id);
+  await typeDsl(page, dsl);
+  await expect(page.locator('#overlay-layer rect[data-type="message"][data-line="5"]').first()).toBeAttached({ timeout: 20000 });
+  await page.waitForTimeout(600);
+
+  // 参加者 Z を押す: 本文欄へはフォーカスを移さず、3 行目に帯と行番号の印が出る
+  const z = await hoverHit(page, 'Z');
+  await page.mouse.click(3, 3);
+  await page.mouse.click(z.box.x, z.box.y);
+  await expect(page.locator('#overlay-layer rect.selected[data-type="participant"]').first()).toHaveAttribute('data-line', '3');
+  expect(await active(), '図を押しても本文欄にフォーカスは移らない').not.toBe('editor');
+  await expect(page.locator('#editor-jump-band'), '選んだ行に帯が出る').toBeVisible();
+  await expect(page.locator('#editor-jump-band')).toHaveAttribute('data-line', '3');
+  await expect(page.locator('#line-numbers .ln.ln-jump')).toHaveAttribute('data-line', '3');
+  // Enter・文字キーで行が置き換わらない
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
+  await page.mouse.click(3, 3);
+  await page.mouse.click(z.box.x, z.box.y);
+  await page.keyboard.press('x');
+  expect(await text(), 'Enter・文字キーで本文は変わらない').toBe(dsl);
+  // Delete は ✕ 削除と同じ (宣言の行だけを行ごと消す)。Ctrl+Z で戻る
+  await page.keyboard.press('Delete');
+  await expect.poll(text, 'Delete で参加者の宣言の行が行ごと消える').toBe(dsl.replace('participant Z\n', ''));
+  await page.keyboard.press('Control+z');
+  await expect.poll(text).toBe(dsl);
+  await expect(page.locator('#overlay-layer rect[data-type="message"][data-line="4"]').first()).toBeAttached({ timeout: 20000 });
+  await page.waitForTimeout(600);
+
+  // メッセージを押して Delete: 行の文字だけ消して空行を残さず、行ごと消える
+  const req = await hoverHit(page, 'req');
+  await page.mouse.click(3, 3);
+  await page.mouse.click(req.box.x, req.box.y);
+  await expect(page.locator('#overlay-layer rect.selected[data-type="message"]').first()).toHaveAttribute('data-line', '4');
+  expect(await active()).not.toBe('editor');
+  await page.keyboard.press('Delete');
+  await expect.poll(text, 'Delete でメッセージの行が行ごと消える').toBe(dsl.replace('A -> Z : req\n', ''));
+  await page.keyboard.press('Control+z');
+  await expect.poll(text).toBe(dsl);
+  await expect(page.locator('#overlay-layer rect[data-type="message"][data-line="5"]').first()).toBeAttached({ timeout: 20000 });
+  await page.waitForTimeout(600);
+
+  // メッセージを押して Ctrl+D: 直後に複製
+  const ack = await hoverHit(page, 'ack');
+  await page.mouse.click(3, 3);
+  await page.mouse.click(ack.box.x, ack.box.y);
+  await expect(page.locator('#overlay-layer rect.selected[data-type="message"]').first()).toHaveAttribute('data-line', '5');
+  await page.keyboard.press('Control+d');
+  await expect.poll(text, 'Ctrl+D で複製').toBe(dsl.replace('Z --> A : ack\n', 'Z --> A : ack\nZ --> A : ack\n'));
+
+  // 本文を打ちたい人は本文欄を押せば打てる (帯は下りる)
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type("\n' memo");
+  await expect.poll(text).toContain("' memo");
+  await expect(page.locator('#editor-jump-band')).toBeHidden();
 });
 
 // BLK-migrator-20260925-1800: 途中で `create` / `**` した参加者の頭がそのメッセージの高さに描かれ、メッセージの文字を探す床を押し下げて、

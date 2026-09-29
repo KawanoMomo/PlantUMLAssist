@@ -38,11 +38,20 @@ async function clickOverlay(page, type, id) {
   await page.waitForTimeout(300);
 }
 
-// エディタで選択されている文字列。
+// 図で選んだ行: 本文欄の上の帯 (#editor-jump-band) が重なっている行の文字列。
+// BLK-owner-20260930-0111-1: 図を押しても本文欄へはフォーカスを移さず、行全体を選択状態にもしない
+// (続く Enter・文字キーで行が置き換わっていた)。以前はエディタの選択範囲で確かめていた。
+// キャレットはその行の頭に置き、本文欄のフォーカスは図の側に残る。
 function selectedText(page) {
   return page.evaluate(() => {
     const ed = /** @type {HTMLTextAreaElement} */ (document.getElementById('editor'));
-    return ed.value.slice(ed.selectionStart, ed.selectionEnd);
+    const band = document.getElementById('editor-jump-band');
+    if (!band || band.hidden) return '';
+    if (document.activeElement === ed) return 'FOCUSED';
+    const n = Number(band.getAttribute('data-line'));
+    const caretLine = ed.value.slice(0, ed.selectionStart).split('\n').length;
+    if (caretLine !== n || ed.selectionStart !== ed.selectionEnd) return 'CARET-MISMATCH';
+    return ed.value.split('\n')[n - 1];
   });
 }
 
