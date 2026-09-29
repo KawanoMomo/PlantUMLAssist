@@ -88,14 +88,16 @@ test('手順4 先輩のシーケンス図から活動図を組み立て、(資�
   expect(fresh).toContain('stop');
 
   // 工程名は先輩の図の矢印ラベルから借りる (打ち直さない)。
+  // BLK-owner-20260925-0341-prune: 1 行 1 アクションの欄と「⧉ 他の図から取り込む」は種別チップ「まとめて」の中。
+  await page.locator('#ac-tail-kind-chip-bulk').click();
   await page.locator('#ac-tail-reuse').click();
   await page.waitForSelector('#reuse-modal');
   await page.locator('#reuse-all').click();
   await page.locator('#reuse-confirm').click();
   await page.waitForTimeout(200);
-  expect(await page.locator('#ac-tail-text').inputValue()).toContain('Gpio_Init');
+  expect(await page.locator('#ac-tail-bulk').inputValue()).toContain('Gpio_Init');
 
-  await page.locator('#ac-tail-add-lines').click();
+  await page.locator('#ac-tail-add').click();
   await page.waitForTimeout(600);
 
   // 到達条件: Hello world は残らず、足した工程は start と stop の間に並ぶ。
@@ -233,7 +235,8 @@ test('手順4 一括入力欄の取り込みにも先輩のシーケンス図の
   await S.runCommand(page, 'シーケンス図からアクティビティ図を起こす');
   await page.waitForTimeout(800);
 
-  // 追加パネルの一括欄から「他の図から取り込む」を開く。
+  // 追加パネルの一括欄 (種別チップ「まとめて」) から「他の図から取り込む」を開く。
+  await page.locator('#ac-tail-kind-chip-bulk').click();
   await page.locator('#ac-tail-reuse').click();
   await page.waitForSelector('#reuse-modal-content');
   // 出処 (図名 → 部品名) で絞れるので、その部品が送る列だけを 1 手で全部選べる。
@@ -244,7 +247,7 @@ test('手順4 一括入力欄の取り込みにも先輩のシーケンス図の
   await page.locator('#reuse-all').click();
   await page.locator('#reuse-confirm').click();
   await page.waitForTimeout(300);
-  const bulk = await page.locator('#ac-tail-text').inputValue();
+  const bulk = await page.locator('#ac-tail-bulk').inputValue();
   expect(bulk).toContain('EnableClock');
   expect(bulk).toContain('InitDone');
 });

@@ -1705,17 +1705,13 @@ window.MA.modules.plantumlClass = (function() {
           { value: 'namespace', label: '名前空間 (namespace)' },
           { value: 'relation',  label: '関係' },
           { value: 'note',      label: '注釈 (note)' },
+          // BLK-owner-20260925-0341-prune: 複数行をまとめて入れる入口は、他の図種と同じ種別チップ「まとめて」1 つ。
+          // 以前はフォームの下に「⌗ クラス構成をまとめて追加」ボタンを別に置いていた。中身 (親・派生・関連の窓) は同じ。
+          { value: 'bulk',      label: 'まとめて (複数行)' },
         ]) +
         '<div id="cl-tail-detail" style="margin-top:6px;"></div>' +
-      '</div>' +
-      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-        '<button id="cl-scaffold-open" style="width:100%;font-size:11px;padding:5px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⌗ クラス構成をまとめて追加</button>' +
       '</div>';
     propsEl.innerHTML = html;
-
-    P.bindEvent('cl-scaffold-open', 'click', function() {
-      _showScaffoldModal(parsedData, ctx);
-    });
 
 
     var renderTailDetail = function() {
@@ -1776,8 +1772,20 @@ window.MA.modules.plantumlClass = (function() {
             '<textarea id="cl-tail-ntext" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;"></textarea>' +
           '</div>' +
           P.primaryButtonHtml('cl-tail-add', '+ 追加');
+      } else if (kind === 'bulk') {
+        html2 =
+          '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;">' +
+            '親クラス・派生クラス (メンバ付き)・関連を 1 つの窓で並べて、1 回で入れます。' +
+            '開いている図の名前は窓の「⧉ 他の図から取り込む」から入れられます</div>' +
+          P.primaryButtonHtml('cl-scaffold-open', '⌗ クラス構成をまとめて追加…');
       }
       detailEl.innerHTML = html2;
+      if (kind === 'bulk') {
+        P.bindEvent('cl-scaffold-open', 'click', function() {
+          _showScaffoldModal(parsedData, ctx);
+        });
+        return;
+      }
       if (kind === 'relation') {
         window.MA.relationKindCards.mountForSelect('cl-tail-rkind', 'class');
         _bindRelationRoles(ctx);
@@ -1840,7 +1848,16 @@ window.MA.modules.plantumlClass = (function() {
     };
     document.getElementById('cl-tail-kind').addEventListener('change', renderTailDetail);
     // design 2b: 種別はチップ 1 クリックで決める。値の持ち主は上の select のまま。
-    window.MA.tailKindChips.mount('cl-tail-kind');
+    var chipsEl = window.MA.tailKindChips.mount('cl-tail-kind');
+    // チップ「まとめて」を押すと、その場でクラス構成の窓を開く (当たっているチップの押し直しでも開く)。
+    // 描き直し (確定のあと・前回の種別を覚えていたとき) と ← → での移動では開かない。
+    if (chipsEl) chipsEl.addEventListener('click', function(e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.prop-seg') : null;
+      if (!btn || btn.getAttribute('data-value') !== 'bulk') return;
+      var modal = document.getElementById('cl-sc-modal');
+      if (modal && modal.style.display === 'flex') return;
+      _showScaffoldModal(parsedData, ctx);
+    });
     renderTailDetail();
   }
 
