@@ -164,8 +164,8 @@ describe('BLK-migrator-20260929-1351 マクロは PlantUML の展開で読む', 
     var server = fs.readFileSync(path.join(__dirname, '..', 'server.py'), 'utf8');
     expect(server).toContain("if self.path == '/preproc':");
     expect(server).toContain("'-preproc', '-pipe'");
-    expect(server.indexOf('def preproc_local(text):')).toBeGreaterThan(-1);
-    var body = server.slice(server.indexOf('def preproc_local(text):'), server.indexOf('def _shutdown_daemon'));
+    expect(server.indexOf('def preproc_local(text')).toBeGreaterThan(-1);
+    var body = server.slice(server.indexOf('def preproc_local(text'), server.indexOf('def _shutdown_daemon'));
     expect(/render_online|plantuml\.com|urlopen/.test(body)).toBe(false);
     var daemon = fs.readFileSync(path.join(__dirname, '..', 'lib', 'PlantUMLDaemon.java'), 'utf8');
     expect(daemon).toContain('PREPROC_MAGIC');

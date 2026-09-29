@@ -9415,7 +9415,7 @@ function applyPartFocus() {
   var name = _peekName;
   if (!dsl) return Promise.resolve(false);
   el.svg.setAttribute('data-focus', '');
-  return renderDslToSvg(dsl).then(function(svg) {
+  return renderDslToSvg(dsl, _peekDir).then(function(svg) {
     if (name !== _peekName) return false;
     el.svg.innerHTML = svg;
     // 描き終わってから印を付ける (絞った絵が出る前の 1 枚と見分けが付くように)。
@@ -10222,7 +10222,7 @@ function _noteApplyReexport(plan) {
     return chain.then(function() {
       return WS.loadFile(f.file, f.dir).then(function(dsl) {
         if (dsl == null) throw new Error('読めません');
-        return renderDslToSvg(dsl);
+        return renderDslToSvg(dsl, f.dir);
       }).then(function(svg) {
         return fetch('/autosave-svg', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -12066,7 +12066,7 @@ function showPeekFile(name) {
     // 切り出さずに 1 枚のまま絞る入口も同時に出す (読むだけなら絞る方が近い)。
     _focusSel = '';
     renderPartFocus();
-    return renderDslToSvg(text).then(function(svg) {
+    return renderDslToSvg(text, dir).then(function(svg) {
       if (name !== _peekName) return false;
       el.svg.innerHTML = svg;
       return true;
@@ -15506,7 +15506,7 @@ function setupTabs() {
       btn.textContent = '作り直しています… ' + name + '（残り ' + queue.length + ' 枚）';
       window.MA.workspace.loadFile(name, dir).then(function(dsl) {
         if (dsl === null) throw new Error('読めません');
-        return renderDslToSvg(dsl);
+        return renderDslToSvg(dsl, dir);
       }).then(function(svg) {
         return fetch('/autosave-svg', {
           method: 'POST',
@@ -28387,12 +28387,17 @@ function exportSVG() {
 // 枚数分積み上がっていた。ここではタブを切り替えず、各ドキュメントの DSL を /render に
 // 直接投げて保存するので、何枚でも Export を開く → この項目を押す の 2 クリックで済む。
 // 保存はブラウザの複数ダウンロードを 1 件ずつ直列に走らせる。
-function renderDslToSvg(dsl) {
+// BLK-primary-20260929-1108: dir は相対の !include を探す起点 (その図の .puml のあるフォルダ)。
+// 渡さなければ今の保存先 (保存フォルダの図を描き直す経路が大半のため)。
+function renderDslToSvg(dsl, dir) {
   var mode = (document.getElementById('render-mode') || {}).value || 'local';
+  var body = { text: dsl, mode: mode };
+  var base = (dir === undefined || dir === null) ? _renderSaveDir() : dir;
+  if (base) body.dir = base;
   return fetch('/render', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: dsl, mode: mode }),
+    body: JSON.stringify(body),
   }).then(function(resp) {
     if (!resp.ok) {
       return resp.json().then(function(err) { throw new Error(err.error || ('HTTP ' + resp.status)); });
@@ -34437,6 +34442,31 @@ function renderProps(parsed) {
 // (タブの id と名前。ファイルを開いて白紙のタブに入れ替わったときも別の図と分かる。
 // PlantUML の案内画面「Welcome to PlantUML!」は図に数えないので false)。
 var _previewOwnerId = false;
+// BLK-primary-20260929-1108: 描くときに相対の !include / !includesub を探すフォルダ。
+// 手元から開いたファイルはそのファイルのフォルダ、保存先の図はそのタブの保存フォルダ (留めたタブは留めた先)。
+// 保存先がフォルダでない (ブラウザ内) ときは渡さない。
+function _renderSaveDir() {
+  try {
+    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    if (!cfg || cfg.backend !== 'file') return '';
+  } catch (e) { return ''; }
+  return _wsFileDir();
+}
+function _renderDirOfDoc(doc) {
+  var src = doc && doc.id ? _sourcePathOf(doc.id) : '';
+  if (src) {
+    var cut = Math.max(src.lastIndexOf('/'), src.lastIndexOf('\\'));
+    if (cut > 0) return src.slice(0, cut);
+  }
+  if (!_renderSaveDir()) return '';
+  return doc ? _docDir(doc) : _wsFileDir();
+}
+function _renderDirOfActive() {
+  var d = null;
+  try { d = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { d = null; }
+  return _renderDirOfDoc(d);
+}
+
 function _activeDocKey() {
   try {
     var d = window.MA.workspace ? window.MA.workspace.getActive() : null;
@@ -34553,11 +34583,15 @@ function renderSvg() {
   // BLK-migrator-20260929-1351: マクロのある本文は、描画と並べて PlantUML のプリプロセッサに展開を頼み、
   // 選択枠はその展開を読んでから当てる (展開できない・遅いときは今までの読み方で当てる)。
   var _PEx = window.MA.preprocExpand;
-  var expandP = (!focusDsl && _PEx) ? _PEx.ensure(mmdText).catch(function() { return false; }) : Promise.resolve(false);
+  // BLK-primary-20260929-1108: 相対の !include は、このタブの .puml のあるフォルダから探す。
+  var renderDir = _renderDirOfActive();
+  var expandP = (!focusDsl && _PEx) ? _PEx.ensure(mmdText, null, renderDir).catch(function() { return false; }) : Promise.resolve(false);
+  var renderBody = { text: renderText, mode: mode };
+  if (renderDir) renderBody.dir = renderDir;
   fetch('/render', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: renderText, mode: mode }),
+    body: JSON.stringify(renderBody),
   }).then(function(resp) {
     var contentType = resp.headers.get('Content-Type') || '';
     if (!resp.ok) {

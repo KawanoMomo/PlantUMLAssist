@@ -507,6 +507,8 @@ RENDER_API_DOC = {
         'fields': {
             'text': "必須。PlantUML の DSL 全文 (@startuml … @enduml)",
             'mode': "任意。'local' (既定、同梱 Java) または 'online' (plantuml.com へ送信)",
+            'dir': ("任意。その図の .puml のあるフォルダ。相対の !include / !includesub をここから探す"
+                    "(省略すると server の作業フォルダ)。本文は書き換えない。読めないときの 422 は探したフォルダを言う"),
             'withSvg': ("任意。true にすると、保存中の svg (印を外したもの) と描き直した svg の"
                         "本文そのものを savedSvg / drawnSvg として返す。可視差分プレビュー用。"
                         "応答が重いので types が 1 件のときだけ効く"),
@@ -1626,8 +1628,10 @@ class Handler(BaseHTTPRequestHandler):
         if problem:
             self._send_json(400, {'error': problem, 'api': RENDER_API_DOC})
             return
+        # BLK-primary-20260929-1108: dir はその図の .puml のあるフォルダ。相対の !include をそこから探す。
+        base_dir = render_base_dir(data.get('dir'))
         if mode == 'local':
-            svg, error = render_local(text)
+            svg, error = render_local(text, base_dir)
         else:
             svg, error = render_online(text)
         if error:
@@ -1642,6 +1646,9 @@ class Handler(BaseHTTPRequestHandler):
                 cause, cause_line = crash_cause(err, text)
                 if cause:
                     msg += '。' + cause
+                searched = include_search_note(err.get('message'), base_dir if mode == 'local' else None)
+                if searched:
+                    msg += '。' + searched
                 payload = {'error': msg, 'line': err['line'],
                            'kind': 'plantuml-crash' if err.get('crashed') else 'plantuml-syntax'}
                 if cause_line:
@@ -1649,6 +1656,8 @@ class Handler(BaseHTTPRequestHandler):
                 for key in ('version', 'source', 'assumed', 'message'):
                     if err.get(key):
                         payload[key] = err[key]
+                if searched:
+                    payload['includeDir'] = searched.split(': ', 1)[1]
                 if warning:
                     payload['warning'] = warning
                 self._send_json(422, payload)
@@ -1695,7 +1704,7 @@ class Handler(BaseHTTPRequestHandler):
         text = data.get('text')
         if not isinstance(text, str) or not text.strip():
             return self._send_json(400, {'error': 'text (DSL 全文) が要ります'})
-        lines, error = preproc_local(text)
+        lines, error = preproc_local(text, render_base_dir(data.get('dir')))
         if error:
             return self._send_json(200, {'ok': False, 'error': error})
         self._send_json(200, {'ok': True, 'lines': lines})
@@ -3699,7 +3708,7 @@ class Handler(BaseHTTPRequestHandler):
                 results[name] = {'status': 'missing'}
                 continue
             text = puml_bytes.decode('utf-8', errors='replace')
-            drawn, err = render_local(text) if mode == 'local' else render_online(text)
+            drawn, err = render_local(text, save_dir) if mode == 'local' else render_online(text)
             if drawn is None:
                 # 描けなかったものを「一致」とも「食い違い」とも言わない。控えも残さない。
                 results[name] = {'status': 'error', 'error': err or 'render failed'}
@@ -4533,12 +4542,42 @@ def _kill_daemon():
     _daemon_proc = None
 
 
-def _render_via_daemon(text):
+# BLK-primary-20260929-1108: 相対の `!include` / `!includesub` は、その .puml のあるフォルダから探す
+# (PlantUML をファイルに対して起動したときと同じ)。GUI の本文はファイルではなく文字列で渡るので、
+# 探す起点を渡さないと server の作業フォルダを探し、隣の共通ファイル (common_defs.puml) が読めなかった。
+# daemon には本文の前に BASEDIR_MAGIC + フォルダ + 改行を付けて渡す。本文は書き換えない。
+BASEDIR_MAGIC = '\x00BASEDIR '
+
+
+def render_base_dir(raw):
+    """/render・/preproc の dir を、include を探す起点のフォルダ (Path) にする。無い・フォルダでなければ None。"""
+    if not isinstance(raw, str) or not raw.strip() or '\n' in raw or '\x00' in raw:
+        return None
+    try:
+        p = Path(raw.strip()).expanduser().resolve()
+    except (OSError, RuntimeError, ValueError):
+        return None
+    return p if p.is_dir() else None
+
+
+def _with_base_dir(text, base_dir):
+    return (BASEDIR_MAGIC + str(base_dir) + '\n' + text) if base_dir else text
+
+
+def include_search_note(message, base_dir):
+    """描けない理由が include の読めなさなら、探したフォルダを言う 1 文を返す (無関係なら '')。"""
+    if not re.search(r'cannot include|include.*(not found|見つか)', str(message or ''), re.I):
+        return ''
+    where = str(base_dir) if base_dir else str(Path.cwd())
+    return '探したフォルダ: %s' % where
+
+
+def _render_via_daemon(text, base_dir=None):
     """Send DSL to the daemon, read SVG back. Returns (svg, error) or raises on IO."""
     proc = _get_daemon()
     if proc is None:
         return None, 'daemon unavailable'
-    payload = text.encode('utf-8')
+    payload = _with_base_dir(text, base_dir).encode('utf-8')
     proc.stdin.write(struct.pack('>I', len(payload)))
     proc.stdin.write(payload)
     proc.stdin.flush()
@@ -4587,7 +4626,7 @@ def _read_exact(stream, n):
     return b''.join(chunks)
 
 
-def _render_via_pipe(text):
+def _render_via_pipe(text, base_dir=None):
     """Fallback: one-shot `java -jar plantuml.jar -pipe` (slower, Java 8+ compatible)."""
     try:
         proc = subprocess.run(
@@ -4595,6 +4634,7 @@ def _render_via_pipe(text):
             input=text.encode('utf-8'),
             capture_output=True,
             timeout=30,
+            cwd=str(base_dir) if base_dir else None,
             **_SUBPROCESS_KWARGS,
         )
     except FileNotFoundError:
@@ -4606,7 +4646,7 @@ def _render_via_pipe(text):
     return proc.stdout, None
 
 
-def render_local(text):
+def render_local(text, base_dir=None):
     global _daemon_proc
     jar = jar_path()
     if not jar.exists():
@@ -4614,7 +4654,7 @@ def render_local(text):
                       '設定 → レンダリング で jar を選ぶか「公式から取得」を押してください')
     with _daemon_lock:
         try:
-            svg, err = _render_via_daemon(text)
+            svg, err = _render_via_daemon(text, base_dir)
             if err is not None and _DAEMON_BROKEN_JAR_RE.search(err):
                 # The JVM cannot load its own classes (the jar changed under it,
                 # BLK-migrator-20260925-1632). Not the diagram's fault: drop the
@@ -4631,7 +4671,7 @@ def render_local(text):
             for line in daemon_log_tail(10):
                 print(f'  daemon stderr: {line}')
             _kill_daemon()
-    return _render_via_pipe(text)
+    return _render_via_pipe(text, base_dir)
 
 
 # BLK-migrator-20260929-1351: 当て方は描いた側を先に使う。マクロ (!procedure / !definelong / 引数つき !define /
@@ -4642,11 +4682,12 @@ PREPROC_MAGIC = '\x00PREPROC\n'
 PREPROC_TIMEOUT_SEC = float(os.environ.get('PUA_PREPROC_TIMEOUT', '8'))
 
 
-def _preproc_via_pipe(text):
+def _preproc_via_pipe(text, base_dir=None):
     try:
         proc = subprocess.run(
             ['java', '-jar', str(jar_path()), '-preproc', '-pipe', '-charset', 'UTF-8'],
             input=text.encode('utf-8'), capture_output=True, timeout=PREPROC_TIMEOUT_SEC,
+            cwd=str(base_dir) if base_dir else None,
             **_SUBPROCESS_KWARGS,
         )
     except FileNotFoundError:
@@ -4658,7 +4699,7 @@ def _preproc_via_pipe(text):
     return proc.stdout.decode('utf-8', errors='replace'), None
 
 
-def preproc_local(text):
+def preproc_local(text, base_dir=None):
     """(lines, error)。lines は最初の @startuml ブロックを展開した行 (@startuml / @enduml を含む)。"""
     if not jar_path().exists():
         return None, 'plantuml.jar not found'
@@ -4667,7 +4708,7 @@ def preproc_local(text):
         try:
             proc = _get_daemon()
             if proc is not None:
-                payload = (PREPROC_MAGIC + text).encode('utf-8')
+                payload = _with_base_dir(PREPROC_MAGIC + text, base_dir).encode('utf-8')
                 proc.stdin.write(struct.pack('>I', len(payload)))
                 proc.stdin.write(payload)
                 proc.stdin.flush()
@@ -4679,7 +4720,7 @@ def preproc_local(text):
             print(f'daemon preproc unusable ({exc}); falling back to -preproc')
             _kill_daemon()
     if out is None:
-        out, err = _preproc_via_pipe(text)
+        out, err = _preproc_via_pipe(text, base_dir)
         if err:
             return None, err
     lines = out.replace('\r\n', '\n').split('\n')
