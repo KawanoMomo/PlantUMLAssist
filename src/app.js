@@ -13842,6 +13842,86 @@ function setupTabs() {
 
   openFromFolderByName = function(name) { openFromFolder(name); };
   refreshFolderPanelNow = function() { if (panel.classList.contains('open')) renderFolderPanel(); };
+
+  // BLK-owner-20260926-0550-3: 自動保存・Ctrl+S で新しく書いた図が、FILES ツリーの保存先に読み込み直すまで
+  // 出なかった (外で消えた図の行も残った)。保存先の一覧は開いた時に 1 回読むだけだったため。
+  // 書いた・消した知らせ (workspace の pua:folder-changed) と、ウィンドウにフォーカスが戻った時・FILES を
+  // 開き直した時に、ディスクの顔ぶれと並べている顔ぶれを比べ、違えば一覧を読み直す
+  // (VS Code・IntelliJ のエクスプローラと同じ)。同じなら読み直さない (打つたびの自動保存で一覧を組み直さない)。
+  var _folderShown = null;       // { dir, sig } 最後に並べた保存先と顔ぶれ
+  var _folderSyncTimer = null;
+  var _folderSyncBusy = false;
+  var _folderSyncAgain = false;   // 比べている最中に来た知らせは、終わってからもう 1 回比べる
+  var _folderSyncOnClose = false; // 中央の枠を開いている間に来た知らせは、枠を閉じてから比べる
+  function _folderSyncable() {
+    if (!_folderShown) return false;              // まだ一度も並べていない (開いた時に読む)
+    var RFm = window.MA.refFolders;
+    if (RFm && RFm.isRef(_wsFileDir(), refActiveDir)) return false;   // 参照タブを見ている間は触らない
+    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    return !!(cfg && cfg.backend === 'file');
+  }
+  function _sameDir(a, b) {
+    if (a === b) return true;
+    var PF = window.MA.peekFolder;
+    return !!(PF && PF.samePath && PF.samePath(a, b));
+  }
+  syncFolderListNow = function() {
+    if (_folderSyncBusy) { _folderSyncAgain = true; return Promise.resolve(false); }
+    if (!_folderSyncable()) return Promise.resolve(false);
+    var WS = window.MA.workspace;
+    var FT = window.MA.fileTree;
+    if (!WS || !WS.listFileEntries || !FT || !FT.nameSig) return Promise.resolve(false);
+    var dir = _wsFileDir();
+    // 一覧を中央の枠に開いている間は組み直さない (押そうとした行が手の下で作り直され、押しても開かない)。
+    // 枠は開くたびに読み直すので、閉じた時に比べ直す。
+    if (panel.classList.contains('is-list')) { _folderSyncOnClose = true; return Promise.resolve(false); }
+    _folderSyncBusy = true;
+    function done() {
+      _folderSyncBusy = false;
+      if (_folderSyncAgain) { _folderSyncAgain = false; _folderSyncSoon(50); }
+    }
+    return WS.listFileEntries(dir).then(function(entries) {
+      done();
+      if (!_folderSyncable() || _wsFileDir() !== dir) return false;
+      var sig = FT.nameSig(entries);
+      if (_folderShown && _folderShown.dir === dir && _folderShown.sig === sig) return false;
+      if (panel.classList.contains('is-list')) { _folderSyncOnClose = true; return false; }
+      renderFolderPanel();
+      return true;
+    }, function() { done(); return false; });
+  };
+  function _folderSyncSoon(ms) {
+    if (_folderSyncTimer) clearTimeout(_folderSyncTimer);
+    _folderSyncTimer = setTimeout(function() { _folderSyncTimer = null; syncFolderListNow(); }, ms || 250);
+  }
+  window.addEventListener('pua:folder-changed', function(ev) {
+    var d = (ev && ev.detail) || {};
+    if (!_folderSyncable() || !_sameDir(String(d.dir || ''), _wsFileDir())) return;
+    var FT = window.MA.fileTree;
+    var has = FT && FT.sigHas ? FT.sigHas(_folderShown.sig, d.name) : false;
+    // 並べている図を書き直しただけなら顔ぶれは変わらない。新しい名前・消した名前のときだけ比べに行く。
+    if (d.what === 'written' && has) return;
+    if (d.what === 'deleted' && !has) return;
+    _folderSyncSoon(150);
+  });
+  // 外で増えた・消えた図は、ウィンドウにフォーカスが戻った時・タブが見えるようになった時に拾う。
+  window.addEventListener('focus', function() { _folderSyncSoon(100); });
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') _folderSyncSoon(100);
+  });
+  if (window.MutationObserver) {
+    new window.MutationObserver(function() {
+      if (_folderSyncOnClose && !panel.classList.contains('is-list')) {
+        _folderSyncOnClose = false;
+        _folderSyncSoon(100);
+      }
+    }).observe(panel, { attributes: true, attributeFilter: ['class'] });
+  }
+  // FILES を開き直した時 (レールの FILES・保存先の行の ▸) も拾う。
+  ['rail-files', 'files-target-caret'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', function() { _folderSyncSoon(50); });
+  });
   // BLK-builder-20260924-2152-2-red: 保存先を変えたときは畳んでいても読み直す (FILES の部品フォルダと
   // 上部バーの部品の段はこの一覧を読むので、閉じたままだと前のフォルダの図が残る)。
   reloadFolderListNow = function() { renderFolderPanel(); };
@@ -14093,6 +14173,8 @@ function setupTabs() {
     window.MA.workspace.listFolder(dir).then(function(res) {
       if (myGen !== _folderRenderGen) return;
       var entries = (res && res.entries) || [];
+      // BLK-owner-20260926-0550-3: 並べた顔ぶれを控える (書いた後・フォーカスが戻った時にディスクと比べる)。
+      _folderShown = { dir: dir, sig: window.MA.fileTree ? window.MA.fileTree.nameSig(entries) : '' };
       panel.textContent = '';
       appendListHead(panel);
       // BLK-human-20260917-0901: 保存フォルダの外にある手元の .puml を開く入口を一覧の頭に置く。
@@ -17338,6 +17420,8 @@ var openFromFolderByName = function() {};
 var refreshFolderPanelNow = function() {};
 // 保存先を変えた直後に、開閉に関わらず一覧を新しいフォルダで読み直す口 (BLK-builder-20260924-2152-2-red)。
 var reloadFolderListNow = function() {};
+// 保存先の一覧に並べた顔ぶれがディスクと違えば読み直す口 (BLK-owner-20260926-0550-3)。
+var syncFolderListNow = function() { return Promise.resolve(false); };
 // 保存先の版 (server の _versions) を読む・開く・並べる・戻す道具。「この図の履歴」が使う
 // (BLK-owner-20260923-2312-prune)。保存先の一覧の結線 (setupTabs) で入る。
 var _versionsApi = null;

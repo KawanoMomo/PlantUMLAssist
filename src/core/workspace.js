@@ -417,6 +417,18 @@ window.MA.workspace = (function() {
     return fileDir || './autosave';
   }
 
+  // BLK-owner-20260926-0550-3: 保存フォルダに図を書いた・消したことを知らせる (FILES ツリーの保存先が
+  // 読み込み直すまで古いままだった)。聞き手は app.js の保存先の一覧 1 か所。
+  function _announce(what, name, fileDir) {
+    try {
+      var ev;
+      var detail = { what: what, name: String(name || ''), dir: _dir(fileDir) };
+      try { ev = new window.CustomEvent('pua:folder-changed', { detail: detail }); }
+      catch (e) { ev = document.createEvent('CustomEvent'); ev.initCustomEvent('pua:folder-changed', false, false, detail); }
+      window.dispatchEvent(ev);
+    } catch (e) { /* 知らせが届かなくても保存そのものは済んでいる */ }
+  }
+
   function saveToFile(doc, fileDir) {
     if (!doc || !isValidName(doc.name)) return Promise.resolve(false);
     try {
@@ -451,13 +463,14 @@ window.MA.workspace = (function() {
         if (doc.fresh && doc.id) markWritten(doc.id);
         // BLK-junior-20260908-2003: 図種が変わる保存は server が別ファイルへ回す。
         // 回された先は autoSave の知らせに寄せる (聞き手は 1 か所でよい)。
-        if (!r.json) return true;
+        if (!r.json) { _announce('written', doc.name, fileDir); return true; }
         return r.json().then(function(data) {
+          _announce('written', (data && data.savedAs) || doc.name, fileDir);
           if (window.MA.autoSave && window.MA.autoSave.noteFileRenamed) {
             window.MA.autoSave.noteFileRenamed(data);
           }
           return true;
-        }).catch(function() { return true; });
+        }).catch(function() { _announce('written', doc.name, fileDir); return true; });
       }).catch(function() { return false; });
     } catch (e) {
       return Promise.resolve(false);
@@ -578,7 +591,7 @@ window.MA.workspace = (function() {
       return window.fetch('/autosave?dir=' + encodeURIComponent(_dir(fileDir))
                           + '&type=' + encodeURIComponent(name), { method: 'DELETE' })
         .then(function(r) {
-          if (r && r.ok) return { ok: true };
+          if (r && r.ok) { _announce('deleted', name, fileDir); return { ok: true }; }
           return { ok: false, error: '保存フォルダから消せませんでした (' + ((r && r.status) || '?') + ')' };
         })
         .catch(function() { return { ok: false, error: '保存フォルダに届きませんでした' }; });
