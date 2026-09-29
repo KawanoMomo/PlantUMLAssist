@@ -41,8 +41,9 @@ jobs:
           if ($version -notmatch '^\d+(\.\d+)+$') { throw "インストーラの版が取れない ($version)" }
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\installer.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
-          $pv = (Get-Item "dist\PlantUMLAssist-$version-setup.exe").VersionInfo.ProductVersion
-          if ($pv -ne $version) { throw "setup.exe の版 $pv がタグ $version と食い違う" }
+          # VersionInfo の文字列は末尾に空白・NUL の詰め物が付くことがある(v3.0 で「3.0 」となり照合が赤になった)ので、両端を落として比べる
+          $pv = ((Get-Item "dist\PlantUMLAssist-$version-setup.exe").VersionInfo.ProductVersion -replace '[\s\0]+$','').Trim()
+          if ($pv -ne $version) { throw "setup.exe の版 '$pv' がタグ '$version' と食い違う" }
           "APP_SETUP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       # BLK-human-20260917-0900: 旧版を入れる → 新版を入れる → アンインストール登録が 1 件で版が新しい。
