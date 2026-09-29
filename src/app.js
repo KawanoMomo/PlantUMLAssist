@@ -1013,7 +1013,11 @@ function init() {
       } else {
         lit = peers;
       }
-      lit.forEach(function(r) { if (peers.indexOf(r) >= 0) r.classList.add('hit-hover'); });
+      lit = lit.filter(function(r) { return peers.indexOf(r) >= 0; });
+      // BLK-migrator-20260929-1611: 楔を持つ note は紙の枠の代わりに楔込みの枠を光らせる (当たりは変えない)。
+      var OBh = window.MA.overlayBuilder;
+      if (OBh && OBh.litRects) lit = OBh.litRects(overlayElForHover, lit);
+      lit.forEach(function(r) { r.classList.add('hit-hover'); });
     });
     overlayElForHover.addEventListener('mouseleave', _clearHoverPeers);
   }

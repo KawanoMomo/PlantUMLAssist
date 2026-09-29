@@ -296,11 +296,16 @@ window.MA.overlayBuilder = (function() {
       });
       if (!best || bestScore < 0.6) return;
       var rb = boxOf(best);
+      var fx0 = rb.x, fy0 = rb.y, fx1 = rb.x + rb.width, fy1 = rb.y + rb.height, outside = 0;
       tails.forEach(function(poly) {
         var inside = poly.every(function(q) {
           return q[0] >= rb.x - 0.5 && q[0] <= rb.x + rb.width + 0.5 && q[1] >= rb.y - 0.5 && q[1] <= rb.y + rb.height + 0.5;
         });
         if (inside) return;
+        outside++;
+        poly.forEach(function(q) {
+          fx0 = Math.min(fx0, q[0]); fy0 = Math.min(fy0, q[1]); fx1 = Math.max(fx1, q[0]); fy1 = Math.max(fy1, q[1]);
+        });
         var path = document.createElementNS(SVG_NS, 'path');
         path.setAttribute('d', poly.map(function(q, k) {
           return (k ? 'L' : 'M') + (Math.round(q[0] * 100) / 100) + ' ' + (Math.round(q[1] * 100) / 100);
@@ -340,8 +345,50 @@ window.MA.overlayBuilder = (function() {
         else overlayEl.appendChild(edge);
         n++;
       });
+      if (outside) _addNoteFrame(overlayEl, best, { x: fx0, y: fy0, width: fx1 - fx0, height: fy1 - fy0 });
     });
     return n;
+  }
+
+  // 再確認 2 (curator が書き直した求める結果): 楔を持つ note にホバーしたとき、光る枠は楔を含む紙の外形全体を包む 1 矩形。
+  // 当たり (どこで note が選ばれるか) は変えず、光らせる枠だけを描き分ける。紙の枠 (rect.selectable) の代わりに光らせる
+  // 見た目だけの矩形 (rect.note-frame、pointer-events: none、selectable ではない) を 1 枚置き、紙の枠と data-note-frame で結ぶ。
+  // 当たり判定・件数・選択は selectable の rect だけを見るので、この矩形は数えられない。光らせる側は litRects で置き換える。
+  var _noteFrameSeq = 0;
+  function _addNoteFrame(overlayEl, best, box) {
+    var key = 'nf' + (++_noteFrameSeq);
+    var fr = document.createElementNS(SVG_NS, 'rect');
+    fr.setAttribute('x', String(Math.round(box.x * 100) / 100));
+    fr.setAttribute('y', String(Math.round(box.y * 100) / 100));
+    fr.setAttribute('width', String(Math.round(box.width * 100) / 100));
+    fr.setAttribute('height', String(Math.round(box.height * 100) / 100));
+    fr.setAttribute('fill', 'none');
+    fr.setAttribute('stroke', 'none');
+    ['data-type', 'data-id', 'data-line'].forEach(function(a) {
+      if (best.hasAttribute(a)) fr.setAttribute(a, best.getAttribute(a));
+    });
+    fr.setAttribute('data-note-frame-of', key);
+    fr.classList.add('note-frame');
+    fr.style.pointerEvents = 'none';
+    best.setAttribute('data-note-frame', key);
+    overlayEl.appendChild(fr);
+  }
+
+  // ホバーで光らせる矩形の列 (app.js)。紙の枠に楔込みの枠 (rect.note-frame) が結ばれていれば、紙の枠の代わりにそれを光らせる。
+  function litRects(overlayEl, rects) {
+    var out = [];
+    (rects || []).forEach(function(r) {
+      var key = r && r.getAttribute && r.getAttribute('data-note-frame');
+      var fr = null;
+      if (key && overlayEl) {
+        fr = Array.prototype.filter.call(overlayEl.querySelectorAll('rect.note-frame'), function(f) {
+          return f.getAttribute('data-note-frame-of') === key;
+        })[0] || null;
+      }
+      var pick = fr || r;
+      if (out.indexOf(pick) < 0) out.push(pick);
+    });
+    return out;
   }
 
   function _inPolygon(x, y, d) {
@@ -1593,6 +1640,7 @@ window.MA.overlayBuilder = (function() {
     notePaperAt: notePaperAt,
     noteTails: noteTails,
     addNoteTails: addNoteTails,
+    litRects: litRects,
     noteLineKey: noteLineKey,
     extractMultiLineTextBBoxes: extractMultiLineTextBBoxes,
     hitTestTopmost: hitTestTopmost,

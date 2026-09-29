@@ -135,6 +135,53 @@ describe('BLK-migrator-20260929-1611 note の楔の当たり', function() {
     // 縁から離れた空所は当たらない
     expect(OB.hitTestTopmost(ov, 150, 25)).toBeNull();
   });
+
+  // 再確認 2: 楔の上を指すと note 本体だけの枠が光り、指した点 (楔の 15%〜35%) が枠の外 30〜120px だった。
+  test('枠: 楔込みの紙の外形を包む見た目だけの矩形を 1 枚置き、ホバーでは紙の枠の代わりにそれを光らせる (当たりは変えない)', function() {
+    var svg = makeSvg(MEMBER_NOTE);
+    var ov = overlayWith([
+      [7, 7, 128.703, 65.609, { 'data-type': 'class', 'data-id': 'Filter', 'data-line': '2' }],
+      [171, 22, 73, 26.352, { 'data-type': 'note', 'data-id': '__n_0', 'data-line': '5' }],
+    ]);
+    OB.addNoteTails(svg, ov);
+    var frames = ov.querySelectorAll('rect.note-frame');
+    expect(frames.length).toBe(1);
+    var f = frames[0];
+    var box = ['x', 'y', 'width', 'height'].map(function(a) { return Math.round(parseFloat(f.getAttribute(a))); });
+    // 楔の先 (129.703, 59.805) から紙の右下 (244, 48.352) まで
+    expect(box).toEqual([130, 22, 114, 38]);
+    expect(f.getAttribute('data-type')).toBe('note');
+    expect(f.getAttribute('data-line')).toBe('5');
+    expect(f.style.pointerEvents).toBe('none');
+    expect(f.classList.contains('selectable')).toBe(false);
+    // 楔の 15%・25%・35% の点が枠の内側
+    [0.15, 0.25, 0.35].forEach(function(t) {
+      var x = 171 + (129.703 - 171) * t, y = 35.176 + (59.805 - 35.176) * t;
+      expect(x >= box[0] - 1 && x <= box[0] + box[2] + 1 && y >= box[1] - 1 && y <= box[1] + box[3] + 1).toBe(true);
+    });
+    // 当たりは今までどおり (枠は selectable でないので hitTestTopmost に出ない)
+    var hit = OB.hitTestTopmost(ov, 60, 30);
+    expect(hit && hit.getAttribute('data-type')).toBe('class');
+    expect(OB.hitTestTopmost(ov, 150, 25)).toBeNull();
+    // 光らせる矩形: 紙の枠を渡すと楔込みの枠に置き換わる。クラスの枠はそのまま
+    var body = ov.querySelector('rect.selectable[data-type="note"]');
+    var cls = ov.querySelector('rect.selectable[data-type="class"]');
+    expect(OB.litRects(ov, [body])).toEqual([f]);
+    expect(OB.litRects(ov, [cls])).toEqual([cls]);
+    // 件数を数える selectable の note の枠は 1 枚のまま
+    expect(ov.querySelectorAll('rect.selectable[data-type="note"]').length).toBe(1);
+  });
+
+  test('枠: 楔が紙の枠に収まる note には置かない', function() {
+    var svg = makeSvg(MEMBER_NOTE);
+    var ov = overlayWith([
+      [129.703, 22, 114.297, 37.805, { 'data-type': 'note', 'data-id': '__n_0', 'data-line': '5' }],
+    ]);
+    OB.addNoteTails(svg, ov);
+    expect(ov.querySelectorAll('rect.note-frame').length).toBe(0);
+    var body = ov.querySelector('rect.selectable[data-type="note"]');
+    expect(OB.litRects(ov, [body])).toEqual([body]);
+  });
 });
 
 if (prevWindow !== undefined) global.window = prevWindow;
