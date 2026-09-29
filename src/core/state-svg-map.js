@@ -492,6 +492,45 @@ window.MA.stateSvgMap = (function() {
         trOf[links.indexOf(g)] = tr;
         frames.push({ type: 'transition', id: tr.id, line: line, link: g });
       });
+      // BLK-migrator-20260930-0323: 行で組にならない線 (手続き !procedure の本文の行を指す線など。パーサは展開した遷移を
+      // 呼んだ行で読む) は、線の両端 (data-entity-1 / -2 → 名前) で、まだどの線とも組になっていない遷移に当てる。
+      // それでも組にならない線は、PlantUML が残した行 (data-source-line) の枠にする (黙って捨てない。押すと描いた行)。
+      // note と結ぶ点線は注記の当て方 (overlay-builder の addNoteFrames) に任せる。
+      var usedTr = trOf.filter(function(t) { return t; });
+      var OBn = window.MA.overlayBuilder;
+      var endOf = function(id) {
+        var e = id ? svgEl.querySelector('[id="' + String(id).replace(/"/g, '') + '"]') : null;
+        return e;
+      };
+      var nameOf = function(e, fallback) {
+        if (e && e.__stId) return e.__stId;
+        if (e) {
+          var ps = pseudoOf(e.getAttribute('data-qualified-name') || '', _classOf(e));
+          if (ps) return '[*]';
+        }
+        return _s(fallback);
+      };
+      links.forEach(function(g, i) {
+        if (trOf[i]) return;
+        var e1 = endOf(g.getAttribute('data-entity-1')), e2 = endOf(g.getAttribute('data-entity-2'));
+        if ([e1, e2].some(function(e) { return e && OBn && OBn.notePapers && OBn.notePapers(e).length; })) return;
+        var a = nameOf(e1, names[i] && names[i].a), b = nameOf(e2, names[i] && names[i].b);
+        var tr = null;
+        for (var k = 0; k < trs.length && !tr; k++) {
+          var t = trs[k];
+          if (usedTr.indexOf(t) >= 0) continue;
+          if (_bareEnd(t.from) === shortName(a) && _bareEnd(t.to) === shortName(b)) tr = t;
+        }
+        if (tr) {
+          usedTr.push(tr);
+          trOf[i] = tr;
+          frames.push({ type: 'transition', id: tr.id, line: tr.line, link: g });
+          return;
+        }
+        var sl = parseInt(g.getAttribute('data-source-line'), 10);
+        if (isNaN(sl)) return;
+        frames.push({ type: 'source-line', id: 'src:link@' + (sl + off) + ':' + (g.getAttribute('id') || i), line: sl + off, link: g });
+      });
     }
 
     // 3. 名前の付いた <g> を持たない図形 (fork / join の棒、入口・出口の丸)

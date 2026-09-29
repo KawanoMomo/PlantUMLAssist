@@ -895,7 +895,8 @@ window.MA.modules.plantumlState = (function() {
     var framedComposite = {};
     got.frames.forEach(function(f) {
       var attrs = { 'data-type': f.type, 'data-id': f.id, 'data-line': f.line == null ? '' : String(f.line) };
-      if (f.type === 'transition') {
+      if (f.type === 'source-line') { attrs['data-src-kind'] = 'link'; }
+      if (f.type === 'transition' || f.link) {
         if (!OB.addLinkRects(overlayEl, f.link, attrs, 8)) {
           var lb = OB.extractLinkBBox(f.link, 8);
           if (lb) OB.addRect(overlayEl, lb.x, lb.y, lb.width, lb.height, attrs);
