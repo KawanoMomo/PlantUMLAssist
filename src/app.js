@@ -33694,7 +33694,7 @@ function _dsRenameActive(next) {
     }
     _dsRenameNotice = {
       text: offer
-        ? text + '。名前を変える前の版を ' + from + '.puml として残すなら、右のボタンで戻せます'
+        ? text + '。名前を変える前の版を ' + from + '.puml として残すなら、下のボタンで戻せます'
         : text,
       canRestore: offer, from: from, dsl: offer ? restoreDsl : '',
     };
