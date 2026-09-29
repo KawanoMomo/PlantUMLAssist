@@ -29450,7 +29450,7 @@ function renderDocProof() {
   if (!DP || !box || !_dpProof) return;
   var proof = _dpProof;
 
-  var title = document.getElementById('dp-title');
+  var title = document.getElementById('dpf-title');
   if (title) title.textContent = proof.title;
   var v = DP.verdict(proof);
   var vEl = document.getElementById('dp-verdict');

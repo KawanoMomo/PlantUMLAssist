@@ -44,11 +44,19 @@ test.describe('新しく作った図が保存フォルダに現れる (BLK-prima
     await setFileBackend(page);
   });
 
-  test('「＋」で作った新しいタブは、その場でフォルダに書き出される', async ({ page }) => {
+  // BLK-primary-20260914-2106 以降、白紙・見本のままのタブはフォルダに書かない (起動しただけで既存の図を見本で潰さない)。
+  // 書いた図は「＋」で切り替える前に書き出され、新しいタブは 1 文字でも書いた時点で現れる
+  // (BLK-releaser-20260929-0851-2 で今の保存の規則に合わせた)。
+  test('「＋」で作った新しいタブは、書き始めた時点でフォルダに書き出される', async ({ page }) => {
+    await page.locator('#editor').fill('@startuml\nactor FIRST_MARKER\n@enduml');
+    await page.waitForTimeout(300);
     await page.locator('#btn-tab-new').click();
-    // 開いていた図と新しい図の両方がフォルダに揃う (切替前の 1 枚も書き出される)
     const names = await page.evaluate(() => window.MA.workspace.list().map((d) => d.name));
     expect(names.length).toBe(2);
+    // 切り替える前の 1 枚は書き出されている
+    await expect.poll(() => listFiles(page), { timeout: 8000 }).toContain(names[0]);
+    // 新しいタブに書くと、それもフォルダに現れる
+    await page.locator('#editor').fill('@startuml\nactor SECOND_MARKER\n@enduml');
     await expect.poll(() => listFiles(page), { timeout: 8000 })
       .toEqual(expect.arrayContaining(names));
   });

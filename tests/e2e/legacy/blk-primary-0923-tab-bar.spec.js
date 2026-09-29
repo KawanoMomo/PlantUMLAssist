@@ -15,7 +15,7 @@ const TOOLS = [
   'btn-tab-cross',
   'btn-tab-family',
   'btn-tab-lines',
-  'btn-tab-compare',
+  // BLK-owner-20260923-1509-prune: ⇔ 並べて見る は「並べて比較」1 つに畳み、タブバーのボタンは無くなった
   'btn-tab-template',
   'btn-tab-diff',
 ];
@@ -59,8 +59,10 @@ test.describe('BLK-primary-0923 タブバーが潰れない', () => {
     await gotoApp(page);
     await page.keyboard.press('Control+k');
     await page.locator('#cp-input').fill('いちらん');
-    await expect(page.locator('#cp-list')).toContainText('一覧');
+    // 行の題は「FILES: 保存先を開く」。「いちらん」はその行を引く語として残り、Enter で保存先の一覧が中央の枠に開く
+    // (BLK-owner-20260924-0637-1。BLK-releaser-20260929-0851-2 で今の画面に合わせた)
+    await expect(page.locator('#cp-list')).toContainText('保存先を開く');
     await page.keyboard.press('Enter');
-    await expect(page.locator('#folder-panel')).toHaveClass(/open/);
+    await expect(page.locator('#folder-panel')).toHaveClass(/is-list/);
   });
 });

@@ -31,7 +31,10 @@ async function openState(page) {
 
 // 図の要素は overlay の rect。data-type / data-line を持っている。
 async function clickOverlay(page, type, id) {
-  await page.locator(`#overlay-layer [data-type="${type}"][data-id="${id}"]`).first().click();
+  // 遷移は線の枠・ラベル・矢じりの複数枚で当たる。押すのは見えている 1 枚 (ラベルがあればラベル) (BLK-releaser-20260929-0851-2)
+  const all = page.locator(`#overlay-layer [data-type="${type}"][data-id="${id}"]`);
+  const label = all.and(page.locator('[data-hit-kind="linklabel"]'));
+  await ((await label.count()) ? label.first() : all.first()).click();
   await page.waitForTimeout(300);
 }
 

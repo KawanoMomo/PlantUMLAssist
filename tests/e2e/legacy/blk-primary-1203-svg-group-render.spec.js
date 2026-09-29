@@ -48,11 +48,12 @@ async function clearDir(page) {
   }, DIR);
 }
 
+// 保存先の一覧は FILES ツリーの「保存先」の右クリック「保存先の一覧を開く」で中央の枠に開く
+// (scenarios/_scenario.js の openFolder と同じ経路)。旧経路 (見出しを畳んで開き直し #folder-panel.open を待つ) は
+// 一覧が中央の枠へ移ってから見えないまま待ち続けていた (BLK-releaser-20260929-0851-2)。
+const S = require('../scenarios/_scenario');
 async function openFolder(page) {
-  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
-  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open .folder-item');
+  await S.openFolder(page);
 }
 
 // 古い 1 枚 (svg はあるが puml の方が新しい) と、無い 1 枚を作る。

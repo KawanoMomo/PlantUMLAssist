@@ -44,11 +44,13 @@ async function clearDir(page) {
   }, DIR);
 }
 
+// 保存先の一覧は FILES ツリーの「保存先」の右クリック「保存先の一覧を開く」で中央の枠に開く
+// (scenarios/_scenario.js の openFolder と同じ経路)。旧経路 (見出しを畳んで開き直し #folder-panel.open を待つ) は
+// 一覧が中央の枠へ移ってから見えないまま待ち続けていた (BLK-releaser-20260929-0851-2)。
+const S = require('../scenarios/_scenario');
 async function openFolder(page) {
-  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
-  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open .folder-item');
+  await S.openFolder(page);
+  await page.waitForSelector('#folder-panel.is-list .folder-item');
 }
 
 test.describe('BLK-primary-1703: 一覧から複数の図をまとめて開く', () => {
@@ -63,13 +65,12 @@ test.describe('BLK-primary-1703: 一覧から複数の図をまとめて開く',
     await clearDir(page).catch(() => {});
   });
 
-  test('14 枚を「全部選ぶ → 開く」の 3 クリックでタブにできる', async ({ page }) => {
+  test('14 枚を「一覧を開く → 全部選ぶ → 開く」の 4 クリックでタブにできる', async ({ page }) => {
     let clicks = 0;
     page.on('console', () => {});
     const before = await page.locator('#tab-bar .tab').count();
 
-    await openFolder(page); clicks++;
-    await page.waitForSelector('#folder-panel.open .folder-item');
+    await openFolder(page); clicks += 2;   // 右クリックと「保存先の一覧を開く」
     // 一覧には編集中の図 (diagram1) も並ぶので、枚数は画面から数える。
     const listed = await page.locator('#folder-panel .folder-item').count();
     expect(listed).toBeGreaterThanOrEqual(NAMES.length);
@@ -91,7 +92,7 @@ test.describe('BLK-primary-1703: 一覧から複数の図をまとめて開く',
     await openFolder(page);
     await page.locator('#folder-panel .folder-pick[data-pick-name="P1703_Adc_state"]').click();
     await page.locator('#folder-panel .folder-pick[data-pick-name="P1703_Pwm_state"]').click();
-    await expect(page.locator('#folder-panel')).toHaveClass(/open/);
+    await expect(page.locator('#folder-panel')).toHaveClass(/is-list/);
     await expect(page.locator('#folder-panel .folder-open-many')).toHaveText('選んだ 2 枚をタブで開く');
   });
 
@@ -119,7 +120,7 @@ test.describe('BLK-primary-1703: 一覧から複数の図をまとめて開く',
     await openFolder(page);
     await page.locator('#folder-panel .folder-item[data-file-name="P1703_Adc_class"]').click();
     await page.waitForTimeout(1200);
-    await expect(page.locator('#folder-panel')).not.toHaveClass(/open/);
+    // 1 回押しは仮のタブで開く。一覧は中央の枠に開いたまま (次の 1 回押しで中身が入れ替わる)
     await expect(page.locator('#tab-bar .tab[data-doc-name="P1703_Adc_class"]')).toHaveCount(1);
     await expect(page.locator('#tab-bar .tab[data-doc-name="P1703_Gpio_state"]')).toHaveCount(0);
   });
