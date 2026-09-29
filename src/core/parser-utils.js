@@ -6,6 +6,7 @@ window.MA.parserUtils = (function() {
     var lines = text.split('\n');
     var inBlock = false;
     var hasParticipantSeqOnly = false;
+    var hasParticipantKw = false;
     var hasActor = false;
     var hasUsecaseShort = false;
     var hasUsecaseKw = false;
@@ -30,6 +31,9 @@ window.MA.parserUtils = (function() {
       if (!inBlock) continue;
 
       if (/^(participant|boundary|control|entity|database|queue|collections)\b/.test(t)) hasParticipantSeqOnly = true;
+      // BLK-migrator-20260929-1051: シーケンス図にしか無い宣言は `participant` だけ。database / queue /
+      // collections / boundary / control / entity はコンポーネント・ユースケース図 (PlantUML の DESCRIPTION) にも出る。
+      if (/^participant\b/.test(t)) hasParticipantKw = true;
       if (/^actor\b/.test(t)) hasActor = true;
       if (/^\(.+\)/.test(t)) hasUsecaseShort = true;
       // BLK-migrator-20260924-0012: ユースケースの略記は行頭に来るとは限らない
@@ -93,7 +97,18 @@ window.MA.parserUtils = (function() {
     // contain `interface` (which would otherwise match hasClassKw).
     if (hasComponentKw) return 'plantuml-component';
     // 参加者の宣言が 1 つも無い図で component 要素だけが並ぶなら component。
+    // BLK-migrator-20260929-1051: card / stack / file … はシーケンス図に無い語なので、queue / database と
+    // 並んでいても (`card "C"` + `queue "Q"` + `-->`) component。`participant` か actor があるときだけ譲る。
     if (hasComponentElemKw && !hasParticipantSeqOnly && !hasActor) return 'plantuml-component';
+    if (hasComponentElemKw && !hasParticipantKw && !hasActor && !hasClassOnlyKw && !hasClassRelation) return 'plantuml-component';
+    // BLK-migrator-20260929-1051: `interface` の宣言と `[部品]` 記法だけの図 (ロリポップ) は component。
+    // class にしか無い記法 (class / abstract / enum / 継承・集約線) があるときは class のまま。
+    if (hasComponentBracket && hasClassKw && !hasClassOnlyKw && !hasClassRelation && !hasParticipantKw) {
+      return 'plantuml-component';
+    }
+    // BLK-migrator-20260929-1051: `usecase` の宣言はユースケース図にしか無い。actor 同士の汎化 (`<|--`) が
+    // あっても class にしない (class にしか無い宣言 class / abstract / enum があるときは class)。
+    if (hasUsecaseKw && !hasClassOnlyKw) return 'plantuml-usecase';
     // BLK-migrator-20260923-1909: `[部品]` 記法と component の要素語 (node / cloud / artifact …) があり、
     // class にしか無い記法 (class / abstract / enum / 継承・集約線) が無ければ component。
     // `interface` や `queue` / `collections` は component 図にも出るので、それだけで class / sequence にしない。

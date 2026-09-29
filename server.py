@@ -200,13 +200,146 @@ KIND_SKIP_RE = re.compile(
     r"scale\b|autonumber\b|allow_mixing\b|left to right\b|top to bottom\b)", re.I)
 
 
+# BLK-migrator-20260929-1051: 本文からの図種の当て方は画面 (src/core/parser-utils.js の detectDiagramType) と
+# 同じにする。1 行目から順に「最初に図種の分かる行」で決めていたため、actor で始まるユースケース図を
+# シーケンス図、interface で始まるコンポーネント図をクラス図と読み、保存先の一覧に偽の「名乗りと本文が
+# 別の図」を出していた (BLK-owner-20260926-0550-4 と同じ根)。図全体の語の組み合わせで決める。
+# 片方だけ変えないこと (tests/blk-migrator-20260929-1051-kind-by-svg.test.js が両者の一致を見る)。
+_DK_START_RE = re.compile(r'^\s*@startuml\b')
+_DK_END_RE = re.compile(r'^\s*@enduml\b')
+
+
+def _dk_match(pat, s, flags=0):
+    # JS の正規表現と同じく、語の境目と語の文字は ASCII だけで数える (日本語の直後の as などで食い違わない)。
+    return re.match(pat, s, flags | re.A)
+
+
+def _dk_search(pat, s, flags=0):
+    return re.search(pat, s, flags | re.A)
+
+
+def detect_diagram_kind(text):
+    """detectDiagramType の写し。'sequence' / 'class' / 'state' / 'activity' / 'usecase' / 'component' / ''。"""
+    if not isinstance(text, str) or not text.strip():
+        return ''
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    f = dict(seq_only=False, participant=False, actor=False, uc_short=False, uc_kw=False, package=False,
+             class_kw=False, abstract_class=False, enum=False, class_only=False, class_rel=False,
+             state_kw=False, activity_kw=False, comp_kw=False, comp_elem=False, comp_bracket=False,
+             msg_arrow=False)
+    in_block = False
+    for line in text.split('\n'):
+        t = line.strip()
+        if not t or t.startswith("'"):
+            continue
+        if _DK_START_RE.match(t):
+            in_block = True
+            continue
+        if _DK_END_RE.match(t):
+            break
+        if not in_block:
+            continue
+        if _dk_match(r'^(participant|boundary|control|entity|database|queue|collections)\b', t):
+            f['seq_only'] = True
+        if _dk_match(r'^participant\b', t):
+            f['participant'] = True
+        if _dk_match(r'^actor\b', t):
+            f['actor'] = True
+        if _dk_match(r'^\(.+\)', t):
+            f['uc_short'] = True
+        if (_dk_search(r'(-+>|<-+|\.+>|<\.+|--|\.\.)\s*\([^()*][^()]*\)\s*(:.*)?$', t) or
+                _dk_search(r'\bas\s+\([^()]+\)\s*$', t) or
+                _dk_match(r'^:[^:;]+:\s*(-|\.|<|as\b|$)', t) or
+                _dk_match(r'^skinparam\s+actorStyle\b', t, re.I)):
+            f['uc_short'] = True
+        if _dk_match(r'^usecase\b', t):
+            f['uc_kw'] = True
+        if _dk_match(r'^(package|rectangle)\b.*\{', t):
+            f['package'] = True
+        if _dk_match(r'^(class|interface|abstract|enum)\b', t):
+            f['class_kw'] = True
+        if _dk_match(r'^abstract\s+class\s', t):
+            f['abstract_class'] = True
+        if _dk_match(r'^(class|abstract|enum)\b', t):
+            f['class_only'] = True
+        if _dk_match(r'^enum\s', t):
+            f['enum'] = True
+        if _dk_search(r'\s(<\|--|--\|>|<\|\.\.|\.\.\|>|\*--|--\*|o--|--o)\s', t):
+            f['class_rel'] = True
+        if _dk_match(r'^state\b|^\[\*\]', t):
+            f['state_kw'] = True
+        if _dk_match(r'^(start|stop)\b|^:.+;|^if\s+\(|^fork\b', t):
+            f['activity_kw'] = True
+        if _dk_match(r'^component\b', t):
+            f['comp_kw'] = True
+        if _dk_match(r'^(agent|node|artifact|cloud|folder|frame|storage|stack|card|file|hexagon|person)\b', t):
+            f['comp_elem'] = True
+        if _dk_match(r'^\[[^\]*][^\]]*\]', t):
+            f['comp_bracket'] = True
+        if _dk_search(r'\s(->|-->|->>|-->>|<-|<--|<<-|<<--)\s', t):
+            f['msg_arrow'] = True
+
+    has_activity_start = _dk_search(r'^\s*start\s*$', text, re.M)
+    has_action = _dk_search(r'^\s*:[^:]+;\s*$', text, re.M)
+    has_activity_kw2 = _dk_search(r'^\s*(endif|endwhile|end\s+fork|fork|while|repeat)\s*(\(|$)', text, re.M)
+    has_swimlane = _dk_search(r'^\s*\|[^|]+\|\s*$', text, re.M)
+    if (has_activity_start or has_action) and (has_activity_kw2 or has_action or has_activity_start or has_swimlane):
+        if not f['class_kw'] and not f['comp_kw']:
+            return 'activity'
+    has_legacy_activity = _dk_search(r'\(\*(top)?\)\s*-+>|-+>\s*\(\*\)|^\s*if\s+"[^"]*"\s+then', text, re.M)
+    if has_legacy_activity and not f['class_kw'] and not f['comp_kw'] and not f['seq_only']:
+        return 'activity'
+    has_state_explicit = _dk_search(r'^\s*state\s+\w', text, re.M)
+    has_initial = _dk_search(r'^\s*\[\*\]\s*-->', text, re.M)
+    has_final = _dk_search(r'-->\s*\[\*\]', text, re.M)
+    if (has_state_explicit or has_initial or has_final) and not f['class_kw'] and not f['comp_kw']:
+        return 'state'
+    if f['comp_kw']:
+        return 'component'
+    if f['comp_elem'] and not f['seq_only'] and not f['actor']:
+        return 'component'
+    if (f['comp_elem'] and not f['participant'] and not f['actor'] and not f['class_only']
+            and not f['class_rel']):
+        return 'component'
+    if (f['comp_bracket'] and f['class_kw'] and not f['class_only'] and not f['class_rel']
+            and not f['participant']):
+        return 'component'
+    if f['uc_kw'] and not f['class_only']:
+        return 'usecase'
+    if f['comp_bracket'] and f['comp_elem'] and not f['class_only'] and not f['class_rel']:
+        return 'component'
+    if f['abstract_class'] or f['enum'] or f['class_rel']:
+        return 'class'
+    if f['class_kw']:
+        return 'class'
+    if f['state_kw']:
+        return 'state'
+    if f['activity_kw']:
+        return 'activity'
+    if f['uc_kw'] or f['uc_short'] or (f['actor'] and f['package']):
+        return 'usecase'
+    if f['comp_bracket']:
+        return 'component'
+    if f['seq_only']:
+        return 'sequence'
+    if f['actor']:
+        return 'sequence' if f['msg_arrow'] else 'usecase'
+    if f['msg_arrow']:
+        return 'sequence'
+    return ''
+
+
 def dsl_kind(text):
     """DSL の本文から図種の slug を当てる。当てられなければ ''。
 
     当てられない図には手を出さない (分からないまま別名に回す方が危ない)。
+    図全体の語で決め (detect_diagram_kind)、それで決まらないときだけ最初に図種の分かる行で決める。
     """
     if not isinstance(text, str):
         return ''
+    kind = detect_diagram_kind(text)
+    if kind:
+        return kind
     for line in text.splitlines():
         s = line.strip()
         if not s or KIND_SKIP_RE.match(s):

@@ -30,14 +30,30 @@ window.MA.svgKind = (function() {
     return String(v).toUpperCase();
   }
 
+  // BLK-migrator-20260929-1051: DESCRIPTION (component / usecase / deployment をまとめた図種) の中の見分け。
+  // 図種そのものは SVG が決め、DSL の語はこの中でどちらかを選ぶのにだけ使う。
+  // DSL の判定が component / usecase のどちらかならそれ。それ以外 (class / sequence と読んだ・読めない) は
+  // ユースケースそのものの印 (usecase 宣言・`(名前)`・矢印の先の `(名前)`・`as (名前)`) があれば usecase、無ければ component。
+  // actor だけでは決めない (AWS・C4 の部品図も人物を actor で描く)。
+  var USECASE_MARK_RE = /^\s*(usecase\b|\([^()*][^()]*\))|(-+>|<-+|\.+>|<\.+|--|\.\.)\s*\([^()*][^()]*\)|\bas\s+\([^()]+\)/m;
+  function descriptionKind(dsl) {
+    var PU = window.MA.parserUtils;
+    var byDsl = null;
+    try { byDsl = PU && PU.detectDiagramType ? PU.detectDiagramType(String(dsl || '')) : null; } catch (e) { byDsl = null; }
+    if (byDsl === 'plantuml-component' || byDsl === 'plantuml-usecase') return byDsl;
+    return USECASE_MARK_RE.test(String(dsl || '')) ? 'plantuml-usecase' : 'plantuml-component';
+  }
+
   // 今の図種 current が SVG の図種 svgType と食い違っていれば、使うべき図種を返す。
   // 合っている・SVG が図種を言わない・このツールに無い図種 (timing / mindmap …) なら current のまま。
-  function reconcile(current, svgType) {
+  // dsl を渡すと、DESCRIPTION の中の component / usecase を本文で選ぶ (渡さなければ component)。
+  function reconcile(current, svgType, dsl) {
     var cands = MAP[String(svgType || '').toUpperCase()];
     if (!cands) return current || null;
     if (current && cands.indexOf(current) !== -1) return current;
+    if (cands.length > 1 && typeof dsl === 'string') return descriptionKind(dsl);
     return cands[0];
   }
 
-  return { of: of, reconcile: reconcile, MAP: MAP };
+  return { of: of, reconcile: reconcile, descriptionKind: descriptionKind, MAP: MAP };
 })();

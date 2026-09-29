@@ -449,3 +449,40 @@ test('手順3 par/else・critical・group/break の sequence 図を開くと落�
   expect((await texts()).filter((t) => t === 'Start()')).toHaveLength(2);
   expect(await page.locator('#diagram-type').inputValue()).toBe('plantuml-sequence');
 });
+
+// BLK-migrator-20260929-1051: 宣言だけのコンポーネント図 (interface 宣言 + [部品] / card・queue だけ) が Class / Sequence と
+// 判定され、右パネルだけ component に替わっても図種欄・左レール・ズームの帯は Class / Sequence のままだった。
+// 描いた後の図種は PlantUML が SVG に残した図種 (DESCRIPTION) で決め、画面の図種はどこも同じにそろう。
+// 手続きで宣言した部品 (DSL には actor と --> しか見えない) も、描けば SVG の図種 (DESCRIPTION → component) にそろう。
+test('手順3 宣言だけのコンポーネント図・手続きの部品の図も、描いた図種 (DESCRIPTION) で図種欄・左レール・帯がそろう', async ({ page }) => {
+  const CASES = [
+    ['component-09-lollipop-socket.puml',
+      '@startuml\ninterface "IDataStore" as IStore\n[StorageService] as Storage\nStorage - IStore\n@enduml\n',
+      'plantuml-component', /Component/],
+    ['component-12-container-shapes.puml',
+      '@startuml\ncard "C" as c\nqueue "Q" as q\nc --> q\n@enduml\n',
+      'plantuml-component', /Component/],
+    ['procedure-box.puml',
+      '@startuml\n!procedure Box($a)\nrectangle $a\n!endprocedure\nactor U\nBox(Srv)\nU --> Srv\n@enduml\n',
+      'plantuml-component', /Component/],
+  ];
+  const srcDir = path.join(absDirFor(__filename), '..', 'migrator-03-desc-src');
+  fs.mkdirSync(srcDir, { recursive: true });
+  await bootWithSaveDir(page, dirFor(__filename) + '-desc');
+  for (const [name, text, kind, hud] of CASES) {
+    const src = path.join(srcDir, name);
+    fs.writeFileSync(src, text);
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser', { timeout: 20000 }),
+      page.evaluate(() => { document.getElementById('file-input').click(); }),
+    ]);
+    await chooser.setFiles(src);
+    await expect(page.locator('#render-status')).toHaveText(/^Rendered/, { timeout: 20000 });
+    await expect.poll(() => page.evaluate(() =>
+      (document.querySelector('#preview-svg svg') || { getAttribute: () => '' }).getAttribute('data-diagram-type')),
+    { timeout: 20000 }).toBe('DESCRIPTION');
+    await expect(page.locator('#diagram-type')).toHaveValue(kind, { timeout: 20000 });
+    expect(await page.evaluate(() => window.MA.workspace.getActive().diagramType)).toBe(kind);
+    await expect(page.locator('.zoom-hud, #zoom-hud').first()).toContainText(hud);
+  }
+});

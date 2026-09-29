@@ -34330,17 +34330,23 @@ function _reconcileKindWithSvg(svgEl) {
   if (PU.isAmbiguousType(mmdText)) return;
   var svgType = SK.of(svgEl);
   var cur = currentModule.type;
-  var want = SK.reconcile(cur, svgType);
+  // BLK-migrator-20260929-1051: 図種は SVG が決める。DSL は DESCRIPTION の中の component / usecase の見分けにだけ使う。
+  var want = SK.reconcile(cur, svgType, mmdText);
   var fromDsl = PU.detectDiagramType(mmdText);
   if (!want || want === cur || !modules[want]) {
     // DSL の判定だけで SVG と合うようになったら (手続きを書き換えた等)、憶えた図種は捨てる。
-    if (_svgKindFix && svgType && SK.reconcile(fromDsl, svgType) === fromDsl) _svgKindFix = null;
+    if (_svgKindFix && svgType && SK.reconcile(fromDsl, svgType, mmdText) === fromDsl) _svgKindFix = null;
+    // 右パネルは SVG の図種なのに、図種欄・左レール・ズームの帯・タブの図種が DSL の読みのまま残っていたら揃える。
+    if (want && want === cur && modules[want] && want !== currentDiagramType) _adoptDetectedType(want);
     return;
   }
   _svgKindFix = { from: fromDsl, to: want };
   currentModule = modules[want];
   try { currentParsed = currentModule.parse(mmdText); }
   catch (e) { currentParsed = { meta: {}, elements: [], relations: [], groups: [] }; }
+  // BLK-migrator-20260929-1051: 右パネルだけでなく、図種欄・左レール・ズームの帯・タブの図種も SVG の図種にそろえる
+  // (以前は右パネルだけ component に替わり、帯と左レールは Class / Sequence のまま残っていた)。
+  _adoptDetectedType(want);
   try { renderProps(currentParsed); } catch (e) {}
   try { renderUnsupportedPanel(); } catch (e) {}
 }
