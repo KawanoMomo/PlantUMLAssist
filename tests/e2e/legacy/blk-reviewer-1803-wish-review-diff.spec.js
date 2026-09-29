@@ -34,16 +34,16 @@ async function clearDir(page) {
   }, DIR);
 }
 
+// 保存先の一覧は保存先の右クリック「保存先の一覧を開く」で中央の枠に開く (scenarios/_scenario.js の openFolder と同じ経路)。
+// 開くたびに読み直すので、後から置いたファイルも出る。旧経路 (見出しを畳んで開き直し #folder-panel.open を待つ) は使わない。
+const S = require('../scenarios/_scenario');
 async function openFolder(page) {
-  // 保存先は既定で開いている (design 10a)。開いていれば畳んでから開き直し、一覧を今の中身で描き直す。
-  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open .folder-item');
+  await S.openFolder(page);
+  await page.waitForSelector('#folder-panel.open.is-list .folder-item');
 }
 
 async function closeFolder(page) {
-  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
-  await page.waitForTimeout(150);
+  await S.closeFolderList(page);
 }
 
 async function markSeen(page) {
@@ -168,7 +168,7 @@ test.describe('BLK-reviewer-1803-wish: 変更図を旧版と並べて読む', ()
     await closeFolder(page);
 
     await openFolder(page);
-    await expect(page.locator('#folder-panel .folder-summary')).toContainText('すべて前回見た版のまま');
+    await expect(page.locator('#folder-panel .folder-summary:not(.folder-kinds):not(.folder-stamp-summary)')).toContainText('すべて前回見た版のまま');
     await expect(page.locator('#folder-panel .folder-diff')).toHaveCount(0);
     await expect(page.locator('#folder-panel .folder-pick-changed')).toBeDisabled();
   });
