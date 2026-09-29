@@ -3,13 +3,9 @@ const path = require('path');
 const { test, expect } = require('@playwright/test');
 const { gotoApp, saveDirFor } = require('../helpers');
 
-// 保存先の節は既定で開いている (design 10a)。開いていれば畳んでから開き直し、
-// 一覧を今の中身で描き直す (直に押すと、開いていたときに畳んでしまう)。
-async function openFolder(page) {
-  if (await page.locator('#folder-panel.open').count()) await page.locator('#btn-tab-folder').click();
-  await page.locator('#btn-tab-folder').click();
-  await page.waitForSelector('#folder-panel.open');
-}
+// 保存先の一覧は右クリック「保存先の一覧を開く」で中央の枠に開く (開くたびに読み直す)。
+// 入口は台本と同じ scenarios/_scenario.js の openFolder を使う。
+const { openFolder } = require('../scenarios/_scenario');
 
 // BLK-reviewer-20260908-0103 (1903 追記): dma のラベル修正が反映済みなのに
 // POST /verify-svg が 7 枚とも 'differ' を返した。svgLabels/drawnLabels も
@@ -114,14 +110,16 @@ test.describe('BLK-reviewer-0103 (1903) /verify-svg の differ 誤判定', () =>
 
     await openFolder(page);
     await page.waitForSelector('#folder-panel.open .folder-item');
-    await expect(page.locator('#folder-svg-content')).toContainText('未確認 1 枚');
-    await page.locator('#folder-svg-verify').click();
-    await expect(page.locator('#folder-svg-content'))
-      .toContainText('体裁だけが違う', { timeout: 120000 });
-    await expect(page.locator('#folder-svg-verify-note')).toContainText('体裁差のみ 1 枚');
-    // 行の印は「体裁差のみ」。作り直しは要らない
-    await expect(page.locator('#folder-panel .folder-item[data-file-name="R0103f_only"] [data-svg-content="format"]'))
-      .toHaveCount(1);
+    // 一覧は描かれる中身で比べるので、体裁だけが違う SVG は押す前から「今の puml から作られた」側に入る
+    // (以前は「未確認」に置き、[中身を確かめる] で体裁差のみと言っていた。今は確かめる必要が無く、ボタンは押せない)。
+    // 変更理由: BLK-releaser-20260929-1251-1。守ることは同じ — 体裁差を「ずれ」に数えず、作り直しの対象にもしない。
+    await expect(page.locator('#folder-svg-content')).toContainText('1 枚とも今の puml から作られています');
+    await expect(page.locator('#folder-svg-content')).not.toContainText('ずれ');
+    await expect(page.locator('#folder-svg-verify')).toBeDisabled();
+    // 行の印は「ずれ」ではない (一致 か 体裁差のみ)
+    await expect(page.locator('#folder-panel .folder-item[data-file-name="R0103f_only"]')).toHaveCount(1);
+    await expect(page.locator('#folder-panel .folder-item[data-file-name="R0103f_only"] [data-svg-content="differ"]'))
+      .toHaveCount(0);
     await expect(page.locator('#folder-svg-render')).toHaveText(/古い SVG はありません|作り直す SVG はありません/);
   });
 
