@@ -8,6 +8,10 @@ test.describe('State v1.0.0', () => {
     // 状態遷移図の追加フォーム(種別チップ)から 1 件目を足せる。
     test('UC-1: switching a blank tab to State gives a blank diagram and the add chips', async ({ page }) => {
       await gotoApp(page);
+      // BLK-releaser-20260930-0417-1: 起動時のタブは前の spec が保存先に残した図を開き直していることがある
+      // (白紙でない)。＋ で白紙のタブを作ってから図種を選ぶ。
+      await page.locator('#btn-tab-new').click();
+      await page.waitForTimeout(300);
       await page.locator('#diagram-type').selectOption('plantuml-state');
       await page.waitForTimeout(500);
       var t = await getEditorText(page);
