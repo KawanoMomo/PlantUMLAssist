@@ -14,6 +14,7 @@ const sourceFiles = [
   'src/core/dsl-utils.js',
   'src/core/preproc-live.js',
   'src/core/preproc-expand.js',
+  'src/core/generated-part.js',
   'src/core/regex-parts.js',
   'src/core/id-normalizer.js',
   'src/core/alias-hint.js',

@@ -271,6 +271,14 @@ window.MA.preprocExpand = (function() {
   }
 
   function has(text) { return !!(_cache[text] && _cache[text].mapped); }
+  // 展開で字面が変わる行 ({L: true})。展開が手元に無ければ null (BLK-owner-20260929-2131-1: 読むだけにする部品の見分け)。
+  function changedLines(text) {
+    var c = _cache[text];
+    if (!c || !c.mapped) return null;
+    var out = {};
+    Object.keys(_callLines(text, c.mapped)).forEach(function(L) { out[L] = true; });
+    return out;
+  }
   function known(text) { return !!_cache[text]; }
   function splicedText(text) { return _spliced[text] || null; }
 
@@ -310,7 +318,7 @@ window.MA.preprocExpand = (function() {
 
   return {
     needs: needs, withMarks: withMarks, mapBack: mapBack, splice: splice, remap: remap,
-    parseWith: parseWith, ensure: ensure, has: has, known: known, splicedText: splicedText,
+    parseWith: parseWith, ensure: ensure, has: has, known: known, splicedText: splicedText, changedLines: changedLines,
     remember: remember, forget: forget, MARK: MARK,
   };
 })();
