@@ -370,6 +370,64 @@ test('手順2 手本の矢印から、種類を選び直さずに同じ関連を
   expect(t).toContain('Driver_Common --> IRQCtrl : uses');
 });
 
+// BLK-owner-20260929-0351-1: 関係のフォームの上の欄 (From) は、どの種類でも図に描かれる矢の根元。
+// 継承・実現では子 (実装クラス) が From。以前は「親 (From)」で、子を From に選ぶと継承が逆向きに入った。
+const DRV_CLASS = [
+  '@startuml',
+  'interface IDrv',
+  'abstract class BaseDrv',
+  'class SpiDrv',
+  '@enduml',
+].join('\n');
+
+test('手順2 継承・実現は子 (実装クラス) を From に選べば、その向きのまま入り、選び直しても同じ順で出る', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR + '-from-root');
+  await page.locator('#diagram-type').selectOption('plantuml-class');
+  await page.waitForTimeout(400);
+  await S.typeDsl(page, DRV_CLASS);
+  await page.waitForTimeout(1500);
+
+  // 継承: 上の欄は 子 (From)、下の欄は 親 (To)。子の SpiDrv を From に選ぶ。
+  await page.locator('#cl-tail-kind-chip-relation').click();
+  await page.locator('.cl-tail-rkind-card[data-value="inheritance"]').click();
+  await expect(page.locator('#cl-tail-from-label')).toHaveText('子 (From)');
+  await expect(page.locator('#cl-tail-to-label')).toHaveText('親 (To)');
+  await page.locator('#cl-tail-from').selectOption('SpiDrv');
+  await page.locator('#cl-tail-to').selectOption('BaseDrv');
+  await expect(page.locator('#cl-tail-rpreview')).toContainText('BaseDrv <|-- SpiDrv');
+  await expect(page.locator('#cl-tail-rpreview')).toContainText('子: SpiDrv / 親: BaseDrv');
+  await page.locator('#cl-tail-add').click();
+  await page.waitForTimeout(800);
+  let t = await getEditorText(page);
+  expect(t).toContain('BaseDrv <|-- SpiDrv');
+  expect(t).not.toContain('SpiDrv <|-- BaseDrv');
+
+  // 実現: 実装クラス (From) / インターフェース (To)。
+  if (!(await page.locator('#cl-tail-rkind').count())) await page.locator('#cl-tail-kind-chip-relation').click();
+  await page.locator('.cl-tail-rkind-card[data-value="implementation"]').click();
+  await expect(page.locator('#cl-tail-from-label')).toHaveText('実装クラス (From)');
+  await expect(page.locator('#cl-tail-to-label')).toHaveText('インターフェース (To)');
+  await page.locator('#cl-tail-from').selectOption('SpiDrv');
+  await page.locator('#cl-tail-to').selectOption('IDrv');
+  await page.locator('#cl-tail-add').click();
+  await page.waitForTimeout(1500);
+  t = await getEditorText(page);
+  expect(t).toContain('IDrv <|.. SpiDrv');
+  expect(t).not.toContain('SpiDrv <|.. IDrv');
+
+  // 図で継承の線を押すと、編集パネルも 子 (From) = SpiDrv / 親 (To) = BaseDrv の順で出る。
+  const line = t.split('\n').findIndex((l) => l === 'BaseDrv <|-- SpiDrv') + 1;
+  const rel = page.locator('#overlay-layer [data-type="relation"][data-line="' + line + '"]').first();
+  await expect(rel).toBeAttached({ timeout: 10000 });
+  const rb = await rel.boundingBox();
+  await page.mouse.click(rb.x + rb.width / 2, rb.y + rb.height / 2);
+  await page.waitForTimeout(400);
+  await expect(page.locator('#cl-rel-from')).toHaveValue('SpiDrv');
+  await expect(page.locator('#cl-rel-to')).toHaveValue('BaseDrv');
+  await expect(page.locator('#props-content')).toContainText('子 (From)');
+  await expect(page.locator('#props-content')).toContainText('親 (To)');
+});
+
 // BLK-junior-20260912-2103-wish: 手順 2 で先輩の図の構成をそのまま持ち込むと、
 // `actor` を持ち、ラベルに括弧の付くシーケンスは本文判定でユースケースに倒れる。
 // 保存した図種を控えておき、一覧の行に印として出し、そのまま開けることを守る。

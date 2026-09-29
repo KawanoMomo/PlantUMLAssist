@@ -33,8 +33,9 @@ test.describe('UC-5: 横展開 (二次 actor + association/generalization 追加
       await page.waitForTimeout(200);
       await page.locator('#uc-tail-kind-chip-relation').click();
       await page.locator('#uc-tail-rkind').selectOption('generalization');
-      await page.locator('#uc-tail-from').selectOption('User');
-      await page.locator('#uc-tail-to').selectOption('Admin');
+      // BLK-owner-20260929-0351-1: From は矢の根元 = 子 (Admin)、To は親 (User)
+      await page.locator('#uc-tail-from').selectOption('Admin');
+      await page.locator('#uc-tail-to').selectOption('User');
       await page.locator('#uc-tail-add').click();
       await page.waitForTimeout(300);
       var t = await getEditorText(page);

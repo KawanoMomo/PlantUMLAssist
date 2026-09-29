@@ -2,6 +2,7 @@
 // BLK-junior-20260908-1203: Relation 追加フォームで From/To のどちらが親か分からず、
 // 継承を逆向きに張ってしまう。種類ごとの呼び名と「押すとこう入る」の 1 行が出て、
 // 追加する前に親子を確かめられること。
+// BLK-owner-20260929-0351-1: 上の欄 (From) はどの種類でも矢の根元。継承は 子 (From) / 親 (To)。
 const { test, expect } = require('@playwright/test');
 const { gotoApp, getEditorText } = require('../helpers');
 
@@ -28,12 +29,12 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
 });
 
-test('継承を選ぶと From/To が 親/子 と呼ばれる', async ({ page }) => {
+test('継承を選ぶと From/To が 子/親 と呼ばれる (From は矢の根元)', async ({ page }) => {
   await openRelationForm(page);
   await expect(page.locator('#cl-tail-from-label')).toHaveText('一方 (From)');
   await page.locator('#cl-tail-rkind').selectOption('inheritance');
-  await expect(page.locator('#cl-tail-from-label')).toHaveText('親 (From)');
-  await expect(page.locator('#cl-tail-to-label')).toHaveText('子 (To)');
+  await expect(page.locator('#cl-tail-from-label')).toHaveText('子 (From)');
+  await expect(page.locator('#cl-tail-to-label')).toHaveText('親 (To)');
 });
 
 test('種類ごとに呼び名が変わる', async ({ page }) => {
@@ -46,8 +47,8 @@ test('種類ごとに呼び名が変わる', async ({ page }) => {
 test('「こう入る」の 1 行が、実際に足される行と一致する', async ({ page }) => {
   await openRelationForm(page);
   await page.locator('#cl-tail-rkind').selectOption('inheritance');
-  await page.locator('#cl-tail-from').selectOption('DriverBase');
-  await page.locator('#cl-tail-to').selectOption('GpioDrv');
+  await page.locator('#cl-tail-from').selectOption('GpioDrv');
+  await page.locator('#cl-tail-to').selectOption('DriverBase');
   await expect(page.locator('#cl-tail-rpreview')).toContainText('DriverBase <|-- GpioDrv');
   await expect(page.locator('#cl-tail-rpreview')).toContainText('親: DriverBase');
 
@@ -59,9 +60,9 @@ test('「こう入る」の 1 行が、実際に足される行と一致する',
 test('逆に選んでしまっても、押す前に下書きで気づいて ⇄ 入替で直せる', async ({ page }) => {
   await openRelationForm(page);
   await page.locator('#cl-tail-rkind').selectOption('inheritance');
-  // 親のつもりで子を選んでしまった状態。
-  await page.locator('#cl-tail-from').selectOption('GpioDrv');
-  await page.locator('#cl-tail-to').selectOption('DriverBase');
+  // 子の欄に親を選んでしまった状態。
+  await page.locator('#cl-tail-from').selectOption('DriverBase');
+  await page.locator('#cl-tail-to').selectOption('GpioDrv');
   await expect(page.locator('#cl-tail-rpreview')).toContainText('GpioDrv <|-- DriverBase');
 
   await page.locator('#cl-tail-rswap').click();
@@ -89,6 +90,8 @@ test('既にある関係を選び直すときも同じ呼び名で出る', async
     window.MA.selection.setSelected([{ type: 'relation', id: rel.id, line: rel.line }]);
   });
   await expect(page.locator('#cl-rel-from')).toBeVisible();
-  await expect(page.locator('#props-content')).toContainText('親 (From)');
-  await expect(page.locator('#props-content')).toContainText('子 (To)');
+  await expect(page.locator('#props-content')).toContainText('子 (From)');
+  await expect(page.locator('#props-content')).toContainText('親 (To)');
+  await expect(page.locator('#cl-rel-from')).toHaveValue('GpioDrv');
+  await expect(page.locator('#cl-rel-to')).toHaveValue('DriverBase');
 });

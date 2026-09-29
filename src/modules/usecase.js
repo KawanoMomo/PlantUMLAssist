@@ -56,9 +56,10 @@ window.MA.modules.plantumlUsecase = (function() {
   function fmtPackage(label, notation) {
     return window.MA.groupNotation.fmtOpen(notation, label, 'plantuml-usecase');
   }
-  function fmtRelation(kind, from, to, label) {
+  // rootFirst: 汎化を矢の根元 (子) から書く (`子 --|> 親`)。from / to は記法の左右 (from = 親) で渡す。
+  function fmtRelation(kind, from, to, label, rootFirst) {
     var lbl = label || '';
-    if (kind === 'generalization') return from + ' <|-- ' + to;
+    if (kind === 'generalization') return rootFirst ? to + ' --|> ' + from : from + ' <|-- ' + to;
     if (kind === 'include') return from + ' ..> ' + to + ' : <<include>>';
     if (kind === 'extend') return from + ' ..> ' + to + ' : <<extend>>';
     // association (default)
@@ -85,8 +86,25 @@ window.MA.modules.plantumlUsecase = (function() {
     var open = fmtPackage(label, notation);
     return insertBeforeEnd(insertBeforeEnd(text, open), '}');
   }
+  // 本文の汎化の書き方 (`親 <|-- 子` / `子 --|> 親`) の多い方に揃えて書く (BLK-owner-20260929-0351-1)。
+  function _rootFirstIn(text) {
+    var R = window.MA.relationRoles;
+    return !!(R && R.prefersRootFirst && R.prefersRootFirst(text));
+  }
+  function relationLine(text, kind, from, to, label) {
+    return fmtRelation(kind, from, to, label, _rootFirstIn(text));
+  }
   function addRelation(text, kind, from, to, label) {
-    return insertBeforeEnd(text, fmtRelation(kind, from, to, label));
+    return insertBeforeEnd(text, relationLine(text, kind, from, to, label));
+  }
+
+  // フォームの上の欄 (From) は矢の根元。汎化は子が根元なので、記法の左右と入れ替える。
+  function _uiToModel(kind, uiFrom, uiTo) {
+    return kind === 'generalization' ? { from: uiTo, to: uiFrom } : { from: uiFrom, to: uiTo };
+  }
+  function _fieldLabel(kind, side) {
+    if (kind === 'generalization') return side === 'to' ? '親 (To)' : '子 (From)';
+    return side === 'to' ? '終点 (To)' : '始点 (From)';
   }
 
   // design 5d: UseCase の「その他パレット」の ノート。書式は図種で変わらないので
@@ -254,6 +272,10 @@ window.MA.modules.plantumlUsecase = (function() {
     var fromRaw = m[1], arrow = m[2], toRaw = m[3], lbl = (m[4] || '').trim();
     var from = DU.unquote(fromRaw), to = DU.unquote(toRaw);
     var kind = 'association';
+    // `子 --|> 親` は parse と同じく from = 親 / to = 子 に読み、直したあとも同じ書き方で書く
+    // (従来は左右を読み替えずに `子 <|-- 親` と書き直し、親子が逆になっていた)。
+    var rootFirst = (arrow === '--|>');
+    if (rootFirst) { var sw0 = from; from = to; to = sw0; }
     if (arrow === '<|--' || arrow === '--|>') kind = 'generalization';
     else if (lbl === '<<include>>') kind = 'include';
     else if (lbl === '<<extend>>') kind = 'extend';
@@ -267,10 +289,11 @@ window.MA.modules.plantumlUsecase = (function() {
     } else if (field === 'from') from = value;
     else if (field === 'to') to = value;
     else if (field === 'label') lbl = value;
+    else if (field === 'swap') { var sw1 = from; from = to; to = sw1; }
 
     // 多重度・線の色は種別やラベルの書き換えでは失われない (design 3c)。
     lines[idx] = window.MA.relationOptions.applyDecorations(
-      indent + fmtRelation(kind, from, to, lbl), deco);
+      indent + fmtRelation(kind, from, to, lbl, rootFirst), deco);
     return lines.join('\n');
   }
 
@@ -679,8 +702,8 @@ window.MA.modules.plantumlUsecase = (function() {
             { value: 'include',        label: 'Include (..> <<include>>)' },
             { value: 'extend',         label: 'Extend (..> <<extend>>)' },
           ]) +
-          P.selectFieldHtml('始点 (From)', 'uc-tail-from', allOpts) +
-          P.selectFieldHtml('終点 (To)', 'uc-tail-to', allOpts) +
+          P.selectFieldHtml(_fieldLabel('association', 'from'), 'uc-tail-from', allOpts) +
+          P.selectFieldHtml(_fieldLabel('association', 'to'), 'uc-tail-to', allOpts) +
           P.fieldHtml('ラベル', 'uc-tail-rlabel', '', 'association のみ任意') +
           P.primaryButtonHtml('uc-tail-add', '+ 追加');
       } else if (kind === 'note') {
@@ -714,7 +737,19 @@ window.MA.modules.plantumlUsecase = (function() {
         window.MA.tailMemory.bindSelect('uc-tail-rkind');
         window.MA.tailMemory.bindSelect('uc-tail-from');
       }
-      if (kind === 'relation') window.MA.relationKindCards.mountForSelect('uc-tail-rkind', 'usecase');
+      if (kind === 'relation') {
+        window.MA.relationKindCards.mountForSelect('uc-tail-rkind', 'usecase');
+        // 欄の呼び名は種類で替える (汎化は 子 (From) / 親 (To)。From は矢の根元)。
+        var ucKindEl = document.getElementById('uc-tail-rkind');
+        var ucRoleLabels = function() {
+          ['from', 'to'].forEach(function(side) {
+            var sel = document.getElementById('uc-tail-' + side);
+            var lab = sel && sel.previousElementSibling;
+            if (lab && lab.tagName === 'LABEL') lab.textContent = _fieldLabel(ucKindEl.value, side);
+          });
+        };
+        if (ucKindEl) { ucKindEl.addEventListener('change', ucRoleLabels); ucRoleLabels(); }
+      }
       if (kind === 'actor') bindAliasHint('A');
       else if (kind === 'usecase') bindAliasHint('U');
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
@@ -756,8 +791,9 @@ window.MA.modules.plantumlUsecase = (function() {
             window.MA.tailMemory.setField('uc-tail-rkind', rkind);
             window.MA.tailMemory.setField('uc-tail-from', fr);
           }
+          var ucEnds = _uiToModel(rkind, fr, to);
           window.MA.history.pushHistory();
-          out = addRelation(t, rkind, fr, to, document.getElementById('uc-tail-rlabel').value.trim());
+          out = addRelation(t, rkind, ucEnds.from, ucEnds.to, document.getElementById('uc-tail-rlabel').value.trim());
         } else if (kind === 'note') {
           var ntarget = document.getElementById('uc-tail-ntarget').value;
           if (!ntarget) { alert('Target 必須 (先に actor/usecase を追加)'); return; }
@@ -934,15 +970,17 @@ window.MA.modules.plantumlUsecase = (function() {
   function _renderRelationEdit(relation, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var RC = window.MA.relationKindCards;
+    var uiEnds = _uiToModel(relation.kind, relation.from, relation.to);   // 入れ替えは対称
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
         // design 3c: 関係の種類は記法ではなく「UML 名称 + 意味の説明」のカードで選ぶ
         RC.cardsHtml('uc-rel-card', RC.kindsOf('usecase'), relation.kind) +
-        P.fieldHtml('From', 'uc-rel-from', relation.from) +
+        // BLK-owner-20260929-0351-1: 上の欄は矢の根元 (汎化なら子)。
+        P.fieldHtml(relation.kind === 'generalization' ? _fieldLabel('generalization', 'from') : 'From', 'uc-rel-from', uiEnds.from) +
         '<button id="uc-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
-        P.fieldHtml('To', 'uc-rel-to', relation.to) +
+        P.fieldHtml(relation.kind === 'generalization' ? _fieldLabel('generalization', 'to') : 'To', 'uc-rel-to', uiEnds.to) +
         P.fieldHtml('Label', 'uc-rel-label', relation.label) +
         P.relationOptionsFor('uc-rel-more', ctx.getMmdText(), relation.line) +
         P.primaryButtonHtml('uc-rel-apply', '変更を反映') +
@@ -960,13 +998,21 @@ window.MA.modules.plantumlUsecase = (function() {
     RC.bindCards(propsEl, 'uc-rel-card', function(newKind) {
       if (newKind === relation.kind) return;
       window.MA.history.pushHistory();
-      ctx.setMmdText(updateRelation(ctx.getMmdText(), relation.line, 'kind', newKind));
+      var t = updateRelation(ctx.getMmdText(), relation.line, 'kind', newKind);
+      // 種類を替えても欄に見えている根元 (From) の相手は替えない (汎化とそれ以外で左右の読みが替わる)。
+      if ((newKind === 'generalization') !== (relation.kind === 'generalization')) {
+        t = updateRelation(t, relation.line, 'swap');
+        var sw = relation.from; relation.from = relation.to; relation.to = sw;
+      }
+      ctx.setMmdText(t);
       relation.kind = newKind;   // 「変更を反映」での二重適用を防ぐ
       ctx.onUpdate();
     });
     P.bindEvent('uc-rel-apply', 'click', function() {
-      var newFrom = document.getElementById('uc-rel-from').value.trim();
-      var newTo = document.getElementById('uc-rel-to').value.trim();
+      var newEnds = _uiToModel(relation.kind,
+        document.getElementById('uc-rel-from').value.trim(), document.getElementById('uc-rel-to').value.trim());
+      var newFrom = newEnds.from;
+      var newTo = newEnds.to;
       var newLabel = document.getElementById('uc-rel-label').value.trim();
       window.MA.history.pushHistory();
       var t = ctx.getMmdText();
@@ -1062,7 +1108,9 @@ window.MA.modules.plantumlUsecase = (function() {
     function refreshPreview() {
       var e = ends();
       var label = (document.getElementById('uc-conn-label') || {}).value || '';
-      var line = RA.previewLine(fmtRelation, kind, e.from.id, e.to.id, label.trim());
+      var m = _uiToModel(kind, e.from.id, e.to.id);
+      var rf = _rootFirstIn(ctx.getMmdText());
+      var line = RA.previewLine(function(k, a, b, l) { return fmtRelation(k, a, b, l, rf); }, kind, m.from, m.to, label.trim());
       var pre = document.getElementById('uc-conn-preview');
       if (pre) pre.textContent = line;
     }
@@ -1093,7 +1141,8 @@ window.MA.modules.plantumlUsecase = (function() {
       window.MA.history.pushHistory();
       var e = ends();
       var label = document.getElementById('uc-conn-label').value.trim();
-      ctx.setMmdText(addRelation(ctx.getMmdText(), kind, e.from.id, e.to.id, label));
+      var m = _uiToModel(kind, e.from.id, e.to.id);
+      ctx.setMmdText(addRelation(ctx.getMmdText(), kind, m.from, m.to, label));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });

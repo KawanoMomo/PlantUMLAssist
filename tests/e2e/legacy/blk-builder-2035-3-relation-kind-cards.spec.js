@@ -85,7 +85,8 @@ test.describe('BLK-builder-2035-3 関係の種類カード (design 3c)', () => {
     await openUseCaseRelation(page);
     await page.locator('.uc-rel-card[data-value="generalization"]').click();
     await page.waitForTimeout(500);
-    expect((await getEditorText(page)).split('\n')[3]).toBe('User <|-- UC1');
+    // BLK-owner-20260929-0351-1: 種類を替えても From (矢の根元) の User はそのまま。汎化では根元が子なので User が子。
+    expect((await getEditorText(page)).split('\n')[3]).toBe('UC1 <|-- User');
   });
 
   test('UseCase: 種類を変えたあとも From / To / ラベルの欄はそのまま出ている', async ({ page }) => {
