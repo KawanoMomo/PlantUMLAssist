@@ -2811,6 +2811,52 @@ test('migrator 手順 4 — メンバー・クラス・状態を指す note の�
   }
 });
 
+// BLK-migrator-20260930-0157: 複合状態に付けた note (`note top of 運転`) の文字・点線の接続線に枠が出ず、それがあると同じ図の
+// 別の note (`note right of 警戒`) の枠まで消えた (state は宣言の並び順で SVG の note と組にしていた)。note の枠は note 自身の行・
+// 紙・接続線で全図種共通の 1 か所で当て、1 つの note の当て損ねが他の note の枠を消さない。
+test('migrator 手順 4 — 複合状態に付けた note と中の状態の note の文字・点線の接続線・楔に本人の枠が出て、押すと note の行', async ({ page }) => {
+  await bootPlain(page);
+  await typeDsl(page, ['@startuml', 'state 運転 {', '  [*] --> 通常', '  通常 --> 警戒', '}',
+    'note top of 運転 : 複合の上', 'note right of 警戒 : 内側', '@enduml'].join(String.fromCharCode(10)));
+  await expect(page.locator('#overlay-layer rect.selectable[data-type="note"]:not([data-hit-kind])')).toHaveCount(2, { timeout: 20000 });
+  const lit = async (pt) => {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(pt.x, pt.y);
+    await page.waitForTimeout(100);
+    // 光るのは同じ note の紙と接続線の枠 (同じ種類・行)。種類と行の組を 1 つずつ数える。
+    return page.evaluate(() => Array.from(new Set(Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+      .map((r) => r.getAttribute('data-type') + ':' + r.getAttribute('data-line')))).join(','));
+  };
+  const textPt = (l) => page.evaluate((w) => {
+    const t = Array.prototype.find.call(document.querySelectorAll('#preview-svg svg text'), (n) => (n.textContent || '').trim() === w);
+    const r = t.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }, l);
+  // 接続線 (note の <g> を端に持つ点線) の長さの半分の点。楔 (紙の外形から対象へ伸びる尖り) の中ほどの点。
+  const pts = await page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    const toScr = (el, x, y) => { const q = new DOMPoint(x, y).matrixTransform(el.getScreenCTM()); return { x: q.x, y: q.y }; };
+    const link = svg.querySelector('g.link path[style*="dasharray"]');
+    const mid = link.getPointAtLength(link.getTotalLength() / 2);
+    const OB = window.MA.overlayBuilder;
+    const paper = OB.notePapers(svg).filter((p) => OB.noteTails(p).length)[0];
+    const tail = OB.noteTails(paper)[0];
+    const a = tail[0], tip = tail[1], b = tail[tail.length - 1];
+    const bx = (a[0] + b[0]) / 2, by = (a[1] + b[1]) / 2;
+    return { line: toScr(link, mid.x, mid.y), tail: toScr(paper.el, bx + (tip[0] - bx) * 0.4, by + (tip[1] - by) * 0.4) };
+  });
+  expect(await lit(await textPt('複合の上')), 'note top of 運転 の文字').toBe('note:6');
+  expect(await lit(pts.line), 'note top of 運転 の点線の接続線').toBe('note:6');
+  expect(await lit(await textPt('内側')), 'note right of 警戒 の文字').toBe('note:7');
+  expect(await lit(pts.tail), 'note right of 警戒 の楔').toBe('note:7');
+  // 押すと note の行が選ばれる。
+  const top = await textPt('複合の上');
+  await page.evaluate(() => window.MA.selection.setSelected([]));
+  await page.mouse.click(top.x, top.y);
+  await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).map((s) => s.type + ':' + s.line)))
+    .toEqual(['note:6']);
+});
+
 // BLK-migrator-20260929-1651: 古い skinparam (ParticipantPadding) を使うと PlantUML は図の先頭に警告の帯を描き、
 // 1 番目の box の当たりがその帯に置かれて、見出しの文字にホバーしても枠が出なかった。囲みはライフラインの上端を包む rect で見分ける。
 test('migrator 手順 4 — ParticipantPadding のあるシーケンス図でも box の見出しを指すと box の枠が出る', async ({ page }) => {

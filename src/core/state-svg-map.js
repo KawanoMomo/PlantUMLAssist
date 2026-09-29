@@ -439,6 +439,9 @@ window.MA.stateSvgMap = (function() {
       var isCluster = /(^|\s)cluster(\s|$)/.test(cls) || _isComposite(g);
       if (!isCluster && !/(^|\s)(entity|start_entity|end_entity)(\s|$)/.test(cls)) return;
       if (/^GMN/.test(qn)) return;   // 注記は呼び手が別に当てる
+      // BLK-migrator-20260930-0157: 浮いた note (`note "…" as N1`) は名前が付くが状態ではない。紙を持つ <g> は注記として呼び手に任せる。
+      var OBn = window.MA.overlayBuilder;
+      if (!isCluster && OBn && OBn.notePapers && OBn.notePapers(g).length) return;
       var ps = isCluster ? null : pseudoOf(qn, cls);
       // 壊れた修飾名の開始・終了 (`...start..`) は、包む複合状態の <g> を入れ物にする。
       if (ps && _brokenQn(qn.replace(/\.(start|end)\./, '#'))) {

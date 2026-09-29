@@ -58,11 +58,11 @@ window.MA.modules.plantumlState = (function() {
   }
 
   var NOTE_INLINE_RE = new RegExp(
-    '^note\\s+(left|right)\\s+of\\s+(' + ID + ')\\s*:\\s*(.*)$',
+    '^note\\s+(left|right|top|bottom)\\s+of\\s+(' + ID + ')\\s*:\\s*(.*)$',
     'i'
   );
   var NOTE_BLOCK_OPEN_RE = new RegExp(
-    '^note\\s+(left|right)\\s+of\\s+(' + ID + ')\\s*$',
+    '^note\\s+(left|right|top|bottom)\\s+of\\s+(' + ID + ')\\s*$',
     'i'
   );
   var END_NOTE_RE = /^end\s+note\s*$/i;
@@ -863,23 +863,6 @@ window.MA.modules.plantumlState = (function() {
     return lines.join('\n');
   }
 
-  function _entityBBox(g) {
-    if (!g) return null;
-    var rect = g.querySelector('rect');
-    if (rect) {
-      return {
-        x: parseFloat(rect.getAttribute('x')) || 0,
-        y: parseFloat(rect.getAttribute('y')) || 0,
-        width: parseFloat(rect.getAttribute('width')) || 0,
-        height: parseFloat(rect.getAttribute('height')) || 0,
-      };
-    }
-    if (typeof g.getBBox === 'function') {
-      try { return g.getBBox(); } catch (e) {}
-    }
-    return null;
-  }
-
   function _detectCompositeRects(svgEl, ents) {
     var rects = svgEl.querySelectorAll('rect[rx="12.5"]');
     var entRects = {};
@@ -898,7 +881,7 @@ window.MA.modules.plantumlState = (function() {
     return composites;
   }
 
-  function buildOverlay(svgEl, parsedData, overlayEl) {
+  function buildOverlay(svgEl, parsedData, overlayEl, dslText) {
     if (!svgEl || !overlayEl) return;
     OB.syncDimensions(svgEl, overlayEl);
     while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
@@ -980,31 +963,10 @@ window.MA.modules.plantumlState = (function() {
         console.warn('[state.buildOverlay] transition arrow mismatch: model=' + transitions.length + ' svg=' + arrowHeads.length);
       }
     }
-    // 4. Notes: match by entity wrapper (note has its own g.entity[data-qualified-name=GMN_])
-    var notes = parsedData.notes || [];
-    if (notes.length > 0) {
-      var noteEnts = [];
-      Array.prototype.forEach.call(ents, function(g) {
-        var qn = g.getAttribute('data-qualified-name') || '';
-        if (qn.indexOf('GMN') === 0) noteEnts.push(g);
-      });
-      if (noteEnts.length === notes.length) {
-        notes.forEach(function(n, idx) {
-          var g = noteEnts[idx];
-          // BLK-migrator-20260926-1116: 紙の外形から取る (中の Creole の表・箇条書きの点を範囲にしない)。
-          var bb = (OB.notePaperBox && OB.notePaperBox(g)) || _entityBBox(g);
-          if (!bb) {
-            // Note path-based shapes may not have a rect; use getBBox or skip
-            return;
-          }
-          OB.addRect(overlayEl, bb.x, bb.y, bb.width, bb.height, {
-            'data-type': 'note',
-            'data-id': n.id,
-            'data-line': String(n.line),
-          });
-        });
-      }
-    }
+    // 4. Notes: BLK-migrator-20260930-0157: 宣言の並び順で SVG の note と組にしない (読めない note が 1 つあると全部の枠が落ちた)。
+    // note 自身の data-source-line・紙の外形・接続線で、全図種共通の 1 か所 (overlay-builder の addNoteFrames) で当てる。
+    // BLK-migrator-20260926-1116: 範囲は紙の外形 (中の Creole の表・箇条書きの点を範囲にしない)。
+    if (OB.addNoteFrames) OB.addNoteFrames(svgEl, overlayEl, dslText, parsedData.notes || []);
 
     // BLK-migrator-20260923-2312: 図の題 (title) にも本文の行を指す枠を置く (class / component と同じ)。
     // 題にホバーしても何も出ない / 下の複合状態の枠が出る、をやめる。
@@ -2854,7 +2816,10 @@ window.MA.modules.plantumlState = (function() {
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (target: ' + H.escHtml(note.targetId) + ', L' + note.line + ')</div>' +
       P.selectFieldHtml('Position', 'st-note-pos', [
         { value: 'right', label: 'Right', selected: note.position === 'right' },
-        { value: 'left', label: 'Left', selected: note.position === 'left' }
+        { value: 'left', label: 'Left', selected: note.position === 'left' },
+        // BLK-migrator-20260930-0157: 書かれた位置 (note top / bottom of 複合状態) を選んだまま見せる (right に見せて書き換えない)。
+        { value: 'top', label: 'Top', selected: note.position === 'top' },
+        { value: 'bottom', label: 'Bottom', selected: note.position === 'bottom' }
       ]) +
       // BLK-human-20260916-0900: 置いた後でも対象と上下の順を変えられる (シーケンス図と揃える)。
       (note.targetId ? P.selectFieldHtml('対象 (Target)', 'st-note-target', (parsedData.states || []).map(function(s) {
