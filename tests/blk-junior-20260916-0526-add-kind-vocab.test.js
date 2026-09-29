@@ -61,6 +61,15 @@ describe('add-kind-vocab: 用語を知らない人の言葉から、足す種別
     expect(AKV.words('plantuml-state', 'child').length).toBe(n);
   });
 
+  // BLK-owner-20260925-0341-prune: 旧ボタン名 (クラス構成をまとめて追加 / 各行をアクションとして一括追加) で
+  // 覚えた人も、種別チップ「まとめて」へ検索で届く。
+  test('クラス図・アクティビティ図の「まとめて」に旧ボタン名から届く', function() {
+    expect(AKV.words('plantuml-class', 'bulk')).toContain('クラス構成をまとめて追加');
+    expect(AKV.words('plantuml-class', 'bulk')).toContain('一括追加');
+    expect(AKV.words('plantuml-activity', 'bulk')).toContain('各行をアクションとして一括追加');
+    expect(AKV.words('plantuml-activity', 'bulk')).toContain('一括追加');
+  });
+
   test('用語抜きの 1 行を持つ (押す前に何が起きるかが読める)', function() {
     expect(AKV.hintFor('plantuml-state', 'child')).toContain('中に');
     expect(AKV.hintFor('plantuml-state', 'composite')).toContain('入れ子');

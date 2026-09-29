@@ -4114,6 +4114,8 @@ function initCommandPalette() {
       { value: 'namespace', label: 'Namespace' },
       { value: 'relation', label: '関連' },
       { value: 'note', label: '注釈' },
+      // 種別チップ「まとめて」と同じく、クラス構成の窓まで開く。
+      { value: 'bulk', label: '一括 (複数行)', then: 'cl-scaffold-open' },
     ] },
     'plantuml-activity': { prefix: 'ac', kinds: [
       { value: 'action', label: 'アクション' },
@@ -4127,6 +4129,7 @@ function initCommandPalette() {
       { value: 'swimlane', label: 'レーン (swimlane)' },
       { value: 'note', label: '注釈' },
       { value: 'other', label: '中断・切り離し・打ち切り (break / detach / kill)' },
+      { value: 'bulk', label: '一括 (複数行)' },
     ] },
     'plantuml-state': { prefix: 'st', kinds: [
       { value: 'state', label: '状態' },
@@ -4185,7 +4188,7 @@ function initCommandPalette() {
         // 旧名 (末尾に追加 / この位置に挿入 / Action 追加 …) で覚えた人もここから同じ入口に来られるようにする。
         keywords: ['add', 'ついか', k.value, k.label, '末尾に追加', 'この位置に挿入', 'ここに挿入', 'insert',
           k.value + ' 追加', k.value.charAt(0).toUpperCase() + k.value.slice(1) + ' 追加'].concat(plain),
-        run: function() { openTailForm(spec.prefix, k.kind || k.value, k.place); },
+        run: function() { openTailForm(spec.prefix, k.kind || k.value, k.place); if (k.then) clickById(k.then); },
       };
     });
   }

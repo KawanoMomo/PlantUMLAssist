@@ -18,7 +18,7 @@ async function fillClassRow(page, i, name, members, relation) {
 }
 
 async function openScaffold(page) {
-  await page.locator('#cl-scaffold-open').click();
+  await page.locator('#cl-tail-kind-chip-bulk').click();
   await expect(page.locator('#cl-sc-modal')).toBeVisible();
   await page.locator('#cl-sc-parent').fill('CanDrv');
   await page.locator('#cl-sc-pmembers').fill('+init() : void, -state : uint8');
@@ -86,7 +86,7 @@ test.describe('BLK-junior-20260906-2143 クラス構成の一括追加', () => {
 
   test('UC-4: クラス名が空なら確定できない', async ({ page }) => {
     await openClassDiagram(page);
-    await page.locator('#cl-scaffold-open').click();
+    await page.locator('#cl-tail-kind-chip-bulk').click();
     await expect(page.locator('#cl-sc-confirm')).toBeDisabled();
     await expect(page.locator('#cl-sc-errors')).toContainText('1 つ以上');
   });
