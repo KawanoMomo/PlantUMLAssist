@@ -1,0 +1,22 @@
+' 狙い: 入れ子 partition(色付き)、note left/right、floating note、end note 複数行
+@startuml
+start
+partition "製造工程" #EEEEFF {
+  :材料を投入;
+  partition "加工" {
+    :切削する;
+    note right
+      公差は±0.05mm
+      抜き取り検査あり
+    end note
+    :研磨する;
+  }
+  :組み立てる;
+  note left: 治具Aを使用
+}
+floating note right: 全工程で温度を記録
+partition 検査 {
+  :外観検査;
+}
+stop
+@enduml

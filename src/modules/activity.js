@@ -1675,6 +1675,138 @@ window.MA.modules.plantumlActivity = (function() {
     });
   }
 
+  // BLK-migrator-20260929-0952: partition (と同じ描き方の group / rectangle / card) の入れ物を本文から読む。
+  // 名前・開きの行・閉じの `}` の行・入れ子の深さ。skinparam の `{ … }` と <style> の中の `}` は入れ物として数えない。
+  var PARTITION_OPEN_RE = /^(partition|group|rectangle|card)\s+(.+?)\s*\{\s*$/i;
+  function readPartitions(lines) {
+    var out = [], stack = [], inStyle = false;
+    (lines || []).forEach(function(raw, i) {
+      var t = String(raw || '').trim();
+      if (!t || t.charAt(0) === "'") return;
+      if (inStyle) { if (/<\/style>/i.test(t)) inStyle = false; return; }
+      if (/^<style>/i.test(t)) { inStyle = !/<\/style>/i.test(t); return; }
+      var m = PARTITION_OPEN_RE.exec(t);
+      if (m) {
+        var name = m[2].replace(/<<[^>]*>>/g, ' ').replace(/\s+#[^\s"]+$/, '').replace(/^#[^\s"]+\s+/, '').trim();
+        if (/^".*"$/.test(name)) name = name.slice(1, -1);
+        var depth = stack.filter(function(s) { return s; }).length;
+        var p = { kind: m[1].toLowerCase(), name: name, line: i + 1, endLine: null, depth: depth };
+        out.push(p);
+        stack.push(p);
+        return;
+      }
+      if (/\{\s*$/.test(t)) { stack.push(null); return; }
+      if (/^\}/.test(t) && stack.length) {
+        var top = stack.pop();
+        if (top) top.endLine = i + 1;
+      }
+    });
+    return out;
+  }
+
+  // 描いた入れ物: 枠の <rect> (塗りの有無・角の丸みは問わない) と、その直後の見出しの札 (<path>、partition / group) と
+  // 見出しの <text>。札の無い rectangle / card は、枠の上端のすぐ下に書いた見出しの文字。
+  function _drawnPartitions(svgEl) {
+    var out = [];
+    function num(el, k) { return parseFloat(el.getAttribute(k)) || 0; }
+    function next(el) { return el.nextElementSibling; }
+    Array.prototype.forEach.call(svgEl.querySelectorAll('rect'), function(r) {
+      var x = num(r, 'x'), y = num(r, 'y'), w = num(r, 'width'), h = num(r, 'height');
+      if (w < 20 || h < 30) return;
+      var tab = null, n = next(r);
+      if (n && n.tagName.toLowerCase() === 'path') {
+        var pts = String(n.getAttribute('d') || '').match(/-?[\d.]+(?:e-?\d+)?/gi) || [];
+        var ps = [];
+        for (var i = 0; i + 1 < pts.length; i += 2) ps.push({ x: parseFloat(pts[i]), y: parseFloat(pts[i + 1]) });
+        var last = ps[ps.length - 1];
+        if (ps.length >= 3 && Math.abs(ps[0].y - y) < 0.5 && Math.abs(last.x - x) < 0.5 && ps[0].x > x && ps[0].x <= x + w + 0.5) {
+          tab = { el: n, x: x, y: y, w: ps[0].x - x, h: Math.max.apply(null, ps.map(function(q) { return q.y; })) - y };
+          n = next(n);
+        }
+      }
+      // card は見出しの下に横の区切り線 (<line>) を描く。split の棒と見なさない
+      var sep = null;
+      if (!tab && n && n.tagName.toLowerCase() === 'line' && num(n, 'y1') === num(n, 'y2') &&
+        Math.abs(Math.min(num(n, 'x1'), num(n, 'x2')) - x) < 0.5 && num(n, 'y1') - y < 30) {
+        sep = n;
+        n = next(n);
+      }
+      var texts = [];
+      while (n && n.tagName.toLowerCase() === 'text') {
+        var tx = num(n, 'x'), ty = num(n, 'y');
+        if (tx < x || tx > x + w || ty < y || ty > y + (tab ? tab.h + 2 : 26)) break;
+        texts.push(n);
+        n = next(n);
+      }
+      if (!texts.length) return;
+      // 札の無い枠は、見出しの文字 (動作の文字より大きい) の下に中身の入る高さがあるものだけ (動作の箱を取らない)
+      if (!tab && (num(texts[0], 'font-size') < 13 || h - (num(texts[0], 'y') - y) < 30)) return;
+      out.push({ rect: r, tab: tab, sep: sep, texts: texts, box: { x: x, y: y, w: w, h: h },
+        label: _normLabel(texts.map(function(t) { return t.textContent || ''; }).join('')) });
+    });
+    return out;
+  }
+
+  // 本文の入れ物と描いた入れ物を、見出しの文字 = 名前で照らして対にする (上から順)。名前で照らせない残りは、
+  // 残りの数が同じときだけ並び順で対にする。
+  function _matchPartitions(svgEl, lines) {
+    var parts = readPartitions(lines);
+    if (!parts.length) return [];
+    var drawn = _drawnPartitions(svgEl);
+    var pairs = [];
+    var rest = [];
+    parts.forEach(function(p) {
+      var want = _normLabel(p.name);
+      var hit = null;
+      // partition / group は札のある枠、rectangle / card は札の無い枠
+      var withTab = p.kind === 'partition' || p.kind === 'group';
+      for (var i = 0; !hit && i < drawn.length; i++) {
+        if (!drawn[i].used && want && !!drawn[i].tab === withTab && drawn[i].label === want) hit = drawn[i];
+      }
+      if (hit) { hit.used = true; pairs.push({ part: p, drawn: hit }); } else rest.push(p);
+    });
+    var left = drawn.filter(function(d) { return !d.used && d.tab; });
+    rest = rest.filter(function(p) { return p.kind === 'partition' || p.kind === 'group'; });
+    if (rest.length && rest.length === left.length) {
+      rest.forEach(function(p, i) { pairs.push({ part: p, drawn: left[i] }); });
+    }
+    return pairs;
+  }
+
+  // 入れ物の枠: 見出しの札 (文字)・枠線の 4 辺のどこを押しても同じ入れ物が選ばれ、本文の開きの行を指す。
+  // 中の空所は入れ物 (data-hit-kind="container" で中の部品・矢印より後ろ)。4 辺の細い帯と見出しの札 (frameline) は、
+  // 辺・札を横切る矢印より手前。入れ子は小さい (内側の) 方が手前。
+  function _addPartitionRects(overlayEl, pairs) {
+    // 帯の幅は辺の内外 2 ずつ (辺に着く矢印の端の区間を帯で覆いすぎない)
+    var pad = 2;
+    pairs.forEach(function(pr) {
+      var b = pr.drawn.box, line = pr.part.line;
+      function attrs(kind) {
+        var a = { 'data-type': 'source-line', 'data-id': 'src:partition@' + line, 'data-src-kind': 'partition',
+          'data-line': String(line) };
+        if (kind) a['data-hit-kind'] = kind;
+        return a;
+      }
+      OB.addRect(overlayEl, b.x, b.y, b.w, b.h, attrs('container'));
+      OB.addRect(overlayEl, b.x - pad, b.y - pad, b.w + pad * 2, pad * 2, attrs('frameline'));
+      OB.addRect(overlayEl, b.x - pad, b.y + b.h - pad, b.w + pad * 2, pad * 2, attrs('frameline'));
+      OB.addRect(overlayEl, b.x - pad, b.y - pad, pad * 2, b.h + pad * 2, attrs('frameline'));
+      OB.addRect(overlayEl, b.x + b.w - pad, b.y - pad, pad * 2, b.h + pad * 2, attrs('frameline'));
+      var head = pr.drawn.tab;
+      if (!head) {
+        var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        pr.drawn.texts.forEach(function(t) {
+          var tb = OB.nodeBBox(t);
+          if (!tb) return;
+          x0 = Math.min(x0, tb.x); y0 = Math.min(y0, tb.y); x1 = Math.max(x1, tb.x + tb.width); y1 = Math.max(y1, tb.y + tb.height);
+        });
+        if (x0 < x1) head = { x: x0 - 3, y: y0 - 3, w: x1 - x0 + 6, h: y1 - y0 + 6 };
+      }
+      // 見出しの札も枠線と同じ段: 札の上を通る矢印より手前 (見出しの文字を指したら partition)
+      if (head) OB.addRect(overlayEl, head.x, head.y, head.w, head.h, attrs('frameline'));
+    });
+  }
+
   // BLK-migrator-20260924-2232: 図の題・凡例・見出し・脚注・図の下の説明は、PlantUML が
   // <g class="title" data-source-line> に行を残す。本文の並びを数えず、その行で当てる
   // (題が付いても動作・分岐の対応はずれない)。data-source-line は @startuml を 0 とする。
@@ -1797,8 +1929,8 @@ window.MA.modules.plantumlActivity = (function() {
       });
       return best;
     }
-    // 既に枠のある文字 (枝のラベル・レーンの見出しなど) は矢印の文字にしない。
-    var placed = Array.prototype.map.call(overlayEl.querySelectorAll('rect.selectable'), function(r) {
+    // 既に枠のある文字 (枝のラベル・レーンの見出しなど) は矢印の文字にしない。入れ物 (partition) の中の空所は数えない。
+    var placed = Array.prototype.map.call(overlayEl.querySelectorAll('rect.selectable:not([data-hit-kind="container"])'), function(r) {
       return { x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0,
         w: parseFloat(r.getAttribute('width')) || 0, h: parseFloat(r.getAttribute('height')) || 0 };
     });
@@ -1927,7 +2059,8 @@ window.MA.modules.plantumlActivity = (function() {
   // 押すとその行が選ばれる (フォームで直せる要素ならそのフォーム、無ければ行の表示)。
   function _addTextFallback(svgEl, parsedData, overlayEl, lines) {
     if (!lines.length) return 0;
-    var placed = Array.prototype.map.call(overlayEl.querySelectorAll('rect.selectable'), function(r) {
+    // 入れ物 (partition) の中の空所の枠は、中の文字 (ノートの本文など) を覆ったものと見なさない
+    var placed = Array.prototype.map.call(overlayEl.querySelectorAll('rect.selectable:not([data-hit-kind="container"])'), function(r) {
       return { x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0,
         w: parseFloat(r.getAttribute('width')) || 0, h: parseFloat(r.getAttribute('height')) || 0 };
     });
@@ -1947,6 +2080,13 @@ window.MA.modules.plantumlActivity = (function() {
     var shapes = Array.prototype.filter.call(svgEl.querySelectorAll('polygon, rect'), function(el) {
       return !_inDecor(el);
     }).map(function(el) { return { el: el, bb: _shapeBBox(el) }; }).filter(function(s) { return s.bb && s.bb.width > 0; });
+    // BLK-migrator-20260929-0952: PlantUML 1.2026 のノートの紙は <path>。本文と数が合わず紙で当てられなかったノート
+    // (floating note など) の文字は、紙ごと囲む (入れ物の partition の枠を紙と見なさない)。
+    if (OB.notePapers) {
+      OB.notePapers(svgEl).forEach(function(p) {
+        if (!_inDecor(p.el)) shapes.push({ el: p.el, bb: p.box });
+      });
+    }
     var flat = _flattenNodes(parsedData.nodes || [], []);
     var notes = parsedData.notes || [];
     var n = 0;
@@ -2004,7 +2144,7 @@ window.MA.modules.plantumlActivity = (function() {
         w: parseFloat(r.getAttribute('width')) || 0, h: parseFloat(r.getAttribute('height')) || 0,
         line: parseInt(r.getAttribute('data-line'), 10), type: r.getAttribute('data-type') };
     }
-    var framed = Array.prototype.map.call(overlayEl.querySelectorAll('rect.selectable[data-type]'), rbox);
+    var framed = Array.prototype.map.call(overlayEl.querySelectorAll('rect.selectable[data-type]:not([data-src-kind="partition"])'), rbox);
     function hasFrame(b) {
       return framed.some(function(f) {
         return Math.abs(f.x - b.x) < 1.5 && Math.abs(f.y - b.y) < 1.5 && Math.abs(f.w - b.w) < 1.5 && Math.abs(f.h - b.h) < 1.5;
@@ -2135,6 +2275,16 @@ window.MA.modules.plantumlActivity = (function() {
 
     var flat = _flattenNodes(parsedData.nodes || [], []);
     if (flat.length === 0) return;
+
+    // BLK-migrator-20260929-0952: partition の枠・札・見出しの文字は、動作・菱形・矢印の文字・ノートの紙として数えない
+    // (並び順・文字で当てる他の当て方から外す)。枠は本文の partition の行で _addPartitionRects が置く。
+    var partPairs = _matchPartitions(svgEl, parsedData.sourceLines || []);
+    partPairs.forEach(function(pr) {
+      _chromeEls.push(pr.drawn.rect);
+      if (pr.drawn.tab) _chromeEls.push(pr.drawn.tab.el);
+      if (pr.drawn.sep) _chromeEls.push(pr.drawn.sep);
+      pr.drawn.texts.forEach(function(t) { _chromeEls.push(t); });
+    });
 
     // Walk SVG, classify each primitive, then post-process to group ellipse pairs as 'stop-or-end'.
     // split の棒は横の <line> なので、棒と見なした線も文書順に混ぜる (fork の棒の rect と同じ 'fork-bar')。
@@ -2275,6 +2425,7 @@ window.MA.modules.plantumlActivity = (function() {
 
     _addBranchLabelRects(svgEl, parsedData, overlayEl);
     _addSwimlaneHeaderRects(svgEl, parsedData, overlayEl);
+    _addPartitionRects(overlayEl, partPairs);
     _addDecorRects(svgEl, parsedData, overlayEl);
     // 閉じの図形 (合流の菱形・下の棒) の枠を矢印より先に置く: 矢じりの先が触れる図形の行から矢印の行を決めるので、
     // 先に無いと合流へ入る矢印に枠が出ない。switch の菱形は文字で当てる (_addTextFallback) ので、その後にもう一度探す。
@@ -3436,6 +3587,7 @@ window.MA.modules.plantumlActivity = (function() {
     showInsertForm: showInsertForm,
     showInsertPicker: showInsertPicker,
     showElseifForm: showElseifForm,
+    readPartitions: readPartitions,
     defaultInsertKind: 'action',
     capabilities: {
       overlaySelection: true,

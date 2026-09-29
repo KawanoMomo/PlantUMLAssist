@@ -570,6 +570,9 @@ window.MA.overlayBuilder = (function() {
       // BLK-migrator-20260929-0951: 1 本の線で描いた棒 (activity の split / end split) は、棒に入る・棒から出る矢印の
       // 端の枠と重なる。棒の細い帯の上は棒が選ばれる (矢じりの関係 linkhead よりは後ろ)。
       if (k === 'bar') return 1.5;
+      // BLK-migrator-20260929-0952: 入れ物 (activity の partition) の枠線の細い帯と見出しの札も同じ。辺・札を横切る矢印より手前で、
+      // 見出し・枠線のどこを押しても入れ物が選ばれる。
+      if (k === 'frameline') return 1.5;
       return k === 'linkhead' ? 2 : 1;
     };
     // 元の並び順を保つ安定ソート (面積が同じものの前後関係を変えない)
