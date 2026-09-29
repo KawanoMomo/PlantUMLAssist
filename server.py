@@ -711,6 +711,8 @@ API_INDEX = {
         {'endpoint': 'GET /render', 'summary': 'POST /render の仕様'},
         {'endpoint': 'POST /render', 'summary': 'DSL を描いて SVG を返す',
          'request': "{text, mode}"},
+        {'endpoint': 'POST /preproc', 'summary': 'DSL を同梱の plantuml.jar のプリプロセッサだけに通し、展開後の行を返す (外へ送らない)',
+         'request': "{text}"},
         {'endpoint': 'GET /verify-svg', 'summary': 'POST /verify-svg の仕様'},
         {'endpoint': 'POST /verify-svg', 'summary': '保存中の svg が今の puml の結果かを中身で確かめる',
          'request': "{dir, types: [名前...], mode}"},
@@ -1604,6 +1606,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(204)
             self.end_headers()
             return
+        # BLK-migrator-20260929-1351: 当てる前の本文を PlantUML 自身のプリプロセッサで展開する口。
+        if self.path == '/preproc':
+            return self._handle_preproc_post()
         if self.path != '/render':
             self.send_error(404)
             return
@@ -1682,6 +1687,18 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {'error': 'body must be an object'})
             return None
         return data
+
+    def _handle_preproc_post(self):
+        data = self._read_json_object()
+        if data is None:
+            return
+        text = data.get('text')
+        if not isinstance(text, str) or not text.strip():
+            return self._send_json(400, {'error': 'text (DSL 全文) が要ります'})
+        lines, error = preproc_local(text)
+        if error:
+            return self._send_json(200, {'ok': False, 'error': error})
+        self._send_json(200, {'ok': True, 'lines': lines})
 
     def _handle_jar_path_post(self):
         data = self._read_json_object()
@@ -4603,6 +4620,60 @@ def render_local(text):
                 print(f'  daemon stderr: {line}')
             _kill_daemon()
     return _render_via_pipe(text)
+
+
+# BLK-migrator-20260929-1351: 当て方は描いた側を先に使う。マクロ (!procedure / !definelong / 引数つき !define /
+# !include した手続き / 変数) を DSL の読み方で 1 種類ずつ真似るのをやめ、PlantUML 自身の
+# プリプロセッサが展開した行を返す。描画と同じ daemon を使い (数 ms)、使えなければ -preproc の 1 回起動。
+# ローカルの jar だけを使う (online モードでも外へは送らない)。展開できなければ (None, 理由)。
+PREPROC_MAGIC = '\x00PREPROC\n'
+PREPROC_TIMEOUT_SEC = float(os.environ.get('PUA_PREPROC_TIMEOUT', '8'))
+
+
+def _preproc_via_pipe(text):
+    try:
+        proc = subprocess.run(
+            ['java', '-jar', str(jar_path()), '-preproc', '-pipe', '-charset', 'UTF-8'],
+            input=text.encode('utf-8'), capture_output=True, timeout=PREPROC_TIMEOUT_SEC,
+            **_SUBPROCESS_KWARGS,
+        )
+    except FileNotFoundError:
+        return None, 'java not found'
+    except subprocess.TimeoutExpired:
+        return None, 'preproc timeout'
+    if proc.returncode != 0:
+        return None, 'PlantUML error: ' + proc.stderr.decode('utf-8', errors='replace')[:300]
+    return proc.stdout.decode('utf-8', errors='replace'), None
+
+
+def preproc_local(text):
+    """(lines, error)。lines は最初の @startuml ブロックを展開した行 (@startuml / @enduml を含む)。"""
+    if not jar_path().exists():
+        return None, 'plantuml.jar not found'
+    out = None
+    with _daemon_lock:
+        try:
+            proc = _get_daemon()
+            if proc is not None:
+                payload = (PREPROC_MAGIC + text).encode('utf-8')
+                proc.stdin.write(struct.pack('>I', len(payload)))
+                proc.stdin.write(payload)
+                proc.stdin.flush()
+                status, body = _read_daemon_reply(proc, PREPROC_TIMEOUT_SEC)
+                if status != 0:
+                    return None, body.decode('utf-8', errors='replace')[:300]
+                out = body.decode('utf-8', errors='replace')
+        except (BrokenPipeError, EOFError, OSError) as exc:
+            print(f'daemon preproc unusable ({exc}); falling back to -preproc')
+            _kill_daemon()
+    if out is None:
+        out, err = _preproc_via_pipe(text)
+        if err:
+            return None, err
+    lines = out.replace('\r\n', '\n').split('\n')
+    if lines and lines[-1] == '':
+        lines.pop()
+    return lines, None
 
 
 def _shutdown_daemon():

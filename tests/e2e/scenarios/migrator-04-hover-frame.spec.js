@@ -1880,6 +1880,43 @@ test('migrator 手順 4 — !ifdef / !else の両枝にメッセージのある 
   await expect(page.locator('#overlay-layer rect[data-type="participant"][data-id="Cache"]').first()).toBeAttached();
 });
 
+// BLK-migrator-20260929-1351: `!definelong RETRY(target)` を `RETRY(B)` で呼ぶと、描かれる B の自己メッセージにも後ろの
+// `B --> A` にも枠が出ず、「⚠ 図の要素 3 個に選択枠を当てられませんでした」が出た (corpus の seq-36)。当てる前の本文を
+// 同梱 jar のプリプロセッサに展開させ、展開で生まれた行は呼んだ行として読む。
+test('migrator 手順 4 — !definelong・変数・%関数で書いた sequence 図でも、マクロが描く矢印は呼んだ行、後ろの矢印は本人の行の枠が出て、帯が出ない', async ({ page }) => {
+  await bootPlain(page);
+  const fx = (n) => fs.readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'dsl', n + '.puml'), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\n+$/, '');
+  await typeDsl(page, fx('seq-definelong-retry'));
+  await expect(page.locator('#overlay-layer rect[data-type="message"][data-line="8"]').first()).toBeAttached({ timeout: 20000 });
+  await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+  await expect(page.locator('#status-info')).toHaveText('2 elements · 3 relations');
+  for (const [label, line] of [['送信', '7'], ['再試行', '8'], ['完了', '9']]) {
+    expect((await hoverHit(page, label)).hit, label + ' にホバーして枠が出る').toEqual({ type: 'message', line, hover: true });
+  }
+  const caretLine = () => page.evaluate(() => {
+    const ed = document.getElementById('editor');
+    return ed.value.slice(0, ed.selectionStart).split('\n').length;
+  });
+  for (const [label, line] of [['再試行', '8'], ['完了', '9']]) {
+    const h = await hoverHit(page, label);
+    await page.mouse.click(3, 3);
+    await page.mouse.click(h.box.x, h.box.y);
+    await expect(page.locator('#overlay-layer rect.selected[data-type="message"]').first(), label + ' を押すと ' + line + ' 行目')
+      .toHaveAttribute('data-line', line);
+    await expect.poll(caretLine, label + ' を押すと本文の ' + line + ' 行目').toBe(Number(line));
+  }
+
+  await typeDsl(page, fx('seq-36-definelong-variables-strfunc'));
+  await expect(page.locator('#overlay-layer rect[data-type="message"][data-line="14"]').first()).toBeAttached({ timeout: 20000 });
+  await page.waitForTimeout(600);
+  await expect(page.locator('#overlay-warning'), 'seq-36 で帯が出ない').toBeHidden();
+  for (const [label, line] of [['REQ 送信', '10'], ['上限 3 回まで', '12'], ['再試行', '14'], ['文字数 4 / 3', '15']]) {
+    expect((await hoverHit(page, label)).hit, label + ' にホバーして枠が出る').toEqual({ type: 'message', line, hover: true });
+  }
+});
+
 // BLK-migrator-20260925-1800: 途中で `create` / `**` した参加者の頭がそのメッセージの高さに描かれ、メッセージの文字を探す床を押し下げて、
 // それより上のメッセージの文字に枠が出なかった (corpus の seq-11 / seq-12、1.2026.8 への版上げ由来)。床は最初の矢印より上の頭だけで決める。
 test('migrator 手順 4 — 途中で create / ** / !! した参加者のある sequence 図でも、その頭より上のメッセージの文字に本人の枠が出る', async ({ page }) => {
