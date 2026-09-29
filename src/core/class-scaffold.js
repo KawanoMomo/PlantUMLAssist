@@ -169,28 +169,75 @@ window.MA.classScaffold = (function() {
     return { ok: errors.length === 0, errors: errors, warnings: warnings };
   }
 
-  // 追加される行だけを返す。UI のプレビューと apply が同じ結果を見る。
-  function preview(text, spec) {
+  // BLK-primary-20260929-2056-friction: 継承を図の書き方に合わせる。図の継承が `子 --|> 親` の向きで多く書かれていれば
+  // 新しい継承もその向きで書く (`親 <|-- 子` と混ぜると、揃える手が別に要った)。
+  function childFirstInheritance(text) {
+    var fwd = 0, back = 0;
+    _s(text).split(/\r?\n/).forEach(function(raw) {
+      var l = raw.trim();
+      if (/^[A-Za-z_][A-Za-z0-9_]*\s*(?:"[^"]*"\s*)?--\|>/.test(l)) fwd++;
+      else if (/^[A-Za-z_][A-Za-z0-9_]*\s*(?:"[^"]*"\s*)?<\|--/.test(l)) back++;
+    });
+    return fwd > back;
+  }
+
+  // 同じ語尾 (最後の `_` の後、例 `Driver`) の兄弟クラスが 2 つ以上そろって継承している親。無ければ ''。
+  // 系統を 1 つ足すとき、新しい `Pwm_Driver` は兄弟の `Spi_Driver` … と同じ親 (`Driver_Common`) にぶら下がる。
+  function siblingParent(text, name) {
+    var n = _s(name);
+    var cut = n.lastIndexOf('_');
+    if (cut <= 0 || cut === n.length - 1) return '';
+    var suffix = n.slice(cut);
+    var count = {};
+    _s(text).split(/\r?\n/).forEach(function(raw) {
+      var l = raw.trim(), m, child = null, parent = null;
+      if ((m = l.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*--\|>\s*([A-Za-z_][A-Za-z0-9_]*)/))) { child = m[1]; parent = m[2]; }
+      else if ((m = l.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*<\|--\s*([A-Za-z_][A-Za-z0-9_]*)/))) { child = m[2]; parent = m[1]; }
+      if (!child || child === n || child.slice(-suffix.length) !== suffix || child.length <= suffix.length) return;
+      count[parent] = (count[parent] || 0) + 1;
+    });
+    var best = '', bestN = 1;
+    Object.keys(count).forEach(function(p) { if (count[p] > bestN) { bestN = count[p]; best = p; } });
+    return best;
+  }
+
+  // 本文の中のクラスの宣言の行 ({ で本体を開くか) を探す。
+  function _declAt(lines, id) {
+    for (var i = 0; i < lines.length; i++) {
+      var m = lines[i].trim().match(KEYWORD_RE);
+      if (m && m[1] === id) return { index: i, body: /\{\s*$/.test(lines[i]) };
+    }
+    return null;
+  }
+
+  // 末尾に足す行 (tail) と、もう有るクラスの中へ足すメンバ (into: [{ id, members }]) に分ける。
+  function _plan(text, spec) {
     var s = normalizeSpec(spec, text);
-    if (!s.parent && s.classes.length === 0) return [];
+    var tail = [], into = [];
+    if (!s.parent && s.classes.length === 0) return { tail: tail, into: into };
     var declared = existingIds(text);
-    var lines = [];
+    var srcLines = _s(text).length ? String(text).split('\n') : [];
+    var childFirst = childFirstInheritance(text);
 
     function emitClass(c) {
-      // 既に宣言済みのクラスは宣言し直さない。メンバだけ足したい時は
-      // 既存クラスを選んで Properties から足す方が安全なので何も出さない。
-      if (declared[c.id]) return;
+      if (declared[c.id]) {
+        // もう有るクラスは宣言し直さない。持ち込んだメンバのうち、まだ無いものだけをそのクラスの中へ足す。
+        var at = _declAt(srcLines, c.id);
+        var have = {};
+        if (at && at.body) {
+          for (var k = at.index + 1; k < srcLines.length && srcLines[k].trim() !== '}'; k++) have[srcLines[k].trim()] = true;
+        }
+        var add = c.members.filter(function(m) { return !have[m]; });
+        if (!add.length) return;
+        if (at) { into.push({ id: c.id, members: add }); return; }
+      }
       if (c.members.length === 0) {
-        lines.push(_decl(c.kind, c.id, c.label));
+        tail.push(_decl(c.kind, c.id, c.label));
         return;
       }
-      lines.push(_decl(c.kind, c.id, c.label) + ' {');
-      c.members.forEach(function(m) { lines.push('  ' + m); });
-      lines.push('}');
-    }
-
-    function emitRelation(kind, from, to, label) {
-      lines.push(fmtRelation(kind, from, to, label));
+      tail.push(_decl(c.kind, c.id, c.label) + ' {');
+      c.members.forEach(function(m) { tail.push('  ' + m); });
+      tail.push('}');
     }
 
     if (s.parent) emitClass(s.parent);
@@ -198,10 +245,26 @@ window.MA.classScaffold = (function() {
     if (s.parent) {
       s.classes.forEach(function(c) {
         if (c.relation === 'none') return;
-        emitRelation(c.relation, s.parent.id, c.id, c.relationLabel);
+        if (c.relation === 'inheritance' && childFirst) {
+          tail.push(c.id + ' --|> ' + s.parent.id + (c.relationLabel ? ' : ' + c.relationLabel : ''));
+          return;
+        }
+        tail.push(fmtRelation(c.relation, s.parent.id, c.id, c.relationLabel));
       });
     }
-    s.relations.forEach(function(r) { emitRelation(r.kind, r.from, r.to, r.label); });
+    s.relations.forEach(function(r) { tail.push(fmtRelation(r.kind, r.from, r.to, r.label)); });
+    return { tail: tail, into: into };
+  }
+
+  // 追加される行だけを返す。UI のプレビューと apply が同じ結果を見る。
+  // もう有るクラスの中へ足すメンバは「' {クラス} に足す」の見出しの下に並べる。
+  function preview(text, spec) {
+    var p = _plan(text, spec);
+    var lines = p.tail.slice();
+    p.into.forEach(function(x) {
+      lines.push("' " + x.id + ' に足す');
+      x.members.forEach(function(m) { lines.push('  ' + m); });
+    });
     return lines;
   }
 
@@ -225,9 +288,25 @@ window.MA.classScaffold = (function() {
   // 1 手でクラス構成一式を書き込む。不正な spec なら text をそのまま返す
   // (呼び手が validate せずに呼んでも DSL を壊さない)。
   function apply(text, spec) {
-    var lines = preview(text, spec);
-    if (lines.length === 0) return text;
-    return _insertBeforeEnd(text, lines);
+    var p = _plan(text, spec);
+    if (p.tail.length === 0 && p.into.length === 0) return text;
+    var out = String(text);
+    p.into.forEach(function(x) {
+      var ls = out.split('\n');
+      var at = _declAt(ls, x.id);
+      if (!at) return;
+      var ind = (ls[at.index].match(/^\s*/) || [''])[0];
+      if (at.body) {
+        var k = at.index + 1;
+        while (k < ls.length && ls[k].trim() !== '}') k++;
+        ls.splice.apply(ls, [k, 0].concat(x.members.map(function(m) { return ind + '  ' + m; })));
+      } else {
+        ls.splice.apply(ls, [at.index, 1, ls[at.index].replace(/\s*$/, '') + ' {']
+          .concat(x.members.map(function(m) { return ind + '  ' + m; }), [ind + '}']));
+      }
+      out = ls.join('\n');
+    });
+    return p.tail.length ? _insertBeforeEnd(out, p.tail) : out;
   }
 
   return {
@@ -240,6 +319,8 @@ window.MA.classScaffold = (function() {
     fmtRelation: fmtRelation,
     ARROWS: ARROWS,
     validate: validate,
+    childFirstInheritance: childFirstInheritance,
+    siblingParent: siblingParent,
     preview: preview,
     apply: apply,
   };

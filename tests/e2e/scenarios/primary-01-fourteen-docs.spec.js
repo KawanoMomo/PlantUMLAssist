@@ -148,3 +148,67 @@ test('手順1 14 枚を 1 回押しで見て回ってもタブは 1 枚だけ増
   expect(seen.left, '先頭のタブへ戻ると左端まで送り返す').toBeGreaterThanOrEqual(seen.visLeft - 0.5);
   expect(seen.right).toBeLessThanOrEqual(seen.visRight + 0.5);
 });
+
+// BLK-primary-20260929-2056-friction: 無い系統 (PWM) を作るとき、シーケンス・状態遷移の 2 枚はできても、共通クラス図に
+// Pwm_Driver / PwmRegs とメソッド・関係を足すのに参加者名・呼び出し名・きっかけを打ち直していた (クリック 28・キー入力 72)。
+// 「⌗ クラス構成をまとめて追加」の窓の「⧉ 他の図から取り込む」で、開いている 2 枚から打ち直さずに持ち込む。
+test('手順1 無い系統のクラスを、開いているシーケンス図・状態遷移図から打ち直さずにクラス図へ足す (クリック 10・キー 50 以内)', async ({ page }) => {
+  const fs = require('fs');
+  const path = require('path');
+  await S.bootPlain(page);
+  const dir = S.absDirFor(__filename);
+  fs.mkdirSync(dir, { recursive: true });
+  const NL = String.fromCharCode(10);
+  const files = {
+    pwm_init_sequence: ['@startuml', 'actor App', 'participant Pwm_Driver', 'participant PwmRegs', 'participant Irq_Controller',
+      'App -> Pwm_Driver : Pwm_Init()', 'Pwm_Driver -> PwmRegs : WriteConfig()', 'Pwm_Driver -> Irq_Controller : EnableIrq()',
+      'Irq_Controller --> Pwm_Driver : Ack', 'Pwm_Driver --> App : InitDone', '@enduml'],
+    pwm_state: ['@startuml', '[*] --> Idle', 'Idle --> Pwm_Ready : Pwm_Init', 'Pwm_Ready --> Pwm_Running : Pwm_Start',
+      'Pwm_Running --> Idle : Pwm_Stop', '@enduml'],
+    driver_common_class: ['@startuml', 'class Driver_Common {', '  + Init() : void', '}', 'class Spi_Driver {', '  + Spi_Init() : void', '}',
+      'class Can_Driver {', '  + Can_Init() : void', '}', 'class Irq_Controller {', '  + EnableIrq() : void', '}',
+      'Spi_Driver --|> Driver_Common', 'Can_Driver --|> Driver_Common', 'Spi_Driver -- Irq_Controller', '@enduml'],
+  };
+  for (const name of Object.keys(files)) {
+    const f = path.join(dir, name + '.puml');
+    fs.writeFileSync(f, files[name].join(NL));
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      page.evaluate(() => { document.getElementById('file-input').click(); }),
+    ]);
+    await chooser.setFiles(f);
+    await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', name, { timeout: 20000 });
+  }
+  await expect(page.locator('#cl-scaffold-open')).toBeVisible({ timeout: 20000 });
+
+  let clicks = 0, keys = 0;
+  await page.locator('#cl-scaffold-open').click(); clicks++;
+  await page.locator('#cl-sc-reuse').click(); clicks++;
+  // 候補: 参加者 → クラス、受ける呼び出し → メソッド、きっかけ → 頭が同じクラスのメソッド、呼び出し → 関連。
+  // クラス図にもう有るメソッド (Irq_Controller.EnableIrq) と応答 (Ack / InitDone) は出ない。
+  const rows = await page.locator('#reuse-list .reuse-row').allTextContents();
+  const joined = rows.join(NL);
+  for (const w of ['Pwm_Driver : + Pwm_Init() : void', 'Pwm_Driver : + Pwm_Start() : void', 'Pwm_Driver : + Pwm_Stop() : void',
+    'PwmRegs : + WriteConfig() : void', 'Pwm_Driver -- Irq_Controller']) expect(joined).toContain(w);
+  expect(joined).not.toContain('EnableIrq');
+  expect(joined).not.toContain('Ack');
+  expect(joined).not.toContain('InitDone');
+  await page.keyboard.type('Pwm'); keys += 3;   // 絞り込み欄は開いた時から選ばれている
+  await page.locator('#reuse-all').click(); clicks++;
+  await page.locator('.reuse-row', { hasText: 'Pwm_Driver -- PwmRegs' }).locator('.reuse-check').click(); clicks++;
+  await page.locator('#reuse-confirm').click(); clicks++;
+  // 窓の欄に入る: 親は兄弟 (Spi_Driver / Can_Driver) と同じ Driver_Common、Pwm_Driver は継承、PwmRegs は結ばない。
+  await expect(page.locator('#cl-sc-parent')).toHaveValue('Driver_Common');
+  await page.keyboard.press('Enter'); keys++;   // 確定は窓の既存のボタン 1 つ (フォーカスが載っている)
+  await expect(page.locator('#cl-sc-modal')).toBeHidden();
+  const dsl = await page.locator('#editor').inputValue();
+  expect(dsl).toContain(['class Pwm_Driver {', '  + Pwm_Init() : void', '  + Pwm_Start() : void', '  + Pwm_Stop() : void', '}'].join(NL));
+  expect(dsl).toContain(['class PwmRegs {', '  + WriteConfig() : void', '}'].join(NL));
+  // 継承は図の書き方 (子 --|> 親) に揃う。
+  expect(dsl).toContain('Pwm_Driver --|> Driver_Common');
+  expect(dsl).not.toContain('Driver_Common <|-- Pwm_Driver');
+  expect(dsl).toContain('Pwm_Driver -- Irq_Controller');
+  expect(dsl).not.toContain('PwmRegs --|>');
+  expect(clicks, 'クリック数').toBeLessThanOrEqual(10);
+  expect(keys, 'キー入力数').toBeLessThanOrEqual(50);
+});

@@ -1310,6 +1310,9 @@ window.MA.modules.plantumlClass = (function() {
     var SECTION = 'font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 4px 0;';
     content.innerHTML = datalist +
       '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">クラス構成をまとめて追加</h3>' +
+      // BLK-primary-20260929-2056-friction: 他の図種の一括欄と同じ「⧉ 他の図から取り込む」。開いているシーケンス図の参加者・受ける呼び出し、
+      // 状態遷移図のきっかけを、打ち直さずにクラス・メンバ・関連の欄へ入れる。
+      (window.MA.reuseModal ? window.MA.reuseModal.buttonHtml('cl-sc-reuse') : '') +
       '<div style="' + SECTION + '">親クラス (省略可)</div>' +
       '<div style="display:flex;gap:6px;margin-bottom:5px;align-items:center;">' +
         '<select id="cl-sc-pkind" style="' + INPUT + '">' +
@@ -1477,6 +1480,84 @@ window.MA.modules.plantumlClass = (function() {
       var el = document.getElementById('cl-sc-rfrom-' + j);
       if (el && el.focus) el.focus();
       refresh();
+    });
+
+    // 取り込んだ候補を欄へ入れる。同じ名前の行があればそのメンバ欄に足し、無ければ空いている行 (無ければ新しい行) を使う。
+    // 親が空なら、同じ語尾の兄弟クラスがそろって継承している親を入れ、そのクラスは継承、ほかは「親と結ばない」にする。
+    function fillFromPicked(picked) {
+      var spec = window.MA.reusePicker.toClassSpec(picked);
+      var text = ctx.getMmdText();
+      var rowOf = function(name) {
+        var rows = content.querySelectorAll('.cl-sc-row');
+        var empty = null;
+        for (var i = 0; i < rows.length; i++) {
+          var k = rows[i].getAttribute('data-i');
+          var v = val('cl-sc-name-' + k).trim();
+          if (v === name) return k;
+          if (!v && empty === null) empty = k;
+        }
+        if (empty !== null) return empty;
+        var i2 = rowCount++;
+        document.getElementById('cl-sc-rows').insertAdjacentHTML('beforeend', classRowHtml(i2));
+        bindClassRow(i2);
+        return String(i2);
+      };
+      spec.classes.forEach(function(c) {
+        var k = rowOf(c.name);
+        var nameEl = document.getElementById('cl-sc-name-' + k);
+        var memEl = document.getElementById('cl-sc-mem-' + k);
+        nameEl.value = c.name;
+        var have = CS.parseMembers(memEl.value);
+        memEl.value = have.concat(c.members.filter(function(m) { return have.indexOf(m) < 0; })).join(', ');
+        var parentEl = document.getElementById('cl-sc-parent');
+        var sib = CS.siblingParent(text, c.name);
+        if (parentEl && !parentEl.value.trim() && sib) parentEl.value = sib;
+        var relEl = document.getElementById('cl-sc-rel-' + k);
+        if (relEl) relEl.value = (sib && parentEl && parentEl.value.trim() === sib) ? 'inheritance' : 'none';
+      });
+      spec.relations.forEach(function(r) {
+        refreshNamePickers();
+        var rrows = content.querySelectorAll('.cl-sc-rel-row');
+        var slot = null;
+        for (var j = 0; j < rrows.length; j++) {
+          var jk = rrows[j].getAttribute('data-j');
+          if (!val('cl-sc-rfrom-' + jk) && !val('cl-sc-rto-' + jk)) { slot = jk; break; }
+        }
+        if (slot === null) {
+          slot = String(relCount++);
+          document.getElementById('cl-sc-rel-rows').insertAdjacentHTML('beforeend', relRowHtml(slot));
+          bindRelRow(slot);
+          refreshNamePickers();
+        }
+        var fromEl = document.getElementById('cl-sc-rfrom-' + slot);
+        var toEl = document.getElementById('cl-sc-rto-' + slot);
+        [[fromEl, r.from], [toEl, r.to]].forEach(function(pair) {
+          if (!pair[0]) return;
+          if (!Array.prototype.some.call(pair[0].options, function(o) { return o.value === pair[1]; })) {
+            var o = document.createElement('option');
+            o.value = pair[1]; o.textContent = pair[1];
+            pair[0].appendChild(o);
+          }
+          pair[0].value = pair[1];
+        });
+        var kindEl = document.getElementById('cl-sc-rkind-' + slot);
+        if (kindEl) kindEl.value = 'association';
+      });
+      refresh();
+      var confirmBtn = document.getElementById('cl-sc-confirm');
+      if (confirmBtn && confirmBtn.focus) confirmBtn.focus();
+    }
+
+    P.bindEvent('cl-sc-reuse', 'click', function() {
+      var ws = window.MA.workspace;
+      var docs = ws && ws.list ? ws.list() : [];
+      var active = ws && ws.getActiveId ? ws.getActiveId() : null;
+      window.MA.reuseModal.open({
+        items: window.MA.reusePicker.classCandidates(docs, active, ctx.getMmdText()),
+        onPick: fillFromPicked,
+        hint: '選んだクラス・メソッド・関連がこの窓の欄に入ります (打ち直し不要)',
+        emptyText: '取り込めるシーケンス図・状態遷移図が開いていません (もう全部クラス図に有るときも空です)',
+      });
     });
 
     function close() { modal.style.display = 'none'; content.innerHTML = ''; }
