@@ -204,6 +204,15 @@ describe('activity _resolveInsertIndent', function() {
     var lines = [':A;', ':B;'];
     expect(actMod._resolveInsertIndent(lines, 1)).toBe('');
   });
+  test('empty branch: a line added right after the opener goes one level in', function() {
+    // BLK-owner-20260927-0745-1: 枠は中身なしで入るので、枝のはじめへ足す行は開き行より 1 段内側
+    expect(actMod._resolveInsertIndent(['if (a?) then (yes)', 'else (no)', 'endif'], 1)).toBe('  ');
+    expect(actMod._resolveInsertIndent(['if (a?) then (yes)', 'else (no)', 'endif'], 2)).toBe('  ');
+    expect(actMod._resolveInsertIndent(['  while (m?) is (yes)', '  endwhile'], 1)).toBe('    ');
+    expect(actMod._resolveInsertIndent(['repeat', 'repeat while (d?) is (yes)'], 1)).toBe('  ');
+    expect(actMod._resolveInsertIndent(['fork', 'fork again', 'end fork'], 1)).toBe('  ');
+    expect(actMod._resolveInsertIndent(['  if (a?) then', '    :X;', '  endif', 'endif'], 3)).toBe('  ');
+  });
   test('handles else as closing token', function() {
     var lines = ['if (a?) then', '  :X;', 'else', '  :Y;', 'endif'];
     expect(actMod._resolveInsertIndent(lines, 2)).toBe('  ');
@@ -216,7 +225,7 @@ describe('activity addControlAtLine - if', function() {
     var out = actMod.addControlAtLine(t, 2, 'before', 'if', { cond: 'auth?', thenLabel: 'yes', elseLabel: 'no' });
     expect(out).toContain(':A;');
     expect(out).toContain('if (auth?) then (yes)');
-    expect(out).toContain('  :;');
+    expect(out).not.toContain(':;');  // BLK-owner-20260927-0745-1: 空アクションを書かない
     expect(out).toContain('else (no)');
     expect(out).toContain('endif');
     expect(out).toContain(':B;');
@@ -246,19 +255,19 @@ describe('activity addControlAtLine - if', function() {
     for (var i = 0; i < lines.length; i++) { if (lines[i].indexOf('if (inner?)') >= 0) { innerIfLine = i; break; } }
     expect(innerIfLine).toBeGreaterThan(-1);
     expect(lines[innerIfLine].substring(0, 2)).toBe('  ');
-    expect(lines[innerIfLine + 1].substring(0, 4)).toBe('    ');  // placeholder :; at depth 2
+    expect(lines[innerIfLine + 1]).toBe('  endif');  // 中身は空 (BLK-owner-20260927-0745-1)
   });
 });
 
 describe('activity addControlAtLine - while/repeat/fork', function() {
-  test('inserts while with placeholder', function() {
+  test('inserts while without an empty action', function() {
     var t = ':A;\n:B;';
     var out = actMod.addControlAtLine(t, 2, 'before', 'while', { cond: 'more?', label: 'yes' });
     expect(out).toContain('while (more?) is (yes)');
-    expect(out).toContain('  :;');
+    expect(out).not.toContain(':;');
     expect(out).toContain('endwhile');
   });
-  test('inserts repeat with placeholder', function() {
+  test('inserts repeat without an empty action', function() {
     var t = ':A;\n:B;';
     var out = actMod.addControlAtLine(t, 2, 'before', 'repeat', { cond: 'done?', label: 'no' });
     var lines = out.split('\n');
@@ -269,7 +278,7 @@ describe('activity addControlAtLine - while/repeat/fork', function() {
     }
     expect(hasRepeat).toBe(true);
     expect(hasRepeatWhile).toBe(true);
-    expect(out).toContain('  :;');
+    expect(out).not.toContain(':;');
   });
   test('inserts fork with N branches', function() {
     var t = ':A;\n:B;';
@@ -349,9 +358,9 @@ describe('activity addElseifBranch / addElseBranch', function() {
     var t = 'if (a?) then (yes)\n  :X;\nendif';
     var out = actMod.addElseifBranch(t, 1, 'b?', 'yes');
     expect(out).toContain('elseif (b?) then (yes)');
-    expect(out).toContain('  :;');
+    expect(out).not.toContain(':;');
     expect(out).toContain('endif');
-    // Order: if → :X; → elseif → :; → endif
+    // Order: if → :X; → elseif → endif
     var lines = out.split('\n');
     var ifIdx = -1, elseifIdx = -1, endifIdx = -1;
     for (var i = 0; i < lines.length; i++) {
@@ -379,7 +388,7 @@ describe('activity addElseifBranch / addElseBranch', function() {
     var t = 'if (a?) then\n  :X;\nendif';
     var out = actMod.addElseBranch(t, 1, 'no');
     expect(out).toContain('else (no)');
-    expect(out).toContain('  :;');
+    expect(out).not.toContain(':;');
   });
   test('addElseBranch is no-op when else already exists', function() {
     var t = 'if (a?) then\n  :X;\nelse\n  :Y;\nendif';

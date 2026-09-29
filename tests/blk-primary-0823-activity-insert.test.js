@@ -115,9 +115,10 @@ if (act) {
       expect(out[1]).toBe('start');
       expect(out[2]).toBe(':Hello world;');
       expect(out[3]).toBe('if (受信成功?) then (yes)');
-      expect(out[5]).toBe('else (no)');
-      expect(out[7]).toBe('endif');
-      expect(out[8]).toBe('stop');
+      // 枝は空のまま入る (BLK-owner-20260927-0745-1: 利用者が入れていない `:;` を書かない)
+      expect(out[4]).toBe('else (no)');
+      expect(out[5]).toBe('endif');
+      expect(out[6]).toBe('stop');
     });
 
     test('while は endwhile まで入る', function() {

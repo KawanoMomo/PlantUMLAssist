@@ -95,7 +95,8 @@ describe('split を fork と同じ入れ物として読む', function() {
     var out = ACT.addForkBranch(dsl, 3).split('\n');
     expect(out.indexOf('split again', 5)).toBeGreaterThan(-1);
     expect(out.filter(function(l) { return l.trim() === 'fork again'; }).length).toBe(0);
-    expect(out[out.indexOf('end split') - 2].trim()).toBe('split again');
+    // 足した枝は空のまま end split の直前に入る (BLK-owner-20260927-0745-1: `:;` を書かない)
+    expect(out[out.indexOf('end split') - 1].trim()).toBe('split again');
   });
 
   test('split again の枝を消すと end split の手前までが消える', function() {

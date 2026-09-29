@@ -178,7 +178,7 @@ window.MA.activityBranchPattern = (function() {
   }
 
   // 挿入する行のかたまり。indent は挿入位置の字下げ、枝の中はその 2 つ内側。
-  // 空アクションの型でも枝が空にならないよう `:;` を 1 行置く。
+  // 中身の無い枝は空のまま (BLK-owner-20260927-0745-1: 入れていない `:;` を書かない)。
   function linesFor(p, indent) {
     if (!p) return [];
     var ind = _s(indent);
@@ -186,12 +186,10 @@ window.MA.activityBranchPattern = (function() {
     var out = [];
     out.push(ind + 'if (' + _s(p.cond) + ') then (' + (_s(p.thenLabel) || 'yes') + ')');
     var th = (p.thenActions || []).filter(function(a) { return _s(a).trim(); });
-    if (th.length) th.forEach(function(a) { out.push(inner + ':' + _s(a).trim() + ';'); });
-    else out.push(inner + ':;');
+    th.forEach(function(a) { out.push(inner + ':' + _s(a).trim() + ';'); });
     out.push(ind + 'else (' + (_s(p.elseLabel) || 'no') + ')');
     var el = (p.elseActions || []).filter(function(a) { return _s(a).trim(); });
-    if (el.length) el.forEach(function(a) { out.push(inner + ':' + _s(a).trim() + ';'); });
-    else out.push(inner + ':;');
+    el.forEach(function(a) { out.push(inner + ':' + _s(a).trim() + ';'); });
     out.push(ind + 'endif');
     return out;
   }

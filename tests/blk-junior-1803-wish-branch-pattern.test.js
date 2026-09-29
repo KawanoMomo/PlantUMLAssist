@@ -113,9 +113,10 @@ test('linesFor が条件・両枝ラベル・枝の中身まで入った行を�
   ok(got.indexOf('    :;') < 0, '空アクションが残っている');
 });
 
-test('枝の中身が空の型でも枝が空行にならない', function() {
+test('枝の中身が空の型は空の枝のまま入り、空行も空アクションも書かない', function() {
+  // BLK-owner-20260927-0745-1: 利用者が入れていない `:;` を書かない (PlantUML は空の枝を描く)
   var got = BP.linesFor({ cond: 'c?', thenLabel: '', thenActions: [], elseLabel: '', elseActions: [] }, '');
-  eq(got, ['if (c?) then (yes)', '  :;', 'else (no)', '  :;', 'endif']);
+  eq(got, ['if (c?) then (yes)', 'else (no)', 'endif']);
 });
 
 test('signature は枝ラベルの揺れでは変わらず、中身が違えば変わる', function() {
