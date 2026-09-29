@@ -30114,7 +30114,7 @@ function exportAllSVG(pickedDocs, statusEl, extraFiles) {
       return _elRecord('svg', { file: summary.zipFile, docs: docs }).then(function() {
         if (document.getElementById('expick-modal') &&
             document.getElementById('expick-modal').style.display === 'flex') {
-          _expickList = _expickBuild();
+          _expickList = window.MA.exportSelect.keepPicks(_expickBuild(), _expickList);
           renderExportPick();
           if (status) status.textContent = msg;
         }
@@ -31579,10 +31579,17 @@ function setupFixExport() {
 var _expickList = [];
 var _expickMode = 'all';
 
+var _expickQuery = '';   // 名前の絞り込み欄 (BLK-primary-20260925-1032-wish)
+
+// BLK-primary-20260925-1032-wish: 候補は開いているタブの図 + 保存先 (保存フォルダ) の図。
+// 保存フォルダの本文は ▤ 影響を見る・会議セットと同じ読み込み (loadFolderImpact) を使う。
 function _expickDocs() {
   if (!window.MA.workspace) return [];
   saveActiveDoc();
-  return window.MA.workspace.list();
+  var open = window.MA.workspace.list();
+  var ES = window.MA.exportSelect;
+  var files = (_fiFolderMode() && _fiDir === _wsFileDir()) ? _fiFileDocs : [];
+  return (ES && ES.withFolder) ? ES.withFolder(open, files) : open;
 }
 
 function _expickBuild() {
@@ -31618,21 +31625,33 @@ function renderExportPick() {
   var body = document.getElementById('expick-body');
   if (!ES || !body) return;
   var esc = window.MA.htmlUtils.escHtml;
+  var shown = ES.visibleByName ? ES.visibleByName(_expickList, _expickQuery) : _expickList;
   if (_expickList.length === 0) {
     body.innerHTML = '<div class="expick-empty">書き出せる図がありません（DSL が空の図は詰められません）</div>';
+  } else if (shown.length === 0) {
+    body.innerHTML = '<div class="expick-empty">「' + esc(_expickQuery) + '」を名前に含む図はありません</div>';
   } else {
-    body.innerHTML = _expickList.map(function(it) {
+    // BLK-primary-20260925-1032-wish: 開いている図 / 保存先の図 の 2 段 (会議セットの選ぶ欄と同じ見出し)。
+    var GROUP = { open: '開いている図', folder: '保存先の図（タブを開かずに、保存されている中身で書き出します）' };
+    var cur = '';
+    body.innerHTML = shown.map(function(it) {
+      var g = it.origin === 'folder' ? 'folder' : 'open';
+      var head = '';
+      if (g !== cur) {
+        cur = g;
+        head = '<div class="expick-group" data-group="' + g + '">' + esc(GROUP[g]) + '</div>';
+      }
       var marks = [];
       if (it.status === 'new') marks.push('<span class="expick-mark">新規</span>');
       else if (it.status === 'changed') marks.push('<span class="expick-mark">変更あり</span>');
       if (it.fix > 0) marks.push('<span class="expick-mark fix">要修正 ' + it.fix + '</span>');
-      return '<label class="expick-row"><input type="checkbox" class="expick-check" data-id="'
+      return head + '<label class="expick-row" data-origin="' + g + '" data-name="' + esc(it.name) + '">'
+        + '<input type="checkbox" class="expick-check" data-id="'
         + esc(String(it.id)) + '"' + (it.selected ? ' checked' : '') + '>'
         + '<span>' + esc(it.name) + '</span>' + marks.join(' ') + '</label>';
     }).join('');
   }
-  var count = document.getElementById('expick-count');
-  if (count) count.textContent = ES.countText(_expickList, _expickMode);
+  _expickCount();
   _expickSinceLine();
   ES.MODES.forEach(function(m) {
     var b = document.getElementById('expick-mode-' + m);
@@ -31640,6 +31659,21 @@ function renderExportPick() {
   });
   var save = document.getElementById('expick-save');
   if (save) save.disabled = (ES.counts(_expickList).selected === 0);
+}
+
+// 見出しの件数。絞り込みで隠れた行に印が残っていれば、その枚数も言う (書き出すのは印を付けた図すべて)。
+function _expickCount() {
+  var ES = window.MA.exportSelect;
+  var count = document.getElementById('expick-count');
+  if (!ES || !count) return;
+  var text = ES.countText(_expickList, _expickMode);
+  if (_expickQuery && ES.visibleByName) {
+    var vis = {};
+    ES.visibleByName(_expickList, _expickQuery).forEach(function(it) { vis[String(it.id)] = true; });
+    var hidden = _expickList.filter(function(it) { return it.selected && !vis[String(it.id)]; }).length;
+    if (hidden) text += '（絞り込みの外に印 ' + hidden + ' 枚）';
+  }
+  count.textContent = text;
 }
 
 function toggleExportPick(open, mode) {
@@ -31650,17 +31684,26 @@ function toggleExportPick(open, mode) {
   _expickList = _expickBuild();
   _expickMode = mode || 'all';
   if (_expickMode !== 'all') _expickList = window.MA.exportSelect.applyMode(_expickList, _expickMode);
+  _expickQuery = '';
+  var find = document.getElementById('expick-filter');
+  if (find) find.value = '';
   var state = document.getElementById('expick-state');
   if (state) state.textContent = '';
   modal.style.display = 'flex';
   renderExportPick();
-  // 保存フォルダの控えは開くたびに読み直す (別の端末で出した分も基準に入れる)。
-  _elLoad().then(function(log) {
-    if (!log || modal.style.display !== 'flex') return;
-    _expickList = _expickBuild();
-    _expickList = window.MA.exportSelect.applyMode(_expickList, _expickMode);
+  // 組み直しても、開いてから付け外しした印はそのまま (保存フォルダを読み終えた後・控えを読んだ後)。
+  function rebuild() {
+    if (modal.style.display !== 'flex') return;
+    var ES = window.MA.exportSelect;
+    var next = _expickBuild();
+    if (_expickMode !== 'all') next = ES.applyMode(next, _expickMode);
+    _expickList = ES.keepPicks(next, _expickList);
     renderExportPick();
-  });
+  }
+  // 保存フォルダの控えは開くたびに読み直す (別の端末で出した分も基準に入れる)。
+  _elLoad().then(function(log) { if (log) rebuild(); });
+  // BLK-primary-20260925-1032-wish: 保存先の図も候補に並べる (読み終えたら足す。タブは開かない)。
+  if (_fiFolderMode()) loadFolderImpact(false).then(function(ok) { if (ok) rebuild(); });
   var body = document.getElementById('expick-body');
   if (body) body.scrollTop = 0;
 }
@@ -31713,14 +31756,20 @@ function setupExportPick() {
     var t = ev.target;
     if (!t || !t.classList || !t.classList.contains('expick-check')) return;
     _expickList = window.MA.exportSelect.setSelected(_expickList, t.getAttribute('data-id'), t.checked);
-    var count = document.getElementById('expick-count');
-    if (count) count.textContent = window.MA.exportSelect.countText(_expickList, _expickMode);
+    _expickCount();
     var save = document.getElementById('expick-save');
     if (save) save.disabled = (window.MA.exportSelect.counts(_expickList).selected === 0);
   });
 
   var save = document.getElementById('expick-save');
   if (save) save.addEventListener('click', function() { exportPickedSVG(); });
+
+  // BLK-primary-20260925-1032-wish: 名前の絞り込み欄。見える行を減らすだけで、印は変えない。
+  var find = document.getElementById('expick-filter');
+  if (find) find.addEventListener('input', function() {
+    _expickQuery = find.value;
+    renderExportPick();
+  });
 }
 
 function svgToCanvas(transparent, callback) {

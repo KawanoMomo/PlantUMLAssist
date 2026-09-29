@@ -3592,6 +3592,12 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #expick-tools #expick-save[disabled] { opacity: 0.5; cursor: default; border-color: var(--border); color: var(--text-secondary); }
 #expick-since { padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); }
 #expick-body { flex: 1; overflow-y: auto; padding: 8px 14px; }
+#expick-find { padding: 6px 14px; border-bottom: 1px solid var(--border); }
+#expick-find input {
+  width: 100%; box-sizing: border-box; background: var(--bg-primary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px;
+}
+#expick-body .expick-group { font-size: 11px; color: var(--text-secondary); padding: 6px 6px 2px; border-bottom: 1px solid var(--border); }
 #expick-body .expick-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 4px; }
 #expick-body label.expick-row {
   display: flex;
@@ -9319,6 +9325,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </span>
     </div>
     <div id="expick-since" role="status"></div>
+    <!-- BLK-primary-20260925-1032-wish: 候補は開いている図 + 保存先の図。名前で絞り、印を付けた図だけを書き出す -->
+    <div id="expick-find"><input type="search" id="expick-filter" placeholder="名前で絞り込む（保存先の図も含む）" aria-label="図の名前で絞り込む" autocomplete="off" /></div>
     <div id="expick-body"></div>
     <div id="expick-state" role="status"></div>
   </div>

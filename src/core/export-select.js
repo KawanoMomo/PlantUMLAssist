@@ -44,18 +44,73 @@ window.MA.exportSelect = (function() {
       var fix = Number(fixOf(name)) || 0;
       var since = sinceOf(name, doc.dsl);
       if (since !== 'changed' && since !== 'same') since = 'new';
+      var origin = doc.origin === 'folder' ? 'folder' : 'open';
       out.push({
         id: doc.id, name: name, dsl: doc.dsl,
         diagramType: doc.diagramType || '',
+        origin: origin,
         status: status,
         sinceStatus: since,
         sinceChanged: since !== 'same',
         changed: status !== 'same',
         fix: fix < 0 ? 0 : fix,
-        selected: true,
+        // BLK-primary-20260925-1032-wish: 保存先にだけある図は、開いたときには印を付けない
+        // (「今回だけこの 3 枚」を選ぶ場面で、保存先の全図が最初から入っていると外す手間になる)。
+        selected: origin !== 'folder',
       });
     });
     return out;
+  }
+
+  // withFolder(openDocs, fileDocs) — 「図を選ぶ」の候補。開いているタブの図に、保存先 (保存フォルダ) の図を足す。
+  // BLK-primary-20260925-1032-wish: 候補がタブの図だけだと、保存フォルダに 24 枚あっても一覧は開いた枚数しか出ず、
+  // 3 枚を選ぶためにまずタブで開き直す往復が要った。会議セットの「会議で見せる図を選ぶ欄」(meeting-set.docOptions)
+  // と同じ出し方: 同名は開いている方だけ (未保存の編集を含む方)、保存先の図は名前順で後ろに並ぶ。
+  // 保存先の図は書き出す時点のディスクの本文で描く (タブは開かない)。
+  function withFolder(openDocs, fileDocs) {
+    var seen = {};
+    var out = [];
+    (Array.isArray(openDocs) ? openDocs : []).forEach(function(d) {
+      if (!d) return;
+      seen[String(d.name == null ? '' : d.name)] = true;
+      out.push(d);
+    });
+    var files = (Array.isArray(fileDocs) ? fileDocs : []).filter(function(f) {
+      return f && f.name && typeof f.dsl === 'string';
+    }).slice().sort(function(a, b) {
+      var x = String(a.name), y = String(b.name);
+      return x < y ? -1 : (x > y ? 1 : 0);
+    });
+    files.forEach(function(f) {
+      var n = String(f.name);
+      if (seen[n]) return;
+      seen[n] = true;
+      out.push({ id: 'file:' + n, name: n, dsl: f.dsl, diagramType: f.diagramType || '', origin: 'folder' });
+    });
+    return out;
+  }
+
+  // visibleByName(list, query) — 名前の絞り込み欄。空白で区切った語をすべて含む図だけを残す (大小文字は見ない)。
+  // 絞り込みは見える行を減らすだけで、印は変えない (書き出すのは印を付けた図)。
+  function visibleByName(list, query) {
+    var words = String(query == null ? '' : query).toLowerCase().split(/\s+/).filter(Boolean);
+    return (Array.isArray(list) ? list : []).filter(function(it) {
+      if (!it) return false;
+      var n = String(it.name || '').toLowerCase();
+      return words.every(function(w) { return n.indexOf(w) >= 0; });
+    });
+  }
+
+  // keepPicks(next, prev) — 一覧を組み直したときに、前の一覧で付け外しした印を引き継ぐ (保存フォルダを読み終えた後など)。
+  function keepPicks(next, prev) {
+    var was = {};
+    (Array.isArray(prev) ? prev : []).forEach(function(it) { if (it) was[String(it.id)] = !!it.selected; });
+    return (Array.isArray(next) ? next : []).map(function(it) {
+      var copy = {};
+      for (var k in it) { if (Object.prototype.hasOwnProperty.call(it, k)) copy[k] = it[k]; }
+      if (Object.prototype.hasOwnProperty.call(was, String(it.id))) copy.selected = was[String(it.id)];
+      return copy;
+    });
   }
 
   // matches(item, mode) — その図が絞り込みに残るか。
@@ -160,6 +215,9 @@ window.MA.exportSelect = (function() {
     MODE_LABEL: MODE_LABEL,
     normalizeMode: normalizeMode,
     buildList: buildList,
+    withFolder: withFolder,
+    visibleByName: visibleByName,
+    keepPicks: keepPicks,
     matches: matches,
     applyMode: applyMode,
     setSelected: setSelected,
