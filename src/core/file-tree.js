@@ -309,6 +309,31 @@ window.MA.fileTree = (function() {
     return out;
   }
 
+  // BLK-owner-20260926-0550-3: 保存先の一覧に並べた図の名前と、ディスクの図の名前の「顔ぶれ」。
+  // 自動保存・Ctrl+S で新しい図を書いても、外で図が増えた・消えても、一覧は読み込み直すまで古いままだった。
+  // 書いた後・フォーカスが戻った時に顔ぶれを比べ、違えば一覧を読み直す (同じなら読み直さない)。
+  // entries は server の一覧の行 ({ type } / { name }) か名前の文字列。
+  function nameSig(entries) {
+    var seen = {};
+    var out = [];
+    (entries || []).forEach(function(e) {
+      var n = (e && typeof e === 'object') ? (e.type || e.name) : e;
+      n = _s(n);
+      if (!n || seen[n]) return;
+      seen[n] = true;
+      out.push(n);
+    });
+    out.sort();
+    return out.join('\n');
+  }
+
+  // 書いた名前が、一覧に並べている顔ぶれ (nameSig の値) に入っているか。入っていれば読み直すまでもない。
+  function sigHas(sig, name) {
+    var n = _s(name);
+    if (!n) return true;
+    return String(sig == null ? '' : sig).split('\n').indexOf(n) >= 0;
+  }
+
   // 下端の 1 行の数。states は図 1 枚ごとの札の事実 ({ unapplied, draft })。
   // 保存先の図を数える (design 10a の「12 図」はツリーに並ぶ保存先の図の数)。
   function summaryOf(states) {
@@ -390,6 +415,8 @@ window.MA.fileTree = (function() {
     gitCountLabel: gitCountLabel,
     summaryLine: summaryLine,
     summaryOf: summaryOf,
+    nameSig: nameSig,
+    sigHas: sigHas,
     missingParts: missingParts,
     freeName: freeName,
   };

@@ -440,6 +440,9 @@ window.MA.filesPanel = (function() {
     var entries = _folderNames();
     if (!FT || !entries.length) {
       host.textContent = '';
+      // BLK-owner-20260926-0550-3: 最後の 1 枚が消えた後も前の件数が見出しに残らないように消す。
+      var c0 = $('files-count-target');
+      if (c0) c0.textContent = '';
       _syncTargetRow();
       refreshSummary();
       if (typeof window.MA.refreshTopCrumbs === 'function') window.MA.refreshTopCrumbs();

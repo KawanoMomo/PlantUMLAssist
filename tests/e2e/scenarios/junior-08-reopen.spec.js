@@ -544,6 +544,47 @@ test('手順8 部品フォルダの「＋ 未作成 N 図種」の略号を押�
   await expect.poll(async () => (await S.readDoc(page, DIR, 'adc_activity')) || '').toContain('@startuml');
 });
 
+// BLK-owner-20260926-0550-3: ＋ で起こした図に 1 行足すと自動保存でディスクには書かれるのに、FILES ツリーの保存先には
+// 読み込み直すまで行が出なかった (見出しの件数・下端の「N 図」も古いまま)。外で消えた図の行も残った。
+// 書いた時に行が出て、外での増減はウィンドウにフォーカスが戻った時に拾う。件数・行・下端・ディスクは同じ数を言う。
+test('手順8 ＋ で起こした図に 1 行足すと、読み込み直さずに保存先の部品フォルダに行が出る (外で消えた図はフォーカスで消える)', async ({ page }) => {
+  await seedParts(page);
+  await expect(page.locator('#files-count-target')).toHaveText('4');
+  await page.locator('#btn-tab-new').click();
+  const name = await page.evaluate(() => window.MA.workspace.getActive().name);
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('End');
+  await page.keyboard.type('\nAlice -> Bob : hi');
+  await expect.poll(async () => (await S.readDoc(page, DIR, name)) || '').toContain('Alice -> Bob');
+
+  // 到達条件その1: 読み込み直さずに、その図の行が保存先の下 (部品のフォルダ) に出て、件数・下端が 5 を言う。
+  await expect(treeFile(page, name)).toHaveCount(1);
+  const where = await treeFile(page, name).evaluate((el) => {
+    const body = el.closest('.files-part-body');
+    return body ? body.getAttribute('data-part-body') : '';
+  });
+  if (where) await expect(page.locator('#files-parts .files-part-head[data-part="' + where + '"]')).toBeVisible();
+  else await expect(treeFile(page, name)).toBeVisible();
+  await expect(page.locator('#files-count-target')).toHaveText('5');
+  await expect(page.locator('#files-summary')).toHaveText(/^5 図/);
+  expect((await S.listDir(page, DIR)).length).toBe(5);
+  // 書いた図の行から開き直せる (押すとその図が開く)。
+  const closedHead = page.locator('#files-parts .files-part-head[data-part="' + where + '"][aria-expanded="false"]');
+  if (where && await closedHead.count()) await closedHead.click();
+  await treeFile(page, name).click();
+  await expect.poll(() => page.locator('#editor').inputValue()).toContain('Alice -> Bob');
+
+  // 到達条件その2: 外で消えた図は、ウィンドウにフォーカスが戻った時に行が消え、件数・下端も 4 に戻る。
+  await page.evaluate(async (d) => fetch('/autosave?dir=' + encodeURIComponent(d) + '&type=adc_state', { method: 'DELETE' }), DIR);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(treeFile(page, 'adc_state')).toHaveCount(0);
+  await expect(page.locator('#files-count-target')).toHaveText('4');
+  await expect(page.locator('#files-summary')).toHaveText(/^4 図/);
+  expect((await S.listDir(page, DIR)).length).toBe(4);
+});
+
 test('手順8 Ctrl+P で同じ検索欄がファイル名に絞られて開き、名前を打って Enter で開ける', async ({ page }) => {
   await seedParts(page);
   await page.locator('#editor').click();
