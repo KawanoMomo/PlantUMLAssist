@@ -37,10 +37,10 @@ test('measure: 継承関係を親子を間違えずに 1 本足すまでの手�
   await page.locator('#cl-tail-kind').selectOption('relation');
   // 5. 種類を継承にする
   await page.locator('#cl-tail-rkind').selectOption('inheritance');
-  // 6. 親を選ぶ (見出しが「親 (From)」なので迷わない)
-  await page.locator('#cl-tail-from').selectOption('DriverBase');
-  // 7. 子を選ぶ
-  await page.locator('#cl-tail-to').selectOption('GpioDrv');
+  // 6. 子を選ぶ (見出しが「子 (From)」。From は矢の根元 — BLK-owner-20260929-0351-1)
+  await page.locator('#cl-tail-from').selectOption('GpioDrv');
+  // 7. 親を選ぶ
+  await page.locator('#cl-tail-to').selectOption('DriverBase');
   // 8. 下書きで向きを確かめる (ここが「保存して DSL を見比べる」の代わり)
   await expect(page.locator('#cl-tail-rpreview')).toContainText('DriverBase <|-- GpioDrv');
   // 9. 追加

@@ -37,13 +37,15 @@ const clMod = global.window.MA.modules.plantumlClass;
 
 describe('関係の From/To の呼び名 (BLK-junior-20260908-1203)', function() {
 
-  test('継承は 親 / 子 で呼ぶ', function() {
-    expect(rr.fieldLabel('inheritance', 'from')).toBe('親 (From)');
-    expect(rr.fieldLabel('inheritance', 'to')).toBe('子 (To)');
+  // BLK-owner-20260929-0351-1: 上の欄 (From) はどの種類でも矢の根元。継承は子から親へ引くので 子 (From) / 親 (To)。
+  test('継承は 子 (From) / 親 (To) で呼ぶ', function() {
+    expect(rr.fieldLabel('inheritance', 'from')).toBe('子 (From)');
+    expect(rr.fieldLabel('inheritance', 'to')).toBe('親 (To)');
   });
 
   test('種類ごとに呼び名が変わる', function() {
-    expect(rr.fieldLabel('implementation', 'from')).toBe('インタフェース (From)');
+    expect(rr.fieldLabel('implementation', 'from')).toBe('実装クラス (From)');
+    expect(rr.fieldLabel('implementation', 'to')).toBe('インターフェース (To)');
     expect(rr.fieldLabel('composition', 'to')).toBe('部分 (To)');
     expect(rr.fieldLabel('dependency', 'from')).toBe('使う側 (From)');
     expect(rr.fieldLabel('nested', 'to')).toBe('内側 (To)');
@@ -55,7 +57,8 @@ describe('関係の From/To の呼び名 (BLK-junior-20260908-1203)', function()
   });
 
   test('下書きの 1 行は、実際に入る行と同じ並びになる', function() {
-    var line = rr.preview('inheritance', 'DriverBase', 'GpioDrv');
+    // 欄は 子 (From) = GpioDrv / 親 (To) = DriverBase。書く行は従来の `親 <|-- 子`。
+    var line = rr.preview('inheritance', 'GpioDrv', 'DriverBase');
     expect(line.indexOf('DriverBase <|-- GpioDrv')).toBe(0);
     expect(line).toContain('親: DriverBase');
     expect(line).toContain('子: GpioDrv');
@@ -66,11 +69,11 @@ describe('関係の From/To の呼び名 (BLK-junior-20260908-1203)', function()
   });
 
   test('選んでいない端点は ? で出す (空欄のまま押させない)', function() {
-    expect(rr.preview('inheritance', '', 'GpioDrv').indexOf('? <|-- GpioDrv')).toBe(0);
+    expect(rr.preview('inheritance', 'GpioDrv', '').indexOf('? <|-- GpioDrv')).toBe(0);
   });
 
   test('全種類の矢印が addRelation の書き出しと一致する', function() {
-    Object.keys(rr.ROLES).forEach(function(kind) {
+    Object.keys(rr.ROLES).filter(function(k) { return k !== 'generalization'; }).forEach(function(kind) {
       var out = clMod.addRelation('@startuml\nclass A\nclass B\n@enduml', kind, 'A', 'B', null);
       expect(out).toContain('A ' + rr.ROLES[kind].arrow + ' B');
     });

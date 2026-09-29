@@ -503,10 +503,12 @@ window.MA.modules.plantumlClass = (function() {
     return 'enum ' + labelPart + stereoPart;
   }
 
-  function fmtRelation(kind, from, to, label) {
+  // rootFirst: 継承・実現を矢の根元 (子・実装クラス) から書く (`子 --|> 親`)。
+  // from / to は常に記法の左右 (from = 親・インターフェース) で渡す。
+  function fmtRelation(kind, from, to, label, rootFirst) {
     var lbl = label ? ' : ' + label : '';
-    if (kind === 'inheritance')   return from + ' <|-- ' + to + lbl;
-    if (kind === 'implementation') return from + ' <|.. ' + to + lbl;
+    if (kind === 'inheritance')   return rootFirst ? to + ' --|> ' + from + lbl : from + ' <|-- ' + to + lbl;
+    if (kind === 'implementation') return rootFirst ? to + ' ..|> ' + from + lbl : from + ' <|.. ' + to + lbl;
     if (kind === 'composition')   return from + ' *-- ' + to + lbl;
     if (kind === 'aggregation')   return from + ' o-- ' + to + lbl;
     if (kind === 'nested')        return from + ' +-- ' + to + lbl;
@@ -577,8 +579,24 @@ window.MA.modules.plantumlClass = (function() {
     lines.forEach(function(l) { out = insertBeforeEnd(out, l); });
     return out;
   }
+  // 本文の継承・実現の書き方 (`親 <|-- 子` / `子 --|> 親`) の多い方 (BLK-owner-20260929-0351-1)。
+  function _rootFirstIn(text) {
+    var R = window.MA.relationRoles;
+    return !!(R && R.prefersRootFirst && R.prefersRootFirst(text));
+  }
+  // フォームの上下の欄 (根元 / 矢じり) → 記法の左右。表は relation-roles が持つ
+  // (読み込まれていない単体の場でも継承・実現だけは同じ規則で入れ替える)。
+  function _toModel(kind, uiFrom, uiTo) {
+    var R = window.MA.relationRoles;
+    if (R && R.toModel) return R.toModel(kind, uiFrom, uiTo);
+    return (kind === 'inheritance' || kind === 'implementation') ? { from: uiTo, to: uiFrom } : { from: uiFrom, to: uiTo };
+  }
+  // 書き込む 1 行 (追加と下書きの両方がこれを通す。見えている行と本文が食い違わない)。
+  function relationLine(text, kind, from, to, label) {
+    return fmtRelation(kind, from, to, label, _rootFirstIn(text));
+  }
   function addRelation(text, kind, from, to, label) {
-    return insertBeforeEnd(text, fmtRelation(kind, from, to, label));
+    return insertBeforeEnd(text, relationLine(text, kind, from, to, label));
   }
   function addPackage(text, label) {
     return insertBeforeEnd(insertBeforeEnd(text, fmtPackage(label)), '}');
@@ -936,6 +954,8 @@ window.MA.modules.plantumlClass = (function() {
         arrow === '<..' || arrow === '<--' || arrow === '<--*' || arrow === '<--o' || arrow === '<--+') {
       var tmp = from; from = to; to = tmp;
     }
+    // `子 --|> 親` で書かれた継承・実現は、直したあとも同じ書き方で書く (既存の図の書き方を崩さない)。
+    var rootFirst = (arrow === '--|>' || arrow === '..|>');
 
     if (field === 'kind') kind = value;
     else if (field === 'from') from = value;
@@ -945,7 +965,7 @@ window.MA.modules.plantumlClass = (function() {
 
     // 多重度・線の色は種別やラベルの書き換えでは失われない (design 3c)。
     lines[idx] = window.MA.relationOptions.applyDecorations(
-      indent + fmtRelation(kind, from, to, label), deco);
+      indent + fmtRelation(kind, from, to, label, rootFirst), deco);
     return lines.join('\n');
   }
 
@@ -1674,7 +1694,7 @@ window.MA.modules.plantumlClass = (function() {
       detailEl.innerHTML = html2;
       if (kind === 'relation') {
         window.MA.relationKindCards.mountForSelect('cl-tail-rkind', 'class');
-        _bindRelationRoles();
+        _bindRelationRoles(ctx);
       }
 
       P.bindEvent('cl-tail-add', 'click', function() {
@@ -1716,8 +1736,10 @@ window.MA.modules.plantumlClass = (function() {
           var to = document.getElementById('cl-tail-to').value;
           if (!fr || !to) { alert('From/To 必須 (先に要素を追加)'); return; }
           var rkind = document.getElementById('cl-tail-rkind').value;
+          // 上の欄は矢の根元 (継承なら子)。記法の左右へ直して書く (BLK-owner-20260929-0351-1)。
+          var mEnds = _toModel(rkind, fr, to);
           window.MA.history.pushHistory();
-          out = addRelation(t, rkind, fr, to, document.getElementById('cl-tail-rlabel').value.trim() || null);
+          out = addRelation(t, rkind, mEnds.from, mEnds.to, document.getElementById('cl-tail-rlabel').value.trim() || null);
         } else if (k === 'note') {
           var ntg = document.getElementById('cl-tail-ntarget').value;
           if (!ntg) { alert('Target 必須'); return; }
@@ -1863,20 +1885,20 @@ window.MA.modules.plantumlClass = (function() {
   // 選んだクラスを一端にして、その場で関係を 1 本引く。選択を外して追加ペインの
   // Relation へ行き From を選び直す・Shift で 2 つ選ぶ、の遠回りをさせない。
   //
-  // 選んだクラスがどちらの端になるかは種類で既定を変える。継承・実現は「選んだ
-  // クラスが子 (実装側)」、それ以外は「選んだクラスが根元 (使う側・全体側)」。
+  // 選んだクラスは、どの種類でも矢の根元 (From) になる (BLK-owner-20260929-0351-1)。
+  // 継承・実現なら子 (実装クラス)、それ以外は使う側・全体側。
   // ⇄ で入れ替えた向きは、種類を選び直しても保つ。
   var _relAdd = { openFor: null, kind: 'association', swapped: false, other: '' };
 
-  function _selfIsFromByDefault(kind) {
-    return !(kind === 'inheritance' || kind === 'implementation');
+  // 選んだクラス・相手・入れ替えから、フォームの上下 (根元 / 矢じり) を決める。
+  function _relAddUiEnds(selfId, otherId, swapped) {
+    return swapped ? { from: otherId, to: selfId } : { from: selfId, to: otherId };
   }
 
-  // 選んだクラス・相手・種類・入れ替えから、書き込む行の両端を決める (DOM に触らない)。
+  // 選んだクラス・相手・種類・入れ替えから、書き込む行の両端 (記法の左右) を決める (DOM に触らない)。
   function relationEnds(kind, selfId, otherId, swapped) {
-    var selfFrom = _selfIsFromByDefault(kind);
-    if (swapped) selfFrom = !selfFrom;
-    return selfFrom ? { from: selfId, to: otherId } : { from: otherId, to: selfId };
+    var ui = _relAddUiEnds(selfId, otherId, swapped);
+    return _toModel(kind, ui.from, ui.to);
   }
 
   function _relAddHtml(element, parsedData) {
@@ -1925,15 +1947,17 @@ window.MA.modules.plantumlClass = (function() {
     function refresh() {
       _relAdd.other = otherEl.value;
       var ends = relationEnds(_relAdd.kind, element.id, otherEl.value, _relAdd.swapped);
+      var ui = _relAddUiEnds(element.id, otherEl.value, _relAdd.swapped);
       var R = window.MA.relationRoles;
       var roles = document.getElementById('cl-reladd-roles');
       if (roles && R) {
-        var r = R.of(_relAdd.kind);
-        roles.textContent = r.from + ': ' + (nameOf[ends.from] || ends.from) + ' / ' + r.to + ': ' + (nameOf[ends.to] || ends.to);
+        // 根元 (From) を先に言う。継承なら「子: … / 親: …」。
+        roles.textContent = R.roleName(_relAdd.kind, 'from') + ': ' + (nameOf[ui.from] || ui.from) + ' / ' +
+          R.roleName(_relAdd.kind, 'to') + ': ' + (nameOf[ui.to] || ui.to);
       }
       var prev = document.getElementById('cl-reladd-preview');
       var lbl = document.getElementById('cl-reladd-label');
-      if (prev) prev.textContent = fmtRelation(_relAdd.kind, ends.from, ends.to, lbl ? lbl.value.trim() : '');
+      if (prev) prev.textContent = relationLine(ctx.getMmdText(), _relAdd.kind, ends.from, ends.to, lbl ? lbl.value.trim() : '');
     }
     var RC = window.MA.relationKindCards;
     if (RC) RC.bindCards(box, 'cl-reladd-card', function(k) {
@@ -2495,7 +2519,7 @@ window.MA.modules.plantumlClass = (function() {
     '</div>';
   }
 
-  function _bindRelationRoles() {
+  function _bindRelationRoles(ctx) {
     var kindEl = document.getElementById('cl-tail-rkind');
     var fromEl = document.getElementById('cl-tail-from');
     var toEl = document.getElementById('cl-tail-to');
@@ -2508,7 +2532,8 @@ window.MA.modules.plantumlClass = (function() {
       var k = kindEl.value;
       if (fromLabel) fromLabel.textContent = window.MA.relationRoles.fieldLabel(k, 'from');
       if (toLabel) toLabel.textContent = window.MA.relationRoles.fieldLabel(k, 'to');
-      if (prevEl) prevEl.textContent = window.MA.relationRoles.preview(k, fromEl.value, toEl.value);
+      if (prevEl) prevEl.textContent = window.MA.relationRoles.preview(k, fromEl.value, toEl.value,
+        ctx && ctx.getMmdText ? _rootFirstIn(ctx.getMmdText()) : false);
     }
     kindEl.addEventListener('change', refresh);
     fromEl.addEventListener('change', refresh);
@@ -2528,6 +2553,8 @@ window.MA.modules.plantumlClass = (function() {
   function _renderRelationEdit(relation, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var RC = window.MA.relationKindCards;
+    var RR = window.MA.relationRoles;
+    var uiEnds = RR.toUi(relation.kind, relation.from, relation.to);
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
@@ -2536,9 +2563,10 @@ window.MA.modules.plantumlClass = (function() {
         RC.cardsHtml('cl-rel-card', RC.kindsOf('class'), relation.kind) +
         // BLK-junior-20260908-1203: 追加フォームと同じ呼び名で出す。既にある関係を
         // 直すときも、親子のどちらを触っているかが見出しから読める。
-        P.fieldHtml(window.MA.relationRoles.fieldLabel(relation.kind, 'from'), 'cl-rel-from', relation.from) +
+        // BLK-owner-20260929-0351-1: 上の欄は矢の根元 (継承なら子)。追加フォームと同じ順。
+        P.fieldHtml(RR.fieldLabel(relation.kind, 'from'), 'cl-rel-from', uiEnds.from) +
         '<button id="cl-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
-        P.fieldHtml(window.MA.relationRoles.fieldLabel(relation.kind, 'to'), 'cl-rel-to', relation.to) +
+        P.fieldHtml(RR.fieldLabel(relation.kind, 'to'), 'cl-rel-to', uiEnds.to) +
         P.fieldHtml('Label', 'cl-rel-label', relation.label || '') +
         P.relationOptionsFor('cl-rel-more', ctx.getMmdText(), relation.line) +
         P.primaryButtonHtml('cl-rel-apply', '変更を反映') +
@@ -2561,7 +2589,14 @@ window.MA.modules.plantumlClass = (function() {
     function _applyRelationKind(newKind) {
       if (newKind === relation.kind) return false;   // 値が変わらないなら DSL も履歴も触らない
       window.MA.history.pushHistory();               // DSL 書換の直前に 1 回だけ
-      ctx.setMmdText(updateRelation(ctx.getMmdText(), relation.line, 'kind', newKind));
+      var t = updateRelation(ctx.getMmdText(), relation.line, 'kind', newKind);
+      // 種類を替えても、欄に見えている根元 (From) と矢じり (To) の相手は替えない
+      // (関連 A → B を継承にしたら A が子)。記法の左右の読み方が替わる種類の間では入れ替えて書く。
+      if (RR.rootIsTo(newKind) !== RR.rootIsTo(relation.kind)) {
+        t = updateRelation(t, relation.line, 'swap');
+        var sw = relation.from; relation.from = relation.to; relation.to = sw;
+      }
+      ctx.setMmdText(t);
       relation.kind = newKind;                       // 「変更を反映」での二重適用を防ぐ
       ctx.onUpdate();
       return true;
@@ -2571,8 +2606,10 @@ window.MA.modules.plantumlClass = (function() {
       _applyRelationKind(newKind);
     });
     P.bindEvent('cl-rel-apply', 'click', function() {
-      var newFrom = document.getElementById('cl-rel-from').value.trim();
-      var newTo = document.getElementById('cl-rel-to').value.trim();
+      var newEnds = RR.toModel(relation.kind,
+        document.getElementById('cl-rel-from').value.trim(), document.getElementById('cl-rel-to').value.trim());
+      var newFrom = newEnds.from;
+      var newTo = newEnds.to;
       var newLabel = document.getElementById('cl-rel-label').value.trim() || null;
       // 種別はカードで反映済みなので、実際に変わる項目が無ければ履歴も積まない。
       if (newFrom === relation.from && newTo === relation.to && newLabel === relation.label) return;
@@ -2707,8 +2744,8 @@ window.MA.modules.plantumlClass = (function() {
         '</div>' +
         P.selectFieldHtml('Kind', 'cl-conn-kind', [
           { value: 'association',    label: 'Association (--)', selected: true },
-          { value: 'inheritance',    label: 'Inheritance (<|--, parent <|-- child)' },
-          { value: 'implementation', label: 'Implementation (<|.., interface <|.. class)' },
+          { value: 'inheritance',    label: 'Inheritance (From 子 → To 親)' },
+          { value: 'implementation', label: 'Implementation (From 実装クラス → To インターフェース)' },
           { value: 'composition',    label: 'Composition (*--, container *-- contained)' },
           { value: 'aggregation',    label: 'Aggregation (o--, container o-- part)' },
           { value: 'nested',         label: 'Nested (+--, outer +-- inner)' },
@@ -2727,15 +2764,13 @@ window.MA.modules.plantumlClass = (function() {
     }
     P.bindEvent('cl-conn-swap', 'click', _doSwap);
 
+    // From は矢の根元 (BLK-owner-20260929-0351-1)。実現ではインターフェースが矢じり (To) の側。
     P.bindEvent('cl-conn-kind', 'change', function() {
       var k = document.getElementById('cl-conn-kind').value;
       if (k !== 'implementation') return;
       var fromId = swapped ? selData[1].id : selData[0].id;
-      var fromType = typeById[fromId];
-      if (fromType !== 'interface') {
-        var otherId = swapped ? selData[0].id : selData[1].id;
-        if (typeById[otherId] === 'interface') _doSwap();
-      }
+      var otherId = swapped ? selData[0].id : selData[1].id;
+      if (typeById[fromId] === 'interface' && typeById[otherId] !== 'interface') _doSwap();
     });
 
     P.bindEvent('cl-conn-create', 'click', function() {
@@ -2744,7 +2779,8 @@ window.MA.modules.plantumlClass = (function() {
       var toId = swapped ? selData[0].id : selData[1].id;
       var kind = document.getElementById('cl-conn-kind').value;
       var label = document.getElementById('cl-conn-label').value.trim() || null;
-      ctx.setMmdText(addRelation(ctx.getMmdText(), kind, fromId, toId, label));
+      var mEnds = _toModel(kind, fromId, toId);
+      ctx.setMmdText(addRelation(ctx.getMmdText(), kind, mEnds.from, mEnds.to, label));
       window.MA.selection.clearSelection();
       ctx.onUpdate();
     });

@@ -83,8 +83,9 @@ test.describe('Class diagram (v0.6.0)', () => {
       await page.waitForTimeout(200);
       await page.locator('#cl-tail-kind').selectOption('relation');
       await page.locator('#cl-tail-rkind').selectOption('inheritance');
-      await page.locator('#cl-tail-from').selectOption('Animal');
-      await page.locator('#cl-tail-to').selectOption('Dog');
+      // BLK-owner-20260929-0351-1: From は矢の根元 = 子 (Dog)、To は親 (Animal)
+      await page.locator('#cl-tail-from').selectOption('Dog');
+      await page.locator('#cl-tail-to').selectOption('Animal');
       await page.locator('#cl-tail-add').click();
       await page.waitForTimeout(300);
       var t = await getEditorText(page);
