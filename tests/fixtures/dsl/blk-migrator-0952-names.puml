@@ -1,0 +1,16 @@
+@startuml
+skinparam activity {
+  BackgroundColor #F8F8F8
+}
+start
+partition "製造 工程" #EEEEFF {
+  :投入;
+}
+partition B #pink {
+  :b;
+}
+partition 検査 {
+  :外観検査;
+}
+stop
+@enduml

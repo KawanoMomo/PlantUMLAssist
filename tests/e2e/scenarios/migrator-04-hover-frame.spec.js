@@ -2248,6 +2248,60 @@ test('migrator 手順 4 — destroy した参加者を同じ名前で create し
   await expect(page.locator('#overlay-warning')).toBeHidden();
 });
 
+// BLK-migrator-20260929-0952: アクティビティ図の 2 つ目の partition・入れ子の外側の partition の見出し (名前の文字) と左辺に
+// ホバーしても枠が出なかった。partition を本文から読み、見出しの文字を名前で照らして枠を決める。見出し・4 辺の中点のどこでも
+// 同じ partition が光り、押すと `partition 名前 {` の行が選ばれる。
+test('migrator 手順 4 — アクティビティ図の partition は 2 つ目・入れ子の外側でも、見出しの文字と 4 辺に枠が出て、押すと partition の行', async ({ page }) => {
+  await bootPlain(page);
+  const caretLine = () => page.evaluate(() => {
+    const ed = document.getElementById('editor');
+    return ed.value.slice(0, ed.selectionStart).split('\n').length;
+  });
+  const hovered = () => page.evaluate(() => Array.from(new Set(Array.from(document.querySelectorAll('#overlay-layer rect.hit-hover'))
+    .map((r) => r.getAttribute('data-type') + '@' + r.getAttribute('data-line')))).join(','));
+  // 描いた partition (札の <path> の直前の <rect>) の見出しの文字と 4 辺の中点を、画面の座標で
+  const points = () => page.evaluate(() => {
+    const svg = document.querySelector('#preview-svg svg');
+    const out = [];
+    Array.from(svg.querySelectorAll('rect')).forEach((r) => {
+      const p = r.nextElementSibling;
+      if (!p || p.tagName.toLowerCase() !== 'path' || !/stroke-width:1\.5/.test(p.getAttribute('style') || '')) return;
+      const t = p.nextElementSibling.getBoundingClientRect();
+      const b = r.getBoundingClientRect();
+      out.push({ name: p.nextElementSibling.textContent, pts: [
+        ['見出し', t.left + t.width / 2, t.top + t.height / 2], ['上辺', b.left + b.width / 2, b.top],
+        ['下辺', b.left + b.width / 2, b.bottom], ['左辺', b.left, b.top + b.height / 2], ['右辺', b.right, b.top + b.height / 2]] });
+    });
+    return out;
+  });
+  const cases = [
+    [['@startuml', 'start', 'partition A {', '  :a;', '  :b;', '}', 'partition B {', '  :c;', '}', 'stop', '@enduml'], { A: 3, B: 7 }],
+    [['@startuml', 'start', 'partition A {', '  :a;', '  partition C {', '    :c;', '  }', '}', 'stop', '@enduml'], { A: 3, C: 5 }],
+    [['@startuml', 'start', 'partition "製造 工程" #EEEEFF {', '  :投入;', '}', 'partition 検査 {', '  :外観検査;', '}', 'stop', '@enduml'],
+      { '製造 工程': 3, '検査': 6 }],
+  ];
+  for (const [dsl, want] of cases) {
+    await typeDsl(page, dsl.join('\n'));
+    await expect(page.locator('#overlay-layer rect[data-src-kind="partition"][data-hit-kind="container"]'))
+      .toHaveCount(Object.keys(want).length, { timeout: 20000 });
+    const parts = await points();
+    expect(parts.map((p) => p.name).sort(), '描いた partition').toEqual(Object.keys(want).sort());
+    for (const part of parts) {
+      for (const [where, x, y] of part.pts) {
+        await page.mouse.move(3, 3);
+        await page.mouse.move(x, y);
+        await expect.poll(hovered, part.name + ' の' + where + 'にホバーすると partition の行の枠').toBe('source-line@' + want[part.name]);
+      }
+      const head = part.pts[0];
+      await page.mouse.click(3, 3);
+      await page.mouse.click(head[1], head[2]);
+      await expect.poll(caretLine, part.name + ' の見出しを押すと partition の行').toBe(want[part.name]);
+      await expect(page.locator('#src-line-props')).toHaveAttribute('data-line', String(want[part.name]));
+    }
+  }
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+});
+
 // BLK-owner-20260926-1628-1: 当て方を変えるたびに、migrator が枠 ok と記録した実物の図が退行し、マージの後の手の測り直しで
 // 見つかっていた。progress.md で描画 ok・枠 ok の実物の図を、migrator と同じ道 (ファイルを開く → Fit → 要素を指す) で測り、
 // 基準 (tests/e2e/hit-baseline/plantuml-{版}.json) で枠が出ていた点が「枠なし」「別の行の枠」になったら赤にする。
