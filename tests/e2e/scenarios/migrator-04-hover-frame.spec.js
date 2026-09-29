@@ -1931,6 +1931,22 @@ test('migrator 手順 4 — !definelong・変数・%関数で書いた sequence 
     expect(h.hit.line, label + ' は宣言した 4 行目').toBe('4');
   }
   expect((await hoverHit(page, '転送')).hit, '転送 にホバーして 7 行目の枠').toEqual({ type: 'message', line: '7', hover: true });
+
+  // BLK-owner-20260929-2131-1: !while が作った参加者を押すと、右パネルは読むだけで、どの行が作っているかを 1 行で言う。
+  // 欄から名前を直してひな形の行 (4 行目) を書き換え、2 人とも同じ名前にしない。普通の行 (7 行目) は今までどおり直せる。
+  const whileDsl = fx('seq-while-participants');
+  const s2 = await hoverHit(page, 'サービス2');
+  await page.mouse.click(s2.box.x, s2.box.y);
+  await expect(page.locator('#generated-part-note'), '!while の参加者は理由の 1 行が出る').toContainText('L3 の繰り返し (!while)');
+  await expect(page.locator('#seq-edit-alias'), 'Alias 欄は読むだけ').toBeDisabled();
+  await expect(page.locator('#props-content .seq-delete-line'), '✕ 削除も押せない').toBeDisabled();
+  await page.evaluate(() => { const a = document.activeElement; if (a && a.blur) a.blur(); });
+  await page.keyboard.press('Delete');
+  expect(await page.evaluate(() => document.getElementById('editor').value), '本文は 1 字も変わらない').toBe(whileDsl);
+  const tr = await hoverHit(page, '転送');
+  await page.mouse.click(tr.box.x, tr.box.y);
+  await expect(page.locator('#props-content .seq-delete-line'), '普通の行は ✕ 削除を押せる').toBeEnabled();
+  await expect(page.locator('#generated-part-note')).toHaveCount(0);
 });
 
 // BLK-migrator-20260925-1800: 途中で `create` / `**` した参加者の頭がそのメッセージの高さに描かれ、メッセージの文字を探す床を押し下げて、

@@ -1295,6 +1295,8 @@ function init() {
       var newIndex = computeDropIndex(e.clientX);
       if (newIndex !== null && currentModule) {
         var seqMod = window.MA.modules && window.MA.modules.plantumlSequence;
+        var genP = _generatedOf({ type: 'participant', id: dragState.id });   // BLK-owner-20260929-2131-1
+        if (genP) { _refuseGenerated(genP); seqMod = null; }
         if (seqMod && seqMod.moveParticipant) {
           // Bug 4: newIndex === 現在位置の no-op で履歴だけ積まれると
           // Ctrl+Z が「同じ text に戻る」無駄な 1 step になり、体感的に
@@ -1517,6 +1519,23 @@ function init() {
     }
     return null;
   }
+
+  // BLK-owner-20260929-2131-1: 繰り返し・手続きが作った部品 (src/core/generated-part.js) は、キーでも消さない・
+  // 矢印を替えない・挿入しない・複製しない・並べ替えない。下の各ルーターより先に (window の capture で) 断る。
+  window.addEventListener('keydown', function(e) {
+    if (e.isComposing || e.keyCode === 229 || e.shiftKey) return;
+    var k = e.key, plain = !(e.ctrlKey || e.metaKey || e.altKey);
+    var edits = (plain && (k === 'Delete' || k === 'Backspace' || k === 'd' || k === 'Enter'))
+      || ((e.ctrlKey || e.metaKey) && !e.altKey && (k || '').toLowerCase() === 'd')
+      || (e.altKey && !e.ctrlKey && !e.metaKey && (k === 'ArrowUp' || k === 'ArrowDown'));
+    if (!edits || _kbdInTypingTarget() || _kbdModalOpen()) return;
+    var cur = _kbdSelectedItem();
+    var gen = cur ? _generatedOf(cur) : null;
+    if (!gen) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    _refuseGenerated(gen);
+  }, true);
 
   document.addEventListener('keydown', function(e) {
     if (e.isComposing || e.keyCode === 229) return;
@@ -34394,6 +34413,50 @@ function refreshPartVocab() {
   PV.setCurrent(PV.collect(subject, all));
 }
 
+// BLK-owner-20260929-2131-1: 選んだ部品が「その部品 1 つだけを書いた行」から描かれていない (!while・!foreach の中、
+// 手続きの中身・呼び出し、$変数・%関数で名前が決まる行、展開後の行から読んだ部品) なら、どの行が作っているかを返す
+// (src/core/generated-part.js)。右パネル・キー操作・参加者のドラッグは、そういう部品を書き換えない。
+function _parsedPartOf(s) {
+  if (!s || !currentParsed) return null;
+  var hit = null, seen = new Set();
+  (function walk(o, depth) {
+    if (hit && hit.line === s.line) return;
+    if (!o || typeof o !== 'object' || o.nodeType || depth > 8 || seen.has(o)) return;
+    seen.add(o);
+    if (o.id === s.id && typeof o.line === 'number' && (o.kind || o.type)) {
+      if (!hit || o.line === s.line) hit = o;
+    }
+    Object.keys(o).forEach(function(k) { if (o[k] && typeof o[k] === 'object') walk(o[k], depth + 1); });
+  })(currentParsed, 0);
+  return hit;
+}
+function _generatedOf(s) {
+  var GP = window.MA.generatedPart;
+  if (!GP || !s || s.type === 'source-line') return null;
+  var el = _parsedPartOf(s);
+  var line = (typeof s.line === 'number' && s.line) || (el && el.line) || 0;
+  var PE = window.MA.preprocExpand;
+  var cl = PE && PE.changedLines ? PE.changedLines(mmdText) : null;
+  try { return GP.of(mmdText, line, el, { callLines: cl }); } catch (e) { return null; }
+}
+function _generatedOfSelection(sel) {
+  sel = sel || (window.MA.selection ? window.MA.selection.getSelected() : []) || [];
+  for (var i = 0; i < sel.length; i++) {
+    var g = _generatedOf(sel[i]);
+    if (g) return g;
+  }
+  return null;
+}
+// 書き換えを断ったことを言う (右パネルの 1 行を光らせ、同じ文をトーストにも出す)。
+function _refuseGenerated(gen) {
+  var note = document.getElementById('generated-part-note');
+  if (note) {
+    note.style.outline = '2px solid var(--accent-orange, #f0a030)';
+    setTimeout(function() { note.style.outline = ''; }, 1500);
+  }
+  if (window.MA.toast) window.MA.toast.show('書き換えませんでした: ' + gen.message);
+}
+
 function renderProps(parsed) {
   if (!parsed) parsed = currentParsed;
   refreshNameRegistry();
@@ -34420,7 +34483,10 @@ function renderProps(parsed) {
       '</div>';
     return;
   }
-  currentModule.renderProps(sel, parsed, propsEl, {
+  // BLK-owner-20260929-2131-1: 繰り返し・手続きが作った部品の欄は読むだけ (本文を書き換えない)
+  var _gen = (sel && sel.length) ? _generatedOfSelection(sel) : null;
+  var _GP = window.MA.generatedPart;
+  var _ctx = {
     getMmdText: function() { return mmdText; },
     setMmdText: function(s) {
       mmdText = s;
@@ -34437,7 +34503,9 @@ function renderProps(parsed) {
       }
     },
     onUpdate: function() { scheduleRefresh(); },
-  });
+  };
+  currentModule.renderProps(sel, parsed, propsEl, _gen && _GP ? _GP.guard(_ctx, _gen, _refuseGenerated) : _ctx);
+  if (_gen && _GP) _GP.lock(propsEl, _gen);
 }
 
 // design 5a: 描画エラーの出し方。「図の上に重ねて表示」が入っていれば
