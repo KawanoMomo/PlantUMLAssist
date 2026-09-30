@@ -1252,8 +1252,9 @@ window.MA.modules.plantumlState = (function() {
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        // design 4c: 置く場所を選べるようになったので、見出しは「末尾」を名乗らない。
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">追加 / Add</label>' +
+        // BLK-owner-20260926-0550-5: 見出しは 6 図種で同じ「末尾に追加」(台帳の名前)。
+        // 途中に入れるときは、この見出しの下の「追加する位置」で選ぶ。
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'st-tail-kind', [
           // BLK-owner-20260925-0312-3: 「子状態」は「状態」+ 追加する位置「{親} の中」と同じ行を書くので畳んだ
           // (入れ子を作る入口を「追加する位置」1 つにする。Ctrl+K の「子状態」「入れ子」はここへ連れてくる)。
@@ -2090,9 +2091,9 @@ window.MA.modules.plantumlState = (function() {
       }
       moveIntoHtml =
         '<div style="margin-top:4px;font-size:11px;display:flex;align-items:center;gap:4px;">' +
-          '<span style="color:var(--text-secondary);">Move into:</span>' +
+          '<span style="color:var(--text-secondary);">入れる先の複合状態:</span>' +
           '<select id="st-move-target" style="flex:1;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:11px;">' + moveOpts + '</select>' +
-          '<button id="st-move-into" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">Move</button>' +
+          '<button id="st-move-into" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">移す</button>' +
         '</div>';
     }
     var moveOutHtml = '';
@@ -2102,9 +2103,10 @@ window.MA.modules.plantumlState = (function() {
 
     var doDisplay = (st.do || '').replace(/\\n/g, '\n');
     var html =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' +
-      (st.stereotype ? st.stereotype + ' ' : '') + 'State (L' + st.line + ')</div>' +
-      P.fieldHtml('ID', 'st-id', st.id) +
+      // BLK-owner-20260926-0550-5: 見出しは遷移・クラスと同じ「{種類} · N 行目」、欄名は日本語。
+      '<div id="st-sel-head" style="font-size:10px;color:var(--accent);margin-bottom:8px;font-weight:bold;">' +
+      window.MA.htmlUtils.escHtml((st.stereotype ? st.stereotype + ' ' : '') + P.lineHead('State', st.line)) + '</div>' +
+      P.fieldHtml('名前 (id)', 'st-id', st.id) +
       // BLK-junior-20260915-0406-wish: 状態名も同じ部品の他の図と揃える。
       P.vocabPickerHtml('st-id-vocab', { roles: ['state'] }) +
       P.fieldHtml('ラベル', 'st-label', st.label || '') +
@@ -2130,7 +2132,7 @@ window.MA.modules.plantumlState = (function() {
         : '') +
       // Behaviors section (StableState style: entry/exit single-line, do multi-line)
       '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
-        '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Behaviors</div>' +
+        '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">状態内の動作 (entry / do / exit)</div>' +
         '<div style="margin-bottom:5px;">' +
           '<input id="st-entry" placeholder="entry" value="' + window.MA.htmlUtils.escHtml(st.entry || '') + '" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:Consolas,monospace;font-size:11px;">' +
         '</div>' +

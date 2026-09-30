@@ -974,7 +974,7 @@ window.MA.modules.plantumlComponent = (function() {
       propsEl.innerHTML =
         // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
         '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-          '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
+          '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
           '<div style="font-size:11px;color:var(--text-secondary);">id: ' + element.id + '</div>' +
         '</div>';
       return;
@@ -982,7 +982,7 @@ window.MA.modules.plantumlComponent = (function() {
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
         P.fieldHtml('Alias (id)', 'co-edit-id', element.id) +
         P.fieldHtml('Label', 'co-edit-label', element.label) +
         // design 5d: ステレオタイプ (<<service>> など)。空にすれば外れる
@@ -1204,15 +1204,16 @@ window.MA.modules.plantumlComponent = (function() {
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PACKAGE (L' + group.startLine + '-' + group.endLine + ')</label>' +
-        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Label: ' + window.MA.htmlUtils.escHtml(group.label || '') + '</div>' +
+        // BLK-owner-20260926-0550-5: 見出しは「境界 · 2–5 行目」、欄名は日本語。
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead('境界', group.startLine, group.endLine)) + '</label>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">名前: ' + window.MA.htmlUtils.escHtml(group.label || '') + '</div>' +
         // design 5d: 表記を後から差し替える (中身と閉じ括弧はそのまま)
         window.MA.properties.selectFieldHtml('表記', 'co-grp-notation',
           window.MA.groupNotation.notationsFor('plantuml-component').map(function(n) {
             return { value: n.id, label: n.label + ' — ' + n.hint, selected: n.id === (group.notation || 'package') };
           })) +
         window.MA.properties.primaryButtonHtml('co-grp-notation-apply', '表記を変更') +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;">v0.4.0: ラベル変更 / 範囲指定 wrap は v0.5.0 で対応</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;">名前を変えるときは、テキストの ' + group.startLine + ' 行目を直す。</div>' +
       '</div>';
     propsEl.innerHTML = html;
     window.MA.properties.bindEvent('co-grp-notation-apply', 'click', function() {

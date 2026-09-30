@@ -834,7 +834,7 @@ window.MA.modules.plantumlUsecase = (function() {
     var P = window.MA.properties;
     var esc = window.MA.htmlUtils.escHtml;
     propsEl.innerHTML =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (L' + note.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + esc(P.lineHead('Note', note.line)) + '</div>' +
       '<div style="margin-bottom:6px;font-size:11px;"><b>Target:</b> ' + esc(note.targetId) +
         ' <span style="color:var(--text-secondary);">(付け替えは削除して追加)</span></div>' +
       P.selectFieldHtml('Position', 'uc-note-pos', [
@@ -874,7 +874,7 @@ window.MA.modules.plantumlUsecase = (function() {
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(P.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
         P.fieldHtml('Alias (id)', 'uc-edit-id', element.id) +
         P.fieldHtml('Label', 'uc-edit-label', element.label) +
         P.primaryButtonHtml('uc-edit-apply', '変更を反映') +
@@ -984,7 +984,7 @@ window.MA.modules.plantumlUsecase = (function() {
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(P.lineHead('Relation', relation.line)) + '</label>' +
         // design 3c: 関係の種類は記法ではなく「UML 名称 + 意味の説明」のカードで選ぶ
         RC.cardsHtml('uc-rel-card', RC.kindsOf('usecase'), relation.kind) +
         // BLK-owner-20260929-0351-1: 上の欄は矢の根元 (汎化なら子)。
@@ -1052,15 +1052,16 @@ window.MA.modules.plantumlUsecase = (function() {
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PACKAGE (L' + pkg.startLine + '-' + pkg.endLine + ')</label>' +
-        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Label: ' + window.MA.htmlUtils.escHtml(pkg.label || '') + '</div>' +
+        // BLK-owner-20260926-0550-5: 見出しは「境界 · 2–5 行目」、欄名は日本語。
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead('境界', pkg.startLine, pkg.endLine)) + '</label>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">名前: ' + window.MA.htmlUtils.escHtml(pkg.label || '') + '</div>' +
         // design 5d: 表記を後から差し替える (中身と閉じ括弧はそのまま)
         window.MA.properties.selectFieldHtml('表記', 'uc-grp-notation',
           window.MA.groupNotation.notationsFor('plantuml-usecase').map(function(n) {
             return { value: n.id, label: n.label + ' — ' + n.hint, selected: n.id === (pkg.notation || 'package') };
           })) +
         window.MA.properties.primaryButtonHtml('uc-grp-notation-apply', '表記を変更') +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;">v0.3.0: ラベル変更 / 範囲指定 wrap は v0.5.0 で対応</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;">名前を変えるときは、テキストの ' + pkg.startLine + ' 行目を直す。</div>' +
       '</div>';
     propsEl.innerHTML = html;
     window.MA.properties.bindEvent('uc-grp-notation-apply', 'click', function() {
