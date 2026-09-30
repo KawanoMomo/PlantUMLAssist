@@ -2553,7 +2553,7 @@ window.MA.modules.plantumlActivity = (function() {
     var esc = window.MA.htmlUtils.escHtml;
     var where = AI ? AI.pointLabel(ctx.getMmdText(), sel.line, 'after') : ('L' + sel.line);
     propsEl.innerHTML =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">分岐の枝 (L' + sel.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + esc(window.MA.properties.lineHead('分岐の枝', sel.line)) + '</div>' +
       '<div style="font-size:11px;margin-bottom:8px;">' + esc(where) + '</div>' +
       '<div style="font-size:10px;color:var(--text-secondary);">この側に足すものを下で選びます。' +
       '枝の名前を変えるときは分岐の菱形を選んでください。</div>';
@@ -2566,7 +2566,7 @@ window.MA.modules.plantumlActivity = (function() {
     var esc = window.MA.htmlUtils.escHtml;
     var where = AI ? AI.pointLabel(ctx.getMmdText(), sel.line, 'after') : ('L' + sel.line);
     propsEl.innerHTML =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">流れの矢印 (L' + sel.line + ' の後)</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + esc(window.MA.properties.lineHead('流れの矢印', sel.line)) + 'の後</div>' +
       '<div style="font-size:11px;margin-bottom:8px;">' + esc(where) + '</div>' +
       '<div style="font-size:10px;color:var(--text-secondary);">この矢印の上に足すものを下で選びます。</div>';
   }
@@ -2596,7 +2596,7 @@ window.MA.modules.plantumlActivity = (function() {
     var node = _findNodeById(parsedData.nodes, sel.id);
     if (!node) { propsEl.innerHTML = ''; return; }
     var html =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + node.kind + ' (L' + node.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + window.MA.htmlUtils.escHtml(P.lineHead(node.kind, node.line)) + '</div>' +
       '<div style="font-size:11px;margin-bottom:8px;color:var(--text-secondary);">この ' + node.kind + ' ノードは編集項目がありません。</div>' +
       P.primaryButtonHtml('ac-term-delete', '✕ 削除');
     propsEl.innerHTML = html;
@@ -2754,8 +2754,9 @@ window.MA.modules.plantumlActivity = (function() {
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        // 置く場所を選べるので、見出しは「末尾」を名乗らない (状態遷移図と同じ)。
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">追加</label>' +
+        // BLK-owner-20260926-0550-5: 見出しは 6 図種で同じ「末尾に追加」(台帳の名前)。
+        // 途中に入れるときは、この見出しの下の「追加する位置」で選ぶ。
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'ac-tail-kind', [
           { value: 'action', label: 'アクション (:…;)', selected: true },
           { value: 'start', label: '開始 (start)' },
@@ -3429,7 +3430,7 @@ window.MA.modules.plantumlActivity = (function() {
     var P = window.MA.properties;
     var node = _findNodeById(parsedData.nodes, sel.id);
     if (!node) { propsEl.innerHTML = ''; return; }
-    var html = '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + (node.keyword || node.kind) + ' (L' + node.line + ')</div>';
+    var html = '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + window.MA.htmlUtils.escHtml(P.lineHead(node.keyword || node.kind, node.line)) + '</div>';
 
     if (node.kind === 'if') {
       html += P.fieldHtml('Condition', 'ac-if-cond', node.condition || '');
@@ -3591,7 +3592,7 @@ window.MA.modules.plantumlActivity = (function() {
     }
     if (!sw) { propsEl.innerHTML = ''; return; }
     var html =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Swimlane "' + window.MA.htmlUtils.escHtml(sw.label) + '" (L' + sw.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead('Swimlane', sw.line) + ' 「' + sw.label + '」') + '</div>' +
       P.fieldHtml('Name', 'ac-sw-name', sw.label) +
       P.primaryButtonHtml('ac-sw-update', '更新') +
       P.primaryButtonHtml('ac-sw-delete', '✕ swimlane 解除');
@@ -3620,7 +3621,7 @@ window.MA.modules.plantumlActivity = (function() {
     }
     if (!note) { propsEl.innerHTML = ''; return; }
     var html =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (L' + note.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead('Note', note.line)) + '</div>' +
       P.selectFieldHtml('Position', 'ac-note-pos', [
         { value: 'right', label: 'Right', selected: note.position === 'right' },
         { value: 'left', label: 'Left', selected: note.position === 'left' }

@@ -491,6 +491,17 @@ window.MA.properties = (function() {
     '</div>';
   }
 
+  // BLK-owner-20260926-0550-5: 選択パネルの見出しは図種をまたいで「{種類} · N 行目」の 1 形
+  // (design 1a / 4a〜4c の「Class · 6 行目」「Transition · 4 行目」)。範囲を持つもの
+  // (境界・ブロック・囲み) は「2–5 行目」。文字だけ返す (囲む要素と色は各パネルが持つ)。
+  function lineHead(kind, line, endLine) {
+    var k = String(kind == null ? '' : kind);
+    var a = parseInt(line, 10), b = parseInt(endLine, 10);
+    var where = isNaN(a) ? '' : (!isNaN(b) && b > a ? a + '–' + b : String(a)) + ' 行目';
+    if (!where) return k;
+    return k ? k + ' · ' + where : where;
+  }
+
   // panelHeaderHtml: title bar at top of single-element edit panel
   function panelHeaderHtml(label) {
     return '<div style="margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);font-weight:bold;color:var(--text-primary);font-size:13px;">' + escHtml(label) + '</div>';
@@ -605,7 +616,7 @@ window.MA.properties = (function() {
         + escHtml(it.name) + '</button>';
     }
 
-    var head = PV.summary(vocab);
+    var head = PV.summary(vocab, items.length);
     var NR = window.MA.nameRegistry;
     if (regChips.length && NR) {
       head = (head ? head + ' / ' : '') + '正式表記 ' + regChips.length + ' 語';
@@ -789,6 +800,7 @@ window.MA.properties = (function() {
     bindRelationOptions: bindRelationOptions,
     relationOptionsFor: relationOptionsFor,
     bindRelationOptionsFor: bindRelationOptionsFor,
+    lineHead: lineHead,
     panelHeaderHtml: panelHeaderHtml,
     sectionHeaderHtml: sectionHeaderHtml,
     sectionFooterHtml: sectionFooterHtml,

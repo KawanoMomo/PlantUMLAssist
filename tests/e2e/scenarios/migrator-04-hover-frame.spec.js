@@ -2572,7 +2572,7 @@ test('migrator 手順 4 — destroy した参加者を同じ名前で create し
     { timeout: 5000 }).toEqual(['participant:Worker@6']);
   await expect(page.locator('#props-content')).toContainText('Worker');
   // BLK-owner-20260929-0431-1: 右欄の見出し・✕ 削除は光らせた行 (6) を指す。1 回目のメッセージ (4) を消さない。
-  await expect(page.locator('#props-content')).toContainText('participant · L6');
+  await expect(page.locator('#props-content')).toContainText('participant · 6 行目');
   const before = await page.locator('#editor').inputValue();
   // 1 回目の頭は宣言の行が無く、選んだ行は最初のメッセージ。✕ 削除は理由を言って本文を変えない。
   // (同じ参加者をもう一度押すと選択が外れるので、Esc で外してから押す)
@@ -2592,7 +2592,7 @@ test('migrator 手順 4 — destroy した参加者を同じ名前で create し
   await page.mouse.move(pts[1].x, pts[1].y);
   await page.mouse.down();
   await page.mouse.up();
-  await expect(page.locator('#props-content')).toContainText('participant · L6');
+  await expect(page.locator('#props-content')).toContainText('participant · 6 行目');
   await page.locator('#props-content .seq-delete-line').click();
   const after = before.split('\n');
   after.splice(5, 1);

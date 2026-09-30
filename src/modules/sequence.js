@@ -1535,7 +1535,8 @@ window.MA.modules.plantumlSequence = (function() {
     ev.initEvent('change', true, false);
     toSel.dispatchEvent(ev);
     var note = document.getElementById('seq-tail-endpoint-note');
-    if (note) note.textContent = 'To: ' + id + ' (「+ 末尾に追加」で確定)';
+    // BLK-owner-20260926-0550-5: 案内の中のボタン名は画面のボタンの名前と同じにする。
+    if (note) note.textContent = 'To: ' + id + ' (「+ 追加 (Enter)」で確定)';
     return true;
   }
 
@@ -3230,7 +3231,7 @@ window.MA.modules.plantumlSequence = (function() {
           // userissue v1.2.7: 既存ラベルから <<stereotype>> 部を分離して個別フィールドへ。
           var msgParts = extractStereotype(mm.label);
           propsEl.innerHTML =
-            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(mm.from + ' ' + mm.arrow + ' ' + mm.to) + '</strong><br><span style="color:var(--text-secondary);">Message · L' + mm.line + '</span></div>' +
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(mm.from + ' ' + mm.arrow + ' ' + mm.to) + '</strong><br><span style="color:var(--text-secondary);">' + escHtml(P.lineHead('Message', mm.line)) + '</span></div>' +
             // design 1a: From ⇄ To を横並びにし、間の ⇄ で 1 クリック入替。
             '<div style="display:flex;align-items:flex-end;gap:4px;margin-bottom:8px;">' +
               '<div style="flex:1;min-width:0;">' + P.selectFieldHtml('From', 'seq-edit-from', fromOpts) + '</div>' +
@@ -3354,13 +3355,14 @@ window.MA.modules.plantumlSequence = (function() {
             '</div>' +
           '</div>';
           propsEl.innerHTML =
-            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(pp.label) + '</strong><br><span style="color:var(--text-secondary);">' + pp.ptype + ' · L' + selLine + '</span></div>' +
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(pp.label) + '</strong><br><span style="color:var(--text-secondary);">' + escHtml(P.lineHead(pp.ptype, selLine)) + '</span></div>' +
             P.selectFieldHtml('Type', 'seq-edit-ptype', pOpts2) +
             P.fieldHtml('Alias', 'seq-edit-alias', pp.id) +
             // BLK-reviewer-20260915-0506-wish: 部品名を打つのはここ。登録簿の
             // 正式表記を欄の下に出し、揺れた綴りならその場で揃える先を言う。
             P.vocabPickerHtml('seq-edit-alias-vocab', { roles: ['type'] }) +
-            '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Label</label><div id="seq-edit-label-rle"></div></div>' +
+            // BLK-owner-20260926-0550-5: 図に出る文字の欄は部品を問わず「本文」。
+            '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-label-rle"></div></div>' +
             '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);margin:8px 0;"><input id="seq-edit-rename-refs" type="checkbox" checked> Alias 変更時に他要素の参照も追従</label>' +
             paletteHtml +
             actionBarHtml(selLine, 'participant', pp.id);
@@ -3444,7 +3446,7 @@ window.MA.modules.plantumlSequence = (function() {
             '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
               '<button id="seq-lifeline-delete-acts" style="width:100%;background:' + (actCount > 0 ? 'var(--accent-red)' : 'var(--bg-tertiary)') + ';color:#fff;border:' + (actCount > 0 ? 'none' : '1px solid var(--border)') + ';padding:6px;border-radius:4px;font-size:11px;cursor:' + (actCount > 0 ? 'pointer' : 'not-allowed') + ';"' + (actCount === 0 ? ' disabled' : '') + '>✕ ' + escHtml(lpp.label) + ' の activation を全削除 (' + actCount + ' 件)</button>' +
             '</div>' +
-            '<div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">participant 宣言行を消したい場合は actor の頭をクリックしてください。</div>';
+            '<div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">参加者の宣言の行を消すときは、参加者の頭を押してください。</div>';
           var lid = lpp.id;
           // 個別 ✕ — 行ごと削除。 削除後は line 番号がシフトするので selection を
           // クリアし render に refresh を委譲。
@@ -3471,11 +3473,11 @@ window.MA.modules.plantumlSequence = (function() {
           if (!nn2) return;
           var posOpts2 = NOTE_POSITIONS.map(function(p) { return { value: p, label: p, selected: p === nn2.position }; });
           propsEl.innerHTML =
-            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(nn2.text || '(empty)') + '</strong><br><span style="color:var(--text-secondary);">Note · ' + nn2.position + ' · L' + nn2.line + '</span></div>' +
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(nn2.text || '(empty)') + '</strong><br><span style="color:var(--text-secondary);">' + escHtml(P.lineHead('Note', nn2.line)) + '</span></div>' +
             // BLK-human-20260916-0900: 置いた後でも位置・対象参加者・上下の順を変えられる。
             P.selectFieldHtml('位置 (Position)', 'seq-edit-npos', posOpts2) +
             _noteTargetsHtml('seq-edit-ntgt', participants, nn2.targets, nn2.position) +
-            '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Text</label><div id="seq-edit-ntext-rle"></div></div>' +
+            '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-ntext-rle"></div></div>' +
             actionBarHtml(nn2.line, 'note');
           var nln = nn2.line;
           document.getElementById('seq-edit-npos').addEventListener('change', function() {
@@ -3511,7 +3513,7 @@ window.MA.modules.plantumlSequence = (function() {
             return escHtml((p && p.label) || id);
           });
           propsEl.innerHTML =
-            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(bx.label || '(名前なし)') + '</strong><br><span style="color:var(--text-secondary);">参加者の囲み (box) · L' + bx.line + (bx.endLine ? '–L' + bx.endLine : '') + '</span></div>' +
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(bx.label || '(名前なし)') + '</strong><br><span style="color:var(--text-secondary);">' + escHtml(P.lineHead('参加者の囲み (box)', bx.line, bx.endLine)) + '</span></div>' +
             P.fieldHtml('名前', 'seq-edit-boxlabel', bx.label || '') +
             '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' +
               '囲んでいる参加者: ' + (memberNames.length ? memberNames.join(' / ') : '(なし)') +
@@ -3529,7 +3531,7 @@ window.MA.modules.plantumlSequence = (function() {
           var tMatch = tRaw.match(/^\s*title\s+(.*?)\r?$/i);
           if (!tMatch) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">題名の行が見つかりません</p>'; return; }
           propsEl.innerHTML =
-            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(tMatch[1]) + '</strong><br><span style="color:var(--text-secondary);">図の題名 (title) · L' + tLine + '</span></div>' +
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(tMatch[1]) + '</strong><br><span style="color:var(--text-secondary);">' + escHtml(P.lineHead('図の題名 (title)', tLine)) + '</span></div>' +
             P.fieldHtml('題名', 'seq-edit-title', tMatch[1]);
           P.bindEvent('seq-edit-title', 'change', function() {
             window.MA.history.pushHistory();
@@ -3540,7 +3542,7 @@ window.MA.modules.plantumlSequence = (function() {
         else if (sel.type === 'activation') {
           var aLine = sel.line;
           propsEl.innerHTML =
-            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>Activation</strong><br><span style="color:var(--text-secondary);">L' + aLine + '</span></div>' +
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>Activation</strong><br><span style="color:var(--text-secondary);">' + escHtml(P.lineHead('Activation', aLine)) + '</span></div>' +
             actionBarHtml(aLine, 'activation');
         }
         else if (sel.type === 'group') {
@@ -3552,7 +3554,7 @@ window.MA.modules.plantumlSequence = (function() {
           if (!gg) { propsEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">ブロックが見つかりません</p>'; return; }
           var gtypeOpts = GROUP_KINDS.map(function(k) { return { value: k, label: groupLabel(k), selected: k === gg.gtype }; });
           propsEl.innerHTML =
-            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(gg.gtype + (gg.label ? ' ' + gg.label : '')) + '</strong><br><span style="color:var(--text-secondary);">Block · L' + gg.line + (gg.endLine ? '–L' + gg.endLine : '') + '</span></div>' +
+            '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(gg.gtype + (gg.label ? ' ' + gg.label : '')) + '</strong><br><span style="color:var(--text-secondary);">' + escHtml(P.lineHead('Block', gg.line, gg.endLine)) + '</span></div>' +
             P.selectFieldHtml('種類 / Type', 'seq-edit-gtype', gtypeOpts) +
             P.fieldHtml('条件 / Condition', 'seq-edit-glabel', gg.label || '') +
             _groupRangeHtml(ctx.getMmdText(), gg, escHtml) +

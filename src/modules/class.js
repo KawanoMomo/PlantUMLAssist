@@ -2677,7 +2677,7 @@ window.MA.modules.plantumlClass = (function() {
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(P.lineHead('Relation', relation.line)) + '</label>' +
         // design 3c: 関係の種類は記法ではなく「UML 名称 + 意味の説明」のカードで選ぶ
         RC.cardsHtml('cl-rel-card', RC.kindsOf('class'), relation.kind) +
         // BLK-junior-20260908-1203: 追加フォームと同じ呼び名で出す。既にある関係を
@@ -2814,8 +2814,7 @@ window.MA.modules.plantumlClass = (function() {
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
-        (group.kind === 'namespace' ? 'NAMESPACE' : 'PACKAGE') +
-        ' (L' + group.startLine + '-' + group.endLine + ')</label>' +
+        window.MA.htmlUtils.escHtml(P.lineHead(group.kind === 'namespace' ? '境界 (namespace)' : '境界', group.startLine, group.endLine)) + '</label>' +
         P.fieldHtml('Label', 'cl-grp-label', group.label) +
         P.primaryButtonHtml('cl-grp-apply', '変更を反映') +
         ' <button id="cl-grp-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 境界削除</button>' +
