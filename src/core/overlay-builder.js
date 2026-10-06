@@ -561,6 +561,13 @@ window.MA.overlayBuilder = (function() {
           return f.getAttribute('data-note-frame-of') === key;
         })[0] || null;
       }
+      // BLK-owner-20260930-0711-1: 境界の 4 辺の帯・見出しの札 (framebelt) を指したら、境界全体の枠 (中の空所の container) を光らせる。
+      if (!fr && overlayEl && r && r.getAttribute && r.getAttribute('data-hit-kind') === 'framebelt') {
+        fr = Array.prototype.filter.call(overlayEl.querySelectorAll('rect[data-hit-kind="container"]'), function(c) {
+          return c.getAttribute('data-type') === r.getAttribute('data-type') && c.getAttribute('data-id') === r.getAttribute('data-id') &&
+            c.getAttribute('data-line') === r.getAttribute('data-line');
+        })[0] || null;
+      }
       var pick = fr || r;
       if (out.indexOf(pick) < 0) out.push(pick);
     });

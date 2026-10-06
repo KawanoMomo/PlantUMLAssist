@@ -6689,6 +6689,14 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   stroke: rgba(80, 160, 255, 0.65);
   stroke-width: 1.5;
 }
+/* BLK-owner-20260930-0711-1: 境界の 4 辺の帯・見出しの札 (framebelt) は当たりだけ。選択・ホバーの枠は境界全体の rect が出す */
+#overlay-layer rect.selectable.selected[data-hit-kind="framebelt"],
+#overlay-layer rect.selectable.peek[data-hit-kind="framebelt"]:not(.selected),
+#overlay-layer rect.selectable[data-type][data-hit-kind="framebelt"]:hover:not(.selected):not(.peek):not(.lg-mark),
+#overlay-layer rect.selectable[data-type][data-hit-kind="framebelt"].hit-hover:not(.selected):not(.peek):not(.lg-mark) {
+  fill: transparent;
+  stroke: none;
+}
 #overlay-layer rect.selectable:hover:not(.selected) {
   fill: rgba(255, 255, 255, 0.05);
 }
