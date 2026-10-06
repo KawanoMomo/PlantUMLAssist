@@ -600,6 +600,25 @@ html, body {
 }
 #top-save-key { margin-left: 6px; opacity: 0.7; font-size: 10px; }
 #top-save[data-save-state="saved"] #top-save-key { display: none; }
+/* 上部バーの並びを押し出さない (検索欄・状態表示に重ならない)。保存ボタンの真下に浮かせる。 */
+#top-save-flash {
+  position: fixed;
+  top: 36px;
+  z-index: 900;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-green, var(--accent));
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+#top-save-flash[hidden] { display: none; }
 #top-render-status {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -7677,6 +7696,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <!-- design 9a: 保存の状態をそのまま出す。未保存のときだけ ● とアクセント色、
          保存済みは淡色の「保存済み」に落とす (BLK-junior-20260913-0306 の入口は残す)。 -->
     <button id="top-save" type="button" title="保存" data-save-state="saved">保存済み<span id="top-save-key"></span></button>
+    <!-- BLK-human-20261006-2020-1: 手で保存した直後に「いつ・どこへ」を数秒だけ出す -->
+    <span id="top-save-flash" role="status" hidden></span>
     <button id="top-source-lock" type="button" hidden></button>
 
     <!-- BLK-builder-20260907-0803-1 (design 1a): コマンド中心。名前を打って実行する入口 -->

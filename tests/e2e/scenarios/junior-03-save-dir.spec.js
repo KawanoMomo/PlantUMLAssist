@@ -360,3 +360,62 @@ test('手順3 actor を先に足してから participant を足しても、保�
   expect(saved).toContain('actor P4');
   expect(saved).toContain('participant Q4');
 });
+
+// BLK-human-20261006-2020-1 / BLK-owner-20261006-2021-1: Ctrl+S で書けたら、タブ・上部バー・FILES の行の未保存の印が
+// その時に消え、保存ボタンの隣に時刻と書いた先が出る。以前は自動の書き戻しを見送る見本のままのタブと、
+// ダウンロード保存では、ファイルが書けても ○ / ● が残り、保存されたかが画面から読めなかった。
+test('手順3 Ctrl+S で保存すると未保存の印が消え、時刻と保存先が出る (見本のままのタブ・1 字直した後)', async ({ page }) => {
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  const save = page.locator('#top-save');
+  const tabDot = page.locator('#tab-bar .tab.active .tab-dot');
+  const openMark = page.locator('#files-panel .files-row.is-active .files-row-mark');
+  const flash = page.locator('#top-save-flash');
+  const name = await page.evaluate(() => window.MA.workspace.getActive().name);
+  // 起動直後の見本のまま: 印は ○ (まだ保存していない)。
+  await expect(tabDot).toHaveText('○');
+  await expect(save).toHaveAttribute('data-save-state', 'dirty');
+
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+s');
+  await expect(save).toHaveAttribute('data-save-state', 'saved', { timeout: 10000 });
+  await expect(tabDot).toHaveCount(0);
+  await expect(openMark).toHaveCount(0);
+  await expect(flash).toBeVisible();
+  await expect(flash).toContainText(name + '.puml に保存');
+  await expect(flash).toHaveText(/\d\d:\d\d:\d\d/);
+  // 下端の札も書けた回を言う (「見本のまま · 書いていません」を書いた後に残さない)。
+  await expect(page.locator('#status-autosave')).not.toContainText('見本のまま');
+  await expect(page.locator('#status-autosave')).toContainText(name + '.puml');
+  expect(await S.readDoc(page, DIR, name)).not.toBeNull();
+});
+
+test('手順3 保存先が未設定 (ダウンロード) でも、1 字直すと印が付き Ctrl+S で消える', async ({ page }) => {
+  await S.bootDownloadMode(page, DIR + '-dl');
+  const save = page.locator('#top-save');
+  const tabDot = page.locator('#tab-bar .tab.active .tab-dot');
+  const openMark = page.locator('#files-panel .files-row.is-active .files-row-mark');
+  const flash = page.locator('#top-save-flash');
+  await page.locator('#editor').click();
+  let dl = page.waitForEvent('download');
+  await page.keyboard.press('Control+s');
+  await dl;
+  await expect(save).toHaveAttribute('data-save-state', 'saved', { timeout: 10000 });
+  await expect(tabDot).toHaveCount(0);
+
+  // 1 字直す (実キー入力) → 3 か所に ● が付く。
+  await page.keyboard.press('Control+End');
+  await page.keyboard.press('Home');
+  await page.keyboard.type("'\n");
+  await expect(tabDot).toHaveText('●');
+  await expect(save).toHaveAttribute('data-save-state', 'dirty');
+  await expect(openMark).toHaveText('●');
+
+  dl = page.waitForEvent('download');
+  await page.keyboard.press('Control+s');
+  await dl;
+  await expect(save).toHaveAttribute('data-save-state', 'saved', { timeout: 10000 });
+  await expect(tabDot).toHaveCount(0);
+  await expect(openMark).toHaveCount(0);
+  await expect(flash).toContainText('.puml をダウンロード');
+});
