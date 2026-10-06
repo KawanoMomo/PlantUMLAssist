@@ -13891,7 +13891,13 @@ function setupTabs() {
     // 起動時に既定で開いた一覧は、隣のフォルダ (参照タブ・読むだけの行き先) を
     // 起動した時点の姿で控えている。人が初めて押して開くときに 1 度だけ取り直す
     // (既定で開く前は、この最初の 1 押しが取りに行く時点だった)。
-    if (focus && _peekDirsFromBoot) { _peekDirsFromBoot = false; _peekDirs = []; }
+    // BLK-releaser-20260930-1020-1: 控えを空にするだけだと、起動時に読み終えた指摘.md の判定
+    // (noteBoardScan は同じ保存先では読み直さない) が自分のフォルダ名を失い、宛先の書かれて
+    // いない指摘を全部「宛先不明」と言っていた。空にせず取り直し、届いたら一覧を描き直す。
+    if (focus && _peekDirsFromBoot) {
+      _peekDirsFromBoot = false;
+      _ensurePeekDirs(true).then(function() { try { refreshFolderPanelNow(); } catch (e) {} });
+    }
     // BLK-junior-20260907-1803: 一覧を開くだけでは保存フォルダへ書き出さない。
     // ここで書き出すと、保存できたかを一覧から確かめようとするたびに編集中の本文で
     // ファイルが上書きされ、「開き直したら必ず一致する」ので確認にならなかった。
