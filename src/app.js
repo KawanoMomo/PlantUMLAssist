@@ -27905,6 +27905,30 @@ function writeRedirectToOrigin(info, dir) {
   });
 }
 
+// BLK-human-20261006-2020-1 / BLK-owner-20261006-2021-1: 手で押した保存が書けたら、その中身を
+// 「前回保存版」にして未保存の印 (タブ・上部バー・FILES の行) を同じ時に消し、保存ボタンの隣に
+// 時刻と書いた先を数秒出す。以前は自動の書き戻し (saveActiveDoc) だけが基準を更新していたので、
+// 書き戻しを見送る見本のままのタブや、ダウンロード保存では、ファイルが書けても ○ / ● が残った。
+var _saveFlashTimer = null;
+function _afterManualSave(doc, target, writtenToFolder) {
+  if (!doc || !doc.name) return;
+  try { if (window.MA.saveDiff) window.MA.saveDiff.mark(doc.name, doc.dsl); } catch (e) {}
+  if (writtenToFolder) {
+    try { if (window.MA.versionTimeline) window.MA.versionTimeline.push(doc.name, doc.dsl); } catch (e) {}
+  }
+  try { renderDiffBadge(); } catch (e) {}
+  try { renderLiveDiffChip(); } catch (e) {}
+  var ST = window.MA.saveTarget;
+  var el = document.getElementById('top-save-flash');
+  var f = (ST && ST.savedFlash) ? ST.savedFlash(target) : null;
+  if (!el || !f) return;
+  el.textContent = f.text;
+  el.title = f.title;
+  el.hidden = false;
+  if (_saveFlashTimer) clearTimeout(_saveFlashTimer);
+  _saveFlashTimer = setTimeout(function() { el.hidden = true; _saveFlashTimer = null; }, 4000);
+}
+
 function saveFile() {
   var title = (currentParsed && currentParsed.meta && currentParsed.meta.title) || 'untitled';
   // 押した時点の編集内容を workspace のアクティブなドキュメントに書き戻してから
@@ -27930,7 +27954,9 @@ function saveFile() {
       if (st) st.setAttribute('data-source-write', res.ok ? 'ok' : 'error');
       if (res.ok) {
         setSaveStatus('上書き保存しました: ' + res.path);
-        if (window.MA.saveDiff) window.MA.saveDiff.mark(doc.name, doc.dsl);
+        var sp = String(res.path || '');
+        var cut = Math.max(sp.lastIndexOf('/'), sp.lastIndexOf('\\'));
+        _afterManualSave(doc, { mode: 'file', name: doc.name, dir: cut > 0 ? sp.slice(0, cut) : sp }, false);
       } else {
         setSaveStatus('⚠ 元のファイルに書けませんでした: ' + res.error);
         if (window.MA.toast) window.MA.toast.show('⚠ 元のファイルに書けませんでした: ' + res.error);
@@ -27980,6 +28006,7 @@ function saveFile() {
       setSaveStatus(ST.messageFor(target, ok));
       // 保存できた図にだけ、その場で突合を掛ける (BLK-reviewer-20260908-1503-wish)。
       if (ok) {
+        _afterManualSave(doc, target, true);
         // 書いた先が開いている図と違うなら、そのことを最優先で言う。
         // 状態バーの 1 行だけでは「保存した」と「本体が変わった」の食い違いが読めない。
         showSaveRedirect(redirected, target.dir);
@@ -27996,6 +28023,8 @@ function saveFile() {
 
   downloadBlob(target.name + '.puml', new Blob([mmdText], { type: 'text/plain' }));
   if (ST) setSaveStatus(ST.messageFor(target, true));
+  // ダウンロードした中身を前回保存版にする (書いたファイルと画面の印を食い違わせない)。
+  if (doc) _afterManualSave({ id: doc.id, name: doc.name, diagramType: doc.diagramType, dsl: mmdText }, target, false);
   runSaveCheck(doc && doc.name);
   runSaveClash(doc && doc.name);
   runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
