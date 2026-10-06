@@ -2687,10 +2687,10 @@ test('migrator 手順 4 — 枠 ok と記録した実物の図は、基準で枠
     targets = Object.keys(base.files);
   }
 
-  const current = {};
-  for (const rel of targets) {
+  // 1 枚を開いて測る (migrator と同じ道: ファイルを開く → Fit → 要素を指す)。
+  const measure = async (rel) => {
     const abs = path.join(HB.CORPUS_DIR, rel);
-    if (!fs.existsSync(abs)) { current[rel] = { error: 'ファイルが無い' }; continue; }
+    if (!fs.existsSync(abs)) return { error: 'ファイルが無い' };
     const prev = await page.evaluate(() => window.__hitDoc());
     const [chooser] = await Promise.all([
       page.waitForEvent('filechooser', { timeout: 20000 }),
@@ -2702,12 +2702,28 @@ test('migrator 手順 4 — 枠 ok と記録した実物の図は、基準で枠
       const d = window.__hitDoc();
       return (d.name !== p.name || d.text !== p.text) && window.__hitSettled();
     }, prev, { timeout: 30000 }).then(() => true, () => false);
-    if (!done) { current[rel] = { error: '描画が終わらない' }; continue; }
-    if ((await page.locator('#render-status').textContent()) === 'ERROR') { current[rel] = { error: 'ERROR' }; continue; }
+    if (!done) return { error: '描画が終わらない' };
+    if ((await page.locator('#render-status').textContent()) === 'ERROR') return { error: 'ERROR' };
     // 手順 4 の「幅合わせ」。点の名前は SVG 座標なので倍率に依らないが、細い要素の当たりは倍率で変わるため毎回そろえる。
     await page.evaluate(() => { document.getElementById('btn-zoom-fit').click(); });
     await page.waitForTimeout(200);
-    current[rel] = { points: await page.evaluate(HB.probeInPage) };
+    return { points: await page.evaluate(HB.probeInPage) };
+  };
+  const current = {};
+  for (const rel of targets) current[rel] = await measure(rel);
+  // BLK-releaser-20260930-1031-2: 1 枚だけ基準の点が全部消える (usecase-25 で base 46 / now 0) 赤が出て、
+  // 同じ木で回し直すと緑だった。当て方の退行は開き直しても同じ答えになるので、描けない・点が消えた図だけ
+  // 別の本文を挟んで 1 度だけ開き直して測る (2 度目も同じなら赤のまま)。基準の書き直しでは測り直さない。
+  if (!writing) {
+    const first = HB.compare(base.files, current);
+    const again = Object.keys(first.perFile).filter((f) => (first.perFile[f].missing || 0) >= 2)
+      .concat(first.unrendered.map((x) => x.file));
+    for (const rel of again) {
+      await typeDsl(page, ['@startuml', 'A -> B : hit-baseline の測り直し', '@enduml'].join('\n'));
+      await page.waitForFunction(() => window.__hitSettled(), null, { timeout: 30000 }).catch(() => {});
+      current[rel] = await measure(rel);
+      console.log('hit-baseline: ' + rel + ' を開き直して測った');
+    }
   }
 
   if (writing) {
