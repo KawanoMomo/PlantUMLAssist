@@ -873,6 +873,10 @@ window.MA.overlayBuilder = (function() {
     if (k === 'notetailedge') return -3;   // note の楔の縁の帯は最も奥 (addNoteTails)
     if (k === 'link') return -2;
     if (k === 'container') return -1;
+    // BLK-owner-20260930-0711-1: クラス・コンポーネント・ユースケースの境界 (package / rectangle / namespace) も
+    // 複合状態と同じ入れ物。中を通る関係の線・ラベル・矢じりより後ろに置き、境界が選ばれるのは中の空所だけにする。
+    // 図種ごとに印を付けず、入れ物と中身の重なりはここ 1 か所で決める。
+    if (!k && r.getAttribute('data-type') === 'package') return -1;
     if (k === 'linkline') return 0;
     if (k === 'linklabel') return 0.5;   // ラベルの文字は他の関係の線より手前 (文字を押したらその関係)
     // BLK-migrator-20260929-0951: 1 本の線で描いた棒 (activity の split / end split) は、棒に入る・棒から出る矢印の

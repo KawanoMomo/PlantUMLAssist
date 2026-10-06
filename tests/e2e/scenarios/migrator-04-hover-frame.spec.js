@@ -3071,3 +3071,62 @@ test('migrator 手順 4 — 手書き風のシーケンス図でも、参加者�
     expect(life, opt + ': 2 本のライフライン').toEqual(['lifeline:3', 'lifeline:4']);
   }
 });
+
+// BLK-owner-20260930-0711-1: クラス図・コンポーネント図・ユースケース図の境界 (package / rectangle) の中を通る関係の線・矢じり・ラベルを
+// 押すと境界が選ばれ、関係を図から選べなかった。複合状態と同じく、境界は中の空所でだけ当たり、中の線・矢じり・ラベルは本人で当たる。
+// 入れ子の境界 (外 › 内) の中の関係も同じ。
+test('migrator 手順 4 — クラス・コンポーネント・ユースケースの境界の中を通る関係は、線・矢じり・ラベルで本人が選ばれ、境界は中の空所で選ばれる', async ({ page }) => {
+  await bootPlain(page);
+  const NL = String.fromCharCode(10);
+  const cases = [
+    { name: 'class (関係を境界の中に書く)', type: 'plantuml-class', rel: 4, pkg: 1, dsl: [
+      '@startuml', 'package Mcal {', '  class Spi', '  class Dio', '  Spi --> Dio : uses', '}', '@enduml'] },
+    { name: 'component (入れ子の境界、関係は外に書く)', type: 'plantuml-component', rel: 7, pkg: 2, dsl: [
+      '@startuml', 'package Outer {', '  package Mcal {', '    [Spi]', '    [Dio]', '  }', '}', '[Spi] --> [Dio] : uses', '@enduml'] },
+    { name: 'usecase (rectangle の中の include)', type: 'plantuml-usecase', rel: 4, pkg: 1, dsl: [
+      '@startuml', 'rectangle R {', '  usecase U1', '  usecase U2', '  U1 .> U2 : include', '}', '@enduml'] },
+  ];
+  const hoverAt = async (pt) => {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(pt.x, pt.y);
+    const r = page.locator('#overlay-layer rect.hit-hover').first();
+    await expect(r).toHaveCount(1, { timeout: 5000 });
+    return { type: await r.getAttribute('data-type'), line: await r.getAttribute('data-line') };
+  };
+  for (const c of cases) {
+    await page.locator('#diagram-type').selectOption(c.type);
+    await page.waitForTimeout(500);
+    await typeDsl(page, c.dsl.join(NL));
+    await expect(page.locator('#overlay-layer rect[data-type="relation"]').first()).toBeAttached({ timeout: 20000 });
+    await expect(page.locator('#overlay-layer rect[data-type="package"]').first()).toBeAttached({ timeout: 20000 });
+    const relLine = String(c.rel + 1);
+    const pkgLine = String(c.pkg + 1);
+    const pts = await page.evaluate(({ rel, pkgLine }) => {
+      const svg = document.querySelector('#preview-svg svg');
+      const lk = svg.querySelector('g.link[data-source-line="' + rel + '"]');
+      lk.scrollIntoView({ block: 'center', inline: 'center' });
+      const lb = lk.querySelector('text').getBoundingClientRect();
+      const head = lk.querySelector('polygon').getBoundingClientRect();
+      const p = lk.querySelector('path');
+      const q = p.getPointAtLength(p.getTotalLength() / 2);
+      const m = p.getScreenCTM();
+      // 境界の中の空所: いちばん内側の境界の左下の隅 (中の部品・線から離れた所)
+      const pr = Array.from(document.querySelectorAll('#overlay-layer rect[data-type="package"]'))
+        .filter((r) => r.getAttribute('data-line') === pkgLine)[0].getBoundingClientRect();
+      return {
+        label: { x: lb.left + lb.width / 2, y: lb.top + lb.height / 2 },
+        head: { x: head.left + head.width / 2, y: head.top + head.height / 2 },
+        line: { x: m.a * q.x + m.c * q.y + m.e, y: m.b * q.x + m.d * q.y + m.f },
+        empty: { x: pr.left + 10, y: pr.bottom - 8 },
+      };
+    }, { rel: c.rel, pkgLine });
+    expect(await hoverAt(pts.label), c.name + ': ラベル → 関係').toEqual({ type: 'relation', line: relLine });
+    expect(await hoverAt(pts.line), c.name + ': 線の中ほど → 関係').toEqual({ type: 'relation', line: relLine });
+    expect(await hoverAt(pts.head), c.name + ': 矢じり → 関係').toEqual({ type: 'relation', line: relLine });
+    expect(await hoverAt(pts.empty), c.name + ': 境界の中の空所 → 境界').toEqual({ type: 'package', line: pkgLine });
+    // 押しても同じ: ラベルを押すと右パネルは関係
+    await page.mouse.click(pts.label.x, pts.label.y);
+    await expect(page.locator('#overlay-layer rect.selected[data-type="relation"]').first()).toBeVisible({ timeout: 5000 });
+  }
+  await expect(page.locator('#overlay-warning')).toBeHidden();
+});
