@@ -1207,3 +1207,147 @@ test.describe('primary 手順 4 (c)④: 共通定義を !include の共通ファ
     await expect(band).toContainText(path.basename(ABS));
   });
 });
+
+// BLK-primary-20260925-1732-wish: 不具合対応で過去の図を探す場面。⇄ 症状検索は当たった図を 1 枚ずつしか
+// 開けず、次の当たり図へは一覧に戻って探し直し、流れで対応の無い名前は DSL を目で探していた。
+// 結果の各図の「ここから順に直す」(影響を見ると同じ) で下端の手当ての帯に関連度順に載り、「次へ」で
+// 次の当たり図へ進み、開いた図では当たった語と対応の無い名前の行が相互ジャンプと同じ光らせ方で出ることを見る。
+const CAN_SEQ = '@startuml\ntitle CAN 送信\nparticipant App\nparticipant Can_Driver\n'
+  + 'App -> Can_Driver : Can_Transmit()\nCan_Driver -> Can_Driver : Can_Reset()\n'
+  + 'Can_Driver -> App : EnableIrq()\n@enduml';
+const CAN_STATE = '@startuml\n[*] --> Idle\nIdle --> BusOff : Can_Driver_BusOff\n'
+  + 'BusOff --> Idle : Can_Driver_Recover\n@enduml';
+
+test.describe('primary 手順 4: 不具合対応で当たった図を順に開いて確かめる', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    await clearDir(page);
+    await putFile(page, 'can_send_sequence', CAN_SEQ);
+    await putFile(page, 'can_state', CAN_STATE);
+    await putFile(page, 'adc_init_sequence', ADC);
+    await page.waitForTimeout(500);
+    await page.reload();
+    await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+  });
+
+  test('症状検索の当たり図を「ここから順に直す」で開き、帯の「次へ」で次の当たり図へ進み、当たった行が図の上で光る', async ({ page }) => {
+    await page.locator('#btn-tab-symptom').click();
+    await expect(page.locator('#symptom-panel')).toHaveClass(/open/);
+    await page.locator('#symptom-scan-folder').check();
+    await page.locator('#symptom-text').click();
+    await page.keyboard.type('Can_Driver のバスオフ復帰後に EnableIrq が再発火しない');
+    const docs = page.locator('#symptom-results .sym-doc');
+    await expect(docs).toHaveCount(2, { timeout: 10000 });
+    await expect(docs.nth(0)).toHaveAttribute('data-doc-name', 'can_send_sequence');
+
+    // 到達条件その1: 結果の図の「ここから順に直す」1 回で、その図が開き、下端の帯に当たり図が関連度順に載る。
+    let clicks = 0;
+    await docs.nth(0).locator('button.sym-walk').click(); clicks++;
+    await expect(page.locator('#symptom-panel')).not.toHaveClass(/open/);
+    const bar = page.locator('#fw-bar');
+    await expect(bar).toBeVisible();
+    await expect(page.locator('#fw-label')).toContainText('1 / 2 図');
+    await expect(page.locator('#fw-label')).toContainText('can_send_sequence (関連度 ');
+    await expect(page.locator('#editor')).toHaveValue(/Can_Transmit\(\)/, { timeout: 10000 });
+
+    // 到達条件その2: 開いた図で、当たった語 (Can_Driver・EnableIrq) と流れで対応の無い名前 (EnableIrq()) の
+    // 行の図形が、キャレット行の対応表示と同じ琥珀の破線で光る。
+    const ov = page.locator('#overlay-layer');
+    await expect(ov.locator('rect.sym-mark[data-line="7"]').first()).toBeAttached({ timeout: 15000 });
+    await expect(ov.locator('rect.sym-mark[data-line="5"]').first()).toBeAttached();
+    const dash = await ov.locator('rect.sym-mark[data-line="7"]').first()
+      .evaluate((el) => getComputedStyle(el).strokeDasharray);
+    expect(dash.replace(/px/g, '').replace(/,\s*/g, ' ')).toBe('4 3');
+
+    // 到達条件その3: 帯の「次へ」1 回で次の当たり図 (状態遷移図) が開き、そこでも当たった行が光る。
+    await page.locator('#fw-next').click(); clicks++;
+    await expect(page.locator('#fw-label')).toContainText('2 / 2 図');
+    await expect(page.locator('#editor')).toHaveValue(/Can_Driver_BusOff/, { timeout: 10000 });
+    await expect(ov.locator('rect.sym-mark[data-line="3"]').first()).toBeAttached({ timeout: 15000 });
+    // 当たっていない図 (adc_init_sequence) は列に入らない。
+    await expect(page.locator('#fw-label')).not.toContainText('adc_init_sequence');
+    expect(clicks).toBeLessThanOrEqual(2);
+
+    // 到達条件その4: 帯の「一覧」で、同じ症状文のまま症状検索の結果に戻れる。
+    await page.locator('#fw-list').click();
+    await expect(page.locator('#symptom-panel')).toHaveClass(/open/);
+    await expect(page.locator('#symptom-text')).toHaveValue('Can_Driver のバスオフ復帰後に EnableIrq が再発火しない');
+    await expect(docs).toHaveCount(2);
+
+    // 帯を閉じると光らせた印も消える。
+    await page.locator('#btn-symptom-close').click();
+    await page.locator('#fw-close').click();
+    await expect(ov.locator('rect.sym-mark')).toHaveCount(0);
+  });
+});
+
+// BLK-primary-20260926-1708-wish / -friction: 場面「仕様変更で影響範囲を洗う」。▤ 影響を見る の影響先は
+// 「図名・届き方・経由した部品名」だけで、その図の何行が当たっているかは 1 枚ずつ開き「次へ」を枚数ぶん押して
+// DSL を目で探すしかなかった (12 図でクリック 16〜17)。下段「出てくる行」に連鎖で届く図の当たり行 (経由した部品名) も
+// 並べ、影響先の行を押せばその図の当たり行へ絞る。部品名が遷移ラベルにだけ出る図も直接の影響先に入る。
+const IM_CLASS = '@startuml\nclass Spi_Driver\nclass Dma_Ctrl\nSpi_Driver ..> Dma_Ctrl : 転送\n@enduml';
+const IM_SEQ = '@startuml\nparticipant Spi_Driver\nparticipant Hw_Ctrl\nSpi_Driver -> Hw_Ctrl : Init\n@enduml';
+const IM_DMA = '@startuml\nparticipant Dma_Ctrl\nparticipant Irq_Ctrl\nDma_Ctrl -> Irq_Ctrl : Raise\n@enduml';
+const IM_STATE = '@startuml\nstate Idle\nstate Busy\nIdle --> Busy : Spi_Driver.Start()\n@enduml';
+const IM_UART = '@startuml\nparticipant Uart_Driver\nparticipant Hw_Ctrl2\nUart_Driver -> Hw_Ctrl2 : Init\n@enduml';
+
+test.describe('primary 手順 4: 仕様変更で影響範囲を洗う (影響先の当たり行を開かずに読む)', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    await clearDir(page);
+    await putFile(page, 'spi_class', IM_CLASS);
+    await putFile(page, 'spi_init_sequence', IM_SEQ);
+    await putFile(page, 'dma_sequence', IM_DMA);
+    await putFile(page, 'spi_state', IM_STATE);
+    await putFile(page, 'uart_init_sequence', IM_UART);
+    await page.waitForTimeout(500);
+    await page.reload();
+    await page.waitForSelector('#preview-svg');
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearDir(page).catch(() => {});
+  });
+  test('影響先ぜんぶの当たり行が下段に並び、影響先の行を押すとその図の行だけに絞れる (図は開かない)', async ({ page }) => {
+    const tabsBefore = await page.evaluate(() => window.MA.workspace.list().map((d) => d.name).sort());
+    await runCmd(page, '影響を見る');
+    await page.waitForSelector('#ri-modal', { state: 'visible' });
+    await page.fill('#ns-q', 'Spi_Driver');
+    await page.waitForTimeout(400);
+
+    // 到達条件その1: 遷移ラベルにだけ Spi_Driver を持つ spi_state も「直接」の影響先に入る。
+    await expect(page.locator('#dg-impact tr.dg-doc[data-doc="spi_state"]')).toHaveAttribute('data-hop', '0');
+    await expect(page.locator('#dg-impact tr.dg-doc[data-doc="dma_sequence"]')).toHaveAttribute('data-hop', '1');
+    await expect(page.locator('#dg-impact tr.dg-doc[data-doc="uart_init_sequence"]')).toHaveCount(0);
+
+    // 到達条件その2: 下段に直接の図の当たり行と、連鎖で届く図の経由した部品名 (Dma_Ctrl) の行が役割つきで並ぶ。
+    const rows = page.locator('#ns-rows');
+    await expect(rows.locator('.ns-row[data-name="spi_state"] .ns-at')).toContainText('Spi_Driver.Start()');
+    const chain = rows.locator('.ns-row.ns-chain[data-name="dma_sequence"]');
+    await expect(chain).toHaveAttribute('data-hop', '1');
+    await expect(chain.locator('.ns-where')).toContainText('経由 Dma_Ctrl');
+    await expect(chain.locator('.ns-at[data-line="4"]')).toContainText('4:呼び出し');
+    await expect(chain.locator('.ns-at[data-line="4"]')).toContainText('Dma_Ctrl -> Irq_Ctrl : Raise');
+    await expect(page.locator('#ns-summary')).toContainText('連鎖で届く図 1 枚');
+
+    // 到達条件その3: 影響先の行を押すと下段がその図の当たり行だけになり、もう一度押すと全部に戻る。
+    await page.locator('#dg-impact tr.dg-doc[data-doc="dma_sequence"] td.dg-doc-name').click();
+    await expect(page.locator('#dg-impact tr.dg-doc[data-doc="dma_sequence"]')).toHaveAttribute('data-focus', '1');
+    await expect(rows.locator('.ns-row')).toHaveCount(1);
+    await expect(page.locator('#ns-summary')).toContainText('dma_sequence の当たり行 2 行');
+    await page.locator('#dg-impact tr.dg-doc[data-doc="spi_class"] td.dg-doc-name').click();
+    await expect(rows.locator('.ns-row')).toHaveCount(1);
+    await expect(rows.locator('.ns-row[data-name="spi_class"] .ns-at')).toHaveCount(2);
+    await page.locator('#dg-impact tr.dg-doc[data-doc="spi_class"] td.dg-doc-name').click();
+    await expect(page.locator('#dg-impact tr.dg-doc[data-focus="1"]')).toHaveCount(0);
+    expect(await rows.locator('.ns-row').count()).toBeGreaterThanOrEqual(4);
+
+    // 到達条件その4: ここまでで図は 1 枚も開いていない (読むだけ)。
+    const tabsAfter = await page.evaluate(() => window.MA.workspace.list().map((d) => d.name).sort());
+    expect(tabsAfter).toEqual(tabsBefore);
+  });
+});

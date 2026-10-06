@@ -324,10 +324,15 @@ window.MA.partVocab = (function() {
   function roleLabel(role) { return ROLE_LABEL[_s(role)] || _s(role); }
 
   // 名前帳の見出し 1 行。何枚の図から何語を集めたかを数で言う。
-  function summary(vocab) {
+  // shown は下に並べる語の数 (欄の役割で絞った数)。総数と違えば「10/16 語」の形で
+  // 並べている数を先に言う (見出しの数と下の語の数が合わないと、どこが欠けたか読めない)。
+  // 数えているのは図の枚数なので「枚」と言う (図種ではない)。
+  function summary(vocab, shown) {
     if (!vocab || !vocab.items.length) return '';
+    var total = vocab.items.length;
+    var n = (typeof shown === 'number' && shown >= 0 && shown < total) ? shown + '/' + total : String(total);
     var head = (vocab.subject ? vocab.subject.toUpperCase() + ' の名前帳: ' : '名前帳: ')
-      + vocab.docs.length + ' 図種 ' + vocab.items.length + ' 語';
+      + vocab.docs.length + ' 枚の図から ' + n + ' 語';
     if (vocab.variants.length) head += ' / 表記揺れ ' + vocab.variants.length + ' 組';
     return head;
   }

@@ -217,3 +217,46 @@ describe('exportSelect.pickedByMode', () => {
     expect(selectedNames(list)).toEqual(['Gpio', 'Can', 'Spi']);
   });
 });
+
+// BLK-primary-20260925-1032-wish: 📦 資料セット「図を選ぶ」の候補は、開いているタブの図に保存先の図を足したもの。
+// 「今回だけこの 3 枚」をタブで開き直さずに選べる。同名は開いている方 (未保存の編集を含む方) だけ。
+describe('exportSelect.withFolder / visibleByName / keepPicks (保存先の図も候補にする)', () => {
+  var OPEN = [{ id: 'd1', name: 'spi_state', dsl: '@startuml\nstate A\n@enduml' }];
+  var FILES = [
+    { name: 'spi_state', dsl: '@startuml\nstate OLD\n@enduml' },
+    { name: 'driver_common_class', dsl: '@startuml\nclass X\n@enduml' },
+    { name: 'spi_init_sequence', dsl: '@startuml\nA -> B\n@enduml' },
+    { name: 'broken' },
+  ];
+
+  test('開いている図が先、保存先の図は名前順で後ろ。同名は開いている方だけ、本文の無いファイルは出さない', () => {
+    var docs = ES.withFolder(OPEN, FILES);
+    expect(names(docs)).toEqual(['spi_state', 'driver_common_class', 'spi_init_sequence']);
+    expect(docs[0].dsl).toContain('state A');
+    expect(docs[1].origin).toBe('folder');
+    expect(docs[1].id).toBe('file:driver_common_class');
+  });
+
+  test('保存先にだけある図は、開いた時点では印を付けない (開いている図は今までどおり付く)', () => {
+    var list = ES.buildList(ES.withFolder(OPEN, FILES), {});
+    expect(selectedNames(list)).toEqual(['spi_state']);
+    expect(list[1].origin).toBe('folder');
+    // 「全部」を押せば保存先の図も入る。
+    expect(selectedNames(ES.applyMode(list, 'all')).length).toBe(3);
+  });
+
+  test('名前の絞り込みは語をすべて含む図だけを見せ、大小文字は見ない', () => {
+    var list = ES.buildList(ES.withFolder(OPEN, FILES), {});
+    expect(names(ES.visibleByName(list, 'SPI'))).toEqual(['spi_state', 'spi_init_sequence']);
+    expect(names(ES.visibleByName(list, 'spi init'))).toEqual(['spi_init_sequence']);
+    expect(ES.visibleByName(list, '').length).toBe(3);
+  });
+
+  test('組み直しても付け外しした印は残り、新しく増えた図は既定の印になる', () => {
+    var before = ES.setSelected(ES.buildList(OPEN, {}), 'd1', false);
+    var after = ES.keepPicks(ES.buildList(ES.withFolder(OPEN, FILES), {}), before);
+    expect(selectedNames(after)).toEqual([]);
+    var picked = ES.setSelected(after, 'file:driver_common_class', true);
+    expect(ES.selectedDocs(picked).map(function(d) { return d.name; })).toEqual(['driver_common_class']);
+  });
+});

@@ -179,10 +179,12 @@ test('手順1 無い系統のクラスを、開いているシーケンス図・
     await chooser.setFiles(f);
     await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', name, { timeout: 20000 });
   }
-  await expect(page.locator('#cl-scaffold-open')).toBeVisible({ timeout: 20000 });
+  // BLK-owner-20260925-0341-prune: クラス構成の窓は、他の図種と同じ種別チップ「まとめて」から開く (押すと窓が開く)。
+  await expect(page.locator('#cl-tail-kind-chip-bulk')).toBeVisible({ timeout: 20000 });
 
   let clicks = 0, keys = 0;
-  await page.locator('#cl-scaffold-open').click(); clicks++;
+  await page.locator('#cl-tail-kind-chip-bulk').click(); clicks++;
+  await expect(page.locator('#cl-sc-modal')).toBeVisible();
   await page.locator('#cl-sc-reuse').click(); clicks++;
   // 候補: 参加者 → クラス、受ける呼び出し → メソッド、きっかけ → 頭が同じクラスのメソッド、呼び出し → 関連。
   // クラス図にもう有るメソッド (Irq_Controller.EnableIrq) と応答 (Ack / InitDone) は出ない。

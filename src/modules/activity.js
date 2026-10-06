@@ -2553,7 +2553,7 @@ window.MA.modules.plantumlActivity = (function() {
     var esc = window.MA.htmlUtils.escHtml;
     var where = AI ? AI.pointLabel(ctx.getMmdText(), sel.line, 'after') : ('L' + sel.line);
     propsEl.innerHTML =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">分岐の枝 (L' + sel.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + esc(window.MA.properties.lineHead('分岐の枝', sel.line)) + '</div>' +
       '<div style="font-size:11px;margin-bottom:8px;">' + esc(where) + '</div>' +
       '<div style="font-size:10px;color:var(--text-secondary);">この側に足すものを下で選びます。' +
       '枝の名前を変えるときは分岐の菱形を選んでください。</div>';
@@ -2566,7 +2566,7 @@ window.MA.modules.plantumlActivity = (function() {
     var esc = window.MA.htmlUtils.escHtml;
     var where = AI ? AI.pointLabel(ctx.getMmdText(), sel.line, 'after') : ('L' + sel.line);
     propsEl.innerHTML =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">流れの矢印 (L' + sel.line + ' の後)</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + esc(window.MA.properties.lineHead('流れの矢印', sel.line)) + 'の後</div>' +
       '<div style="font-size:11px;margin-bottom:8px;">' + esc(where) + '</div>' +
       '<div style="font-size:10px;color:var(--text-secondary);">この矢印の上に足すものを下で選びます。</div>';
   }
@@ -2596,7 +2596,7 @@ window.MA.modules.plantumlActivity = (function() {
     var node = _findNodeById(parsedData.nodes, sel.id);
     if (!node) { propsEl.innerHTML = ''; return; }
     var html =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + node.kind + ' (L' + node.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + window.MA.htmlUtils.escHtml(P.lineHead(node.kind, node.line)) + '</div>' +
       '<div style="font-size:11px;margin-bottom:8px;color:var(--text-secondary);">この ' + node.kind + ' ノードは編集項目がありません。</div>' +
       P.primaryButtonHtml('ac-term-delete', '✕ 削除');
     propsEl.innerHTML = html;
@@ -2636,6 +2636,26 @@ window.MA.modules.plantumlActivity = (function() {
     return out;
   }
 
+  // BLK-owner-20260926-0550-1: 1 件足した後の「追加する位置」。図の末尾で足したら図の末尾のまま、
+  // 途中の位置で足したら足した行 (if〜endif のような組は最後の行) の後。見つからなければ図の末尾。
+  function placeAfterAdd(before, after, place) {
+    if (!place || place.value === 'tail') return 'tail';
+    var a = String(before == null ? '' : before).split('\n');
+    var b = String(after == null ? '' : after).split('\n');
+    var head = 0;
+    while (head < a.length && head < b.length && a[head] === b[head]) head++;
+    var tail = 0;
+    while (tail < a.length - head && tail < b.length - head
+           && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
+    var last = b.length - tail;   // 足した最後の行 (1 始まり)
+    if (last <= head) return 'tail';
+    var opts = tailPlaceOptions(after);
+    for (var i = 0; i < opts.length; i++) {
+      if (opts[i].line === last && opts[i].position === 'after') return opts[i].value;
+    }
+    return 'tail';
+  }
+
   // その位置にその種類を置けるか。「図の末尾」は従来どおり何でも置ける。
   // 終了 (end) は停止 (stop) と同じ場所に置けるものとして扱う。
   // BLK-owner-20260925-0312-4: 開始・停止・終了はどこに置いても PlantUML が描くので止めない
@@ -2646,7 +2666,8 @@ window.MA.modules.plantumlActivity = (function() {
     if (kind === 'start' || kind === 'stop' || kind === 'end') return true;
     var AI = window.MA.activityInsert;
     if (!AI) return false;
-    var k = kind === 'other' ? (sub || 'break') : kind;
+    // 「まとめて」は 1 行 1 アクションなので、置けるかはアクションと同じ。
+    var k = kind === 'other' ? (sub || 'break') : (kind === 'bulk' ? 'action' : kind);
     return AI.isAllowed(dsl, place.line, k, place.position);
   }
 
@@ -2674,6 +2695,7 @@ window.MA.modules.plantumlActivity = (function() {
     if (kind === 'action') {
       return atTail ? addAction(text, v.text) : addActionAtLine(text, line, pos, v.text || '');
     }
+    if (kind === 'bulk') return addActionsFromTailForm(text, place, v.text || '');
     if (kind === 'start' || kind === 'stop' || kind === 'end') {
       return atTail ? insertBeforeEnd(text, kind) : _insertBareAtLine(text, line, pos, kind);
     }
@@ -2732,8 +2754,9 @@ window.MA.modules.plantumlActivity = (function() {
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        // 置く場所を選べるので、見出しは「末尾」を名乗らない (状態遷移図と同じ)。
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">追加</label>' +
+        // BLK-owner-20260926-0550-5: 見出しは 6 図種で同じ「末尾に追加」(台帳の名前)。
+        // 途中に入れるときは、この見出しの下の「追加する位置」で選ぶ。
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'ac-tail-kind', [
           { value: 'action', label: 'アクション (:…;)', selected: true },
           { value: 'start', label: '開始 (start)' },
@@ -2746,7 +2769,10 @@ window.MA.modules.plantumlActivity = (function() {
           { value: 'swimlane', label: 'レーン (swimlane)' },
           { value: 'note', label: '注釈 (note)' },
           // 置く機会の少ない 1 行 (中断・切り離し・打ち切り) はここに畳む。
-          { value: 'other', label: 'その他 (中断・切り離し・打ち切り)' }
+          { value: 'other', label: 'その他 (中断・切り離し・打ち切り)' },
+          // BLK-owner-20260925-0341-prune: 複数行を 1 行 1 アクションで入れる入口は、他の図種と同じ種別チップ「まとめて」1 つ。
+          // 以前は処理欄の下に「+ 各行をアクションとして一括追加」「⧉ 他の図から取り込む」を別に並べていた。
+          { value: 'bulk', label: 'まとめて (複数行)' }
         ]) +
         '<div id="ac-tail-place">' +
           P.selectFieldHtml('追加する位置', 'ac-tail-where', places.map(function(p, i) {
@@ -2756,6 +2782,8 @@ window.MA.modules.plantumlActivity = (function() {
         '<div id="ac-tail-detail" style="margin-top:6px;"></div>' +
       '</div>';
     propsEl.innerHTML = html;
+    // BLK-owner-20260926-0550-1: 確定後も「追加する位置」を保つ (足した行の後)。図種・タブを替えたときだけ既定に戻る。
+    if (window.MA.tailMemory) window.MA.tailMemory.bindSelect('ac-tail-where');
 
     function currentPlace() {
       var w = document.getElementById('ac-tail-where');
@@ -2788,10 +2816,8 @@ window.MA.modules.plantumlActivity = (function() {
         warn.textContent = w ? '注意: ' + w : '';
         warn.style.display = w ? 'block' : 'none';
       }
-      ['ac-tail-add', 'ac-tail-add-lines'].forEach(function(id) {
-        var b = document.getElementById(id);
-        if (b) b.disabled = !ok;
-      });
+      var b = document.getElementById('ac-tail-add');
+      if (b) b.disabled = !ok;
     }
 
     // BLK-owner-20260925-0312-4: 種別を替えても、打ちかけの欄は黙って消さない (同じ欄に戻れば戻る)。
@@ -2818,10 +2844,9 @@ window.MA.modules.plantumlActivity = (function() {
       var html2 = '';
       if (kind === 'action') {
         // BLK-owner-20260925-0312-4: 処理欄も他の図種と同じく Enter で確定、改行は Shift+Enter
-        // (data-enter="submit" を modal-keys が見る)。複数行は Shift+Enter か「各行を一括追加」。
+        // (data-enter="submit" を modal-keys が見る)。複数のアクションを 1 度に入れるのは種別チップ「まとめて」。
         html2 =
           lbl('処理 (Enter で追加 / Shift+Enter で改行)') +
-          window.MA.reuseModal.buttonHtml('ac-tail-reuse') +
           '<textarea id="ac-tail-text" data-enter="submit" rows="2" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>' +
           // BLK-junior-20260915-0606: アクション本文に打つのは先輩のクラス図にある
           // 実在メソッド名。名前帳を欄の下に出さないと、クラス図タブを別に開いて
@@ -2847,6 +2872,13 @@ window.MA.modules.plantumlActivity = (function() {
       } else if (kind === 'note') {
         html2 = lbl('注釈の本文 (Enter で追加 / Shift+Enter で改行)') +
           '<textarea id="ac-tail-ntext" data-enter="submit" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>';
+      } else if (kind === 'bulk') {
+        // 他の図種の「まとめて」と同じ形: 「⧉ 他の図から取り込む」+ 1 行 1 件の欄 +「+ まとめて追加」。
+        html2 =
+          lbl('アクションを 1 行 1 件で') +
+          window.MA.reuseModal.buttonHtml('ac-tail-reuse') +
+          '<textarea id="ac-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
+          P.vocabPickerHtml('ac-tail-bulk-vocab', { roles: ['method'], callSuffix: true });
       } else if (kind === 'other') {
         html2 = P.selectFieldHtml('足すもの', 'ac-tail-other', OTHER_BARE.map(function(o, i) {
           return { value: o.value, label: o.label, selected: i === 0 };
@@ -2855,19 +2887,19 @@ window.MA.modules.plantumlActivity = (function() {
       html2 +=
         '<div id="ac-tail-where-note" style="display:none;font-size:10px;color:var(--text-secondary);margin:4px 0 6px 0;line-height:1.5;"></div>' +
         '<div id="ac-tail-where-warn" role="status" style="display:none;font-size:10px;color:var(--accent-orange, #ffa657);margin:4px 0 6px 0;line-height:1.5;"></div>' +
-        P.primaryButtonHtml('ac-tail-add', '+ 追加');
-      if (kind === 'action') {
+        P.primaryButtonHtml('ac-tail-add', kind === 'bulk' ? '+ まとめて追加' : '+ 追加');
+      if (kind === 'bulk') {
         html2 +=
-          P.primaryButtonHtml('ac-tail-add-lines', '+ 各行をアクションとして一括追加') +
           '<div id="ac-tail-lines-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;">' +
             '1 行 = 1 アクション。空行は無視されます</div>';
       }
       detailEl.innerHTML = html2;
       restoreDrafts();
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
-      window.MA.reuseModal.bindButton('ac-tail-reuse', 'plantuml-activity', 'ac-tail-text');
-      // 一括追加の欄でもあるので、チップは欄を置き換えずカーソル位置に差し込む。
+      window.MA.reuseModal.bindButton('ac-tail-reuse', 'plantuml-activity', 'ac-tail-bulk');
       P.bindVocabPicker('ac-tail-text-vocab', 'ac-tail-text', null, { insert: 'caret' });
+      // 一括欄では、チップは欄を置き換えずカーソル位置に差し込む。
+      P.bindVocabPicker('ac-tail-bulk-vocab', 'ac-tail-bulk', null, { insert: 'caret' });
       P.bindEvent('ac-tail-other', 'change', paintAllowed);
 
       function commit(out, t) {
@@ -2878,18 +2910,13 @@ window.MA.modules.plantumlActivity = (function() {
           ctx.onUpdate();
         }
       }
-      P.bindEvent('ac-tail-add-lines', 'click', function() {
-        var t0 = ctx.getMmdText();
-        if (!tailKindAllowed(t0, currentPlace(), 'action')) return;
-        commit(addActionsFromTailForm(t0, currentPlace(), val('ac-tail-text')), t0);
-      });
       P.bindEvent('ac-tail-add', 'click', function() {
         var t = ctx.getMmdText();
         var k = val('ac-tail-kind');
         var place = currentPlace();
         if (!tailKindAllowed(t, place, k, val('ac-tail-other'))) return;
-        commit(addFromTailForm(t, place, k, {
-          text: k === 'note' ? val('ac-tail-ntext') : val('ac-tail-text'),
+        commitKeepPlace(t, place, addFromTailForm(t, place, k, {
+          text: k === 'note' ? val('ac-tail-ntext') : (k === 'bulk' ? val('ac-tail-bulk') : val('ac-tail-text')),
           cond: val('ac-tail-cond'),
           thenLabel: val('ac-tail-thenlbl'),
           elseLabel: val('ac-tail-elselbl'),
@@ -2897,8 +2924,15 @@ window.MA.modules.plantumlActivity = (function() {
           name: val('ac-tail-lbl'),
           branchCount: val('ac-tail-bcount'),
           sub: val('ac-tail-other'),
-        }), t);
+        }));
       });
+      // 足した行の後を次の「追加する位置」にしてから確定する (同じ枝に 2 つ目を続けて足せる)。
+      function commitKeepPlace(t, place, out) {
+        if (out !== t && window.MA.tailMemory) {
+          window.MA.tailMemory.setField('ac-tail-where', placeAfterAdd(t, out, place));
+        }
+        commit(out, t);
+      }
       paintAllowed();
     };
     P.bindEvent('ac-tail-kind', 'change', renderTailDetail);
@@ -3396,7 +3430,7 @@ window.MA.modules.plantumlActivity = (function() {
     var P = window.MA.properties;
     var node = _findNodeById(parsedData.nodes, sel.id);
     if (!node) { propsEl.innerHTML = ''; return; }
-    var html = '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + (node.keyword || node.kind) + ' (L' + node.line + ')</div>';
+    var html = '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + window.MA.htmlUtils.escHtml(P.lineHead(node.keyword || node.kind, node.line)) + '</div>';
 
     if (node.kind === 'if') {
       html += P.fieldHtml('Condition', 'ac-if-cond', node.condition || '');
@@ -3558,7 +3592,7 @@ window.MA.modules.plantumlActivity = (function() {
     }
     if (!sw) { propsEl.innerHTML = ''; return; }
     var html =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Swimlane "' + window.MA.htmlUtils.escHtml(sw.label) + '" (L' + sw.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead('Swimlane', sw.line) + ' 「' + sw.label + '」') + '</div>' +
       P.fieldHtml('Name', 'ac-sw-name', sw.label) +
       P.primaryButtonHtml('ac-sw-update', '更新') +
       P.primaryButtonHtml('ac-sw-delete', '✕ swimlane 解除');
@@ -3587,7 +3621,7 @@ window.MA.modules.plantumlActivity = (function() {
     }
     if (!note) { propsEl.innerHTML = ''; return; }
     var html =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (L' + note.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead('Note', note.line)) + '</div>' +
       P.selectFieldHtml('Position', 'ac-note-pos', [
         { value: 'right', label: 'Right', selected: note.position === 'right' },
         { value: 'left', label: 'Left', selected: note.position === 'left' }
@@ -3662,6 +3696,7 @@ window.MA.modules.plantumlActivity = (function() {
     addNoteAtLine: addNoteAtLine,
     // BLK-owner-20260924-2259-prune: 追加ペインの 1 つのフォーム (追加する位置 + 種類)
     tailPlaceOptions: tailPlaceOptions,
+    placeAfterAdd: placeAfterAdd,
     tailKindAllowed: tailKindAllowed,
     tailKindWarning: tailKindWarning,
     tailPlaceReason: tailPlaceReason,

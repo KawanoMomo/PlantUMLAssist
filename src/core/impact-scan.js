@@ -191,11 +191,31 @@ window.MA.impactScan = (function() {
     return { docs: rows.length, total: total, roles: roles, summary: summarize({ roles: roles }) };
   }
 
+  // BLK-primary-20260926-1708-wish: 影響先の図 1 枚で、名前のどれかに当たった行 (行番号・本文・役割)。
+  // 連鎖で届いた図は元の部品名を持たないので、経由した部品名 (via) の行を読む。1 行は 1 度だけ
+  // (2 つの名前が同じ行に出ても重ねない)。names: 当たった名前を並べる順。
+  function linesFor(dsl, names) {
+    var text = String(dsl == null ? '' : dsl);
+    var kind = detectKind(text);
+    var list = (Array.isArray(names) ? names : [names]).filter(function(n) { return n != null && String(n) !== ''; });
+    var out = [];
+    if (!list.length) return out;
+    text.split('\n').forEach(function(line, i) {
+      var hit = [];
+      list.forEach(function(n) { if (countIn(line, n) > 0 && hit.indexOf(String(n)) < 0) hit.push(String(n)); });
+      if (!hit.length) return;
+      var role = classifyLine(line, kind);
+      out.push({ line: i + 1, text: String(line), role: role, label: ROLE_LABEL[role], names: hit });
+    });
+    return out;
+  }
+
   return {
     countIn: countIn,
     detectKind: detectKind,
     classifyLine: classifyLine,
     scanDoc: scanDoc,
+    linesFor: linesFor,
     summarize: summarize,
     scan: scan,
     overview: overview,

@@ -563,3 +563,73 @@ test('手順9 Ctrl+K・Import ▾ から開いた保存先の一覧で 3 枚に�
   await expect(sum).toHaveAttribute('data-expected', '3');
   await expect(sum).toHaveAttribute('data-present', '3');
 });
+
+// BLK-primary-20260925-1032-wish: 場面「顧客向け資料に図を組み込む」で SPI 系統の 3 枚だけを SVG にしたいが、
+// 📦 資料セット「図を選ぶ」の一覧は開いているタブの図しか候補にせず、保存フォルダに 24 枚あっても 0〜2 枚しか
+// 出なかった。3 枚をタブで開き直してから選び直す往復が要っていた。候補に保存先の図を足し、名前で絞って
+// 印を付けた図だけを、タブを開かずに書き出せることを到達条件にする。
+test('手順4 資料セットの「図を選ぶ」で、タブを開かずに保存先の 3 枚を名前で絞って選び、SVG の zip にできる', async ({ page }) => {
+  test.setTimeout(120 * 1000);
+  const ALL = ['spi_init_sequence', 'spi_state', 'can_state', 'can_init_sequence', 'driver_common_class'];
+  const PICK = ['spi_init_sequence', 'spi_state', 'driver_common_class'];
+  await S.bootWithSaveDir(page, DIR);
+  await S.clearDir(page, DIR);
+  for (const n of ALL) await S.putDoc(page, DIR, n, S.docFor(n));
+  await page.reload();
+  await page.waitForSelector('#preview-svg');
+  const tabsBefore = await page.evaluate(() => window.MA.workspace.list().map((d) => d.name).sort());
+
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#exp-docset').click();
+  await page.waitForSelector('#docset-scope', { state: 'visible' });
+  await page.locator('#dsc-pick').click();
+  await expect(page.locator('#expick-modal')).toBeVisible();
+
+  // 到達条件その1: 開いていない保存先の図も候補に並ぶ (見出し「保存先の図」の下)。最初は印が付いていない。
+  const folderRow = (n) => page.locator('#expick-body .expick-row[data-origin="folder"][data-name="' + n + '"]');
+  for (const n of ALL) {
+    if (tabsBefore.includes(n)) continue;
+    await expect(folderRow(n)).toBeVisible();
+    await expect(folderRow(n).locator('.expick-check')).not.toBeChecked();
+  }
+  await expect(page.locator('#expick-body .expick-group[data-group="folder"]')).toContainText('保存先の図');
+
+  // 開いているタブの図 (白紙など) の印は外す (今回だけの 3 枚にする)。
+  const openChecks = page.locator('#expick-body .expick-row[data-origin="open"] .expick-check');
+  for (let i = 0; i < await openChecks.count(); i++) {
+    if (await openChecks.nth(i).isChecked()) await openChecks.nth(i).click();
+  }
+
+  // 到達条件その2: 名前の絞り込み欄で絞り、印を付ける。絞り込みを替えても印は残る。
+  const find = page.locator('#expick-filter');
+  await find.fill('spi');
+  await expect(page.locator('#expick-body .expick-row')).toHaveCount(2);
+  const row = (n) => page.locator('#expick-body .expick-row[data-name="' + n + '"] .expick-check');
+  await row('spi_init_sequence').click();
+  await row('spi_state').click();
+  await find.fill('driver');
+  await row('driver_common_class').click();
+  await expect(page.locator('#expick-count')).toContainText('3 / ');
+  await expect(page.locator('#expick-count')).toContainText('絞り込みの外に印 2 枚');
+  await find.fill('');
+
+  // 到達条件その3: 印を付けた 3 枚だけが zip に入る。タブは 1 枚も増えていない。
+  const dl = page.waitForEvent('download', { timeout: 90000 }).catch(() => null);
+  await page.locator('#expick-save').click();
+  const download = await dl;
+  expect(download).not.toBeNull();
+  const fs = require('fs');
+  const zip = fs.readFileSync(await download.path());
+  const entries = [];
+  const re = /\x50\x4b\x03\x04/g;
+  let m;
+  while ((m = re.exec(zip.toString('latin1'))) !== null) {
+    const at = m.index;
+    const len = zip.readUInt16LE(at + 26);
+    entries.push(zip.toString('utf-8', at + 30, at + 30 + len));
+  }
+  expect(entries.filter((e) => e.endsWith('.svg')).sort()).toEqual(PICK.map((n) => n + '.svg').sort());
+  const tabsAfter = await page.evaluate(() => window.MA.workspace.list().map((d) => d.name).sort());
+  expect(tabsAfter).toEqual(tabsBefore);
+});

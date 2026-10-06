@@ -184,11 +184,21 @@ describe('名前帳 — 表記揺れ', function() {
     expect(PV.checkName(v, 'Spi_Abort')).toBe('');
   });
 
-  test('見出しは図種と語数、揺れの組数を数で言う', function() {
+  // BLK-owner-20260926-0550-5: 数えているのは図の枚数なので「図種」と言わない。
+  test('見出しは図の枚数と語数、揺れの組数を数で言う', function() {
     var v = PV.collect('spi', SHAKY);
     expect(PV.summary(v)).toContain('SPI の名前帳');
-    expect(PV.summary(v)).toContain('4 図種');
+    expect(PV.summary(v)).toContain('4 枚の図から');
+    expect(PV.summary(v)).not.toContain('図種');
     expect(PV.summary(v)).toContain('表記揺れ 1 組');
+  });
+
+  test('下に並べる語が総数より少なければ「並べる数/総数」で言う', function() {
+    var v = PV.collect('spi', SHAKY);
+    var total = v.items.length;
+    expect(PV.summary(v, total)).toContain(' ' + total + ' 語');
+    expect(/\d+\/\d+ 語/.test(PV.summary(v, total))).toBe(false);
+    expect(PV.summary(v, 1)).toContain(' 1/' + total + ' 語');
   });
 });
 

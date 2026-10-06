@@ -216,6 +216,40 @@ window.MA.depGraph = (function() {
     });
   }
 
+  // BLK-primary-20260926-1708-friction: 部品名が矢印の端・宣言でなく、ラベル (遷移のきっかけ・メッセージ) や
+  // note にだけ出る図も、その名前の変更が届く「直接」の図として足す (置換で 10 枚が変わったのに直接が 9 図で、
+  // 遷移ラベルにだけ Irq_Controller を持つ irq_state が影響先に出なかった)。
+  // docs: [{ name, dsl }]。語の区切りは英数字と _ (Irq_Controller_Init の中の Irq_Controller は数えない)。
+  function _mentions(dsl, name) {
+    var n = _s(name);
+    if (!n) return false;
+    var re = new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    var text = _s(dsl);
+    var m;
+    while ((m = re.exec(text)) !== null) {
+      var s = m.index, e = s + m[0].length;
+      var before = s === 0 || !/[A-Za-z0-9_]/.test(text.charAt(s - 1));
+      var after = e >= text.length || !/[A-Za-z0-9_]/.test(text.charAt(e));
+      if (before && after) return true;
+      if (re.lastIndex === m.index) re.lastIndex++;
+    }
+    return false;
+  }
+
+  function withMentions(impact, docs, name) {
+    var out = (Array.isArray(impact) ? impact : []).slice();
+    var have = {};
+    out.forEach(function(r) { if (r) have[r.doc] = true; });
+    (Array.isArray(docs) ? docs : []).forEach(function(d) {
+      if (!d || !_s(d.name) || have[_s(d.name)]) return;
+      var dsl = window.MA.dslUtils ? window.MA.dslUtils.docDsl(d) : _s(d.dsl);
+      if (!_mentions(dsl, name)) return;
+      have[_s(d.name)] = true;
+      out.push({ doc: _s(d.name), hop: 0, via: [_s(name)], mention: true });
+    });
+    return out.sort(function(a, b) { return a.hop - b.hop || a.doc.localeCompare(b.doc); });
+  }
+
   // 見出し 1 行。「まだ開いて確かめる図が残っているか」がここだけで分かる。
   function summaryText(view, impact) {
     if (!view) return '部品名を選ぶと、参照元・参照先の図を矢印で出します';
@@ -269,6 +303,7 @@ window.MA.depGraph = (function() {
     names: names,
     forName: forName,
     impactDocs: impactDocs,
+    withMentions: withMentions,
     summaryText: summaryText,
     layout: layout,
   };

@@ -155,6 +155,23 @@ window.MA.saveTarget = (function() {
     };
   }
 
+  // BLK-human-20261006-2020-1: Ctrl+S / 「● 保存」を押した直後に、保存ボタンの隣へ数秒だけ出す 1 行。
+  // 下端の札は突合の結果も続くので読み落とす。押したその場所で「いつ・どこへ」を言う。
+  // when: Date (省略時は今)。返り値 { text, title }。target が無ければ null。
+  function savedFlash(target, when) {
+    if (!target) return null;
+    var d = (when instanceof Date) ? when : new Date();
+    var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+    var hm = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    if (target.mode === 'download') {
+      return { text: '✓ ' + hm + ' ' + target.name + '.puml をダウンロード',
+        title: hm + ' に ' + target.name + '.puml をダウンロードしました (ブラウザのダウンロードフォルダ)' };
+    }
+    var where = tailOf(target.dir);
+    return { text: '✓ ' + hm + ' ' + (where ? where + '/' : '') + target.name + '.puml に保存',
+      title: hm + ' に ' + target.dir + '/' + target.name + '.puml へ保存しました' };
+  }
+
   return { decide: decide, messageFor: messageFor, tailOf: tailOf, label: label,
-    saveButton: saveButton, breadcrumb: breadcrumb, saveState: saveState };
+    saveButton: saveButton, breadcrumb: breadcrumb, saveState: saveState, savedFlash: savedFlash };
 })();

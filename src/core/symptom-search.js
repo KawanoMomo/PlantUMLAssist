@@ -224,10 +224,47 @@ window.MA.symptomSearch = (function() {
     return { terms: termList, docs: rows.length, missed: missed };
   }
 
+  // BLK-primary-20260925-1732-wish: 症状検索から開いた図で、図の上に光らせる行。
+  // 症状文の語が当たる行 (名前・矢印ラベル・title・note のどれでも。関連度の計算と違い、
+  // 語ごとに最も効いた 1 行だけでなく当たった行を全部) と、「流れ」で対応の無い名前
+  // (Can_Transmit / EnableIrq() など。names で渡す) が書かれた行。
+  // 行は今の本文から引き直す (開いた後に直して行がずれても、光る場所が付いていく)。
+  // 返り値は 1 始まりの行番号の昇順 (重複なし)。
+  function markLines(dsl, text, names) {
+    var termList = terms(text);
+    var seen = {};
+    var out = [];
+    function add(n) { if (!seen[n]) { seen[n] = true; out.push(n); } }
+    index(dsl).forEach(function(e) {
+      var ps = parts(e.text);
+      for (var i = 0; i < termList.length; i++) {
+        if (_match(termList[i], ps, e.text) > 0) { add(e.line); return; }
+      }
+    });
+    var keys = [];
+    (Array.isArray(names) ? names : []).forEach(function(n) {
+      var k = String(n == null ? '' : n).trim();
+      if (!k) return;
+      keys.push(k);
+      var bare = k.replace(/\(\s*\)$/, '');
+      if (bare && bare !== k) keys.push(bare);
+    });
+    if (keys.length) {
+      String(dsl == null ? '' : dsl).split('\n').forEach(function(line, i) {
+        if (/^\s*'/.test(line) || /^\s*@/.test(line)) return;
+        for (var j = 0; j < keys.length; j++) {
+          if (line.indexOf(keys[j]) >= 0) { add(i + 1); return; }
+        }
+      });
+    }
+    return out.sort(function(a, b) { return a - b; });
+  }
+
   return {
     terms: terms,
     parts: parts,
     index: index,
+    markLines: markLines,
     scoreDoc: scoreDoc,
     search: search,
     overview: overview,

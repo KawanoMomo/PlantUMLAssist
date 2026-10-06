@@ -1705,17 +1705,13 @@ window.MA.modules.plantumlClass = (function() {
           { value: 'namespace', label: '名前空間 (namespace)' },
           { value: 'relation',  label: '関係' },
           { value: 'note',      label: '注釈 (note)' },
+          // BLK-owner-20260925-0341-prune: 複数行をまとめて入れる入口は、他の図種と同じ種別チップ「まとめて」1 つ。
+          // 以前はフォームの下に「⌗ クラス構成をまとめて追加」ボタンを別に置いていた。中身 (親・派生・関連の窓) は同じ。
+          { value: 'bulk',      label: 'まとめて (複数行)' },
         ]) +
         '<div id="cl-tail-detail" style="margin-top:6px;"></div>' +
-      '</div>' +
-      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-        '<button id="cl-scaffold-open" style="width:100%;font-size:11px;padding:5px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⌗ クラス構成をまとめて追加</button>' +
       '</div>';
     propsEl.innerHTML = html;
-
-    P.bindEvent('cl-scaffold-open', 'click', function() {
-      _showScaffoldModal(parsedData, ctx);
-    });
 
 
     var renderTailDetail = function() {
@@ -1756,7 +1752,10 @@ window.MA.modules.plantumlClass = (function() {
           ]) +
           _roleSelectHtml('cl-tail-from', 'from', 'association', allOpts) +
           '<button id="cl-tail-rswap" type="button" style="font-size:11px;padding:3px 10px;margin:0 0 8px;cursor:pointer;">⇄ 入替</button>' +
-          _roleSelectHtml('cl-tail-to', 'to', 'association', allOpts) +
+          // BLK-owner-20260926-0550-1: To は From と同じ要素を既定にしない (自分への線を黙って書かない)。
+          // 空欄から一覧で選ぶ。自分への関係は同じ要素を選んだときだけ書く。
+          _roleSelectHtml('cl-tail-to', 'to', 'association',
+            [{ value: '', label: TAIL_TO_BLANK, selected: true }].concat(allOpts)) +
           '<div id="cl-tail-rpreview" style="margin-bottom:8px;padding:4px 6px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);background:var(--bg-tertiary);border-radius:3px;word-break:break-all;"></div>' +
           P.fieldHtml('ラベル', 'cl-tail-rlabel', '', '任意') +
           P.primaryButtonHtml('cl-tail-add', '+ 追加');
@@ -1776,9 +1775,26 @@ window.MA.modules.plantumlClass = (function() {
             '<textarea id="cl-tail-ntext" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;"></textarea>' +
           '</div>' +
           P.primaryButtonHtml('cl-tail-add', '+ 追加');
+      } else if (kind === 'bulk') {
+        html2 =
+          '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;">' +
+            '親クラス・派生クラス (メンバ付き)・関連を 1 つの窓で並べて、1 回で入れます。' +
+            '開いている図の名前は窓の「⧉ 他の図から取り込む」から入れられます</div>' +
+          P.primaryButtonHtml('cl-scaffold-open', '⌗ クラス構成をまとめて追加…');
       }
       detailEl.innerHTML = html2;
+      if (kind === 'bulk') {
+        P.bindEvent('cl-scaffold-open', 'click', function() {
+          _showScaffoldModal(parsedData, ctx);
+        });
+        return;
+      }
       if (kind === 'relation') {
+        // BLK-owner-20260926-0550-1: 確定後も関係の種類と From を保つ (次の 1 本は To だけ選べば足せる)。
+        if (window.MA.tailMemory) {
+          window.MA.tailMemory.bindSelect('cl-tail-rkind');
+          window.MA.tailMemory.bindSelect('cl-tail-from');
+        }
         window.MA.relationKindCards.mountForSelect('cl-tail-rkind', 'class');
         _bindRelationRoles(ctx);
       }
@@ -1820,8 +1836,19 @@ window.MA.modules.plantumlClass = (function() {
         } else if (k === 'relation') {
           var fr = document.getElementById('cl-tail-from').value;
           var to = document.getElementById('cl-tail-to').value;
-          if (!fr || !to) { alert('From/To 必須 (先に要素を追加)'); return; }
+          if (!fr) { alert('From/To 必須 (先に要素を追加)'); return; }
+          if (!to) {
+            var toHint = document.getElementById('cl-tail-rpreview');
+            if (toHint) toHint.textContent = 'To を選んでください (一覧で相手を選ぶ)';
+            var toSelC = document.getElementById('cl-tail-to');
+            if (toSelC && toSelC.focus) toSelC.focus();
+            return;
+          }
           var rkind = document.getElementById('cl-tail-rkind').value;
+          if (window.MA.tailMemory) {
+            window.MA.tailMemory.setField('cl-tail-rkind', rkind);
+            window.MA.tailMemory.setField('cl-tail-from', fr);
+          }
           // 上の欄は矢の根元 (継承なら子)。記法の左右へ直して書く (BLK-owner-20260929-0351-1)。
           var mEnds = _toModel(rkind, fr, to);
           window.MA.history.pushHistory();
@@ -1840,7 +1867,16 @@ window.MA.modules.plantumlClass = (function() {
     };
     document.getElementById('cl-tail-kind').addEventListener('change', renderTailDetail);
     // design 2b: 種別はチップ 1 クリックで決める。値の持ち主は上の select のまま。
-    window.MA.tailKindChips.mount('cl-tail-kind');
+    var chipsEl = window.MA.tailKindChips.mount('cl-tail-kind');
+    // チップ「まとめて」を押すと、その場でクラス構成の窓を開く (当たっているチップの押し直しでも開く)。
+    // 描き直し (確定のあと・前回の種別を覚えていたとき) と ← → での移動では開かない。
+    if (chipsEl) chipsEl.addEventListener('click', function(e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.prop-seg') : null;
+      if (!btn || btn.getAttribute('data-value') !== 'bulk') return;
+      var modal = document.getElementById('cl-sc-modal');
+      if (modal && modal.style.display === 'flex') return;
+      _showScaffoldModal(parsedData, ctx);
+    });
     renderTailDetail();
   }
 
@@ -2582,6 +2618,9 @@ window.MA.modules.plantumlClass = (function() {
 
   // 関係の From/To を「親/子」「全体/部分」のように呼ぶ (BLK-junior-20260908-1203)。
   // 呼び名の表は relation-roles が持ち、ここは見出しと 1 行の下書きに使うだけ。
+  // 追加フォームの To の空欄 (From と同じ要素を既定にしない)。
+  var TAIL_TO_BLANK = '（一覧で相手を選ぶ）';
+
   function _roleSelectHtml(id, side, kind, opts) {
     var esc = window.MA.htmlUtils.escHtml;
     var optsHtml = '';
@@ -2610,6 +2649,7 @@ window.MA.modules.plantumlClass = (function() {
       var k = kindEl.value;
       if (fromLabel) fromLabel.textContent = window.MA.relationRoles.fieldLabel(k, 'from');
       if (toLabel) toLabel.textContent = window.MA.relationRoles.fieldLabel(k, 'to');
+      if (prevEl && !toEl.value) { prevEl.textContent = 'To を一覧で選ぶと、ここに書く行が出ます'; return; }
       if (prevEl) prevEl.textContent = window.MA.relationRoles.preview(k, fromEl.value, toEl.value,
         ctx && ctx.getMmdText ? _rootFirstIn(ctx.getMmdText()) : false);
     }
@@ -2619,6 +2659,7 @@ window.MA.modules.plantumlClass = (function() {
     var swap = document.getElementById('cl-tail-rswap');
     if (swap) {
       swap.addEventListener('click', function() {
+        if (!toEl.value) return;
         var tmp = fromEl.value;
         fromEl.value = toEl.value;
         toEl.value = tmp;
@@ -2636,7 +2677,7 @@ window.MA.modules.plantumlClass = (function() {
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(P.lineHead('Relation', relation.line)) + '</label>' +
         // design 3c: 関係の種類は記法ではなく「UML 名称 + 意味の説明」のカードで選ぶ
         RC.cardsHtml('cl-rel-card', RC.kindsOf('class'), relation.kind) +
         // BLK-junior-20260908-1203: 追加フォームと同じ呼び名で出す。既にある関係を
@@ -2773,8 +2814,7 @@ window.MA.modules.plantumlClass = (function() {
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
-        (group.kind === 'namespace' ? 'NAMESPACE' : 'PACKAGE') +
-        ' (L' + group.startLine + '-' + group.endLine + ')</label>' +
+        window.MA.htmlUtils.escHtml(P.lineHead(group.kind === 'namespace' ? '境界 (namespace)' : '境界', group.startLine, group.endLine)) + '</label>' +
         P.fieldHtml('Label', 'cl-grp-label', group.label) +
         P.primaryButtonHtml('cl-grp-apply', '変更を反映') +
         ' <button id="cl-grp-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 境界削除</button>' +

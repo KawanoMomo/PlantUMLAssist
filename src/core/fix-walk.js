@@ -20,6 +20,8 @@ window.MA.fixWalk = (function() {
       hop: (r && typeof r.hop === 'number') ? r.hop : 0,
       via: (r && Array.isArray(r.via)) ? r.via.slice() : [],
       done: !!(r && r.done),
+      // BLK-primary-20260925-1732-wish: 届き方の代わりに帯へ出す一言 (症状検索の列は「関連度 N · 当たった語」)。
+      note: _s(r && r.note),
     };
   }
 
@@ -45,6 +47,10 @@ window.MA.fixWalk = (function() {
       title: _s(o.title),
       hops: (typeof o.hops === 'number') ? o.hops : 2,
       saved: '',
+      // BLK-primary-20260925-1732-wish: どこから始めた列か ('' = 影響を見る / 変更チケット、'symptom' = 症状検索)。
+      // 症状検索の列は、貼った症状文 (query) で開いた図の当たった語を光らせる。
+      origin: _s(o.origin),
+      query: _s(o.query),
     };
   }
 
@@ -67,6 +73,7 @@ window.MA.fixWalk = (function() {
     return {
       subject: walk.subject, items: items || _items(walk).slice(),
       index: index, ticketId: walk.ticketId, title: walk.title, hops: walk.hops,
+      origin: walk.origin || '', query: walk.query || '',
       // 保存の印は「今の図」に付く。別の図へ移ったら消える。
       saved: (walk.index === index && walk.saved) ? walk.saved : '',
     };
@@ -148,6 +155,7 @@ window.MA.fixWalk = (function() {
 
   function hopText(item) {
     if (!item) return '';
+    if (item.note) return item.note;
     return item.hop === 0 ? '直接' : '連鎖 ' + item.hop + ' 段';
   }
 

@@ -864,7 +864,10 @@ window.MA.modules.plantumlComponent = (function() {
             { value: 'requires',    label: 'Requires (lollipop )-)' },
           ]) +
           P.selectFieldHtml('始点 (From)', 'co-tail-from', allOpts) +
-          P.selectFieldHtml('終点 (To)', 'co-tail-to', allOpts) +
+          // BLK-owner-20260926-0550-1: To は From と同じ要素を既定にしない (一覧で選ぶ。自分への線は選んだときだけ)。
+          P.selectFieldHtml('終点 (To)', 'co-tail-to',
+            [{ value: '', label: '（一覧で相手を選ぶ）', selected: true }].concat(allOpts)) +
+          '<div id="co-tail-rhint" role="status" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px 0;"></div>' +
           P.fieldHtml('ラベル', 'co-tail-rlabel', '', 'association/dependency のみ任意') +
           P.primaryButtonHtml('co-tail-add', '+ 追加');
       } else if (kind === 'bulk') {
@@ -878,7 +881,14 @@ window.MA.modules.plantumlComponent = (function() {
             'A ..&gt; B(dependency) / A -() B(provides) / A )- B(requires)。空行は無視されます</div>';
       }
       detailEl.innerHTML = html;
-      if (kind === 'relation') window.MA.relationKindCards.mountForSelect('co-tail-rkind', 'component');
+      if (kind === 'relation') {
+        // BLK-owner-20260926-0550-1: 確定後も関係の種類 (要求 / requires など) と From を保つ。
+        if (window.MA.tailMemory) {
+          window.MA.tailMemory.bindSelect('co-tail-rkind');
+          window.MA.tailMemory.bindSelect('co-tail-from');
+        }
+        window.MA.relationKindCards.mountForSelect('co-tail-rkind', 'component');
+      }
       // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
       window.MA.reuseModal.bindButton('co-tail-reuse', 'plantuml-component', 'co-tail-bulk');
 
@@ -924,8 +934,19 @@ window.MA.modules.plantumlComponent = (function() {
         } else if (kind === 'relation') {
           var fr = document.getElementById('co-tail-from').value;
           var to = document.getElementById('co-tail-to').value;
-          if (!fr || !to) { alert('From/To 必須'); return; }
+          if (!fr) { alert('From/To 必須'); return; }
+          if (!to) {
+            var coHint = document.getElementById('co-tail-rhint');
+            if (coHint) coHint.textContent = 'To を選んでください (一覧で相手を選ぶ)';
+            var coTo = document.getElementById('co-tail-to');
+            if (coTo && coTo.focus) coTo.focus();
+            return;
+          }
           var rkind = document.getElementById('co-tail-rkind').value;
+          if (window.MA.tailMemory) {
+            window.MA.tailMemory.setField('co-tail-rkind', rkind);
+            window.MA.tailMemory.setField('co-tail-from', fr);
+          }
           window.MA.history.pushHistory();
           out = addRelation(t, rkind, fr, to, document.getElementById('co-tail-rlabel').value.trim());
         } else if (kind === 'bulk') {
@@ -953,7 +974,7 @@ window.MA.modules.plantumlComponent = (function() {
       propsEl.innerHTML =
         // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
         '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-          '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
+          '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
           '<div style="font-size:11px;color:var(--text-secondary);">id: ' + element.id + '</div>' +
         '</div>';
       return;
@@ -961,7 +982,7 @@ window.MA.modules.plantumlComponent = (function() {
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
         P.fieldHtml('Alias (id)', 'co-edit-id', element.id) +
         P.fieldHtml('Label', 'co-edit-label', element.label) +
         // design 5d: ステレオタイプ (<<service>> など)。空にすれば外れる
@@ -1183,15 +1204,16 @@ window.MA.modules.plantumlComponent = (function() {
     var html =
       // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PACKAGE (L' + group.startLine + '-' + group.endLine + ')</label>' +
-        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Label: ' + window.MA.htmlUtils.escHtml(group.label || '') + '</div>' +
+        // BLK-owner-20260926-0550-5: 見出しは「境界 · 2–5 行目」、欄名は日本語。
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead('境界', group.startLine, group.endLine)) + '</label>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">名前: ' + window.MA.htmlUtils.escHtml(group.label || '') + '</div>' +
         // design 5d: 表記を後から差し替える (中身と閉じ括弧はそのまま)
         window.MA.properties.selectFieldHtml('表記', 'co-grp-notation',
           window.MA.groupNotation.notationsFor('plantuml-component').map(function(n) {
             return { value: n.id, label: n.label + ' — ' + n.hint, selected: n.id === (group.notation || 'package') };
           })) +
         window.MA.properties.primaryButtonHtml('co-grp-notation-apply', '表記を変更') +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;">v0.4.0: ラベル変更 / 範囲指定 wrap は v0.5.0 で対応</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;">名前を変えるときは、テキストの ' + group.startLine + ' 行目を直す。</div>' +
       '</div>';
     propsEl.innerHTML = html;
     window.MA.properties.bindEvent('co-grp-notation-apply', 'click', function() {
