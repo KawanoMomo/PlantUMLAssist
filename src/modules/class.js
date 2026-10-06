@@ -3108,13 +3108,13 @@ window.MA.modules.plantumlClass = (function() {
             try { pbb = pg.getBBox(); } catch (e) { pbb = null; }
           }
           if (!pbb || !(pbb.width > 0)) continue;
-          OB.addRect(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
+          OB.addContainer(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
             'data-type': 'package', 'data-id': packages[pi].id, 'data-line': packages[pi].startLine,
-          });
+          }, pg);
           matched.package++;
           continue;
         }
-        OB.addRect(overlayEl,
+        OB.addContainer(overlayEl,
           (parseFloat(pkgRect.getAttribute('x')) || 0) - 2,
           (parseFloat(pkgRect.getAttribute('y')) || 0) - 2,
           (parseFloat(pkgRect.getAttribute('width')) || 0) + 4,
@@ -3122,7 +3122,7 @@ window.MA.modules.plantumlClass = (function() {
             'data-type': 'package',
             'data-id': packages[pi].id,
             'data-line': packages[pi].startLine,
-          });
+          }, pg);
         matched.package++;
       }
 
