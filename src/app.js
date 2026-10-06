@@ -27915,6 +27915,12 @@ function _afterManualSave(doc, target, writtenToFolder) {
   try { if (window.MA.saveDiff) window.MA.saveDiff.mark(doc.name, doc.dsl); } catch (e) {}
   if (writtenToFolder) {
     try { if (window.MA.versionTimeline) window.MA.versionTimeline.push(doc.name, doc.dsl); } catch (e) {}
+    // 下端の札も書けた回に揃える (「見本のまま · 書いていません」を書いた後に残さない)。
+    try {
+      if (window.MA.autoSave && window.MA.autoSave.noteFileWritten) {
+        window.MA.autoSave.noteFileWritten(doc.name, doc.diagramType);
+      }
+    } catch (e) {}
   }
   try { renderDiffBadge(); } catch (e) {}
   try { renderLiveDiffChip(); } catch (e) {}
@@ -27924,6 +27930,13 @@ function _afterManualSave(doc, target, writtenToFolder) {
   if (!el || !f) return;
   el.textContent = f.text;
   el.title = f.title;
+  // 保存ボタンの真下に出す (上部バーの並びには入れない)。
+  var btn = document.getElementById('top-save');
+  var r = btn && btn.getBoundingClientRect ? btn.getBoundingClientRect() : null;
+  if (r && r.width > 0) {
+    el.style.left = Math.max(4, Math.round(r.left)) + 'px';
+    el.style.top = Math.round(r.bottom + 4) + 'px';
+  }
   el.hidden = false;
   if (_saveFlashTimer) clearTimeout(_saveFlashTimer);
   _saveFlashTimer = setTimeout(function() { el.hidden = true; _saveFlashTimer = null; }, 4000);

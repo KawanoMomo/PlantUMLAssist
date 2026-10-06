@@ -600,15 +600,23 @@ html, body {
 }
 #top-save-key { margin-left: 6px; opacity: 0.7; font-size: 10px; }
 #top-save[data-save-state="saved"] #top-save-key { display: none; }
+/* 上部バーの並びを押し出さない (検索欄・状態表示に重ならない)。保存ボタンの真下に浮かせる。 */
 #top-save-flash {
+  position: fixed;
+  top: 36px;
+  z-index: 900;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--accent-green, var(--accent));
-  margin-left: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 8px;
   white-space: nowrap;
-  max-width: 280px;
+  max-width: 360px;
   overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: none;
 }
 #top-save-flash[hidden] { display: none; }
 #top-render-status {

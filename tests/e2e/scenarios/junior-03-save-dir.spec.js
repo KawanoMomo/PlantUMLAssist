@@ -384,6 +384,9 @@ test('手順3 Ctrl+S で保存すると未保存の印が消え、時刻と保�
   await expect(flash).toBeVisible();
   await expect(flash).toContainText(name + '.puml に保存');
   await expect(flash).toHaveText(/\d\d:\d\d:\d\d/);
+  // 下端の札も書けた回を言う (「見本のまま · 書いていません」を書いた後に残さない)。
+  await expect(page.locator('#status-autosave')).not.toContainText('見本のまま');
+  await expect(page.locator('#status-autosave')).toContainText(name + '.puml');
   expect(await S.readDoc(page, DIR, name)).not.toBeNull();
 });
 
