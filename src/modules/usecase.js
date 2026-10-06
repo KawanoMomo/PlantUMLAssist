@@ -1327,11 +1327,11 @@ window.MA.modules.plantumlUsecase = (function() {
           height: parseFloat(pkgRect.getAttribute('height')) || 0,
         } : OB.extractUnionBBox(g, 'text, line, polygon, polyline, path, rect, ellipse');
         if (!pbb) continue;
-        OB.addRect(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
+        OB.addContainer(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
           'data-type': 'package',
           'data-id': packages[pi].id,
           'data-line': packages[pi].startLine,
-        });
+        }, g);
       }
 
       // relation: <g class="link">。書かれた行で当てる (読めない線があっても以後がずれない)

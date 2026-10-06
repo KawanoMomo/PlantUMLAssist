@@ -1378,12 +1378,12 @@ window.MA.modules.plantumlComponent = (function() {
         var pkgRect = pg.querySelector('rect');
         if (!pkgRect) {
           var pbb = OB.extractUnionBBox(pg, 'text, line, polygon, polyline, path, rect, ellipse');
-          if (pbb) OB.addRect(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
+          if (pbb) OB.addContainer(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
             'data-type': 'package', 'data-id': packages[pi].id, 'data-line': packages[pi].startLine,
-          });
+          }, pg);
           continue;
         }
-        OB.addRect(overlayEl,
+        OB.addContainer(overlayEl,
           (parseFloat(pkgRect.getAttribute('x')) || 0) - 2,
           (parseFloat(pkgRect.getAttribute('y')) || 0) - 2,
           (parseFloat(pkgRect.getAttribute('width')) || 0) + 4,
@@ -1391,7 +1391,7 @@ window.MA.modules.plantumlComponent = (function() {
             'data-type': 'package',
             'data-id': packages[pi].id,
             'data-line': packages[pi].startLine,
-          });
+          }, pg);
       }
 
       var ports = (parsedData.elements || []).filter(function(e) { return e.kind === 'port'; });

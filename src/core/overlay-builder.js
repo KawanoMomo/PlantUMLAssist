@@ -3,6 +3,39 @@ window.MA = window.MA || {};
 window.MA.overlayBuilder = (function() {
   var SVG_NS = 'http://www.w3.org/2000/svg';
 
+  // BLK-owner-20260930-0711-1: 境界 (package / rectangle / namespace …) の当たり判定。複合状態・partition と同じ入れ物の形にする。
+  //   中の空所 … data-hit-kind="container" (中の部品・関係の線・ラベル・矢じりより後ろ)
+  //   4 辺の細い帯と見出しの札 … framebelt (関係の線・ラベルと要素の間の段: 辺・札を横切る関係の線より手前で、見出しの文字を指したら境界。
+  //   辺の上に置かれた部品 (port など) は帯より手前なので、帯に隠れない)
+  // 入れ物と中身の重なりはここ 1 か所で決め、クラス・コンポーネント・ユースケースの図種ごとに穴を塞がない。
+  // clusterG … 境界を描いた <g>。見出しの札はその直の子の <text> の外接矩形 (無ければ札は付けない)。
+  function addContainer(overlayEl, x, y, w, h, attrs, clusterG) {
+    function at(kind) {
+      var a = {};
+      Object.keys(attrs || {}).forEach(function(k) { a[k] = attrs[k]; });
+      a['data-hit-kind'] = kind;
+      return a;
+    }
+    var main = addRect(overlayEl, x, y, w, h, at('container'));
+    var pad = 2;
+    addRect(overlayEl, x - pad, y - pad, w + pad * 2, pad * 2, at('framebelt'));
+    addRect(overlayEl, x - pad, y + h - pad, w + pad * 2, pad * 2, at('framebelt'));
+    addRect(overlayEl, x - pad, y - pad, pad * 2, h + pad * 2, at('framebelt'));
+    addRect(overlayEl, x + w - pad, y - pad, pad * 2, h + pad * 2, at('framebelt'));
+    if (clusterG && clusterG.children) {
+      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      Array.prototype.forEach.call(clusterG.children, function(t) {
+        if ((t.tagName || '').toLowerCase() !== 'text') return;
+        var tb = _nodeBBox(t);
+        if (!tb || !tb.width) return;
+        x0 = Math.min(x0, tb.x); y0 = Math.min(y0, tb.y);
+        x1 = Math.max(x1, tb.x + tb.width); y1 = Math.max(y1, tb.y + tb.height);
+      });
+      if (x0 < x1) addRect(overlayEl, x0 - 3, y0 - 3, x1 - x0 + 6, y1 - y0 + 6, at('framebelt'));
+    }
+    return main;
+  }
+
   function addRect(overlayEl, x, y, w, h, attrs) {
     var rect = document.createElementNS(SVG_NS, 'rect');
     rect.setAttribute('x', x);
@@ -873,12 +906,11 @@ window.MA.overlayBuilder = (function() {
     if (k === 'notetailedge') return -3;   // note の楔の縁の帯は最も奥 (addNoteTails)
     if (k === 'link') return -2;
     if (k === 'container') return -1;
-    // BLK-owner-20260930-0711-1: クラス・コンポーネント・ユースケースの境界 (package / rectangle / namespace) も
-    // 複合状態と同じ入れ物。中を通る関係の線・ラベル・矢じりより後ろに置き、境界が選ばれるのは中の空所だけにする。
-    // 図種ごとに印を付けず、入れ物と中身の重なりはここ 1 か所で決める。
-    if (!k && r.getAttribute('data-type') === 'package') return -1;
     if (k === 'linkline') return 0;
     if (k === 'linklabel') return 0.5;   // ラベルの文字は他の関係の線より手前 (文字を押したらその関係)
+    // BLK-owner-20260930-0711-1: 境界 (addContainer) の 4 辺の帯と見出しの札は、横切る関係の線・ラベルより手前、
+    // 辺の上に置かれた部品 (port など) より後ろ。
+    if (k === 'framebelt') return 0.9;
     // BLK-migrator-20260929-0951: 1 本の線で描いた棒 (activity の split / end split) は、棒に入る・棒から出る矢印の
     // 端の枠と重なる。棒の細い帯の上は棒が選ばれる (矢じりの関係 linkhead よりは後ろ)。
     if (k === 'bar') return 1.5;
@@ -1262,7 +1294,9 @@ window.MA.overlayBuilder = (function() {
       var bb = paperBox || extractUnionBBox(g, 'text, line, polygon, polyline, path, rect, ellipse');
       if (!bb || !(bb.width > 0 || bb.height > 0)) return;
       var pad = cls === 'cluster' ? 2 : 4;
-      addRect(overlayEl, bb.x - pad, bb.y - pad, bb.width + pad * 2, bb.height + pad * 2, attrs);
+      // BLK-owner-20260930-0711-1: パーサが読めない入れ物 (cloud / database / node …) も package と同じ入れ物の当て方。
+      if (cls === 'cluster') addContainer(overlayEl, bb.x - pad, bb.y - pad, bb.width + pad * 2, bb.height + pad * 2, attrs, g);
+      else addRect(overlayEl, bb.x - pad, bb.y - pad, bb.width + pad * 2, bb.height + pad * 2, attrs);
       n++;
     });
     if (!selector || /g\.(title|header|footer|caption|legend)/.test(selector)) n += addDocumentChrome(svgEl, overlayEl, null);
@@ -1784,6 +1818,7 @@ window.MA.overlayBuilder = (function() {
     linkGroups: linkGroups,
     extractUnionBBox: extractUnionBBox,
     nodeBBox: _nodeBBox,
+    addContainer: addContainer,
     pathBox: pathBox,
     pathPoints: pathPoints,
     noteBodyBox: noteBodyBox,
