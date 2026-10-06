@@ -90,9 +90,14 @@ window.MA.exportTarget = (function() {
 
     // テンプレは渡す相手の成果物ではないので、どちらの的でも外す。
     var deliverable = all.filter(function(d) { return d.deliverable; });
+    // BLK-releaser-20261006-2054-1: 保存先フォルダが未設定 (localStorage 運用) なら、
+    // 対象のすべては開いているタブ。サーバの既定の置き場に残る図を読めていても、
+    // それを「対象から外れた図」「未確定」「テンプレ」として数えない (偽の警告を出さない)。
+    // 行の頭で利用者が入れた図は、従来どおり的に載る。
+    function scoped(d) { return folderAvailable || d.open; }
     // 未確定 (スクラッチ) は既定で外す。渡す側が意図して入れたときだけ的に載せる。
     var includeScratch = !!o.includeScratch;
-    var scratchDocs = deliverable.filter(function(d) { return d.scratch; });
+    var scratchDocs = deliverable.filter(function(d) { return d.scratch && scoped(d); });
     var pool = includeScratch ? deliverable : deliverable.filter(function(d) { return !d.scratch; });
     var targets = mode === MODE_FOLDER ? pool : pool.filter(function(d) { return d.open; });
     // BLK-owner-20260925-0235-prune: 行ごとの入る / 入らない (チェックリストの行の頭で切り替える)。
@@ -109,10 +114,10 @@ window.MA.exportTarget = (function() {
 
     var openCount = pool.filter(function(d) { return d.open; }).length;
     var folderCount = folderAvailable ? pool.length : 0;
-    var template = all.length - pool.length;
-    var missing = pool.filter(function(d) { return targets.indexOf(d) === -1; }).length;
+    var template = all.filter(scoped).length - pool.filter(scoped).length;
+    var missing = pool.filter(function(d) { return scoped(d) && targets.indexOf(d) === -1; }).length;
     var missingUnopened = pool.filter(function(d) {
-      return !d.open && targets.indexOf(d) === -1;
+      return scoped(d) && !d.open && targets.indexOf(d) === -1;
     }).length;
 
     var line;
@@ -137,7 +142,7 @@ window.MA.exportTarget = (function() {
 
     var names = [];
     pool.forEach(function(d) {
-      if (targets.indexOf(d) === -1 && names.length < 5) names.push(d.name);
+      if (scoped(d) && targets.indexOf(d) === -1 && names.length < 5) names.push(d.name);
     });
     if (missing > 0) {
       line += ' — ' + missing + ' 枚が対象から外れています'

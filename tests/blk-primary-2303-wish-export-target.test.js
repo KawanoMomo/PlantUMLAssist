@@ -94,6 +94,36 @@ describe('export-target — 書き出す前の対象確認 (BLK-primary-20260908
     expect(m.hint).toBe('');
   });
 
+  // BLK-releaser-20261006-2054-1: localStorage 運用でも、サーバの既定の置き場 (./autosave) に
+  // 残る図をチェックリストが読む。それを「対象から外れた図」に数えると、未設定と言いながら
+  // 「5 枚が対象から外れています」と偽の警告が出る。
+  test('保存先フォルダが未設定なら、読めてしまった置き場の図を欠落・未確定・テンプレに数えない', function() {
+    var folder = folderDocs(7).concat([{ name: 'spi_init-編集中', dsl: '@startuml\n@enduml' }]);
+    var m = ET.model({
+      openDocs: openDocs(), folderDocs: folder, folderAvailable: false,
+      roles: { diagram1: 'template' },
+    });
+    expect(m.mode).toBe(ET.MODE_OPEN);
+    expect(m.count).toBe(2);
+    expect(m.missing).toBe(0);
+    expect(m.missingUnopened).toBe(0);
+    expect(m.scratch).toBe(0);
+    expect(m.template).toBe(0);
+    expect(m.warn).toBe(false);
+    expect(m.line).toBe('対象 2 枚（保存先フォルダが未設定のため、開いているタブが対象のすべてです）');
+    expect(ET.resultLine(m)).toBe('2 枚');
+  });
+
+  test('保存先フォルダが未設定でも、行の頭で入れた置き場の図は的に載る', function() {
+    var m = ET.model({
+      openDocs: openDocs(), folderDocs: folderDocs(5), folderAvailable: false,
+      overrides: { diagram1: true },
+    });
+    expect(m.count).toBe(3);
+    expect(m.targets.map(function(d) { return d.name; })).toContain('diagram1');
+    expect(m.warn).toBe(false);
+  });
+
   test('フォルダを的にしても読めていなければ、黙ってフォルダ扱いにせずタブに落とす', function() {
     var m = ET.model({ openDocs: openDocs(), folderDocs: [], folderAvailable: false, mode: ET.MODE_FOLDER });
     expect(m.mode).toBe(ET.MODE_OPEN);
