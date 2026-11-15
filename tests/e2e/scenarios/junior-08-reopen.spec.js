@@ -256,14 +256,10 @@ test('手順8 FILES ツリーのファイル行の頭に、左レールと同じ
   expect(await page.locator('#files-body-open').textContent()).not.toContain('📌');
 
   // BLK-builder-20260924-1350-3 (design 10a / 9a): 節見出しは「名前 + 右端の件数」を 1 回だけ。
-  // 「読むだけ」の入口は絵文字ではなくレールと同じ 1px 線画。名前は何をするかで「読むだけのフォルダの図を調べる」
-  // (BLK-owner-20260924-1836-prune。以前は「他フォルダを覗く」)。
+  // 「読むだけ」の目の印 (図を調べる) は TICKET-owner-20261115-2141-prune で外した。
   await expect(page.locator('#files-sec-open .files-sec-label')).toHaveText('開いている図');
   await expect(page.locator('#files-count-open')).toHaveText(/^[1-9]\d*$/);
-  const peek = page.locator('#btn-tab-peek');
-  await expect(peek).toHaveAttribute('aria-label', '読むだけのフォルダの図を調べる');
-  await expect(peek.locator('svg')).toBeVisible();
-  expect(await peek.textContent()).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u);
+  await expect(page.locator('#btn-tab-peek')).toHaveCount(0);
 
   // BLK-builder-20260924-1358-3 (design 10a / 7a): レールの FILES はロゴ P の直下・図種の列の上にあり、
   // 印は図種と同じ線画。押せばツリーが畳まれ、もう一度押せば開く。
@@ -527,7 +523,6 @@ test('手順8 部品フォルダの「＋ 未作成 N 図種」の略号を押�
   await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toContainText('SPI 4 / 6');
   await expect(treeFile(page, 'spi_usecase')).toBeVisible();
   await expect(row).toHaveText('＋未作成 2 図種（CMP・ACT）');
-  await expect(page.locator('#peek-modal')).toBeHidden();
 
   // 行頭の ＋ = 残りをまとめて。
   await row.locator('.files-part-missing-all').click();

@@ -175,8 +175,8 @@ test('手順3 起動すると保存先の一覧が開いていて、読むだけ
   await expect(page.locator('#files-sec-readonly')).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('#files-body-readonly')).toBeHidden();
   await expect(page.locator('#files-sec-git')).toHaveAttribute('aria-expanded', 'false');
-  // 畳んでいても入口は押せる位置にある。
-  await expect(page.locator('#btn-tab-peek')).toBeVisible();
+  // 畳んでいても入口は押せる位置にある (目の印「図を調べる」は TICKET-owner-20261115-2141-prune で外した)。
+  await expect(page.locator('#btn-tab-peek')).toHaveCount(0);
   await expect(page.locator('#btn-tab-senior')).toBeVisible();
   // 見出しを実マウスで押すと開閉する。
   await page.locator('#files-sec-readonly').click();

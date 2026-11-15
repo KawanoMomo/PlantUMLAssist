@@ -1110,29 +1110,6 @@ html, body {
 }
 #folder-panel input.folder-filter:focus { outline: none; border-color: var(--accent); }
 #folder-panel .folder-filter-state { color: var(--accent); font-size: 10px; white-space: nowrap; }
-/* 読むだけの他フォルダの入口。探して 0 枚のときだけ urged で強く出る。 */
-#folder-panel .folder-peek-open {
-  font-size: 10px;
-  padding: 2px 8px;
-  white-space: nowrap;
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  cursor: pointer;
-}
-#folder-panel .folder-peek-open:hover { border-color: var(--accent); }
-#folder-panel .folder-peek-open.urged { border-color: var(--accent); color: var(--accent); }
-#folder-panel .folder-peek-hint { font-size: 10px; color: var(--text-secondary); }
-#folder-panel .folder-peek-hint.urged { color: var(--accent); }
-#peek-query {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 0;
-  font-size: 10px;
-  color: var(--accent);
-}
 #folder-panel .folder-summary {
   font-size: 10px;
   color: var(--text-secondary);
@@ -1171,14 +1148,6 @@ html, body {
   cursor: pointer;
 }
 #folder-panel button.folder-target.folder-target-on { border-color: var(--accent); color: var(--accent); }
-/* 棚卸しは 🧩 部品ビューへの導線だけ */
-#folder-panel button.folder-board-link {
-  display: block; width: calc(100% - 12px); margin: 3px 6px; font-size: 11px; text-align: left;
-  border: 1px solid var(--border); border-radius: 3px; background: transparent;
-  color: var(--accent); cursor: pointer;
-}
-#peek-board .pc-todo { font-size: 10px; padding: 1px 6px 3px; color: var(--text-secondary); }
-#peek-board .pc-todo .has-todo { color: var(--accent-red); margin-right: 8px; }
 /* 上書きされる前の版。行の末尾に付き、押すと
    すぐ下に版が開く。版のある図にしか出ないので、普段の一覧は今までのまま。 */
 #folder-panel button.folder-versions {
@@ -2089,342 +2058,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 .dm-mismatch { font-size: 12px; margin-top: 6px; }
 .dm-mismatch .dm-row { cursor: pointer; padding: 2px 0; color: var(--accent-red); }
 
-/* 他フォルダの閲覧 (読むだけ。保存先は動かさない) */
-#peek-content {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  width: 92vw;
-  max-width: 1280px;
-  height: 88vh;
-  display: flex;
-  flex-direction: column;
-}
-#peek-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  color: var(--text-primary);
-}
-#peek-notice { color: var(--accent); font-family: var(--font-mono); }
-#peek-dir-name { font-size: 12px; padding: 1px 8px; background: transparent; color: var(--text-primary); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; }
-#peek-dir-name:hover { border-color: var(--accent); }
-#peek-dir-name:disabled { color: var(--text-secondary); cursor: default; border-style: dashed; }
-#peek-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-#peek-body { display: flex; flex: 1 1 0; min-height: 0; }
-#peek-dirs, #peek-files {
-  width: 200px;
-  border-right: 1px solid var(--border);
-  overflow-y: auto;
-  padding: 6px;
-  font-size: 11px;
-}
-#peek-dirs .peek-dir, #peek-files .peek-file {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--text-primary);
-  padding: 4px 6px;
-  cursor: pointer;
-}
-#peek-dirs .peek-dir:hover, #peek-files .peek-file:hover { background: var(--bg-hover, rgba(127,127,127,0.15)); }
-#peek-dirs .peek-dir.selected, #peek-files .peek-file.selected { border-color: var(--accent); }
-#peek-dirs .peek-dir.current { color: var(--text-secondary); }
-#peek-dirs .peek-head, #peek-files .peek-head { color: var(--text-secondary); padding: 2px 6px 6px; }
-/* 覗いたフォルダの一覧にも SVG の鮮度を出す。
-   行の印は一致にも出す (無印を「確かめてある」と読ませない)。 */
-#peek-files .peek-file { display: flex; align-items: center; gap: 6px; }
-#peek-files .peek-file .peek-file-name {
-  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* 覗き一覧にも図種の印と内訳を出す
-   (名前の語尾から図種を推測しながら 30 行読む手を無くす)。 */
-/* 確認の結論の控え。相手に 0 枚の図種にだけ出る。 */
-#peek-files .peek-verdict-row {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 1px 6px 3px;
-}
-#peek-files .peek-verdict-text { font-size: 10px; color: var(--text-secondary); }
-#peek-files .peek-verdict-text.is-stale { color: var(--accent-red); font-weight: bold; }
-#peek-files button.peek-verdict-act {
-  flex: 0 0 auto; width: auto; font-size: 9px; white-space: nowrap;
-  border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px;
-  background: transparent; color: var(--text-primary); cursor: pointer;
-}
-#peek-files .peek-kinds {
-  padding: 4px 8px; font-size: 11px; color: var(--text-secondary);
-  border-bottom: 1px solid var(--border-color);
-}
-#peek-files .peek-kind {
-  margin-left: 6px; padding: 0 5px; border-radius: 3px; font-size: 10px;
-  background: var(--bg-tertiary); color: var(--text-secondary); white-space: nowrap;
-}
-#peek-files .peek-svg-badge {
-  flex: 0 0 auto;
-  font-size: 9px;
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  border-radius: 2px;
-  padding: 0 3px;
-  white-space: nowrap;
-}
-#peek-files .peek-svg-badge.alert {
-  border-color: var(--accent-red); color: var(--accent-red); font-weight: bold;
-}
-#peek-files .peek-svg-summary {
-  font-size: 10px; color: var(--text-secondary); padding: 0 6px 4px; line-height: 1.5;
-}
-#peek-files .peek-svg-summary.has-issue { color: var(--accent-red); }
-#peek-files button.peek-svg-verify {
-  display: block; width: 100%; text-align: left;
-  border: 1px solid var(--border); border-radius: 3px; background: var(--bg-tertiary);
-  color: var(--text-primary); font-size: 10px; padding: 2px 6px; cursor: pointer;
-  margin: 0 0 6px;
-}
-#peek-files button.peek-svg-verify:disabled { color: var(--text-secondary); cursor: default; }
-#peek-files .peek-change-badge {
-  font-size: 10px; border: 1px solid var(--border); border-radius: 3px;
-  padding: 0 3px; color: var(--text-secondary); flex: none;
-}
-#peek-files .peek-change-badge.changed {
-  border-color: var(--accent); color: var(--accent); font-weight: bold;
-}
-#peek-files .peek-change-summary {
-  font-size: 10px; color: var(--text-secondary); padding: 0 6px 4px; line-height: 1.5;
-}
-#peek-files .peek-change-summary.has-changes { color: var(--accent); }
-#peek-files button.peek-change-filter {
-  display: block; width: 100%; text-align: left;
-  border: 1px solid var(--border); border-radius: 3px; background: var(--bg-tertiary);
-  color: var(--text-primary); font-size: 10px; padding: 2px 6px; cursor: pointer;
-  margin: 0 0 6px;
-}
-#peek-files button.peek-change-filter.on { border-color: var(--accent); color: var(--accent); }
-#peek-files button.peek-change-filter:disabled { color: var(--text-secondary); cursor: default; }
-#peek-changes {
-  font-size: 11px; color: var(--text-secondary); padding-bottom: 6px; line-height: 1.6;
-}
-#peek-changes .peek-change-notice { color: var(--text-primary); }
-#peek-changes .peek-change-line { font-family: var(--font-mono); white-space: pre-wrap; }
-#peek-changes .peek-change-line.add { color: var(--accent); }
-#peek-changes .peek-change-line.del { color: var(--accent-red); }
-#peek-view { flex: 1 1 0; min-width: 0; overflow: auto; padding: 10px 14px; }
-#peek-title { font-size: 12px; color: var(--text-primary); padding-bottom: 6px; }
-#peek-svg { background: #fff; border-radius: 4px; padding: 8px; overflow: auto; }
-#peek-svg svg { max-width: 100%; height: auto; }
-#peek-dsl {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-secondary);
-  white-space: pre;
-  overflow-x: auto;
-  margin: 10px 0 0;
-}
-/* フォルダ横断のドメイン突合。
-   共通 / 片方だけ を色で分ける (どちらのフォルダの側かは接頭辞で言う)。 */
-#peek-cohort { padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
-#peek-cohort .cohort-head { font-size: 12px; font-weight: 600; padding-bottom: 6px; }
-#peek-cohort .cohort-hint { font-size: 11px; color: var(--text-secondary); padding: 4px 0; }
-#peek-cohort .cohort-pair {
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 6px 8px;
-  margin-bottom: 6px;
-}
-#peek-cohort .cohort-pair.mismatched { border-color: var(--accent); }
-#peek-cohort .cohort-pair.acked {
-  display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline;
-  opacity: 0.75; border-style: dashed;
-}
-#peek-cohort .cohort-pair-title { font-size: 11px; padding-bottom: 4px; }
-#peek-cohort .cohort-line { display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; padding: 2px 0; }
-#peek-cohort .cohort-line-title { font-size: 10px; color: var(--text-secondary); min-width: 5.5em; }
-#peek-cohort .cohort-chip {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  border-radius: 3px;
-  padding: 1px 5px;
-  border: 1px solid var(--border);
-}
-#peek-cohort .cohort-both { color: var(--text-secondary); }
-#peek-cohort .cohort-only-a { border-color: #d08770; color: #d08770; }
-#peek-cohort .cohort-only-b { border-color: #5e81ac; color: #5e81ac; }
-#peek-cohort .cohort-none { color: var(--text-secondary); opacity: 0.7; }
-/* 部品名の対応表。2 列の「片方だけ」を結び直す
-   代わりに、揺れている組だけを 1 行ずつ出す。 */
-#peek-cohort .cohort-pairs { padding: 4px 0 2px; }
-#peek-cohort .cohort-pairs-head { font-size: 10px; color: var(--text-secondary); padding-bottom: 2px; }
-#peek-cohort .cohort-pairs-none { font-size: 10px; color: var(--text-secondary); opacity: 0.8; }
-#peek-cohort .cohort-pair-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: baseline;
-  font-size: 11px;
-  padding: 2px 4px;
-  border-left: 2px solid var(--accent-orange);
-}
-#peek-cohort .cohort-pair-variant { border-left-color: var(--accent-red); }
-#peek-cohort .cohort-pair-arrow { color: var(--text-secondary); }
-#peek-cohort .cohort-pair-note { font-size: 10px; color: var(--text-secondary); }
-#peek-cohort-toggle.on { border-color: var(--accent); color: var(--accent); }
-#peek-template:disabled { opacity: 0.5; cursor: default; }
-#peek-cohort-templates.on { border-color: var(--accent); color: var(--accent); }
-#peek-dirs .cohort-hint { font-size: 11px; color: var(--text-secondary); padding: 4px 2px; }
-#peek-cohort .cohort-verdict {
-  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
-  padding-top: 6px; margin-top: 4px; border-top: 1px dashed var(--border);
-}
-#peek-cohort .cohort-verdict-note { font-size: 10px; color: var(--text-secondary); }
-#peek-cohort .cohort-verdict-btn {
-  font-size: 10px; padding: 2px 8px; border-radius: 3px;
-  border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);
-  cursor: pointer;
-}
-#peek-cohort .cohort-verdict-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-/* 同名ファイルを左右に並べて読む。
-   食い違う語だけに色を置き、揃っている語は本文と同じ色のままにする
-   (全部光ると、どこを見ればよいかが本文を読み直さないと決まらない)。 */
-/* 前回保存版と今回保存版を並べる */
-#peek-ba { border: 1px solid var(--border); border-radius: 4px; padding: 6px; margin-bottom: 8px; }
-#peek-ba .ba-summary { font-size: 12px; font-weight: 600; padding-bottom: 4px; }
-#peek-ba .ba-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-#peek-ba .ba-toggle { border: 1px solid var(--border); border-radius: 3px; background: var(--bg-tertiary); color: inherit; font-size: 11px; padding: 2px 6px; cursor: pointer; }
-#peek-ba .ba-verdict { font-size: 11px; color: var(--text-secondary); }
-#peek-ba .ba-verdict-content { color: var(--accent); font-weight: 600; }
-#peek-ba .ba-cols { display: flex; gap: 6px; padding-top: 6px; }
-#peek-ba .ba-col { flex: 1 1 50%; min-width: 0; border: 1px solid var(--border); border-radius: 3px; padding: 4px; overflow-x: auto; }
-#peek-ba .ba-col-head { font-size: 11px; font-weight: 600; padding-bottom: 3px; color: var(--text-secondary); }
-#peek-ba .ba-line { font-size: 11px; font-family: var(--mono, monospace); white-space: pre; }
-#peek-ba .ba-no { color: var(--text-secondary); padding-right: 6px; }
-#peek-ba .ba-add { background: rgba(60, 160, 90, 0.18); }
-#peek-ba .ba-del { background: rgba(200, 80, 80, 0.18); }
-#peek-ba .ba-blank { opacity: 0.35; }
-#peek-ba .ba-svg-note { font-size: 11px; color: var(--text-secondary); padding-top: 6px; }
-#peek-ba .ba-svg svg { max-width: 100%; height: auto; }
-/* 提案アクションと [適用]。
-   指摘の行のすぐ下に置き、当てる操作と対象図を読んでから押せるようにする。 */
-/* 対象の図種・版 1 行。指摘の行のすぐ下に置き、
-   押す前に「どの版が開くのか」を読めるようにする。 */
-/* 二択の指摘のもう一方。本手と並べるが、
-   どちらが既定かは決めない — 枠だけ控えめにして 2 つ目だと分かるようにする。 */
-#peek-sbs { padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
-#peek-sbs .sbs-head { font-size: 12px; font-weight: 600; padding-bottom: 4px; }
-#peek-sbs .sbs-summary { font-size: 11px; color: var(--text-secondary); padding-bottom: 6px; }
-#peek-sbs .sbs-hint { font-size: 11px; color: var(--text-secondary); padding: 4px 0; }
-#peek-sbs .sbs-grid {
-  display: grid; grid-template-columns: 2.5em 1fr 2.5em 1fr;
-  font-family: var(--mono, monospace); font-size: 11px; line-height: 1.6;
-  border: 1px solid var(--border); border-radius: 4px; overflow: auto; max-height: 46vh;
-}
-#peek-sbs .sbs-col-head {
-  position: sticky; top: 0; background: var(--bg-secondary, #2e3440);
-  font-weight: 600; padding: 3px 6px; border-bottom: 1px solid var(--border);
-}
-#peek-sbs .sbs-ln { color: var(--text-secondary); opacity: 0.6; text-align: right; padding: 0 6px; user-select: none; }
-#peek-sbs .sbs-text { padding: 0 6px; white-space: pre-wrap; word-break: break-all; }
-#peek-sbs .sbs-row-changed .sbs-text { background: rgba(235, 203, 139, 0.10); }
-#peek-sbs .sbs-row-only-left .sbs-text-left,
-#peek-sbs .sbs-row-only-right .sbs-text-right { background: rgba(163, 190, 140, 0.12); }
-#peek-sbs .sbs-gap { opacity: 0.35; }
-#peek-sbs .sbs-mark { border-radius: 2px; padding: 0 1px; }
-#peek-sbs .sbs-mark-spelling { background: rgba(235, 203, 139, 0.30); color: #ebcb8b; }
-#peek-sbs .sbs-mark-only { background: rgba(191, 97, 106, 0.25); color: #bf616a; }
-#peek-sbs .sbs-align { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; padding: 4px 0 0 0; }
-#peek-sbs .sbs-align-note { font-size: 10px; color: var(--text-secondary); }
-#peek-sbs .sbs-align-btn {
-  font-size: 10px; padding: 1px 6px; border: 1px solid var(--border);
-  border-radius: 3px; background: transparent; color: var(--text); cursor: pointer;
-}
-#peek-sbs .sbs-align-btn:hover { border-color: var(--accent); color: var(--accent); }
-/* 部品ビュー。6 図種 × (先輩 / 自分) を 1 画面に。 */
-#peek-board-toggle.on { border-color: var(--accent); color: var(--accent); }
-#peek-board { padding: 6px; font-size: 11px; }
-#peek-board .pb-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 6px; }
-#peek-board-summary { color: var(--text-secondary); }
-#peek-board-summary.has-todo { color: var(--accent-red); font-weight: bold; }
-/* 部品カードの帯。6 図種を 1 まとまりとして
-   「何枚済んだか」と「どの図がまだ先輩に合っていないか」を本文より先に出す。 */
-#peek-card {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 4px 0 6px; border-bottom: 1px solid var(--border);
-}
-#peek-card-progress { font-weight: 600; }
-#peek-card-progress.full { color: var(--accent); }
-#peek-card .pc-bar { display: inline-flex; gap: 3px; }
-#peek-card .pc-pip {
-  width: 10px; height: 6px; border-radius: 2px;
-  background: var(--border); border: 1px solid var(--border);
-}
-#peek-card .pc-pip.on { background: var(--accent); border-color: var(--accent); }
-#peek-card .pc-gaps { color: var(--text-secondary); }
-#peek-card .pc-gaps.has-todo { color: var(--accent-red); }
-#peek-card .pc-gap {
-  background: none; border: 1px solid currentColor; color: inherit;
-  border-radius: 3px; padding: 0 4px; font: inherit; cursor: pointer;
-}
-#peek-card .pc-gap[data-verdict="variant"] { opacity: 0.8; }
-#peek-board .pb-row[data-verdict="differ"] .pb-kind::after { content: ' ●'; color: var(--accent-red); }
-#peek-board .pb-row[data-verdict="variant"] .pb-kind::after { content: ' ○'; color: var(--accent-red); }
-#peek-board .pb-row[data-verdict="agree"] .pb-kind::after { content: ' ✓'; color: var(--accent); }
-#peek-board .pb-row {
-  display: grid; grid-template-columns: 6.5em 1fr 1fr; gap: 6px;
-  border-top: 1px solid var(--border); padding: 6px 0; align-items: start;
-}
-#peek-board .pb-kind { color: var(--text-secondary); padding-top: 4px; }
-#peek-board .pb-row[data-editing="1"] .pb-kind { color: var(--accent); font-weight: 600; }
-#peek-board .pb-row[data-editing="1"] .pb-mine-text { border-color: var(--accent); }
-#peek-board .pb-row[data-state="mine-missing"] .pb-kind { color: var(--accent-red); }
-#peek-board .pb-col-head { font-size: 10px; color: var(--text-secondary); padding-bottom: 2px; }
-/* 共通の図から絞った手本の出典 1 行。 */
-#peek-board .pb-shared-note { font-size: 10px; color: var(--accent); padding-bottom: 2px; }
-#peek-board .pb-ref-text, #peek-board .pb-mine-text {
-  width: 100%; max-height: 150px; min-height: 90px; overflow: auto; box-sizing: border-box;
-  font-family: var(--mono, monospace); font-size: 10px; line-height: 1.45;
-  background: var(--bg-primary); color: var(--text); border: 1px solid var(--border);
-  border-radius: 3px; padding: 4px; white-space: pre; margin: 0;
-}
-#peek-board .pb-mine-text { resize: vertical; }
-#peek-board .pb-names { padding-top: 3px; }
-#peek-board .pb-name {
-  font-size: 10px; padding: 1px 6px; margin: 2px 3px 0 0; border-radius: 9px;
-  border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer;
-}
-#peek-board .pb-name:hover { border-color: var(--accent); color: var(--accent); }
-#peek-board .pb-name[data-role="method"] { border-color: var(--accent); }
-#peek-board .pb-acts { padding-top: 3px; display: flex; gap: 6px; align-items: center; }
-#peek-board .pb-acts button { font-size: 10px; padding: 1px 8px; }
-#peek-board .pb-msg { font-size: 10px; color: var(--accent); }
-#peek-board .pb-empty { font-size: 10px; color: var(--text-secondary); padding: 4px; }
-#peek-parts { padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
-#peek-parts .peek-parts-head { font-size: 11px; color: var(--text-secondary); padding-bottom: 4px; }
-#peek-parts .peek-part-chip {
-  font-size: 11px; padding: 2px 8px; margin: 2px 4px 2px 0; border-radius: 10px;
-  border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer;
-}
-#peek-parts .peek-part-chip:hover { border-color: var(--accent); color: var(--accent); }
-#peek-parts .peek-part-chip.selected { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-/* 相乗り図の部品フィルタ。 */
-#peek-focus { padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
-#peek-focus .peek-focus-head { font-size: 11px; color: var(--text-secondary); padding-bottom: 4px; }
-#peek-focus .peek-focus-chip, #peek-focus .peek-focus-mode {
-  font-size: 11px; padding: 2px 8px; margin: 2px 4px 2px 0; border-radius: 10px;
-  border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer;
-}
-#peek-focus .peek-focus-chip:hover, #peek-focus .peek-focus-mode:hover { border-color: var(--accent); color: var(--accent); }
-#peek-focus .peek-focus-chip.selected, #peek-focus .peek-focus-mode.on {
-  border-color: var(--accent); color: var(--accent); font-weight: 600;
-}
-#peek-focus .peek-focus-modes { padding-top: 4px; }
-#peek-focus .peek-focus-label { font-size: 11px; color: var(--accent); padding-top: 4px; }
-#peek-dsl .peek-dsl-dim { opacity: 0.35; }
-#peek-dsl .peek-dsl-keep { color: var(--text-primary); font-weight: 600; }
 /* ── 突合ダッシュボード ────────────
    別々のモーダルに分かれていた突合の出口を 1 枚の表にまとめる。 */
 .ab-empty { color: var(--text-secondary); font-size: 12px; padding: 12px 0; }
@@ -4945,8 +4579,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 #senior-head button { border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
 #senior-notice { padding: 4px 8px; font-size: 11px; color: var(--text-secondary); }
-/* 相手が無いと言い切った行から部品ビューへ。 */
-#senior-notice .senior-to-board { font-size: 11px; padding: 1px 6px; margin-left: 4px; cursor: pointer; }
 #senior-slice { padding: 0 8px 4px 8px; display: flex; align-items: center; gap: 4px; font-size: 11px; }
 /* display 指定は hidden 属性より強い。共通図の抜き出し以外 (見本・1:1 の相手) では
    効かない欄なので、隠すと言った時は隠す (押せない欄が残ると何の欄か読めない)。 */
@@ -5667,11 +5299,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <button type="button" class="files-sec-head" id="files-sec-readonly" aria-expanded="false"
                   aria-controls="files-body-readonly"><span class="files-caret" aria-hidden="true">▸</span><span
                   class="files-sec-label">読むだけ</span><span class="files-sec-count" id="files-count-readonly"></span></button>
-          <!-- design 9a / 10a: 絵文字をやめ、レールと同じ 1px 線画 (目) にする -->
-          <button class="tab-tool files-sec-act" id="btn-tab-peek" aria-label="読むだけのフォルダの図を調べる"
-                  title="読むだけのフォルダの図を調べる… (並べている相手、無ければ先頭のフォルダ。別のフォルダは行の右クリックから。保存先は変わりません)"><svg class="files-act-glyph"
-                  viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1"
-                  aria-hidden="true"><path d="M1.5 8 C4 4, 12 4, 14.5 8 C12 12, 4 12, 1.5 8 Z"/><circle cx="8" cy="8" r="2"/></svg></button>
           <!-- design 9a: 「先輩」は使う人の立場の名前で、機能の中身を表していない。
                相手が先輩でも他チームでも過去の自分の版でも動きは同じなので、何をするかで名付ける。 -->
           <button class="tab-tool tab-tool-plain files-sec-act" id="btn-tab-senior" aria-pressed="false" aria-label="並べて比較"
@@ -6470,27 +6097,19 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
 <script src="src/core/ref-folders.js"></script>
-<script src="src/core/peek-verdict.js"></script>
 <script src="src/core/peek-settled.js"></script>
-<script src="src/core/kind-matrix.js"></script>
 <script src="src/core/side-pane.js"></script>
 <script src="src/core/senior-pane.js"></script>
 <script src="src/core/compare-entry.js"></script>
 <script src="src/core/senior-slice.js"></script>
 <script src="src/core/peer-sample.js"></script>
 <script src="src/core/peek-freshness.js"></script>
-<script src="src/core/peek-changes.js"></script>
 <script src="src/core/audit-scope.js"></script>
 <script src="src/core/blank-doc.js"></script>
 <script src="src/core/text-sync.js"></script>
 <script src="src/core/domain-cohort.js"></script>
-<script src="src/core/cohort-ack.js"></script>
 <script src="src/core/name-pairing.js"></script>
-<script src="src/core/side-by-side.js"></script>
 <script src="src/core/part-slice.js"></script>
-<script src="src/core/part-focus.js"></script>
-<script src="src/core/part-board.js"></script>
-<script src="src/core/part-card.js"></script>
 <script src="src/core/finding-variant.js"></script>
 <script src="src/core/domain-verdict.js"></script>
 <script src="src/core/version-history.js"></script>
@@ -6963,65 +6582,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </div>
     </div>
     <textarea id="svg-visual-report" readonly style="height:0;opacity:0;position:absolute;left:-9999px;"></textarea>
-  </div>
-</div>
-<!-- 他の保存フォルダの図を「読むだけ」で見る (保存先は動かさない) -->
-<div id="peek-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="peek-content">
-    <div id="peek-head">
-      <strong>読むだけのフォルダ</strong>
-      <!-- フォルダの一覧 (#peek-dirs) は窓から外した。見ているフォルダの名前だけを出し、
-           押すと FILES「読むだけ」のその行へ移る (フォルダはツリーで選ぶ) -->
-      <button type="button" id="peek-dir-name" class="peek-dir-name"></button>
-      <span id="peek-notice"></span>
-      <span id="peek-tools">
-        <button type="button" id="peek-template" disabled title="この図をテンプレートにして新しい図を作る">⧉ テンプレートとして開く</button>
-        <!-- 覗いた手本を閉じずに右へ据える。
-             以降は書きかけと手本が同時に見え、対応表で足りない状態・遷移が出る。 -->
-        <button type="button" id="peek-compare" disabled title="この図を手本として自分の書きかけの右に並べ、対応表で足りない状態・遷移を出す">⇔ 自分の図と並べる</button>
-        <!-- ファイル名が対をなさない相手 (複合図) でも、
-             今開いている自分の図の部品名から「先輩のどの図に載っているか」を名指しする。 -->
-        <button type="button" id="peek-find-part" title="今開いている自分の図の部品名で、このフォルダの図の中身を引き、載っている図を名指しする">自分の部品を探す</button>
-        <button type="button" id="peek-cohort-toggle" title="同じドメイン名の図をフォルダ横断で並べる">ドメインで揃える</button>
-        <!-- 部品を 1 つ選ぶと、その部品の 6 図種が
-             先輩・自分の 2 列で並ぶ。自分の欄はその場で直して保存できる。 -->
-        <button type="button" id="peek-board-toggle" title="部品を 1 つ選び、その部品の 6 図種を先輩・自分の 2 列で並べる（自分の欄はその場で直して保存できる）">部品ビュー</button>
-        <!-- 指摘.md の 1 件を選ぶと、そこに書かれた
-             図名を自分と先輩のフォルダから見つけ、並べて見る画面をその組で開く。 -->
-        <button type="button" id="peek-cohort-templates" style="display:none;" title="アプリ同梱テンプレ・既定サンプル由来のドメインも突合に含める">テンプレも表示</button>
-        <button type="button" id="peek-prev" title="前の図">↑</button>
-        <button type="button" id="peek-next" title="次の図">↓</button>
-        <button type="button" id="peek-close">閉じる</button>
-      </span>
-    </div>
-    <div id="peek-body">
-      <div id="peek-dirs"></div>
-      <!-- 題材 1 つについて 6 図種ぶんの対応要否を 1 画面で出す。
-           図種を 1 つずつ担当する進め方だと、この確認が 6 周にまたがって 1 枚ずつになる。
-           中身は kind-matrix.js -->
-      <div id="peek-files"></div>
-      <div id="peek-view">
-        <div id="peek-cohort" style="display:none;"></div>
-        <div id="peek-sbs" style="display:none;"></div>
-        <!-- 部品ビュー。行 = 6 図種、左 = 先輩の本文、
-             右 = 自分の本文 (編集可)。先輩の欄の名前を押すと自分の欄に綴りが入る。
-             中身は part-board.js -->
-        <div id="peek-board" style="display:none;"></div>
-        <!-- 開いた図が複合図 (共通基底 + 各ドライバ) なら、
-             部品を並べる。押すとその部品の所だけを切り出し、自分の同じ部品の図と並べる。 -->
-        <div id="peek-parts" style="display:none;"></div>
-        <!-- 相乗り図を切り出さずに 1 枚のまま眺めるための
-             部品フィルタ。押した部品に関係するクラス・関連だけが浮き、他は淡色 / 非表示。 -->
-        <div id="peek-focus" style="display:none;"></div>
-        <div id="peek-title"></div>
-        <!-- 開いた 1 枚が前回保存から何を足され何を消されたか。
-             取り込む側は本文ではなく「＋部品 −関係」を読むので、図の上に出す。 -->
-        <div id="peek-changes" style="display:none;"></div>
-        <div id="peek-ba" hidden></div>
-        <div id="peek-svg"></div>
-        <pre id="peek-dsl"></pre>
-      </div>
-    </div>
   </div>
 </div>
 </body>

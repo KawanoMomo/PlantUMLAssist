@@ -58,14 +58,11 @@ window.MA.toolMenu = (function() {
     { key: 'file', title: 'ファイル', items: [
       { id: 'btn-tab-draft',    label: '一時控えにする', group: 'ファイルの右クリック' },
       { id: 'btn-tab-versions', label: 'この図の履歴を見る', group: 'ファイルの右クリック' },
-      // 隣の保存フォルダを覗く窓の入口は FILES「読むだけ」の
-      // フォルダの右クリック (と見出しの目の印) 1 か所。旧名は Ctrl+K の検索の語に残す。
-      { id: 'btn-tab-peek',     label: 'このフォルダの図を調べる…', group: 'FILES の読むだけ',
-        keywords: ['他の保存フォルダを覗く', '他フォルダを覗く', '読むだけのフォルダを足す', 'peek'] },
+      // 覗く窓 (このフォルダの図を調べる…) は TICKET-owner-20261115-2141-prune で外した。
     ] },
   ];
   var FILES_NOTE = 'ファイル単位の操作（開く・並べて比較・前回保存版と比較・履歴・名前変更・一時控え・削除…）は FILES のファイルを右クリック。'
-    + '隣の保存フォルダは FILES の読むだけ（右クリックで並べて比較・このフォルダの図を調べる…）';
+    + '隣の保存フォルダは FILES の読むだけ（右クリックで並べて比較）';
 
   function allGroups() {
     return GROUPS.concat(MOVED_TO_EXPORT).concat(MOVED_TO_FILES);

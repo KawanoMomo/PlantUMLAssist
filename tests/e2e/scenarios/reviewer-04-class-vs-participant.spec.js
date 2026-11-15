@@ -38,36 +38,3 @@ const P_DSL = ['@startuml', 'title GPIO 初期化シーケンス',
   'participant Gpio_Driver', 'participant Hw_Ctrl',
   'Gpio_Driver -> Hw_Ctrl : Gpio_Init', 'Gpio_Driver -> Hw_Ctrl : Gpio_SetMode',
   'Hw_Ctrl --> Gpio_Driver : Gpio_Done', '@enduml'].join('\n');
-
-test('手順4 2 人の同名ファイルを、探さずに組んで食い違う語だけ指せる', () => {
-  const { MA } = loadMA();
-  expect(MA.sideBySide).toBeTruthy();
-
-  const docs = [
-    { name: `junior/${BASE}.puml`, dsl: J_DSL },
-    { name: `primary/${BASE}.puml`, dsl: P_DSL },
-    { name: 'junior/spi_state.puml', dsl: '@startuml\n[*] --> Idle\n@enduml' },
-  ];
-  const pairs = MA.sideBySide.pairsByFile(docs);
-  // 到達条件 1: 同じファイル名の組が、名前で推測せずに 1 件出る。
-  expect(pairs.length).toBe(1);
-  expect(MA.sideBySide.headerLabel(pairs[0])).toBe(`${BASE}: junior ⇔ primary`);
-
-  const a = { name: pairs[0].a.name, dsl: J_DSL };
-  const b = { name: pairs[0].b.name, dsl: P_DSL };
-  const marks = MA.sideBySide.marks(a, b);
-  // 到達条件 2: Gpio と Gpio_Driver が「同じものの綴り違い」として 1 件に組まれる
-  // (「片方にしか無い語が 2 つ」と出されると、どれとどれが対応するかは結局本文で決めることになる)。
-  expect(marks.left['Gpio'].status).toBe('spelling');
-  expect(marks.left['Gpio'].right).toBe('Gpio_Driver');
-  // 揃っている語には印が付かない。
-  expect(marks.left['Hw_Ctrl'].status).toBe('same');
-
-  // 到達条件 3: 粒度の差 (primary にしか無いメッセージ) が段の増減として出る。
-  const rows = MA.sideBySide.rows(a, b);
-  const onlyRight = rows.filter((r) => r.kind === 'only-right');
-  expect(onlyRight.length).toBe(1);
-  expect(onlyRight[0].right).toContain('Gpio_SetMode');
-  // 到達条件 4: 指摘に書ける 1 行が、この 1 回の呼び出しから出る。
-  expect(MA.sideBySide.summaryLine(a, b)).toContain('Gpio / Gpio_Driver');
-});

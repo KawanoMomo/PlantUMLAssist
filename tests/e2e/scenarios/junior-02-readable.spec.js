@@ -817,7 +817,6 @@ test('手順2 遷移ラベルを欄に打って足せる (名前帳のチップ�
   await S.putDoc(page, SENIOR_DIR, 'spi_init_sequence', SENIOR_SPI_SEQ);
   await page.reload();
   await page.waitForSelector('html[data-app-ready="1"]');
-  await page.waitForSelector('#btn-tab-peek');
   await page.locator('#diagram-type').selectOption('plantuml-state');
   await page.waitForTimeout(400);
   await S.renameActive(page, 'spi_state');
@@ -873,128 +872,6 @@ const BOARD_MINE_ACT = [
   'start', ':SPI_Init();', 'stop', '@enduml',
 ].join('\n');
 
-test.describe('junior 手順2: 部品を選ぶと 6 図種が 2 列で並び、手本を見ながら打ち直せる', () => {
-  test.beforeEach(async ({ page }) => {
-    await S.bootWithSaveDir(page, BOARD_MINE);
-    await S.clearDir(page, BOARD_MINE);
-    await S.clearDir(page, BOARD_SENIOR);
-    await S.putDoc(page, BOARD_MINE, 'spi_init_sequence', BOARD_SENIOR_SEQ);
-    await S.putDoc(page, BOARD_MINE, 'spi_activity', BOARD_MINE_ACT);
-    await S.putDoc(page, BOARD_SENIOR, 'spi_init_sequence', BOARD_SENIOR_SEQ);
-    await S.putDoc(page, BOARD_SENIOR, 'spi_activity', BOARD_SENIOR_ACT);
-    await S.putDoc(page, BOARD_SENIOR, 'driver_common_class', BOARD_SENIOR_CLASS);
-    await page.reload();
-    await page.waitForSelector('html[data-app-ready="1"]');
-    await page.waitForSelector('#btn-tab-peek');
-  });
-
-  test('部品ビューで活動図を打ち直し、同じ画面で保存できる', async ({ page }) => {
-    await page.locator('#btn-tab-peek').click();
-    await page.waitForSelector('#peek-modal');
-    await page.waitForSelector('#peek-files');
-
-    // 部品ビューを開く (台本の「SPI を選ぶと」に当たる操作)。
-    await page.locator('#peek-board-toggle').click();
-    await page.waitForSelector('#peek-board .pb-row');
-    await page.locator('#peek-board-part').selectOption('spi');
-    await page.waitForTimeout(800);
-
-    // 到達条件その1: 6 図種ぶんの行が同じ画面に並ぶ (タブを行き来しない)。
-    expect(await page.locator('#peek-board .pb-row').count()).toBe(6);
-    await expect(page.locator('#peek-board-summary')).toContainText('SPI: 6 図種のうち');
-
-    // 到達条件その2: 部品名のファイルが無いクラス図も、相乗り図が手本として出る。
-    const classRow = page.locator('#peek-board .pb-row[data-board-kind="class"]');
-    await expect(classRow).toContainText('driver_common_class');
-    await expect(classRow).toContainText('相乗り図');
-    await expect(classRow.locator('[data-board-ref="class"]')).toContainText('Spi_Transmit');
-
-    // 到達条件その3: 活動図の欄に、先輩のクラス図から拾った名前を押して入れられる
-    // (クラス図タブへ切り替えて名前を控える往復が要らない)。
-    const act = page.locator('#peek-board [data-board-edit="activity"]');
-    await act.fill(['@startuml', 'title SPI 初期化アクティビティ', 'start', ':', 'stop', '@enduml'].join('\n'));
-    // カーソルを ':' の直後へ置いてから、手本のメソッド名を押す。
-    await page.evaluate(() => {
-      const ta = document.querySelector('#peek-board [data-board-edit="activity"]');
-      const at = ta.value.indexOf('\n:') + 2;
-      ta.focus();
-      ta.setSelectionRange(at, at);
-    });
-    await classRow.locator('.pb-name[data-board-name="Spi_Init"]').click();
-    await expect(act).toHaveValue(/:Spi_Init/);
-
-    // 到達条件その4: そのまま同じ画面で保存でき、保存先は自分のフォルダ。
-    await page.locator('#peek-board [data-board-save="activity"]').click();
-    await page.waitForTimeout(800);
-    await expect(page.locator('#peek-board [data-board-msg="activity"]')).toContainText('保存しました');
-    const saved = await S.readDoc(page, BOARD_MINE, 'spi_activity');
-    expect(saved).toContain(':Spi_Init');
-
-    // 先輩のファイルは読むだけ (書き換えない)。
-    expect(await S.readDoc(page, BOARD_SENIOR, 'spi_activity')).toBe(BOARD_SENIOR_ACT);
-    expect(await S.readDoc(page, BOARD_SENIOR, 'driver_common_class')).toBe(BOARD_SENIOR_CLASS);
-  });
-
-  test('まだ起こしていない図種も行として残り、手本の有無が分かる', async ({ page }) => {
-    await page.locator('#btn-tab-peek').click();
-    await page.waitForSelector('#peek-modal');
-    await page.locator('#peek-board-toggle').click();
-    await page.waitForSelector('#peek-board .pb-row');
-    await page.locator('#peek-board-part').selectOption('spi');
-    await page.waitForTimeout(800);
-
-    // クラス図は先輩の相乗り図があるが自分にはまだ無い。
-    await expect(page.locator('#peek-board .pb-row[data-board-kind="class"]'))
-      .toHaveAttribute('data-state', 'mine-missing');
-    // 状態遷移図はどちらにも無い (行は消えない)。
-    await expect(page.locator('#peek-board .pb-row[data-board-kind="state"]'))
-      .toHaveAttribute('data-state', 'none');
-    await expect(page.locator('#peek-board-summary')).toContainText('自分に無し');
-  });
-
-  // BLK-junior-20260915-2346-wish: 6 図種は 2 列で並ぶようになったが、並ぶのは本文
-  // そのものなので「6 枚のうち何枚済んだか」「どの図がまだ先輩に合っていないか」は
-  // 6 行を目で読み比べないと言えなかった。部品を選んだ時点でそれが 1 行に出て、
-  // 直したあとはその場で数字が動くこと (手順7 の見返しが開き直しにならないこと) を見る。
-  test('部品カードが 6 枚中の進捗と、先輩に合っていない図種を 1 行で出す', async ({ page }) => {
-    await page.locator('#btn-tab-peek').click();
-    await page.waitForSelector('#peek-modal');
-    await page.locator('#peek-board-toggle').click();
-    await page.waitForSelector('#peek-board .pb-row');
-    await page.locator('#peek-board-part').selectOption('spi');
-    await page.waitForTimeout(800);
-
-    // 到達条件その1: 6 枚を母数にした進捗が出る (自分はシーケンスと活動図の 2 枚)。
-    await expect(page.locator('#peek-card-progress')).toHaveText('6 図種中 2 枚');
-    expect(await page.locator('#peek-card .pc-pip.on').count()).toBe(2);
-
-    // 到達条件その2: 先輩に合っていない図種が名指しで出る。自分の活動図は
-    // `SPI_Init` 1 つだけで、先輩の `Spi_Init` `Spi_Transmit` に届いていない。
-    const gaps = page.locator('#peek-card-gaps');
-    await expect(gaps).toContainText('要直し');
-    await expect(gaps).toContainText('アクティビティ');
-    // 打ち直した所が無いシーケンス図は一致として出る (要直しには出ない)。
-    await expect(page.locator('#peek-board .pb-row[data-board-kind="sequence"]'))
-      .toHaveAttribute('data-verdict', 'agree');
-    await expect(page.locator('#peek-board .pb-row[data-board-kind="activity"]'))
-      .toHaveAttribute('data-verdict', 'differ');
-
-    // 到達条件その3: 要直しの図種を押すと、その図の自分の欄に入る (探し直さない)。
-    await page.locator('#peek-card [data-card-gap="activity"]').click();
-    await expect(page.locator('#peek-board [data-board-edit="activity"]')).toBeFocused();
-
-    // 到達条件その4: 綴りを先輩に合わせて保存すると、その場で要直しが消える。
-    await page.locator('#peek-board [data-board-edit="activity"]')
-      .fill(['@startuml', 'title SPI 初期化アクティビティ', 'start', ':Spi_Init();', ':Spi_Transmit();', 'stop', '@enduml'].join('\n'));
-    await page.locator('#peek-board [data-board-save="activity"]').click();
-    await page.waitForTimeout(1200);
-    await expect(page.locator('#peek-board .pb-row[data-board-kind="activity"]'))
-      .toHaveAttribute('data-verdict', 'agree');
-    await expect(page.locator('#peek-card-gaps')).not.toContainText('要直し');
-    // 進捗の母数は動かない (まだ 4 図種を起こしていないことが画面から消えない)。
-    await expect(page.locator('#peek-card-progress')).toHaveText('6 図種中 2 枚');
-  });
-});
 
 // BLK-junior-20260915-0606: SPI の活動図 (手順2) を打ち直すのに、実在メソッド名
 // (Spi_Init / Spi_Reset / Spi_Transmit / Notify) を知る手段が先輩の相乗りクラス図
@@ -1036,7 +913,6 @@ test('手順2 活動図の本文を欄に打って、位置を選んで足せる
   await S.putDoc(page, SENIOR_DIR, 'driver_common_class', SENIOR_COMMON_CLASS);
   await page.reload();
   await page.waitForSelector('html[data-app-ready="1"]');
-  await page.waitForSelector('#btn-tab-peek');
   await page.locator('#diagram-type').selectOption('plantuml-activity');
   await page.waitForTimeout(400);
   await S.renameActive(page, 'spi_activity');

@@ -73,10 +73,8 @@ describe('BLK-owner-20260924-1212-prune この図の履歴 は Ctrl+K に 1 行'
 });
 
 describe('BLK-owner-20260924-1212-prune 部品ビュー の行名に立場の語を出さない', function() {
-  test('行名に「先輩」が無く、先輩で打っても引ける', function() {
-    var it = items().filter(function(i) { return /part-board$/.test(i.id); })[0];
-    expect(it.title.indexOf('先輩')).toBe(-1);
-    var got = CP.filter(items(), '先輩');
-    expect(/part-board/.test(got.map(function(i) { return i.id; }).join(' '))).toBe(true);
+  // 🧩 部品ビューは TICKET-owner-20261115-2141-prune で外した。Ctrl+K にも行が無い。
+  test('部品ビューの行は無い', function() {
+    expect(items().filter(function(i) { return /part-board$/.test(i.id); }).length).toBe(0);
   });
 });

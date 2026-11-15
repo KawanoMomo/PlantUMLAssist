@@ -70,10 +70,9 @@ describe('フォルダの右クリック (design 10b)', function() {
   // 編集できないので「新しい図 / 6 図種をまとめて作る」は出さない (前は it[4] が「読むだけにする」だった)。
   test('読むだけのフォルダ: 並べて比較 / 保存先にする / 読むだけにする (押せない)', function() {
     var it = FM.folderItems({ kind: 'readonly' });
-    // BLK-owner-20260924-1836-prune: 覗く窓 (そのフォルダの道具) の入口「このフォルダの図を調べる…」が 2 行目。
-    expect(ids(it)).toEqual(['compare', 'peek', '-', 'set-target', 'set-readonly']);
-    expect(it[1].label).toBe('このフォルダの図を調べる…');
-    expect(it[4].disabled).toBe(true);
+    // 覗く窓「このフォルダの図を調べる…」は TICKET-owner-20261115-2141-prune で外した。
+    expect(ids(it)).toEqual(['compare', '-', 'set-target', 'set-readonly']);
+    expect(it[3].disabled).toBe(true);
   });
 });
 

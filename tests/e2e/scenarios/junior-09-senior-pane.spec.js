@@ -439,8 +439,8 @@ test('手順9 保存先の図が多くても、読むだけの見出しはツリ
     const roBox2 = await ro.boundingBox();
     expect(lastBox && roBox2 && lastBox.y + lastBox.height <= roBox2.y + 1).toBe(true);
   }).toPass({ timeout: 15000 });
-  // 見出しの行の目の印は畳んだまま押せる。
-  await expect(page.locator('#btn-tab-peek')).toBeInViewport();
+  // 見出しの行の入口は畳んだまま押せる (目の印は 2141-prune で外し、残るのは ⇔)。
+  await expect(page.locator('#btn-tab-senior')).toBeInViewport();
   await S.clearDir(page, dir);
 });
 

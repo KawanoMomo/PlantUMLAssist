@@ -198,60 +198,6 @@ async function putStampedSvgIn(page, dir, name, dsl) {
   }, { name, dir, svg });
 }
 
-test('手順4.10 他人のフォルダを覗いた一覧にも SVG の鮮度が最初から出る', async ({ page }) => {
-  test.setTimeout(180000);
-  await page.addInitScript((d) => {
-    try {
-      window.localStorage.clear();
-      window.localStorage.setItem('plantuml-autosave-config',
-        JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: d }));
-    } catch (e) {}
-  }, MY_DIR);
-  await gotoApp(page);
-  await page.evaluate(async (a) => {
-    for (const d of [a.mine, a.other]) {
-      await fetch('/autosave?dir=' + encodeURIComponent(d), { method: 'DELETE' });
-    }
-  }, { mine: MY_DIR, other: OTHER_DIR });
-  // 自分のフォルダにも 1 枚置く (覗き先の一覧が「隣のフォルダ」として出る形にする)。
-  await putFileIn(page, MY_DIR, 'R04g_mine', NOW);
-  // 追いついている図 / 書き換えに svg が追いついていない図 / 印を刻む前の svg。
-  await putFileIn(page, OTHER_DIR, 'R04g_ok', NOW);
-  await putStampedSvgIn(page, OTHER_DIR, 'R04g_ok', NOW);
-  await putFileIn(page, OTHER_DIR, 'R04g_drift', OLD_DSL);
-  await putStampedSvgIn(page, OTHER_DIR, 'R04g_drift', OLD_DSL);
-  await putFileIn(page, OTHER_DIR, 'R04g_drift', NOW);      // puml だけ書き換える
-  await putFileIn(page, OTHER_DIR, 'R04g_raw', NOW);
-  await putRawSvgIn(page, OTHER_DIR, 'R04g_raw', NOW);
-
-  // 到達条件その1: 覗いただけで (隣が 1 つなので追加のクリック無しで) 印が並ぶ。
-  await page.locator('#btn-tab-peek').click();
-  await page.waitForSelector('#peek-modal');
-  const files = page.locator('#peek-files');
-  await expect(files.locator('.peek-file[data-file-name="R04g_ok"] .peek-svg-badge'))
-    .toHaveText('内容一致');
-  await expect(files.locator('.peek-file[data-file-name="R04g_drift"] .peek-svg-badge'))
-    .toHaveText('内容ずれ');
-  // BLK-reviewer-20260914-0906: 印の無い svg も、畳まれた元の DSL で言い切れる。
-  // 覗き先でも「未刻印」で保留にならない (覗いた側は書き出し直せないので、
-  // 保留のままだと reviewer は毎回 CLI に戻ることになる)。
-  await expect(files.locator('.peek-file[data-file-name="R04g_raw"] .peek-svg-badge'))
-    .toHaveText('内容一致');
-
-  // 到達条件その2: フォルダ全体の答えが 1 行で出る (/verify-svg を叩き直さない)。
-  await expect(page.locator('#peek-svg-summary'))
-    .toHaveText('内容: 一致 2 枚 / ずれ 1 枚');
-
-  // 到達条件その3: 印だけでは言えない図は、その場で上書きせずに確かめられる。
-  const verify = page.locator('#peek-svg-verify');
-  await expect(verify).toHaveText('SVG の中身を確かめる（1 枚）');
-  await verify.click();
-  // 確かめても、ずれている図は「ずれ」のまま (作り直しは持ち主の仕事)。
-  await expect(files.locator('.peek-file[data-file-name="R04g_drift"] .peek-svg-badge'))
-    .toHaveText('内容ずれ', { timeout: 120000 });
-  await expect(page.locator('#peek-svg-summary'))
-    .toHaveText('内容: 一致 2 枚 / ずれ 1 枚');
-});
 
 // BLK-reviewer-20260914-2106-wish: 同じ手順4.10 でも、印が食い違った 1 枚について
 // 「コメント行を足しただけの見かけ上の stale」なのか「実質的な内容変更」なのかは、

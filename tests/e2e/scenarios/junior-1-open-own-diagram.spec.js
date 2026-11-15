@@ -375,34 +375,3 @@ const PROG_DIR = './test-results/autosave/junior-1-senior-progress';
 const P_SEQ = ['@startuml', 'participant Timer', 'Timer -> HW: Timer_Init()', '@enduml'].join('\n');
 const P_STATE = ['@startuml', 'state IDLE', 'IDLE --> RUNNING : start', '@enduml'].join('\n');
 
-test('手順1 部品ビューで、先輩がまだ作っていない図種が開く前に分かる', async ({ page }) => {
-  // 自分は TIMER のクラス図を持っている。先輩はシーケンスと状態遷移までで、クラス図は無い。
-  await putFile(page, 'timer_class', CLS);
-  await page.evaluate(async (d) => {
-    await fetch('/autosave?dir=' + encodeURIComponent(d), { method: 'DELETE' });
-  }, PROG_DIR);
-  await putIn(page, PROG_DIR, 'timer_init_sequence', P_SEQ);
-  await putIn(page, PROG_DIR, 'timer_state', P_STATE);
-
-  // 読むだけのフォルダの右クリック「このフォルダの図を調べる…」→「部品ビュー」。
-  await S.peekFolder(page, 'junior-1-senior-progress');
-  await page.locator('#peek-board-toggle').click();
-  await page.waitForSelector('#peek-board .pb-row');
-
-  // 到達条件その1: 部品 TIMER の 6 図種が並ぶ (ファイル名の並びを読み比べない)。
-  await expect(page.locator('#peek-board-part')).toHaveValue('timer');
-  const row = (k) => page.locator('#peek-board .pb-row[data-board-kind="' + k + '"]');
-  await expect(page.locator('#peek-board .pb-row')).toHaveCount(6);
-
-  // 到達条件その2: 先輩にある図種は本文が並び、まだ無い図種は「手本なし」と開く前に分かる。
-  await expect(row('sequence').locator('[data-board-ref="sequence"]')).toContainText('Timer_Init()');
-  await expect(row('state').locator('[data-board-ref="state"]')).toContainText('IDLE --> RUNNING');
-  await expect(row('class').locator('.pb-col-head').first()).toContainText('手本なし');
-  await expect(row('class').locator('[data-board-ref="class"]')).toHaveText('');
-
-  // 到達条件その3: ここまでで保存先は 1 度も動いていない。
-  expect(await saveDirNow(page)).toBe(DIR);
-  await page.evaluate(async (d) => {
-    await fetch('/autosave?dir=' + encodeURIComponent(d), { method: 'DELETE' });
-  }, PROG_DIR);
-});

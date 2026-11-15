@@ -112,57 +112,6 @@ const GPIO_OTHER = [
   'GpioDrv -> Hw_Ctrl : Gpio_Init', '@enduml',
 ].join('\n');
 
-async function openCohort(page) {
-  await page.locator('#btn-tab-peek').click();
-  await page.waitForSelector('#peek-modal');
-  await page.locator('#peek-cohort-toggle').click();
-  await page.waitForSelector('#peek-cohort .cohort-pair');
-}
-
-test('手順5.5 ドメインの食い違いは、突合の場で「統一する」と決めて自分の図に反映できる', async ({ page }) => {
-  await S.bootWithSaveDir(page, MINE_DIR);
-  await S.clearDir(page, MINE_DIR);
-  await S.clearDir(page, OTHER_DIR);
-  await S.putDoc(page, MINE_DIR, 'gpio_init_sequence', GPIO_MINE);
-  await S.putDoc(page, OTHER_DIR, 'gpio_init_sequence', GPIO_OTHER);
-  await reloadReady(page);
-  await page.waitForSelector('#btn-tab-peek');
-
-  await openCohort(page);
-  // 到達条件その1: 相手を探さなくても、食い違いが組として出る。
-  const pair = page.locator('#peek-cohort .cohort-pair').first();
-  await expect(pair).toHaveAttribute('data-cohort-matched', '0');
-  await expect(pair.locator('.cohort-verdict-btn[data-verdict="shared"]')).toBeVisible();
-
-  // 到達条件その2: 押すだけで自分の図の綴りが相手に揃い、その場で結果が読める。
-  await pair.locator('.cohort-verdict-btn[data-verdict="shared"]').click();
-  await page.waitForTimeout(2000);
-  const saved = (await S.readDoc(page, MINE_DIR, 'gpio_init_sequence')) || '';
-  expect(saved).toContain('participant GpioDrv');
-  expect(saved).not.toContain('Gpio_Driver');
-  // 到達条件その3: 決めたことがファイルに残り、次に突合したとき判断済みと分かる。
-  expect(saved).toContain("' domain-verdict: shared gpio vs junior");
-  expect(await S.readDoc(page, OTHER_DIR, 'gpio_init_sequence')).toBe(GPIO_OTHER);
-});
-
-test('手順5.5 「別物」と決めたときは title に明示され、部品名は動かない', async ({ page }) => {
-  await S.bootWithSaveDir(page, MINE_DIR);
-  await S.clearDir(page, MINE_DIR);
-  await S.clearDir(page, OTHER_DIR);
-  await S.putDoc(page, MINE_DIR, 'gpio_init_sequence', GPIO_MINE);
-  await S.putDoc(page, OTHER_DIR, 'gpio_init_sequence', GPIO_OTHER);
-  await reloadReady(page);
-  await page.waitForSelector('#btn-tab-peek');
-
-  await openCohort(page);
-  await page.locator('#peek-cohort .cohort-pair').first()
-    .locator('.cohort-verdict-btn[data-verdict="separate"]').click();
-  await page.waitForTimeout(2000);
-  const saved = (await S.readDoc(page, MINE_DIR, 'gpio_init_sequence')) || '';
-  expect(saved).toContain('title GPIO 初期化シーケンス (junior の gpio とは別のドメイン)');
-  expect(saved).toContain('participant Gpio_Driver');
-  expect(saved).toContain("' domain-verdict: separate gpio vs junior");
-});
 
 // BLK-reviewer-20260914-1706-wish: 突合の画面は「primary だけ / junior だけ」の 2 列までで、
 // IRQCtrl と Irq_Ctrl が同じ部品の別表記であることは読む側が目で結び直していた
@@ -175,30 +124,6 @@ const IRQ_OTHER = ['@startuml', 'title IRQ 初期化シーケンス',
   'participant Irq_Ctrl', 'participant Clock_Ctrl', 'participant Hw_Ctrl',
   'Irq_Ctrl -> Clock_Ctrl : Irq_Init', '@enduml'].join('\n');
 
-test('手順5.5 表記揺れの部品名が、どちらの綴りと対応するかまで 1 つの表で読める', async ({ page }) => {
-  await S.bootWithSaveDir(page, MINE_DIR);
-  await S.clearDir(page, MINE_DIR);
-  await S.clearDir(page, OTHER_DIR);
-  await S.putDoc(page, MINE_DIR, 'irq_init_sequence', IRQ_MINE);
-  await S.putDoc(page, OTHER_DIR, 'irq_init_sequence', IRQ_OTHER);
-  await reloadReady(page);
-  await page.waitForSelector('#btn-tab-peek');
-
-  await openCohort(page);
-  const pair = page.locator('#peek-cohort .cohort-pair').first();
-  // 到達条件 1: 揺れている組が、探さずに 1 行として出る。
-  const rows = pair.locator('.cohort-pair-row[data-pair-kind="variant"]');
-  await expect(rows).toHaveCount(2);
-  // 組は「どちらのフォルダが左か」に依らず、2 つの綴りが 1 行に並ぶ。
-  const pairs = await rows.evaluateAll((els) => els.map(
-    (e) => [e.getAttribute('data-pair-a'), e.getAttribute('data-pair-b')].sort().join('⇔')).sort());
-  expect(pairs).toEqual(['ClockCtrl⇔Clock_Ctrl', 'IRQCtrl⇔Irq_Ctrl']);
-  // 到達条件 2: 何を見ての件数かが 1 行で出る (一致している部品も母数に入る)。
-  await expect(pair.locator('.cohort-pairs-head')).toContainText('表記揺れ 2');
-  await expect(pair.locator('.cohort-pairs-head')).toContainText('一致 1');
-  // 到達条件 3: 表記揺れと「似ているだけ」を取り違えない。
-  await expect(rows.first()).toContainText('表記揺れ');
-});
 
 // BLK-primary-20260912-2206-wish: reviewer の最重要指摘 (driver_common_class /
 // plantuml-class / diagram1 の 3 枚が雛形と完全一致) を反映する手順。

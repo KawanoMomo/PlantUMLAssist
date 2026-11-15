@@ -413,12 +413,7 @@ window.MA.fileMenuUi = (function() {
       case 'change-target':
         if (typeof window.openChangeTarget === 'function') window.openChangeTarget();
         break;
-      // 読むだけのフォルダの道具 (部品ビュー・ドメインで揃える…) は、
-      // ツリーで選んだそのフォルダを開いた状態で覗く窓に出す。窓の中でフォルダを選び直させない。
-      case 'peek':
-        if (typeof window.openPeekFolder === 'function') window.openPeekFolder({ dir: folder && folder.dir });
-        break;
-      // 「読むだけにする」は覗く窓を開かない (名前と違うことをしない)。保存先では押せない (folderItems)。
+      // 「読むだけにする」は何も開かない (名前と違うことをしない)。保存先では押せない (folderItems)。
       case 'set-readonly': break;
       case 'open-list':
         if (typeof window._openFolderListView === 'function') window._openFolderListView();

@@ -41,10 +41,7 @@ window.MA.fileMenu = (function() {
   // 並べて比較が先頭で、そこに作る 2 つは出さない。
   var FOLDER_ITEMS = [
     { id: 'compare', label: '並べて比較', readonlyOnly: true },
-    // 覗く窓 (#peek-modal) はツリーで選んだフォルダの「道具の置き場」
-    // (部品ビュー・ドメインで揃える・自分の部品を探す・テンプレート)。
-    // 入口はここ (と「読むだけ」見出しの目の印) で、窓の中でフォルダを選び直させない。
-    { id: 'peek', label: 'このフォルダの図を調べる…', readonlyOnly: true },
+    // 覗く窓 (このフォルダの図を調べる…) は TICKET-owner-20261115-2141-prune で外した。
     { id: 'new-doc', label: '新しい図', writable: true },
     { id: 'new-part', label: '6 図種をまとめて作る', writable: true },
     { sep: true, realOnly: true },

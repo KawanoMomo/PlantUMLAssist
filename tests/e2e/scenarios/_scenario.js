@@ -137,22 +137,6 @@ async function openFolderItem(page, name, opts) {
   await page.waitForTimeout(900);
 }
 
-// BLK-owner-20260924-1836-prune: 隣の保存フォルダを覗く窓は、FILES「読むだけ」のそのフォルダの行の
-// 右クリック「このフォルダの図を調べる…」で、そのフォルダを開いた状態で出る (窓の中でフォルダを選ばない)。
-async function peekFolder(page, dirName) {
-  const head = page.locator('#files-sec-readonly');
-  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
-  const row = page.locator('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"]');
-  await row.waitFor();
-  await row.click({ button: 'right' });
-  await page.locator('#files-ctx-menu [data-action="peek"]').click();
-  await page.waitForSelector('#peek-modal');
-  await page.waitForFunction((n) => {
-    const b = document.getElementById('peek-dir-name');
-    return b && b.textContent === n;
-  }, dirName);
-}
-
 // FILES「読むだけ」のフォルダを右クリック →「並べて比較」で比較中にする (相手のフォルダを選ぶ道はこの 1 本。
 // BLK-owner-20260924-2135-prune)。参照ペインの増分の取り込みも、このフォルダを相手にする。
 async function compareFolder(page, dirName) {
@@ -391,7 +375,7 @@ module.exports = {
   PRIMARY_DOCS, docFor,
   dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode, reopenApp,
   putDoc, readDoc, listDir, clearDir, clearTickets,
-  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, peekFolder, compareFolder, typeDsl, typeDslDrawn, renameActive, runCommand, exportVia,
+  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, compareFolder, typeDsl, typeDslDrawn, renameActive, runCommand, exportVia,
   GPIO_STATE, GPIO_SEQ, IRQ_SEQ_FOLDED_DASH,
   messageClickPoints, selectedMessageLine, expectMessageHitUniform,
 };

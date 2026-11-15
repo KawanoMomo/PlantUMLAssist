@@ -73,7 +73,7 @@ describe('右列の小見出し', function() {
   test('項目名は tool-menu.js のラベルそのまま (言い換えない)', function() {
     // BLK-owner-20260923-1509-prune: ⇔ 並べて見る は「並べて比較」の相手に畳まり、
     // メニューの項目ではなくなった。他の項目で同じ規則を見る。
-    expect(tm.labelOf('btn-tab-peek')).toBe('このフォルダの図を調べる…');
+    expect(tm.labelOf('btn-tab-versions')).toBe('この図の履歴を見る');
     expect(tm.labelOf('btn-tab-diff')).toBe('前回保存からの差分');
   });
 });

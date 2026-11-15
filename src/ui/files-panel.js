@@ -8,7 +8,7 @@ window.MA = window.MA || {};
 // ここはその 4 つを 1 本のツリーに畳んだ後の、節の開閉・絞り込み・件数・
 // 「開いている図」の行を受け持つ。
 //
-// 引っ越してきた入口 (#btn-tab-folder / #top-save-target / #btn-tab-peek /
+// 引っ越してきた入口 (#btn-tab-folder / #top-save-target /
 // #btn-tab-senior) の中身そのものは app.js に残っていて、ここでは触らない。
 // 置き場所だけがツリーの中に変わる (呼び出し側と台本が同じ id で同じ操作を指せる)。
 window.MA.filesPanel = (function() {
