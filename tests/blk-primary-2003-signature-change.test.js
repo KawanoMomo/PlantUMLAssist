@@ -1,13 +1,10 @@
 'use strict';
-// BLK-primary-20260907-2003-wish: 影響範囲プレビューから「どの行が対象か」へ飛べること、
-// 綴りの変わらない仕様変更 (戻り値型・引数) を全図へ 1 回で当てられることを固定する。
+// BLK-primary-20260907-2003-wish: 綴りの変わらない仕様変更 (戻り値型・引数) を全図へ 1 回で当てられることを固定する。
+// (影響範囲プレビューの行は TICKET-owner-20261115-2140-prune で impact-scan ごと外した)
 const assert = require('assert');
 if (!global.window) global.window = global;
-try { delete require.cache[require.resolve('../src/core/impact-scan.js')]; } catch (e) {}
-require('../src/core/impact-scan.js');
 try { delete require.cache[require.resolve('../src/core/signature-change.js')]; } catch (e) {}
 require('../src/core/signature-change.js');
-var is = global.window.MA.impactScan;
 var sc = global.window.MA.signatureChange;
 
 var CLS = [
@@ -39,26 +36,6 @@ var DOCS = [
   { id: 'd2', name: 'uart_class.puml', dsl: CLS2 },
   { id: 'd3', name: 'spi_sequence.puml', dsl: SEQ },
 ];
-
-// ── 影響範囲プレビューの行 ────────────────────────────────────────────────
-// 内訳だけでは「この図のどの記述か」が分からない。行番号と本文が付いて初めて
-// タブを開かずに対象へ飛べる。
-var rows = is.scan(DOCS, 'Spi_Reset');
-var byName = {};
-rows.forEach(function(r) { byName[r.name] = r; });
-
-assert.ok(byName['driver_common_class.puml'], 'クラス図が影響範囲に出る');
-var cl = byName['driver_common_class.puml'].lines;
-assert.strictEqual(cl.length, 1);
-assert.strictEqual(cl[0].line, 3, '1 始まりの行番号 (editor-jump と同じ数え方)');
-assert.strictEqual(cl[0].text.trim(), '+ Spi_Reset() : void');
-assert.strictEqual(cl[0].count, 1);
-
-// 行の合計は今までどおりヒット数と一致する (行を足したことで数がずれない)。
-rows.forEach(function(r) {
-  var sum = r.lines.reduce(function(a, x) { return a + x.count; }, 0);
-  assert.strictEqual(sum, r.total, r.name + ' の行合計は total と一致');
-});
 
 // ── 宣言行の判定 ──────────────────────────────────────────────────────────
 var p = sc.parseLine('  + Spi_Reset(uint8 ch) : void', 'Spi_Reset');

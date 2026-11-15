@@ -904,7 +904,8 @@ test('手順2 先輩が足したメソッドを、記法を打ち直さずに自
 // 遷移ラベル (Spi_Init / Spi_Transmit / TransferComplete …) は先輩のシーケンス図に
 // も出てくるはずだが、GUI は図ごとに独立していて名前の対応を教えてくれない。
 // 合っているかは先輩の図を別に開いて目で見比べるしかなかった。
-// 同じ部品名の図を 1 冊の名前帳にまとめ、遷移ラベルの欄から選べることを確かめる。
+// 図をまたぐ名前の候補 (部品の名前帳) は TICKET-owner-20261115-2140-prune で外した。
+// 遷移ラベルは欄に打って足せることと、先輩の図に書かないことを確かめる。
 const SENIOR_SPI_SEQ = [
   '@startuml',
   'title SPIドライバ初期化シーケンス',
@@ -928,7 +929,7 @@ const MY_SPI_STATE = [
   '@enduml',
 ].join('\n');
 
-test('手順2 遷移ラベルを、先輩の図を開かずに部品の名前帳から選べる', async ({ page }) => {
+test('手順2 遷移ラベルを欄に打って足せる (名前帳のチップは出ない)', async ({ page }) => {
   await S.bootWithSaveDir(page, MINE_DIR);
   await S.clearDir(page, MINE_DIR);
   await S.clearDir(page, SENIOR_DIR);
@@ -938,7 +939,6 @@ test('手順2 遷移ラベルを、先輩の図を開かずに部品の名前帳
   await page.waitForSelector('#btn-tab-peek');
   await page.locator('#diagram-type').selectOption('plantuml-state');
   await page.waitForTimeout(400);
-  // 名前帳は「同じ部品名の図」で引くので、自分の図も部品名で名乗る。
   await S.renameActive(page, 'spi_state');
   await S.typeDsl(page, MY_SPI_STATE);
   await page.waitForTimeout(1200);
@@ -946,31 +946,16 @@ test('手順2 遷移ラベルを、先輩の図を開かずに部品の名前帳
   await page.locator('#st-tail-kind').selectOption('transition');
   await page.waitForSelector('#st-tail-trig');
 
-  // 到達条件その1: 先輩のシーケンスにしか出ていない名前が、遷移ラベルの欄の
-  // 下に候補として並ぶ (先輩の図を開かない)。
-  const picker = page.locator('#st-tail-trig-vocab');
-  await expect(picker).toBeVisible();
-  await expect(picker.locator('.vocab-head')).toContainText('SPI の名前帳');
-  await expect(picker.locator('.vocab-chip[data-name="Spi_Transmit"]')).toHaveCount(1);
-  await expect(picker.locator('.vocab-chip[data-name="TransferComplete"]')).toHaveCount(1);
-  // 型 (participant) は遷移ラベルにならないので候補に出ない。
-  await expect(picker.locator('.vocab-chip[data-name="Spi_Driver"]')).toHaveCount(0);
+  // TICKET-owner-20261115-2140-prune: 部品の名前帳 (別の図の名前を欄の下に並べるチップ) は外した。
+  // 遷移ラベルは欄に打って足す。欄の下に名前帳は出ない。
+  await expect(page.locator('#st-tail-trig-vocab')).toHaveCount(0);
 
-  // 到達条件その2: 押すだけで欄が埋まり、そのまま遷移を足せる (打ち直さない)。
-  await picker.locator('.vocab-chip[data-name="Spi_Transmit"]').click();
-  await expect(page.locator('#st-tail-trig')).toHaveValue('Spi_Transmit');
+  await page.locator('#st-tail-trig').fill('Spi_Transmit');
   await page.locator('#st-tail-from').selectOption('Idle');
   await page.locator('#st-tail-to').selectOption('Busy');
   await page.locator('#st-tail-add').click();
   await page.waitForTimeout(400);
   expect(await getEditorText(page)).toContain('Idle --> Busy : Spi_Transmit');
-
-  // 到達条件その3: 手で打った綴りが先輩と揺れていれば、その場で相手の綴りが出る。
-  await page.locator('#st-tail-kind').selectOption('transition');
-  await page.waitForSelector('#st-tail-trig');
-  await page.locator('#st-tail-trig').fill('SpiInit');
-  await page.waitForTimeout(200);
-  await expect(page.locator('#st-tail-trig-vocab .vocab-warn')).toContainText('Spi_Init');
 
   // 先輩のファイルは読むだけ (書き換えない)。
   expect(await S.readDoc(page, SENIOR_DIR, 'spi_init_sequence')).toBe(SENIOR_SPI_SEQ);
@@ -1132,10 +1117,9 @@ test.describe('junior 手順2: 部品を選ぶと 6 図種が 2 列で並び、�
 
 // BLK-junior-20260915-0606: SPI の活動図 (手順2) を打ち直すのに、実在メソッド名
 // (Spi_Init / Spi_Reset / Spi_Transmit / Notify) を知る手段が先輩の相乗りクラス図
-// (driver_common_class、8 部品が 1 枚) しか無かった。名前帳はクラス図タブ・状態遷移図・
-// シーケンスの欄にしか出ておらず、しかも名前帳は「ファイル名に部品名がある図」しか
-// 読まないので、この 1 枚は名前帳の外に居た。結果、活動図タブを離れて別タブで
-// クラス図を開き、絞り込み、名前を控えて戻る往復が図種をまたぐたびに要った。
+// (driver_common_class、8 部品が 1 枚) しか無かった。図をまたいで名前を拾う候補は
+// TICKET-owner-20261115-2140-prune で外した (先輩の図は ⇔ 先輩の図 で横に置いて読む)。
+// ここでは活動図の本文欄に打って、位置を選んで足せることを確かめる。
 const SENIOR_COMMON_CLASS = [
   '@startuml',
   'title ドライバ共通クラス図',
@@ -1164,7 +1148,7 @@ const MY_SPI_ACT = [
   '@enduml',
 ].join('\n');
 
-test('手順2 活動図の本文を、先輩のクラス図タブに行かずに名前帳から打てる', async ({ page }) => {
+test('手順2 活動図の本文を欄に打って、位置を選んで足せる', async ({ page }) => {
   await S.bootWithSaveDir(page, MINE_DIR);
   await S.clearDir(page, MINE_DIR);
   await S.clearDir(page, SENIOR_DIR);
@@ -1178,23 +1162,13 @@ test('手順2 活動図の本文を、先輩のクラス図タブに行かずに
   await S.typeDsl(page, MY_SPI_ACT);
   await page.waitForTimeout(1200);
 
-  // 活動図タブを開いたまま。右ペインの「末尾に追加 / Action」の本文欄に名前帳が出る。
+  // 活動図タブを開いたまま。右ペインの「末尾に追加 / Action」の本文欄に打つ。
+  // 部品の名前帳 (欄の下のチップ) は TICKET-owner-20261115-2140-prune で外した。
   await page.locator('#ac-tail-kind').selectOption('action');
   await page.waitForSelector('#ac-tail-text');
+  await expect(page.locator('#ac-tail-text-vocab')).toHaveCount(0);
 
-  // 到達条件その1: ファイル名に部品名の無い相乗り図の中からでも、
-  // SPI のメソッドだけが候補に並ぶ (他部品の Uart_Send は混ざらない)。
-  const picker = page.locator('#ac-tail-text-vocab');
-  await expect(picker).toBeVisible();
-  await expect(picker.locator('.vocab-head')).toContainText('SPI の名前帳');
-  for (const m of ['Spi_Init', 'Spi_Reset', 'Spi_Transmit', 'Notify']) {
-    await expect(picker.locator('.vocab-chip[data-name="' + m + '"]')).toHaveCount(1);
-  }
-  await expect(picker.locator('.vocab-chip[data-name="Uart_Send"]')).toHaveCount(0);
-
-  // 到達条件その2: 押せば括弧まで入り、そのままアクションとして足せる。
-  await picker.locator('.vocab-chip[data-name="Spi_Init"]').click();
-  await expect(page.locator('#ac-tail-text')).toHaveValue('Spi_Init()');
+  await page.locator('#ac-tail-text').fill('Spi_Init()');
   // BLK-owner-20260925-0312-4: 処理欄も他の図種と同じく Enter で確定 (改行は Shift+Enter)。
   await page.locator('#ac-tail-text').press('Enter');
   await expect.poll(async () => getEditorText(page)).toContain(':Spi_Init();');
@@ -1206,19 +1180,6 @@ test('手順2 活動図の本文を、先輩のクラス図タブに行かずに
   await expect(page.locator('#ac-tail-text')).toHaveValue('Clk_A\nClk_B');
   expect(await getEditorText(page)).not.toContain('Clk_A');
   await page.locator('#ac-tail-text').fill('');
-
-  // 到達条件その3: 打ちかけの本文は消えない (カーソル位置に差し込む)。
-  await page.locator('#ac-tail-kind').selectOption('action');
-  await page.waitForSelector('#ac-tail-text');
-  await page.locator('#ac-tail-text').fill('Spi_Reset()\n');
-  await page.locator('#ac-tail-text').press('End');
-  await page.locator('#ac-tail-text-vocab .vocab-chip[data-name="Spi_Transmit"]').click();
-  await expect(page.locator('#ac-tail-text')).toHaveValue('Spi_Reset()\nSpi_Transmit()');
-
-  // 到達条件その4: 揺れた綴りは、その行だけを見てその場で相手の綴りが出る。
-  await page.locator('#ac-tail-text').fill('SpiTransmit');
-  await page.waitForTimeout(200);
-  await expect(page.locator('#ac-tail-text-vocab .vocab-warn')).toContainText('Spi_Transmit');
 
   // 到達条件その5 (BLK-owner-20260924-2259-prune): 追加のフォームは 1 つ。途中に入れるときも同じフォームの
   // 「追加する位置」で選ぶ (「＋ この位置に挿入」の 2 つ目のフォームは無い)。確定は 6 図種で同じ「+ 追加」。

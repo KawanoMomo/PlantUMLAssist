@@ -17,13 +17,11 @@ global.document = dom.window.document;
   '../src/core/dsl-utils.js',
   '../src/core/name-audit.js',
   '../src/core/save-dir-handoff.js',
-  '../src/core/xref-graph.js',
 ].forEach(function(p) {
   try { delete require.cache[require.resolve(p)]; } catch (e) {}
   require(p);
 });
 var SDH = global.window.MA.saveDirHandoff;
-var XG = global.window.MA.xrefGraph;
 
 // ── normalize ──────────────────────────────────────────────────────────────
 // 台本どおりバックスラッシュで打たれた Windows 絶対パスを、往復で壊れない
@@ -91,18 +89,13 @@ assert.ok(block.join('\n').indexOf('`E:/01_Loop/persona-data/primary`') >= 0,
 var noDir = SDH.toBlock({ backend: 'localStorage', fileDir: './autosave' }).join('\n');
 assert.ok(noDir.indexOf('未設定') >= 0);
 
-// ── toText: 書き出しに保存先が入る ─────────────────────────────────────────
-var SPI = '@startuml\nparticipant Spi_Driver\nparticipant DmaCtrl\nSpi_Driver -> DmaCtrl : go\n@enduml';
-var CAN = '@startuml\nparticipant Can_Driver\nparticipant DmaCtrl\nCan_Driver -> DmaCtrl : go\n@enduml';
-var docs = [
-  { id: 'd1', name: 'spi', dsl: SPI, diagramType: 'plantuml-sequence' },
-  { id: 'd2', name: 'can', dsl: CAN, diagramType: 'plantuml-sequence' },
-];
-var graph = XG.build(docs);
-var withDir = XG.toText(graph, { backend: 'file', fileDir: 'E:\\01_Loop\\persona-data\\primary' });
-assert.ok(withDir.indexOf('## 保存先ディレクトリ') >= 0);
+// ── 渡された文面 (前後に別の節がある md) から値だけ拾う ───────────────────
+// 書き出し側 (xref.md) は TICKET-owner-20261115-2140-prune で外したが、
+// 以前に渡された md を貼られても値だけを拾う受け口は残す。
+var withDir = ['# 図の束', '', '## 部品名', '- DmaCtrl (2 図)', '']
+  .concat(SDH.toBlock({ backend: 'file', fileDir: 'E:\\01_Loop\\persona-data\\primary' }))
+  .concat(['', '## 図どうしの繋がり', '- spi ⇔ can']).join('\n');
 assert.ok(withDir.indexOf('E:/01_Loop/persona-data/primary') >= 0);
-assert.ok(withDir.indexOf('DmaCtrl') >= 0, '既存の参照関係もそのまま残る');
 // 書き出した md を貼り直せば同じ値が戻る (渡す側と受ける側が噛み合う)。
 var round = SDH.check(SDH.fromText(withDir));
 assert.strictEqual(round.ok, true);
@@ -116,8 +109,6 @@ assert.strictEqual(flat.value, 'E:/01_Loop/persona-data/primary');
 var guide = SDH.toBlock({ backend: 'file', fileDir: 'E:/x' }).join('\n');
 assert.ok(guide.indexOf('パンくず') >= 0 && guide.indexOf('保存先ディレクトリ」') >= 0, guide);
 assert.ok(guide.indexOf('参照関係') < 0, guide);
-// cfg 無しの呼び出し (既存の呼び出し側) は保存先の節を出さない。
-assert.ok(XG.toText(graph).indexOf('## 保存先ディレクトリ') < 0);
 
 // ── messageFor ─────────────────────────────────────────────────────────────
 assert.ok(SDH.messageFor(ok).indexOf('E:/01_Loop/persona-data/primary') >= 0);

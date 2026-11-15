@@ -17,7 +17,11 @@ describe('ツールメニューの分類', function() {
   // 「渡す」1 か所に集めた (TICKET-owner-20261115-1828-prune で引き継ぎ・納品ごと外した)。
   test('design 7a の分類がこの順で並ぶ (渡す は Export ▾ へ移した)', function() {
     expect(tm.groups().map(function(g) { return g.title; }))
-      .toEqual(['図をつくる', '書き換える', '探す', 'レビュー']);
+      .toEqual(['図をつくる', '書き換える', 'レビュー']);
+    // 「探す」(図をまたぐ調べ物) は TICKET-owner-20261115-2140-prune で中身ごと外した。
+    ['btn-tab-symptom', 'btn-tab-blame', 'btn-tab-xref', 'btn-tab-lineage'].forEach(function(id) {
+      expect(tm.menuIds().indexOf(id)).toBe(-1);
+    });
     // 「確かめる」(図をまたぐ監査) は TICKET-owner-20261115-1841-prune で中身ごと外した。
     expect(tm.menuIds().indexOf('btn-tab-cross')).toBe(-1);
     expect(tm.menuIds().indexOf('btn-tab-handoff')).toBe(-1);
@@ -51,8 +55,9 @@ describe('ツールメニューの分類', function() {
   test('分類と文言が id から引ける', function() {
     // 引き継ぎ zip・納品パッケージ (渡す) は TICKET-owner-20261115-1828-prune で外した。
     expect(tm.groupOf('btn-tab-handoff')).toBe(null);
-    expect(tm.groupOf('btn-tab-lineage')).toBe('review');
-    expect(tm.labelOf('btn-tab-lineage')).toBe('この図の継承元');
+    expect(tm.groupOf('btn-tab-diff')).toBe('review');
+    expect(tm.labelOf('btn-tab-diff')).toBe('前回保存からの差分');
+    expect(tm.groupOf('btn-tab-lineage')).toBe(null);
     expect(tm.groupOf('btn-tab-nope')).toBe(null);
   });
 });

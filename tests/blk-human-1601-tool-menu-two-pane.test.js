@@ -16,9 +16,14 @@ const html = fs.readFileSync(path.resolve(__dirname, '..', 'plantuml-assist.html
 // 「渡す」(引き継ぎ zip・納品パッケージ) は TICKET-owner-20261115-1828-prune で外し、左列は 5 分類になった。
 describe('左列の分類', function() {
   // TICKET-owner-20261115-1841-prune: 「確かめる」(図をまたぐ監査) を外し、左列は 4 分類になった。
-  test('4 分類がこの順で並ぶ', function() {
+  // TICKET-owner-20261115-2140-prune: 「探す」(図をまたぐ調べ物) を外し、左列は 3 分類になった。
+  test('3 分類がこの順で並ぶ', function() {
     expect(tm.panelGroups().map(function(g) { return g.title; }))
-      .toEqual(['図をつくる', '書き換える', '探す', 'レビュー']);
+      .toEqual(['図をつくる', '書き換える', 'レビュー']);
+  });
+
+  test('探す の分類は無い', function() {
+    expect(tm.panelGroups().filter(function(x) { return x.key === 'find'; }).length).toBe(0);
   });
 
   // TICKET-owner-20261115-1840-prune: ピン留めと指摘箱を外したので、レビューの件数は差分と基準の図の分だけ。
@@ -68,7 +73,7 @@ describe('右列の小見出し', function() {
     // BLK-owner-20260923-1509-prune: ⇔ 並べて見る は「並べて比較」の相手に畳まり、
     // メニューの項目ではなくなった。他の項目で同じ規則を見る。
     expect(tm.labelOf('btn-tab-peek')).toBe('このフォルダの図を調べる…');
-    expect(tm.labelOf('btn-tab-lineage')).toBe('この図の継承元');
+    expect(tm.labelOf('btn-tab-diff')).toBe('前回保存からの差分');
   });
 });
 
@@ -80,12 +85,12 @@ describe('パネルの HTML', function() {
     expect(out).toContain('Ctrl+K でも引けます');
   });
 
-  test('左列は 4 つ、最初の分類だけが開いている', function() {
+  test('左列は 3 つ、最初の分類だけが開いている', function() {
     var out = tm.buildMenuHtml();
-    expect((out.match(/class="tool-menu-cat"/g) || []).length).toBe(4);
+    expect((out.match(/class="tool-menu-cat"/g) || []).length).toBe(3);
     expect((out.match(/aria-selected="true"/g) || []).length).toBe(1);
-    // 4 分類のうち 3 つは畳んだ状態で出す (1 画面に収める)
-    expect((out.match(/class="tool-menu-group" data-group="[a-z]+" hidden/g) || []).length).toBe(3);
+    // 3 分類のうち 2 つは畳んだ状態で出す (1 画面に収める)
+    expect((out.match(/class="tool-menu-group" data-group="[a-z]+" hidden/g) || []).length).toBe(2);
   });
 
   test('分類の合計は項目の件数と別の印にする (件数の数え方を壊さない)', function() {
@@ -103,16 +108,16 @@ describe('パネルの HTML', function() {
 
 describe('絞り込み', function() {
   test('全分類を横断して当たる', function() {
-    var hits = tm.filterItems('部品名');
-    expect(hits.length).toBe(3);
-    expect(hits.map(function(h) { return h.groupKey; })).toEqual(['edit', 'find', 'find']);
+    var hits = tm.filterItems('図');
+    expect(hits.map(function(h) { return h.groupKey; })).toEqual(['make', 'review']);
   });
 
   test('小見出し・分類名でも引ける', function() {
     // BLK-human-20260923-1701 (design 10b): 「この図の変遷」は FILES の右クリックへ移したので 4 → 3。
     // TICKET-owner-20261115-1828-prune: 変更サマリを外したので 3 → 2。
-    expect(tm.filterItems('変更の履歴').length).toBe(2);
-    expect(tm.filterItems('探す').length >= 3).toBe(true);
+    // TICKET-owner-20261115-2140-prune: この図の継承元を外したので 2 → 1。
+    expect(tm.filterItems('変更の履歴').length).toBe(1);
+    expect(tm.filterItems('書き換える').length).toBe(3);
   });
 
   test('空の絞り込みは全件', function() {
@@ -123,8 +128,8 @@ describe('絞り込み', function() {
 
   test('候補の HTML は分類名を添えて出し、当たりが無ければそう言う', function() {
     var out = tm.buildHitsHtml('部品名', {});
-    expect(out).toContain('data-target="btn-tab-blame"');
-    expect(out).toContain('探す');
+    expect(out).toContain('data-target="btn-tab-rename"');
+    expect(out).toContain('書き換える');
     expect(tm.buildHitsHtml('そんなものは無い', {})).toContain('該当なし');
   });
 

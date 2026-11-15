@@ -24,7 +24,7 @@ test('既定のタブ列にはボタンが 1 つも無い (図のタブと ＋ /
   await expect(page.locator('#btn-tab-folder')).toBeVisible();
   await expect(page.locator('#btn-tab-tools')).toBeHidden();
   // 25 個の機能ボタンはどれも出ない。
-  for (const id of ['btn-tab-rename', 'btn-tab-xref', 'btn-tab-lines', 'btn-tab-diff']) {
+  for (const id of ['btn-tab-rename', 'btn-tab-apply', 'btn-tab-lines', 'btn-tab-diff']) {
     await expect(page.locator('#' + id), id).toBeHidden();
   }
 });
@@ -42,8 +42,8 @@ test('機能は Ctrl+K から引ける (ツールの分類メニューも Ctrl+K
   await openToolMenu(page);
   // BLK-human-20260923-1601 (design 9b): 分類は左列に並ぶ (渡すは TICKET-owner-20261115-1828-prune で外した)。
   await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
-    // 確かめる は TICKET-owner-20261115-1841-prune で外した。
-    '図をつくる', '書き換える', '探す', 'レビュー',
+    // 確かめる は TICKET-owner-20261115-1841-prune、探す は TICKET-owner-20261115-2140-prune で外した。
+    '図をつくる', '書き換える', 'レビュー',
   ]);
   await pickTool(page, 'btn-tab-diff');
   await expect(page.locator('#diff-panel')).toHaveClass(/open/);

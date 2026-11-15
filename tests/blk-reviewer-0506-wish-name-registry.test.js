@@ -235,10 +235,8 @@ describe('入力欄 (junior / primary が名前を打つ場所)', function() {
     expect(box.querySelector('.vocab-warn').textContent).toContain('IRQCtrl');
   });
 
-  test('登録簿は名前帳より先に言う (揃える先を 2 つ出さない)', function() {
-    // 名前帳は図にある綴り `Irq_Ctrl` を知っていて、登録簿は `IRQCtrl` が正と言う。
-    PV.setCurrent(PV.collect('irq', [{ name: 'irq_state.puml', kind: 'state',
-      text: '@startuml\nstate Irq_Ctrl\n@enduml' }]));
+  // TICKET-owner-20261115-2140-prune: 図をまたいで集めた名前のチップは外した。欄の下は登録簿だけが言う。
+  test('揺れた綴りには登録簿の正式表記だけを言う', function() {
     NR.setCurrent(NR.register(NR.empty(), 'IRQCtrl', ['Irq_Ctrl']).registry);
     var box = mount();
     field.value = 'IrqCtrl';
@@ -248,22 +246,9 @@ describe('入力欄 (junior / primary が名前を打つ場所)', function() {
     expect(warn).not.toContain('表記が揺れています');
   });
 
-  test('登録簿が空なら今までどおり名前帳だけが言う', function() {
-    PV.setCurrent(PV.collect('spi', [{ name: 'spi_state.puml', kind: 'state',
-      text: '@startuml\nstate Spi_Init\n@enduml' }]));
-    var box = mount({ roles: ['state'] });
-    field.value = 'SpiInit';
-    field.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-    expect(box.querySelector('.vocab-warn').textContent).toContain('表記が揺れています');
-  });
-
   test('メソッド名の欄には登録簿を出さない (部品名の揃える先だから)', function() {
     NR.setCurrent(NR.register(NR.empty(), 'IRQCtrl', ['Irq_Ctrl']).registry);
-    PV.setCurrent(PV.collect('spi', [{ name: 'spi_state.puml', kind: 'state',
-      text: '@startuml\nIdle --> Busy : Spi_Init\n@enduml' }]));
-    var box = mount({ roles: ['method', 'event'] });
-    expect(box.getAttribute('data-registry')).toBe('0');
-    expect(box.querySelector('.registry-chip')).toBe(null);
+    expect(P.vocabPickerHtml('nm-vocab', { roles: ['method', 'event'] })).toBe('');
   });
 });
 

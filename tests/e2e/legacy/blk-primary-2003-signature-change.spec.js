@@ -59,25 +59,6 @@ async function openRename(page, from) {
 test.describe('BLK-primary-2003 シグネチャ変更をまとめて当てる', () => {
   test.beforeEach(async ({ page }) => { await freshWorkspace(page); });
 
-  test('影響範囲の各行に該当行が並び、押すとその図のその行へ飛ぶ', async ({ page }) => {
-    await setupTwoDocs(page);
-    await openRename(page, 'Spi_Reset');
-    const lines = page.locator('#rename-impact .impact-line');
-    await expect(lines).toHaveCount(2);
-    await expect(lines.first()).toContainText('Spi_Reset');
-
-    // 今開いているのは 2 枚目。1 枚目の行を押すと図が切り替わり、
-    // エディタのキャレットがその行に乗る。
-    const target = page.locator('#rename-impact .impact-line').filter({ hasText: '+ Spi_Reset() : void' }).first();
-    await target.click();
-    await page.waitForTimeout(300);
-    const sel = await page.evaluate(() => {
-      const ed = /** @type {HTMLTextAreaElement} */ (document.getElementById('editor'));
-      return ed.value.slice(ed.selectionStart, ed.selectionEnd);
-    });
-    expect(sel.trim()).toBe('+ Spi_Reset() : void');
-  });
-
   test('戻り値を入れると当たる行が出て、まとめて適用で 2 図が同時に変わる', async ({ page }) => {
     await setupTwoDocs(page);
     await openRename(page, 'Spi_Reset');

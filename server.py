@@ -743,10 +743,6 @@ API_INDEX = {
         {'endpoint': 'POST /autosave-image', 'summary': '資料化した画像 (png / svg) を保存フォルダに置き、書けた大きさを返す',
          'request': "{name, dir, image: {ext, base64}}"},
         {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
-        {'endpoint': 'GET /version-search', 'summary': '保存フォルダの全図の版から部品名を探す (混入点の材料)',
-         'request': '?dir=&q='},
-        {'endpoint': 'GET /version-diff', 'summary': '1 枚の図の「その版」と「直前の版」の本文を組で返す (全文差分の材料)',
-         'request': '?dir=&type=[&stamp=]'},
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
         {'endpoint': 'GET /git-status', 'summary': '保存先が Git 作業木ならブランチ・ahead/behind・変更 (M/A/D)。読むだけで通信しない',
          'request': '?dir='},
@@ -766,9 +762,6 @@ API_INDEX = {
          'request': '?dir='},
         {'endpoint': 'POST /cohort-ack', 'summary': '確認済みの組の台帳を置き換える',
          'request': "{dir, entries: [{key, domain, kind, left, right, fingerprint, note, by, at}]}"},
-        {'endpoint': 'GET /tickets', 'summary': '変更チケットの一覧', 'request': '?dir='},
-        {'endpoint': 'POST /tickets', 'summary': '変更チケットを 1 枚書く', 'request': "{dir, ticket}"},
-        {'endpoint': 'DELETE /tickets', 'summary': '変更チケットを 1 枚消す', 'request': '?dir=&id='},
         {'endpoint': 'GET /peek-settled', 'summary': '「相手 × 図種は手本なしで確定」の一覧 (以後は聞かない)',
          'request': '?dir='},
         {'endpoint': 'POST /peek-settled', 'summary': '確定を 1 つ足す / 外す (clear で全部外す)',
@@ -1448,15 +1441,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/autosave-versions':
             with _fs_lock:
                 return self._handle_autosave_versions()
-        if self.path.split('?')[0] == '/version-search':
-            with _fs_lock:
-                return self._handle_version_search()
-        if self.path.split('?')[0] == '/version-diff':
-            with _fs_lock:
-                return self._handle_version_diff()
-        if self.path.split('?')[0] == '/tickets':
-            with _fs_lock:
-                return self._handle_tickets_get()
         if self.path.split('?')[0] == '/peek-settled':
             with _fs_lock:
                 return self._handle_peek_settled_get()
@@ -1533,9 +1517,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/autosave-image':
             with _fs_lock:
                 return self._handle_autosave_image_post()
-        if self.path == '/tickets':
-            with _fs_lock:
-                return self._handle_tickets_post()
         if self.path == '/rename-pairs':
             with _fs_lock:
                 return self._handle_rename_pairs_post()
@@ -2439,243 +2420,6 @@ class Handler(BaseHTTPRequestHandler):
             item['hash'] = _version_hash(text)
             versions.append(item)
         self._send_json(200, {'name': dt, 'dir': str(save_dir), 'versions': versions})
-
-    # --- 混入点の検索 (BLK-primary-20260915-0506-wish) ------------------------
-    #
-    # 不具合対応では「この部品名がいつの版から入ったか」を知りたい。今までは
-    # /autosave-versions を図ごとに引き、返ってきた版を 1 つずつ開いて中身を
-    # 読み比べるしかなく、開く回数が「図の枚数 × 版数」で増えていた。
-    # ここは保存フォルダの全図・全版を 1 回で走査し、**語が当たった行だけ**を返す。
-    # 版と版の突き合わせ (どこで増えたか) は GUI 側 (blame-point.js) の仕事なので、
-    # server は数えて抜き出すところまでしかやらない。本文全部は返さない
-    # (14 枚 × 20 版の本文を毎回運ぶと、それ自体が待ち時間になる)。
-    SEARCH_TERMS_MAX = 6        # 1 回に突き合わせる語の数 (混在は 2〜3 語で足りる)
-    SEARCH_LINES_PER_VERSION = 40   # 1 版から返す当たり行の上限
-
-    def _search_hits(self, text, terms, fold=False):
-        """本文 → 語ごとの出現数と、当たった行 (行番号つき)。
-
-        `fold` は大文字小文字を無視する (▤ 影響を見る の症状の語。Spi_Driver と
-        spi_driver を同じ語として拾う)。混入点は表記の揺れそのものを見るので既定は区別する。
-        """
-        counts = [0] * len(terms)
-        lines = []
-        if fold:
-            terms = [t.lower() for t in terms]
-        for no, line in enumerate(str(text or '').splitlines(), 1):
-            hit = False
-            probe = line.lower() if fold else line
-            for i, t in enumerate(terms):
-                c = probe.count(t)
-                if c:
-                    counts[i] += c
-                    hit = True
-            if hit and len(lines) < self.SEARCH_LINES_PER_VERSION:
-                lines.append({'no': no, 'text': line.rstrip()[:200]})
-        return counts, lines
-
-    def _handle_version_search(self):
-        """GET /version-search?dir=&q= — 保存フォルダの全図の版から語を探す。
-
-        `q` は空白区切りの語 (混在を見るので複数可)。返すのは図ごとの
-        「古い順の版 + いまの中身」で、各版に語ごとの出現数と当たり行が付く。
-        `ci=1` で大文字小文字を無視する。いまの中身には更新時刻 `mtime` (UTC) が付く。
-        """
-        parsed = urllib.parse.urlparse(self.path)
-        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
-        save_dir = self._autosave_resolve_dir(params.get('dir'))
-        raw = params.get('q', '')
-        terms = [t for t in str(raw).split() if t][:self.SEARCH_TERMS_MAX]
-        if not terms:
-            self._send_json(400, {'error': 'q is required — 探す部品名を 1 つ以上'})
-            return
-        fold = params.get('ci', '') in ('1', 'true')
-        names = []
-        try:
-            for p in sorted(save_dir.iterdir(), key=lambda x: x.name.lower()):
-                if p.is_file() and p.suffix.lower() == '.puml':
-                    names.append(p.stem)
-        except OSError:
-            names = []
-        files = []
-        scanned = 0
-        for name in names:
-            versions = []
-            # 古い順。刻印は昇順に並べれば時系列になる (server は同じ書式で打つ)。
-            for stamp in sorted(self._version_stamps(save_dir, name)):
-                try:
-                    text = self._version_path(save_dir, name, stamp).read_text(encoding='utf-8')
-                except OSError:
-                    continue
-                counts, lines = self._search_hits(text, terms, fold)
-                versions.append({'stamp': stamp, 'current': False,
-                                 'counts': counts, 'lines': lines})
-                scanned += 1
-            cur_path = save_dir / (name + '.puml')
-            try:
-                text = cur_path.read_text(encoding='utf-8')
-            except OSError:
-                text = ''
-            # いまの中身がいつ書かれたか (UTC)。控えの刻印は「その版が置き換えられた時刻」
-            # なので、いまの中身の時刻はファイルの更新時刻でしか言えない。
-            try:
-                mtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime(cur_path.stat().st_mtime)) + 'Z'
-            except OSError:
-                mtime = ''
-            counts, lines = self._search_hits(text, terms, fold)
-            versions.append({'stamp': '', 'current': True, 'mtime': mtime,
-                             'counts': counts, 'lines': lines})
-            scanned += 1
-            files.append({'name': name, 'versions': versions})
-        self._send_json(200, {'terms': terms, 'dir': str(save_dir),
-                              'files': files, 'scanned': scanned})
-
-    # --- 版と版の全文 (BLK-primary-20260915-0606-wish) ------------------------
-    #
-    # 混入点は「語が当たった行」しか返さないので、原因を直すのに要る前後の文脈が
-    # 出ない。今まではその版を開き、直前の版も開いて目で照合する 2 手が要り、
-    # 部品数 × 該当版数ぶん積み上がっていた。ここは 1 回の要求で「その版」と
-    # 「直前の版」の本文を組で返す。突き合わせ自体は GUI 側 (version-diff.js)。
-
-    def _handle_version_diff(self):
-        """GET /version-diff?dir=&type=[&stamp=] — その版と直前の版の本文。
-
-        `stamp` を省くと「いまの中身」と最新の控えを比べる。最古の控えを指した
-        ときは直前が無いので prev を null、before を空にして first を立てる。
-        """
-        parsed = urllib.parse.urlparse(self.path)
-        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
-        save_dir = self._autosave_resolve_dir(params.get('dir'))
-        dt = params.get('type', '')
-        if not self._autosave_validate_type(dt):
-            self._send_json(400, {'error': 'invalid type — パス区切り・制御文字・Windows の禁止文字は使えません'})
-            return
-        stamp = params.get('stamp', '')
-        if stamp and not is_safe_autosave_name(stamp):
-            self._send_json(400, {'error': 'invalid stamp'})
-            return
-        stamps = sorted(self._version_stamps(save_dir, dt))
-
-        def read(path):
-            try:
-                return path.read_text(encoding='utf-8')
-            except OSError:
-                return None
-
-        if stamp:
-            if stamp not in stamps:
-                self._send_json(404, {'error': 'version not found — その版は残っていません'})
-                return
-            after = read(self._version_path(save_dir, dt, stamp))
-            if after is None:
-                self._send_json(500, {'error': 'read failed'})
-                return
-            idx = stamps.index(stamp)
-            prev = stamps[idx - 1] if idx > 0 else None
-        else:
-            after = read(save_dir / (dt + '.puml'))
-            if after is None:
-                self._send_json(404, {'error': 'diagram not found — その図は保存フォルダにありません'})
-                return
-            prev = stamps[-1] if stamps else None
-        before = ''
-        if prev is not None:
-            got = read(self._version_path(save_dir, dt, prev))
-            if got is None:
-                prev = None
-            else:
-                before = got
-        self._send_json(200, {
-            'name': dt, 'dir': str(save_dir),
-            'stamp': stamp, 'current': not stamp,
-            'prev': prev, 'first': prev is None,
-            'before': before, 'after': after,
-        })
-
-    # --- 変更チケット (BLK-primary-20260909-0603-wish) ------------------------
-    #
-    # 依存グラフの影響一覧はモーダルを閉じると消えるので、1 つの仕様変更が
-    # 数日・複数 run にまたがると「15 枚のうちどこまで直したか」を持ち越せない。
-    # 札を保存フォルダに置くのは、run をまたぐ・ペルソナをまたぐため
-    # (localStorage では reviewer が読めず、指摘.md への転記が要る)。
-    # 図と同じ階層に置くと作業ファイルに紛れるので `_tickets/` に隔離する。
-    TICKETS_DIRNAME = '_tickets'
-
-    def _tickets_dir(self, save_dir):
-        return save_dir / self.TICKETS_DIRNAME
-
-    def _tickets_entries(self, save_dir):
-        out = []
-        try:
-            paths = sorted(self._tickets_dir(save_dir).glob('*.json'))
-        except OSError:
-            return out
-        for p in paths:
-            try:
-                data = json.loads(p.read_text(encoding='utf-8'))
-            except (ValueError, OSError):
-                continue
-            if not isinstance(data, dict):
-                continue
-            data['id'] = p.stem
-            out.append(data)
-        return out
-
-    def _handle_tickets_get(self):
-        """GET /tickets?dir= — その保存フォルダの変更チケット全件."""
-        parsed = urllib.parse.urlparse(self.path)
-        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
-        save_dir = self._autosave_resolve_dir(params.get('dir'))
-        self._send_json(200, {'dir': str(save_dir), 'tickets': self._tickets_entries(save_dir)})
-
-    def _handle_tickets_post(self):
-        """POST /tickets {dir, ticket} — 1 枚まるごと置き換える。
-
-        差分ではなく全文で書くのは、直した印を 1 個立てるたびに
-        server 側で札を組み直さないため (組み立ての正本は change-ticket.js の 1 か所)。
-        """
-        length = int(self.headers.get('Content-Length', 0))
-        try:
-            data = json.loads(self.rfile.read(length).decode('utf-8'))
-        except ValueError:
-            self._send_json(400, {'error': 'invalid JSON'})
-            return
-        if not isinstance(data, dict):
-            self._send_json(400, {'error': 'body must be an object'})
-            return
-        ticket = data.get('ticket')
-        if not isinstance(ticket, dict):
-            self._send_json(400, {'error': 'ticket must be an object'})
-            return
-        ticket_id = ticket.get('id')
-        if not isinstance(ticket_id, str) or not is_safe_autosave_name(ticket_id):
-            self._send_json(400, {'error': 'invalid ticket id'})
-            return
-        save_dir = self._autosave_resolve_dir(data.get('dir'))
-        tdir = self._tickets_dir(save_dir)
-        try:
-            tdir.mkdir(parents=True, exist_ok=True)
-            (tdir / (ticket_id + '.json')).write_text(
-                json.dumps(ticket, ensure_ascii=False, indent=1), encoding='utf-8')
-        except OSError as e:
-            self._send_json(500, {'error': f'write failed: {e}'})
-            return
-        self._send_json(200, {'dir': str(save_dir), 'ticket': ticket})
-
-    def _handle_tickets_delete(self):
-        """DELETE /tickets?dir=&id= — 済んだ札を畳む."""
-        parsed = urllib.parse.urlparse(self.path)
-        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
-        ticket_id = params.get('id', '')
-        if not is_safe_autosave_name(ticket_id):
-            self._send_json(400, {'error': 'invalid ticket id'})
-            return
-        save_dir = self._autosave_resolve_dir(params.get('dir'))
-        try:
-            (self._tickets_dir(save_dir) / (ticket_id + '.json')).unlink()
-        except OSError:
-            pass
-        self._send_json(200, {'ok': True})
 
     # --- 手本なしの確定 (BLK-junior-20260916-2314-wish) -------------------------
     #
@@ -3833,9 +3577,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/doc-sets':
             with _fs_lock:
                 return self._handle_doc_sets_delete()
-        if self.path.split('?')[0] == '/tickets':
-            with _fs_lock:
-                return self._handle_tickets_delete()
         if self.path.startswith('/autosave'):
             return self._handle_autosave_delete()
         self.send_error(404)
@@ -3883,19 +3624,6 @@ class Handler(BaseHTTPRequestHandler):
                         except OSError:
                             pass
                     vdir.rmdir()
-                except OSError:
-                    pass
-            # 変更チケットも同じ理由で残す。仕様変更は図を作り直しても続いている
-            # ので、作業ファイルを片付けたら進捗が消えるのでは持ち越せていない。
-            if params.get('tickets') == '1':
-                tdir = self._tickets_dir(save_dir)
-                try:
-                    for p in tdir.iterdir():
-                        try:
-                            p.unlink()
-                        except OSError:
-                            pass
-                    tdir.rmdir()
                 except OSError:
                     pass
         self._send_json(200, {'ok': True})

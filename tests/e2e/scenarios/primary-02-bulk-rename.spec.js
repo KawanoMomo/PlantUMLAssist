@@ -51,111 +51,6 @@ test('手順2 一括置換の全図適用で、旧名 SpiDrv が全図から消�
   expect(seq).not.toContain('SpiDrv ');
 });
 
-// BLK-primary-20260908-2003-wish: 置換の前に「この名前はどの図から参照されているか」を
-// 各図を開いて目視で推測していた。依存グラフ で参照元・参照先と、連鎖で影響が
-// 届く図までを開かずに数える。
-// BLK-owner-20260923-1949-prune: 依存グラフは ▤ 影響を見る の上段 (◈ 依存グラフ ボタンは畳んだ)。
-test('手順2 依存グラフが、置換する部品名の参照元・参照先と影響の届く図を出す', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.clearDir(page, DIR);
-  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'SpiDrv'));
-  await page.reload();
-  await page.waitForSelector('#preview-svg');
-
-  await S.runCommand(page, '一括置換');
-  await page.locator('#rename-from').fill('SpiDrv');
-  await page.waitForTimeout(900);
-
-  await page.locator('#btn-rename-preview').click();
-  await page.waitForSelector('#ri-modal', { state: 'visible' });
-  await page.waitForTimeout(600);
-
-  // 到達条件その1: 打った名前が中央に立ち、参照元と参照先が矢印で分かれている。
-  const center = page.locator('#dg-svg .dg-node[data-side="center"]');
-  await expect(center).toHaveAttribute('data-name', 'SpiDrv');
-  await expect(page.locator('#dg-svg .dg-node[data-side="out"][data-name="Hw_Ctrl"]')).toHaveCount(1);
-  await expect(page.locator('#dg-svg .dg-node[data-side="in"][data-name="Hw_Ctrl"]')).toHaveCount(1);
-  const edges = page.locator('#dg-svg line.dg-edge');
-  expect(await edges.count()).toBeGreaterThan(1);
-  await expect(page.locator('#dg-summary')).toContainText('SpiDrv');
-
-  // 到達条件その2: 開かずに「直す図」が数えられる。矢印を持たない共通クラス図
-  // (class SpiDrv と書いてあるだけ) も直接の対象として並ぶ。
-  const direct = page.locator('#dg-impact tr.dg-doc[data-hop="0"]');
-  await expect(direct.filter({ hasText: 'spi_init_sequence' })).toHaveCount(1);
-  await expect(direct.filter({ hasText: 'driver_common_class' })).toHaveCount(1);
-
-  // 到達条件その3: 見た名前をそのまま置換の的にできる (打ち直さない)。
-  await page.locator('#dg-name').selectOption('Hw_Ctrl');
-  await page.waitForTimeout(400);
-  await page.locator('#dg-use').click();
-  await expect(page.locator('#ri-modal')).toBeHidden();
-  await expect(page.locator('#rename-from')).toHaveValue('Hw_Ctrl');
-});
-
-
-// BLK-primary-20260914-2206-wish: 依存グラフの行から図は開けるが、開いた瞬間に
-// モーダルが閉じて一覧が消えるので、6 図あれば「◈依存グラフ → 行を探す → 開く」を
-// 6 回繰り返していた (確認は依存グラフ・反映は📂一覧、と経路が分断されていた)。
-// 洗った一覧を下端のバーに残し、直しながら「次へ」で送れるようにした。
-test('手順4 洗った影響が下端に残り、一覧を開き直さずに次の図へ送れる', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.clearDir(page, DIR);
-  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'SpiDrv'));
-  await page.reload();
-  await page.waitForSelector('#preview-svg');
-
-  await S.runCommand(page, '一括置換');
-  await page.locator('#rename-from').fill('SpiDrv');
-  await page.waitForTimeout(900);
-  await page.locator('#btn-rename-preview').click();
-  await page.waitForSelector('#ri-modal', { state: 'visible' });
-  await page.waitForTimeout(600);
-
-  const rows = page.locator('#dg-impact tr.dg-doc');
-  const total = await rows.count();
-  expect(total).toBeGreaterThan(2);
-  const docs = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-doc')));
-
-  // 到達条件その1: 一覧を「順に手当てする」で列にすると、1 枚目が開き、
-  // 下端に何枚目 / 残り何枚が出たまま残る (モーダルは閉じてよい)。
-  await page.locator('#dg-walk').click();
-  await expect(page.locator('#ri-modal')).toBeHidden();
-  const bar = page.locator('#fw-bar');
-  await expect(bar).toBeVisible();
-  await expect(page.locator('#fw-label')).toContainText('1 / ' + total + ' 図');
-  await expect(page.locator('#fw-label')).toContainText('残り ' + total);
-  await page.waitForTimeout(800);
-  await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', docs[0]);
-
-  // 到達条件その2: 直した印を立てると、一覧を開き直さずに次の図がそのまま開く。
-  await page.locator('#fw-done').click();
-  await page.waitForTimeout(800);
-  await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', docs[1]);
-  await expect(page.locator('#fw-label')).toContainText('2 / ' + total + ' 図');
-  await expect(page.locator('#fw-label')).toContainText('残り ' + (total - 1));
-
-  // 印を付けずに送ることもできる (先に全部読んでから直す回)。
-  await page.locator('#fw-next').click();
-  await page.waitForTimeout(800);
-  await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', docs[2]);
-  await expect(page.locator('#fw-label')).toContainText('残り ' + (total - 1));
-  await page.locator('#fw-prev').click();
-  await page.waitForTimeout(800);
-  await expect(page.locator('#tab-bar .tab.active')).toHaveAttribute('data-doc-name', docs[1]);
-
-  // 到達条件その3: 一覧に戻ると、どこまで手当てしたかが行に出ている
-  // (同じ図を二度開かない)。列はバーに残ったまま。
-  await page.locator('#fw-list').click();
-  await page.waitForSelector('#ri-modal', { state: 'visible' });
-  await page.waitForTimeout(600);
-  await expect(page.locator('#dg-impact tr.dg-doc[data-fixed="1"]')).toHaveCount(1);
-  await expect(page.locator('#dg-impact tr.dg-doc[data-fixed="1"]')).toContainText(docs[0]);
-  await expect(page.locator('#dg-impact tr.dg-doc[data-current="1"]')).toContainText(docs[1]);
-  await page.locator('#ri-close').click();
-  await expect(bar).toBeVisible();
-});
-
 // BLK-primary-20260914-1106-friction: 同じ組を当て直す運用では、旧称がもう残って
 // いないことを確かめるためだけに SpiDrv / Spi_Driver を毎回打ち直していた
 // (ヒット 0 件は打ち終えてからしか出ない)。パネルを開いた時点で過去の組と
@@ -216,7 +111,7 @@ test('手順2 過去に当てた置換の組が、打つ前に「適用済み / 
   await expect(page.locator('#btn-rename-apply')).toBeEnabled();
 });
 
-// BLK-primary-20260914-1106-friction (curator 書き直し): 影響を見るためだけに打って
+// BLK-primary-20260914-1106-friction (curator 書き直し): 件数を見るためだけに打って
 // 当てずに閉じた組 (旧称が残る組) は、次に開いたときの既定にしない。両欄に入るのは
 // 最後に [置換] で当てた組だけ。打った組は履歴の行には残る。
 // 組はフォルダに残り続けるので、他のケースに混ざらないよう専用のフォルダで行う。
@@ -289,7 +184,7 @@ test('手順2 ヒット 0 件で打った組も保存フォルダに残り、次
   await page.locator('#rename-from').fill('SpiDrv');
   await page.locator('#rename-to').fill('Spi_Driver');
   await page.waitForTimeout(900);
-  // ヒット 0 件なので [適用] も [▤ 影響を見る] も押せない。ここが起票の状況。
+  // ヒット 0 件なので [適用] は押せない。ここが起票の状況。
   await expect(page.locator('#btn-rename-apply')).toBeDisabled();
   // 打ち終わり (欄から離れる) の時点で組を覚える。
   await page.locator('#rename-to').blur();
@@ -403,114 +298,6 @@ test('手順2 下端の統一バッジが、置換の残りを開かずに言う
   await expect(page.locator('#btn-rename-apply')).toBeEnabled();
 });
 
-// BLK-primary-20260915-0007: 「意図的な省略を note で明記する」対応は、依存グラフが
-// 挙げた影響先の枚数だけ同じ文言を打ち直す作業になっていた (1 図ずつ📂一覧から開き、
-// DSL 欄の末尾にカーソルを合わせて同じ 1 行をタイプする)。文面は 1 つなのに手数が
-// 枚数に比例する。一覧のすぐ下で 1 度打ち、影響先すべてへ 1 回で書き込む。
-test('手順4 依存グラフの影響先すべてに、同じ note を 1 回で打てる', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.clearDir(page, DIR);
-  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'SpiDrv'));
-  await page.reload();
-  await page.waitForSelector('#preview-svg');
-
-  await S.runCommand(page, '一括置換');
-  await page.locator('#rename-from').fill('SpiDrv');
-  await page.waitForTimeout(900);
-  await page.locator('#btn-rename-preview').click();
-  await page.waitForSelector('#ri-modal', { state: 'visible' });
-  await page.waitForTimeout(600);
-
-  const rows = page.locator('#dg-impact tr.dg-doc');
-  const total = await rows.count();
-  expect(total).toBeGreaterThan(1);
-  const docs = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-doc')));
-
-  // 到達条件その1: 一覧のすぐ下で文面を 1 度打つと、影響先すべてが既定で打つ先になる。
-  await page.locator('#dg-note').click();
-  const box = page.locator('#dg-note-box');
-  await expect(box).toBeVisible();
-  await expect(page.locator('#dg-note-targets label')).toHaveCount(total);
-  await expect(page.locator('#dg-note-all')).toBeChecked();
-
-  const NOTE = 'ClockCtrl の呼び先は意図的に省略 (reviewer依頼2への回答)';
-  await page.locator('#dg-note-text').fill(NOTE);
-  const summary = page.locator('#dg-note-summary');
-  await expect(summary).toHaveAttribute('data-add', String(total));
-  await expect(page.locator('#dg-note-run')).toBeEnabled();
-
-  // 到達条件その2: 1 回押すだけで、影響先の図すべてに同じ note が入る
-  // (開いていない図は開かずに保存フォルダへ書き戻る)。
-  await page.locator('#dg-note-run').click();
-  await expect(summary).toHaveAttribute('data-applied', String(total), { timeout: 15000 });
-  await page.waitForTimeout(800);
-  for (const d of docs) {
-    const dsl = await S.readDoc(page, DIR, d);
-    expect(dsl).toContain(NOTE);
-    // note は @enduml の直前に入る (図が壊れない)。
-    expect(dsl.trim().endsWith('@enduml')).toBe(true);
-  }
-
-  // 到達条件その3: 同じ文面をもう一度打っても二重にならない (既にあり、と出る)。
-  await page.locator('#dg-note-text').fill(NOTE);
-  await page.waitForTimeout(400);
-  await expect(summary).toHaveAttribute('data-add', '0');
-  await expect(page.locator('#dg-note-run')).toBeDisabled();
-  const again = await S.readDoc(page, DIR, docs[0]);
-  expect(again.split(NOTE).length - 1).toBe(1);
-});
-
-// BLK-primary-20260917-0023: ⇄ 一括置換のヒット件数は「何枚に当たったか」までで、
-// 「どの図の何行目か」「残りの図は触らなくてよいか」は 3 枚を 1 枚ずつ開いて
-// 確かめ直していた。件数の横から影響範囲へ入り、14 枚を変更あり / なしで仕分けた
-// 一覧を、当たった箇所がハイライトされた状態で 1 画面で読む。
-test('手順4 件数の横から、14 枚が変更あり / なしに仕分けられた影響範囲が開く', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.clearDir(page, DIR);
-  for (const n of S.PRIMARY_DOCS) await S.putDoc(page, DIR, n, S.docFor(n, 'SpiDrv'));
-  await page.reload();
-  await page.waitForSelector('#preview-svg');
-
-  await page.keyboard.press('Control+h');
-  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
-  await page.locator('#rename-from').fill('SpiDrv');
-  await page.locator('#rename-to').fill('Spi_Driver');
-  await page.waitForTimeout(1200);
-
-  // 到達条件その1: 件数を読んだその場に影響範囲への入口がある。
-  const gate = page.locator('#btn-rename-hits-impact');
-  await expect(gate).toBeEnabled();
-  await expect(page.locator('#rename-hits-label')).toContainText('枚');
-  await gate.click();
-  await page.waitForSelector('#ri-modal', { state: 'visible' });
-  await page.waitForTimeout(600);
-
-  // 到達条件その2: 走査した枚数・変更あり・変更なしが 1 行で出て、
-  // 変更なしの図も名前で並ぶ (残りを 1 枚ずつ開いて確かめ直さない)。
-  const roster = page.locator('#ri-roster');
-  const scanned = Number(await roster.getAttribute('data-scanned'));
-  const changed = Number(await roster.getAttribute('data-changed'));
-  const none = Number(await roster.getAttribute('data-none'));
-  // 保存フォルダの 14 枚 (開いている無題のタブが 1 枚加わる回がある)。
-  expect(scanned).toBeGreaterThanOrEqual(S.PRIMARY_DOCS.length);
-  // 識別子として当たるのは spi_init_sequence と driver_common_class の 2 枚
-  // (spi_state の SpiDrv_Init は別の識別子なので置換の的にならない)。
-  expect(changed).toBe(2);
-  expect(none).toBe(scanned - changed);
-  await expect(roster).toContainText('変更なし');
-  await expect(page.locator('#ri-none .ri-none-doc')).toHaveCount(none);
-  await expect(page.locator('#ri-none')).toContainText('can_state');
-  await expect(page.locator('#ri-none')).not.toContainText('spi_init_sequence');
-
-  // 到達条件その3: 変更ありの図はヒット箇所がハイライトされて並ぶ
-  // (行の中のどこが当たったかを目で探さない)。
-  const entries = page.locator('#ri-body .cb-entry');
-  await expect(entries).toHaveCount(changed);
-  const marks = page.locator('#ri-body mark.ri-hit');
-  expect(await marks.count()).toBeGreaterThan(changed);
-  await expect(marks.first()).toHaveText(/SpiDrv|Spi_Driver/);
-});
-
 // BLK-primary-20260917-0223-friction: 畳まれた ⇄ 一括置換を Ctrl+K で名前を打って開く迂回が
 // 毎回乗っていた。パレットの行に単独キー Ctrl+H を出し、エディタで選んだ部品名を
 // 置換前に入れて開く (from 欄を打たない)。
@@ -537,29 +324,6 @@ test('手順2 パレットの一括置換に Ctrl+H が出て、エディタで�
     return at;
   });
   expect(selected).toBeGreaterThanOrEqual(0);
-  // BLK-primary-20260924-0021-wish: 置換の前段で、選んだ部品名を「使っている図」で引いて枚数を読む
-  // (Ctrl+K で「使っている図」と打つと「名前で図を探す」が出て、選んだ名前が入った状態で開く)。
-  await page.keyboard.press('Control+k');
-  await page.waitForSelector('#cp-modal');
-  // BLK-owner-20260924-1212-prune: ▤ 影響を見る を開く行は画面の名前の 1 行だけ。旧名 (依存グラフ /
-  // 参照関係 / 名前で図を探す) で打っても同じ 1 行が出て、旧名の行・ツール ▾ の案内行 (→) は並ばない。
-  for (const q of ['影響', '依存グラフ', '参照関係', '名前で図']) {
-    await page.locator('#cp-input').fill(q);
-    await page.waitForTimeout(150);
-    const rows = page.locator('.cp-item').filter({ hasText: /影響を見る|依存グラフ|参照関係|名前で図を探す|図をまたいで/ });
-    await expect(rows).toHaveCount(1);
-    await expect(rows.first()).toHaveAttribute('data-cp-id', /:name-search$/);
-    await expect(rows.first()).toContainText('影響を見る');
-  }
-  await page.locator('#cp-input').fill('使っている図');
-  await page.waitForTimeout(250);
-  await expect(page.locator('.cp-item').first()).toHaveAttribute('data-cp-id', /:name-search$/);
-  await page.keyboard.press('Enter');
-  await page.waitForSelector('#ri-modal', { state: 'visible' });
-  await expect(page.locator('#ns-q')).toHaveValue('SpiDrv');
-  await expect(page.locator('#ns-summary')).toHaveAttribute('data-hit-docs', '3');
-  await page.keyboard.press('Escape');
-  await expect(page.locator('#ri-modal')).toBeHidden();
   await page.evaluate(() => {
     const ed = document.getElementById('editor');
     const at = ed.value.indexOf('SpiDrv');

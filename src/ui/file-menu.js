@@ -148,7 +148,7 @@ window.MA.fileMenuUi = (function() {
   function renameFile(name) {
     var ws = WS();
     var d = findDoc(name);
-    // 開いている図は、タブのダブルクリックと同じ道を通す (レビューの基準・継承元・
+    // 開いている図は、タブのダブルクリックと同じ道を通す (レビューの基準・
     // 前の名前のファイルの付け替えまで同じ 1 本で済ませる)。
     if (d) {
       var tab = document.querySelector('#tab-bar .tab[data-doc-id="' + d.id + '"]');
@@ -171,7 +171,6 @@ window.MA.fileMenuUi = (function() {
     return fileOp({ op: 'rename', dir: _dir(), name: name, to: next }).then(function(r) {
       if (!r.ok) { toast('名前を変えられませんでした: ' + (r.data.error || r.status)); return false; }
       if (window.MA.reviewDesk) { try { window.MA.reviewDesk.renameBaseline(name, next); } catch (e) {} }
-      if (window.MA.lineage) { try { window.MA.lineage.rename(name, next); } catch (e) {} }
       toast('「' + name + '」を「' + next + '」に変えました');
       refreshLists();
       return true;
@@ -312,7 +311,6 @@ window.MA.fileMenuUi = (function() {
     if (!to) return Promise.resolve();
     return fileOp({ op: 'rename', dir: _dir(), name: name, to: to }).then(function(r) {
       if (!r.ok) { toast('移せませんでした: ' + (r.data.error || r.status)); return; }
-      if (window.MA.lineage) { try { window.MA.lineage.rename(name, to); } catch (e) {} }
       toast('「' + name + '」を ' + String(part).toUpperCase() + ' へ移しました (' + to + ')');
       refreshLists();
     });

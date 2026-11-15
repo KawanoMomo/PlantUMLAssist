@@ -84,8 +84,6 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `POST /autosave-svg` | `{type, dir, svg}` | 書き出した svg を保存する (印を刻む) |
 | `POST /autosave-image` | `{name, dir, image: {ext, base64}}` | 資料化した画像 (png / svg) を保存フォルダに置き、書けた大きさを返す |
 | `GET /autosave-versions` | `?dir=&type=` | 1 枚の図の版の一覧 |
-| `GET /version-search` | `?dir=&q=` | 保存フォルダの全図の版から部品名を探す (混入点の材料) |
-| `GET /version-diff` | `?dir=&type=[&stamp=]` | 1 枚の図の「その版」と「直前の版」の本文を組で返す (全文差分の材料) |
 | `GET /peek-dirs` | — | 保存フォルダの候補を覗く |
 | `GET /git-status` | `?dir=` | 保存先が Git 作業木なら `{repo, branch, ahead, behind, changes:[{code, file, name}]}`。作業木でなければ `{repo:false}`。読むだけで通信しない |
 | `GET /git-log` | `?dir=&file=` | その図 (file 省略で保存先全体) に関係するコミット `{commits:[{hash, short, author, date, message, tags, head, added, removed}]}` |
@@ -102,19 +100,6 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `POST /cohort-ack` | `{dir, entries}` | 確認済みの組の台帳を丸ごと置き換える |
 | `POST /file-roles` | `{dir, roles}` | `_roles.json` を丸ごと置き換える |
 | `POST /export-zip` | `{dir, name, base64}` | 書き出した zip を保存フォルダに置き、書けたバイト数を返す |
-
-`GET /version-search` の `q` は空白区切りの語 (最大 6 語)。返りは
-`{terms, dir, scanned, files:[{name, versions:[{stamp, current, counts, lines}]}]}` で、
-版は古い順・最後の 1 件が `current: true` (まだ控えになっていない今の中身。更新時刻 `mtime` (UTC) 付き)。
-`ci=1` を付けると大文字小文字を無視する (▤ 影響を見る の「版履歴を症状の語で探す」が使う)。
-`counts` は語ごとの出現数、`lines` は当たった行だけ (1 版 40 行まで)。本文は返さない。
-どの版で増えたか・混在がどこから始まったかの判定は GUI 側 (`src/core/blame-point.js`)。
-
-`GET /version-diff` は混入点の行から 1 クリックで開く全文差分の材料。返りは
-`{name, dir, stamp, current, prev, first, before, after}` で、`before` が直前の版・
-`after` がその版の本文 (全文)。`stamp` を省くと「いまの中身」と最新の控えを比べる。
-最古の控えを指したときは直前が無いので `prev: null` / `first: true` / `before: ""`。
-行の突き合わせと畳みは GUI 側 (`src/core/version-fulldiff.js`、LCS は `version-diff.js`)。
 
 保存中の svg が今の puml から作られたかは、`GET /autosave` の `svgSource` (svg に刻まれた印) と
 `hash` (今の puml の sha1) を比べる。印が無い svg は `POST /verify-svg` が描き直して確かめる。

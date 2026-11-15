@@ -3250,8 +3250,7 @@ window.MA.modules.plantumlSequence = (function() {
               '<input id="seq-edit-stereotype" type="text" value="' + escHtml(msgParts.stereotype) + '" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
             '</div>' +
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-msg-label-rle"></div></div>' +
-            // メッセージ名は同じ部品の状態遷移図・
-            // クラス図と同じ綴りでなければならない。名前帳から選べば最初から揃う。
+            // 正式表記のチップ (登録簿に語があるときだけ。役割 method / event には出ない)。
             P.vocabPickerHtml('seq-edit-msg-vocab', { roles: ['method', 'event'], callSuffix: true }) +
             actionBarHtml(mm.line, 'message');
           var mln = mm.line;

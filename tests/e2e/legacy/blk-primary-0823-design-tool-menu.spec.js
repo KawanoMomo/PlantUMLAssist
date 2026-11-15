@@ -26,7 +26,7 @@ test('ツールボタンで分類のメニューが開き、Ctrl+K の注記が�
   await expect(menu).toBeVisible();
   // 「渡す」(引き継ぎ・納品) は TICKET-owner-20261115-1828-prune で外した。
   await expect(menu.locator('.tool-menu-cat .tool-cat-name')).toHaveText([
-    '図をつくる', '書き換える', '探す', 'レビュー', // 確かめる は TICKET-owner-20261115-1841-prune で外した
+    '図をつくる', '書き換える', 'レビュー', // 確かめる は 1841-prune、探す は TICKET-owner-20261115-2140-prune で外した
   ]);
   await expect(menu.locator('.tool-menu-note')).toHaveText('Ctrl+K でも引けます');
   await expect(page.locator('#btn-tab-tools')).toHaveAttribute('aria-expanded', 'true');
@@ -103,7 +103,9 @@ test('分類はホバーで切り替わり、どの分類もパネル内をス�
   await expect(page.locator('#tool-menu-files-note')).toContainText('FILES の読むだけ');
 
   // パネルの中は溢れない (1 画面に収まる)
-  for (const key of ['make', 'edit', 'find', 'review']) {
+  // 「探す」は TICKET-owner-20261115-2140-prune で外した
+  await expect(page.locator('.tool-menu-cat[data-group="find"]')).toHaveCount(0);
+  for (const key of ['make', 'edit', 'review']) {
     await page.locator('.tool-menu-cat[data-group="' + key + '"]').hover();
     const over = await menu.evaluate((el) => el.scrollHeight - el.clientHeight);
     expect(over).toBeLessThanOrEqual(1);
@@ -116,10 +118,10 @@ test('絞り込み欄は全分類を横断し、キーボードだけで実行�
   await expect(filter).toBeFocused();
   await expect(page.locator('.tool-menu-note')).toHaveText('Ctrl+K でも引けます');
 
-  // 「書き換える」の項目も「探す」の項目も、分類を開かずに候補へ出る
-  await filter.fill('部品名');
+  // 「図をつくる」の項目も「レビュー」の項目も、分類を開かずに候補へ出る
+  await filter.fill('図');
   const hits = page.locator('.tool-menu-hits .tool-menu-item');
-  await expect(hits).toHaveCount(3);
+  await expect(hits).toHaveCount(2);
   await filter.fill('前回保存からの差分');
   await expect(page.locator('.tool-menu-hits [data-target="btn-tab-diff"]')).toBeVisible();
 
@@ -131,8 +133,8 @@ test('絞り込み欄は全分類を横断し、キーボードだけで実行�
 
 test('←→ で分類、↑↓ で項目を選び、Enter で開く', async ({ page }) => {
   await page.locator('#btn-tab-tools').click();
-  // 図をつくる → 書き換える → 探す → レビュー (確かめる は TICKET-owner-20261115-1841-prune で外した)
-  for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowRight');
+  // 図をつくる → 書き換える → レビュー (確かめる は 1841-prune、探す は 2140-prune で外した)
+  for (let i = 0; i < 2; i += 1) await page.keyboard.press('ArrowRight');
   await expect(page.locator('.tool-menu-cat[data-group="review"]'))
     .toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.tool-menu-group[data-group="review"]')).toBeVisible();
@@ -141,10 +143,7 @@ test('←→ で分類、↑↓ で項目を選び、Enter で開く', async ({ 
   await page.keyboard.press('ArrowDown');
   await expect(page.locator('.tool-menu-item[data-target="btn-tab-review"]'))
     .toHaveAttribute('aria-current', 'true');
-  // 先頭から ↑ で末尾 (この図の継承元)、もう 1 回 ↑ で 前回保存からの差分
-  await page.keyboard.press('ArrowUp');
-  await expect(page.locator('.tool-menu-item[data-target="btn-tab-lineage"]'))
-    .toHaveAttribute('aria-current', 'true');
+  // 先頭から ↑ で末尾 (前回保存からの差分。この図の継承元 は 2140-prune で外した)
   await page.keyboard.press('ArrowUp');
   await expect(page.locator('.tool-menu-item[data-target="btn-tab-diff"]'))
     .toHaveAttribute('aria-current', 'true');
