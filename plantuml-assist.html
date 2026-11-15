@@ -3715,7 +3715,7 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
   background: var(--bg-primary);
 }
 #compare-pane[hidden] { display: none; }
-/* 見比べ方のタブ。差分タブの間は参照側 (選択・整合チェック・対応表…) を丸ごと畳む */
+/* 見比べ方のタブ。差分タブの間は参照側 (選択・整合チェック…) を丸ごと畳む */
 #compare-modes {
   display: flex;
   gap: 4px;
@@ -4987,7 +4987,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #statusbar button[data-dot="bad"]  .sb-dot { color: var(--accent-red); }
 
 /* 下端に寄せた件数表示。整合と同じ見た目に揃える */
-#status-rename {
+#status-livediff, #status-rename {
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -4997,7 +4997,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   padding: 0 6px;
   cursor: pointer;
 }
-#status-rename:hover { background: var(--bg-tertiary); }
+#status-livediff:hover, #status-rename:hover { background: var(--bg-tertiary); }
 #status-rename.has-open {
   color: var(--accent-orange);
   border-color: var(--accent-orange);
@@ -5671,7 +5671,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <span id="status-save-result" role="status" style="color:var(--text-secondary);"></span>
     <span class="sb-spacer" aria-hidden="true"></span>
     <!-- 下端の「± 差分」「● 前回保存版 ＋a −b」は TICKET-owner-20261115-2141-prune で外した
-         (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ) -->
+         (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。
+         保存すると内容が大きく消える形のときだけ、守りとして警告の札を出す (押すと消える行と「戻す」) -->
+    <button type="button" id="status-livediff" data-livediff="none" hidden>前回保存版</button>
     <!-- 部品名の統一が済んでいるか。過去に当てた
          置換の組に旧称が残っていないかを常時数え、済んでいるなら ⇄ 一括置換を
          開いて空打ちする手順そのものを要らなくする -->
@@ -5932,9 +5934,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/audit-scope.js"></script>
 <script src="src/core/blank-doc.js"></script>
 <script src="src/core/text-sync.js"></script>
-<script src="src/core/domain-cohort.js"></script>
 <script src="src/core/finding-variant.js"></script>
-<script src="src/core/domain-verdict.js"></script>
 <script src="src/core/version-history.js"></script>
 <script src="src/core/version-diff.js"></script>
 <script src="src/core/version-fulldiff.js"></script>

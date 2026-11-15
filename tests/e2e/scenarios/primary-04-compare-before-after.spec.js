@@ -14,15 +14,13 @@ const { shotOut, gotoApp } = require('../helpers');
 const S = require('./_scenario');
 
 
-// BLK-owner-20260923-1509-prune: 「並べる」面はタブ列の「並べて比較」1 つになった。
-// 旧 ⇔ 並べて見る (#btn-tab-compare) はその枠の相手「別タブの図」になったので、
-// 台本の手順も 「並べて比較を開く → 相手を選ぶ」を通る。見る中身は変わらない。
+// TICKET-owner-20261115-2141-prune: 2 枚を比べる入口は「この図の履歴」の行の「比較」1 つになり、
+// 参照ペインの相手を「別タブの図」に選び直す口は外した。この spec が見るのはペインの中身
+// (変更前の控え・書き込み履歴の回・± 差分) なので、ペインはその開き口 (toggleCompareView) で開く。
+// 履歴の「比較」から開く道は junior-1-open-own-diagram の「この図の履歴の「比較」」が守る。
 async function openCompareTabs(p) {
-  await p.waitForSelector('#btn-tab-senior');
-  if (await p.locator('#senior-pane').isHidden()) {
-    await p.locator('#btn-tab-senior').click();
-  }
-  await p.locator('#senior-target-tabs').click();
+  await p.waitForFunction(() => typeof window.toggleCompareView === 'function');
+  await p.evaluate(() => { window.toggleCompareView(true, 'ref'); });
   await p.waitForSelector('#compare-pane:not([hidden])');
 }
 
@@ -202,45 +200,29 @@ test('手順4 保存フォルダへ直接書いた回を、後から履歴で選
   await expect(page2.locator('#compare-hist-empty')).toBeVisible();
   await page2.close();
 });
-
 // BLK-owner-20260924-1712-prune: 「前回保存版と比べる」入口が Ctrl+K に 3 行並び (うち 2 行は同じ枠を開く)、
-// 下端の「± 差分」は変わった図ではなく開いている図の総数を出し、変更サマリボードの見出しは基準を 3 通りに言っていた。
-test('手順4 前回保存からの差分は変わった図の数で出て、Ctrl+K は 1 行', async ({ page }) => {
+// 下端の「± 差分」は変わった図ではなく開いている図の総数を出していた。
+// TICKET-owner-20261115-2141-prune: タブ列・下端の「± 差分」と「● 前回保存版」の札、Ctrl+K「前回保存からの差分」を外し、
+// 前回保存版と比べる入口を「この図の履歴」の行の「比較」1 つにした。Ctrl+K の「前回保存」はこの図の履歴の 1 行を引く。
+test('手順4 前回保存版と比べる入口は「この図の履歴」1 つで、Ctrl+K も 1 行', async ({ page }) => {
   const A = '@startuml\nparticipant SpiDrv\nSpiDrv -> Reg : write(CR1)\n@enduml';
-  const B = '@startuml\nparticipant AdcDrv\nAdcDrv -> Reg : read(DR)\n@enduml';
-  const C = '@startuml\nclass SpiDrv\nclass AdcDrv\n@enduml';
-  // 保存先を決めていない状態で開く。bootPlain は localStorage を空にするだけで、server の
-  // .assist-prefs.json (全体実行で先に走った junior-03 が保存先フォルダを書く) を引き継ぐ。
-  // 引き継ぐと直した図が 1 秒後に自動でフォルダへ書かれて「前回保存」が今になり、差分 0 で落ちていた。
   await S.bootDownloadMode(page);
   await S.typeDsl(page, A);
-  await page.locator('#btn-tab-new').click();
-  await S.typeDsl(page, B);
-  await page.locator('#btn-tab-new').click();
-  await S.typeDsl(page, C);
-  // 3 枚の今を前回保存の基準にしてから、2 枚だけ直す。
-  await page.locator('#btn-tab-diff').click();
-  await page.locator('#diff-mark-all').click();
-  await expect(page.locator('#diff-panel .diff-head')).toContainText('変更前 = 前回保存 (');
-  await expect(page.locator('#diff-panel .diff-head')).not.toContainText('基準');
-  await page.locator('body').click({ position: { x: 5, y: 5 } });
-  await S.typeDsl(page, C.split('SpiDrv').join('Spi_Driver'));
-  await page.locator('#tab-bar .tab').first().click();
-  await page.waitForTimeout(200);
-  await S.typeDsl(page, A.split('SpiDrv').join('Spi_Driver'));
 
-  // 到達条件その1: 下端の差分は変わった図の数 (2)。開いている図の総数 (3) を拾わない。
-  await expect(page.locator('#status-diff')).toHaveText(/差分 2$/);
+  // 到達条件その1: タブ列・下端に「± 差分」「前回保存版」の札は無い。
+  await expect(page.locator('#btn-tab-diff')).toHaveCount(0);
+  await expect(page.locator('#status-diff')).toHaveCount(0);
+  // 「前回保存版」の札は、保存すると内容が大きく消える形のときだけ出る守り (普通の増減では出ない)。
+  await expect(page.locator('#status-livediff')).toBeHidden();
 
-  // 到達条件その2: Ctrl+K で「前回保存」と打つと、変わった図の一覧の 1 行 (分類はレビュー)。
-  // 「前回保存版と比較」の行は TICKET-owner-20261115-2141-prune で外した (前の版と比べるのは この図の履歴 から)。
+  // 到達条件その2: Ctrl+K で「前回保存」と打つと、この図の履歴を開く 1 行だけ。
   await page.keyboard.press('Control+k');
   await page.waitForSelector('#cp-modal');
   const input = page.locator('#cp-input');
   await input.fill('前回保存');
-  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:tab-diff"]')).toHaveCount(1);
+  await expect(page.locator('#cp-list .cp-item[data-cp-id$=":tab-versions"]')).toHaveCount(1);
+  await expect(page.locator('#cp-list .cp-item[data-cp-id$=":tab-diff"]')).toHaveCount(0);
   await expect(page.locator('#cp-list .cp-item[data-cp-id$=":compare-before"]')).toHaveCount(0);
   await expect(page.locator('#cp-list .cp-item[data-cp-id="command:livediff"]')).toHaveCount(0);
   await page.keyboard.press('Escape');
-  // (変更サマリボードの「変更前 =」は TICKET-owner-20261115-1828-prune で外した)
 });

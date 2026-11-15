@@ -14,23 +14,11 @@ async function openFolder(page) {
 }
 
 
-// BLK-owner-20260923-1509-prune: 「並べる」面はタブ列の「並べて比較」1 つになった。
-// 旧 ⇔ 並べて見る (#btn-tab-compare) はその枠の相手「別タブの図」になったので、
-// 台本の手順も 「並べて比較を開く → 相手を選ぶ」を通る。見る中身は変わらない。
-async function openCompareTabs(p) {
-  await p.waitForSelector('#btn-tab-senior');
-  if (await p.locator('#senior-pane').isHidden()) {
-    await p.locator('#btn-tab-senior').click();
-  }
-  await p.locator('#senior-target-tabs').click();
-  await p.waitForSelector('#compare-pane:not([hidden])');
-}
-
 const DIR = S.dirFor(__filename);
 
 // 読み込み直した直後の画面は init (保存先の取り込み /prefs を最大 3 秒待って走る) の前の骨格で、
 // 札やボタンは見えていても押しても何も起きない。全体実行 (--workers=4) で /prefs が遅い回に
-// 部品ビュー・並べて比較の手順が落ちていたので、reload の後は押せるようになった印を待つ。
+// 手順が落ちていたので、reload の後は押せるようになった印を待つ。
 
 // BLK-junior-20260909-0603-wish: 手本は `persona-data\primary` にあり、自分のタブに
 // 無い。覗く画面は全面のモーダルなので、開くと書きかけが見えず、閉じると手本が

@@ -32,7 +32,8 @@ test('札を 1 クリックで畳んだ一覧が開く', async ({ page }) => {
   await expect(page.locator('#tool-menu')).toBeVisible();
   // 「渡す」(引き継ぎ・納品) は TICKET-owner-20261115-1828-prune で外した。
   await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
-    '図をつくる', '書き換える', 'レビュー', // 確かめる は 1841-prune、探す は TICKET-owner-20261115-2140-prune で外した
+    // 確かめる は 1841-prune、探す は TICKET-owner-20261115-2140-prune、レビュー は 2141-prune で外した
+    '図をつくる', '書き換える',
   ]);
 });
 
@@ -64,6 +65,6 @@ test('「ツール ▾」を出す設定の人には札は出ない (入口は 1
   await page.reload();
   await page.waitForSelector('#preview-svg');
   // タブ列に戻るのは畳んでいた道具 (引き継ぎ・納品は TICKET-owner-20261115-1828-prune で外した)。
-  await expect(page.locator('#btn-tab-diff')).toBeVisible();
+  await expect(page.locator('#btn-tab-lines')).toBeVisible();
   await expect(page.locator('#btn-tab-tools-mini')).toBeHidden();
 });

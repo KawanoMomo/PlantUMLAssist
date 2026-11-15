@@ -32,12 +32,20 @@ async function typeDsl(page, text) {
   await page.waitForTimeout(1200);
 }
 
+// TICKET-owner-20261115-2141-prune: 参照ペインの相手は「この図の履歴」の版 (`{名前}@{刻印}` のタブ) だけになり、
+// 別のタブの図は相手に選べない。参照図のタブをこの図の版の名前にして突き合わせる。
 async function twoTabsThenCompare(page, mine) {
   await gotoApp(page);
   await typeDsl(page, SENIOR);
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(600);
   await typeDsl(page, mine);
+  await page.evaluate(() => {
+    const WS = window.MA.workspace;
+    const active = WS.getActive();
+    const ref = WS.list().filter((d) => d.id !== active.id)[0];
+    WS.rename(ref.id, active.name + '@20261116-0700');
+  });
   await openCompareTabs(page);
   await expect(page.locator('#compare-pane')).toBeVisible();
   await expect(page.locator('#compare-svg svg')).toBeVisible({ timeout: 15000 });

@@ -28,7 +28,7 @@ window.MA.toolMenu = (function() {
     // 「探す」(図をまたぐ調べ物) の分類は TICKET-owner-20261115-2140-prune で中身ごと外した。
     // 図をまたぐ操作は「書き換える」の ⇄ 一括置換 1 本。
     // 「確かめる」(図をまたぐ監査) の分類は TICKET-owner-20261115-1841-prune で中身ごと外した。
-    // 「レビュー」の分類 (基準の図との指摘・前回保存からの差分) は TICKET-owner-20261115-2141-prune で
+    // 「レビュー」の分類 (基準の図に照らした指摘の窓・前回保存からの差分) は TICKET-owner-20261115-2141-prune で
     // 中身ごと外した。2 枚を比べるのは「この図の履歴」の行の「比較」1 つ (FILES のファイルの右クリック)。
     // zip にして渡す入口は Export ▾ の「渡す」(資料セット) 1 か所。このメニューには出さない。
   ];
@@ -43,7 +43,7 @@ window.MA.toolMenu = (function() {
     { key: 'file', title: 'ファイル', items: [
       { id: 'btn-tab-draft',    label: '一時控えにする', group: 'ファイルの右クリック' },
       { id: 'btn-tab-versions', label: 'この図の履歴を見る', group: 'ファイルの右クリック' },
-      // 覗く窓 (このフォルダの図を調べる…) は TICKET-owner-20261115-2141-prune で外した。
+      // フォルダの図を覗く窓は TICKET-owner-20261115-2141-prune で外した。
     ] },
   ];
   // 前の版と比べるのは「この図の履歴」の行の「比較」から (TICKET-owner-20261115-2141-prune)。
@@ -65,8 +65,9 @@ window.MA.toolMenu = (function() {
 
   // メニューには載るが、タブ列のボタンではないもの (下端ステータスの札・モーダルの中の
   // ボタン)。畳む対象に数えると「他 N 件」の N が実際に消えた数とずれるので外す。
-  // 下端の「前回保存版」の札 (status-livediff) は TICKET-owner-20261115-2141-prune で外したので、今は無い。
-  var NOT_IN_TAB_BAR = [];
+  // 下端の「前回保存版」の札 (status-livediff) はメニューから外し (TICKET-owner-20261115-2141-prune)、
+  // 消える向きの警告のときだけ出る守りになった。
+  var NOT_IN_TAB_BAR = ['status-livediff'];
 
   // design 9b: 絞り込み欄の右端に出す注記。パネルが 2 段になって幅が要るので短くする。
   var NOTE = 'Ctrl+K でも引けます';
@@ -299,7 +300,7 @@ window.MA.toolMenu = (function() {
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // メニューの中身。badges は { 'btn-tab-diff': '2' } のように件数を持つものだけ渡す
+  // メニューの中身。badges は { 'btn-tab-lines': '2' } のように件数を持つものだけ渡す
   // (タブ列のボタン文字から拾った数字。0 件・未計算のものは付けない)。
   function itemHtml(it, badges) {
     var badge = (badges || {})[it.id];

@@ -171,22 +171,23 @@ test('手順5 前回保存版から何行消えるかが、保存を押す前に
   await S.typeDsl(page, BIG_CLASS.replace('+Init()', '+Start()'));
   await page.waitForTimeout(400);
   await expect(chip).toHaveAttribute('data-livediff', 'changed');
-  // 変わった行数 (増 1 + 減 1) が件数として 1 種類の形で出る。
-  await expect(chip).toBeVisible();
-  await expect(chip).toHaveText('● 前回保存版 2');
+  // TICKET-owner-20261115-2141-prune: 変わった行数を常時出す札 (比較の入口) は外した
+  // (前回保存版と比べるのは「この図の履歴」の比較)。普通の増減では札は出ない。
+  await expect(chip).toBeHidden();
 
   // 事故の形: 中身が雛形に戻ってしまった (77 行 → 4 行と同じ向き)。
   await S.typeDsl(page, TEMPLATE_CLASS);
   await page.waitForTimeout(400);
-  // 到達条件その2: 保存を押す前に、消える側だと分かる印が出る。
+  // 到達条件その2: 保存を押す前に、消える側だと分かる印が出る (図を失わないための守りなので、この形のときだけ出す)。
   await expect(chip).toHaveAttribute('data-livediff', 'shrink');
+  await expect(chip).toBeVisible();
   // 警告は文字ではなく点の色で出す (文字色・形は他の札と同じ)。
   await expect(chip).toHaveAttribute('data-dot', 'bad');
   await expect(chip).toHaveAttribute('title', /いま保存すると .* 行に減ります/);
 
   // 到達条件その3: 押すと前回保存版と現在が並び、消える行が名指しされる (1 操作)。
-  // BLK-owner-20260923-1307-prune: 並べる画面は ⇔ 並べて見る の ± 差分タブ 1 つに寄せた。
-  // 札はその画面を開く入口で、開いた先で見えるもの (警告・消える行・戻す) は変わらない。
+  // BLK-owner-20260923-1307-prune: 並べる画面は参照ペインの ± 差分タブ 1 つに寄せた。
+  // 警告の札はその画面を開く入口で、開いた先で見えるもの (警告・消える行・戻す) は変わらない。
   await chip.click();
   const panel = page.locator('#compare-pane');
   await expect(panel).toBeVisible();

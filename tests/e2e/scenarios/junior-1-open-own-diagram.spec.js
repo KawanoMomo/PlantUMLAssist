@@ -307,28 +307,27 @@ async function saveDirNow(page) {
   });
 }
 
-test('手順1 先輩の図を、保存先を動かさず「読むだけ」から右の枠に並べて読める', async ({ page }) => {
+test('手順1 先輩の図を、保存先を動かさず「読むだけ」から右の枠に出して読める', async ({ page }) => {
   // 自分の図と、先輩のフォルダ (隣のフォルダ) を用意する。
   await putFile(page, 'diagram1', CLS);
   await putIn(page, SENIOR_DIR, 'driver_common_class', SENIOR_CLASS);
   await openFolder(page);
 
-  // 到達条件その1: 保存先の一覧に参照タブ列は無く、隣のフォルダの行き先を 1 行で案内する。
+  // 到達条件その1: 保存先の一覧に参照タブ列も「隣のフォルダ」の案内も無い (入口は「読むだけ」節 1 か所。
+  // 案内は TICKET-owner-20261115-2141-prune で外した)。
   await expect(page.locator('#folder-tabbar')).toHaveCount(0);
   await expect(page.locator('#folder-tab-add')).toHaveCount(0);
-  const hint = page.locator('#folder-ro-hint');
-  await expect(hint).toHaveText('隣のフォルダは FILES の『読むだけ』で開けます');
+  await expect(page.locator('#folder-ro-hint')).toHaveCount(0);
   await expect(page.locator('#folder-panel .folder-item[data-file-name="diagram1"]')).toBeVisible();
 
-  // 到達条件その2: 案内を押すと一覧が閉じ、FILES の「読むだけ」節が開いて見出しに移る。
-  await hint.click();
-  await expect(page.locator('#folder-panel.is-list')).toHaveCount(0);
+  // 到達条件その2: 一覧を閉じ、FILES の「読むだけ」節を開くと隣のフォルダが並ぶ。
+  await page.locator('#folder-list-close').click();
+  await page.locator('#files-sec-readonly').click();
   await expect(page.locator('#files-sec-readonly')).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('#files-sec-readonly')).toBeFocused();
   const folder = page.locator('#files-ro-list .files-ro-folder[data-ro-name="junior-1-senior-ref"]');
   await expect(folder).toBeVisible();
 
-  // 到達条件その3: フォルダの行 → 図の行を押すと、先輩の図が読むだけで右の枠に並ぶ。
+  // 到達条件その3: フォルダの行 → 図の行を押すと、先輩の図が読むだけで右の枠に出る。
   await folder.click();
   const roFile = page.locator('#files-ro-list .files-ro-file[data-ro-dir$="junior-1-senior-ref"][data-file-name="driver_common_class"]');
   await expect(roFile).toBeVisible();
@@ -336,7 +335,7 @@ test('手順1 先輩の図を、保存先を動かさず「読むだけ」から
   await expect(page.locator('#senior-pane')).toBeVisible();
   // 到達条件その4: 粒度差 (先輩は Timer_Driver にメソッド 6 つ) を並べたまま読める。
   await expect(page.locator('#senior-dsl')).toContainText('+GetTick()');
-  await expect(folder).toContainText('比較中');
+  await expect(page.locator('#senior-notice')).toContainText('driver_common_class');
 
   // 到達条件その5: ここまでで保存先は 1 度も動いていない。
   expect(await saveDirNow(page)).toBe(DIR);
