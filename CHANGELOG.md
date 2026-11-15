@@ -1,3 +1,4 @@
+- TICKET-releaser-20261115-1820-1: primary 手順 3 (state-1 に状態を 1 つ足し、図で終点を押して遷移を 2 本つなぐ) を scenario tests/scenarios/primary-3-s1.spec.js で確かめる。1 操作 1 行・元の行は 1 字も動かない・描ける
 - TICKET-releaser-20261115-1555-1: tests/e2e/legacy の赤 21 ファイルを単独で回し直して分けた (負荷 14 ファイルは緑、期待の古さ 7 ファイルを今の画面に合わせた: 前回の図を開き直す前提・足した後に欄へ戻る手・関係の線の当たり・保存時チェックの SVG 無。枠が無いと黙って skip していた component の 2 ファイルは赤になるようにした)。退行は 0。readme-screenshots は docs/images を書き換えず test-results に撮る
 - TICKET-builder-20261115-1635-1: `scripts\verify.ps1` を PUA_PORT 無しで呼んでも、試験サーバを OS の空きポートから起こし (他ループの 87xx の帯を踏まない)、e2e の再試行で trace を取らない。primary-09 の資料セットの scenario は対象の枚数が出てから登録する (全体実行の負荷の下で、読み込み前に押して前の test のセットを掴む赤を除いた)
 - TICKET-human-20261115-0900-1: 入口 `scripts/build.ps1` `test.ps1` `verify.ps1` (summary.json に scenario ごとの合否・描画までの ms・差分行数) と、台本の scenario `tests/scenarios/` (junior-1-s1・primary-2-s1・reviewer-3) で準備・unit・実機の操作をまとめて確かめられる
