@@ -112,57 +112,6 @@ const GPIO_OTHER = [
   'GpioDrv -> Hw_Ctrl : Gpio_Init', '@enduml',
 ].join('\n');
 
-async function openCohort(page) {
-  await page.locator('#btn-tab-peek').click();
-  await page.waitForSelector('#peek-modal');
-  await page.locator('#peek-cohort-toggle').click();
-  await page.waitForSelector('#peek-cohort .cohort-pair');
-}
-
-test('手順5.5 ドメインの食い違いは、突合の場で「統一する」と決めて自分の図に反映できる', async ({ page }) => {
-  await S.bootWithSaveDir(page, MINE_DIR);
-  await S.clearDir(page, MINE_DIR);
-  await S.clearDir(page, OTHER_DIR);
-  await S.putDoc(page, MINE_DIR, 'gpio_init_sequence', GPIO_MINE);
-  await S.putDoc(page, OTHER_DIR, 'gpio_init_sequence', GPIO_OTHER);
-  await reloadReady(page);
-  await page.waitForSelector('#btn-tab-peek');
-
-  await openCohort(page);
-  // 到達条件その1: 相手を探さなくても、食い違いが組として出る。
-  const pair = page.locator('#peek-cohort .cohort-pair').first();
-  await expect(pair).toHaveAttribute('data-cohort-matched', '0');
-  await expect(pair.locator('.cohort-verdict-btn[data-verdict="shared"]')).toBeVisible();
-
-  // 到達条件その2: 押すだけで自分の図の綴りが相手に揃い、その場で結果が読める。
-  await pair.locator('.cohort-verdict-btn[data-verdict="shared"]').click();
-  await page.waitForTimeout(2000);
-  const saved = (await S.readDoc(page, MINE_DIR, 'gpio_init_sequence')) || '';
-  expect(saved).toContain('participant GpioDrv');
-  expect(saved).not.toContain('Gpio_Driver');
-  // 到達条件その3: 決めたことがファイルに残り、次に突合したとき判断済みと分かる。
-  expect(saved).toContain("' domain-verdict: shared gpio vs junior");
-  expect(await S.readDoc(page, OTHER_DIR, 'gpio_init_sequence')).toBe(GPIO_OTHER);
-});
-
-test('手順5.5 「別物」と決めたときは title に明示され、部品名は動かない', async ({ page }) => {
-  await S.bootWithSaveDir(page, MINE_DIR);
-  await S.clearDir(page, MINE_DIR);
-  await S.clearDir(page, OTHER_DIR);
-  await S.putDoc(page, MINE_DIR, 'gpio_init_sequence', GPIO_MINE);
-  await S.putDoc(page, OTHER_DIR, 'gpio_init_sequence', GPIO_OTHER);
-  await reloadReady(page);
-  await page.waitForSelector('#btn-tab-peek');
-
-  await openCohort(page);
-  await page.locator('#peek-cohort .cohort-pair').first()
-    .locator('.cohort-verdict-btn[data-verdict="separate"]').click();
-  await page.waitForTimeout(2000);
-  const saved = (await S.readDoc(page, MINE_DIR, 'gpio_init_sequence')) || '';
-  expect(saved).toContain('title GPIO 初期化シーケンス (junior の gpio とは別のドメイン)');
-  expect(saved).toContain('participant Gpio_Driver');
-  expect(saved).toContain("' domain-verdict: separate gpio vs junior");
-});
 
 // BLK-reviewer-20260914-1706-wish: 突合の画面は「primary だけ / junior だけ」の 2 列までで、
 // IRQCtrl と Irq_Ctrl が同じ部品の別表記であることは読む側が目で結び直していた
@@ -175,30 +124,6 @@ const IRQ_OTHER = ['@startuml', 'title IRQ 初期化シーケンス',
   'participant Irq_Ctrl', 'participant Clock_Ctrl', 'participant Hw_Ctrl',
   'Irq_Ctrl -> Clock_Ctrl : Irq_Init', '@enduml'].join('\n');
 
-test('手順5.5 表記揺れの部品名が、どちらの綴りと対応するかまで 1 つの表で読める', async ({ page }) => {
-  await S.bootWithSaveDir(page, MINE_DIR);
-  await S.clearDir(page, MINE_DIR);
-  await S.clearDir(page, OTHER_DIR);
-  await S.putDoc(page, MINE_DIR, 'irq_init_sequence', IRQ_MINE);
-  await S.putDoc(page, OTHER_DIR, 'irq_init_sequence', IRQ_OTHER);
-  await reloadReady(page);
-  await page.waitForSelector('#btn-tab-peek');
-
-  await openCohort(page);
-  const pair = page.locator('#peek-cohort .cohort-pair').first();
-  // 到達条件 1: 揺れている組が、探さずに 1 行として出る。
-  const rows = pair.locator('.cohort-pair-row[data-pair-kind="variant"]');
-  await expect(rows).toHaveCount(2);
-  // 組は「どちらのフォルダが左か」に依らず、2 つの綴りが 1 行に並ぶ。
-  const pairs = await rows.evaluateAll((els) => els.map(
-    (e) => [e.getAttribute('data-pair-a'), e.getAttribute('data-pair-b')].sort().join('⇔')).sort());
-  expect(pairs).toEqual(['ClockCtrl⇔Clock_Ctrl', 'IRQCtrl⇔Irq_Ctrl']);
-  // 到達条件 2: 何を見ての件数かが 1 行で出る (一致している部品も母数に入る)。
-  await expect(pair.locator('.cohort-pairs-head')).toContainText('表記揺れ 2');
-  await expect(pair.locator('.cohort-pairs-head')).toContainText('一致 1');
-  // 到達条件 3: 表記揺れと「似ているだけ」を取り違えない。
-  await expect(rows.first()).toContainText('表記揺れ');
-});
 
 // BLK-primary-20260912-2206-wish: reviewer の最重要指摘 (driver_common_class /
 // plantuml-class / diagram1 の 3 枚が雛形と完全一致) を反映する手順。
@@ -527,78 +452,4 @@ test.describe('手順5.5 空洞化した図を、戻す先を探さずに戻す'
     await expect(status).toBeVisible({ timeout: 10000 });
     await expect(status).toContainText('減っていません');
   });
-});
-
-// BLK-primary-20260925-0932-wish: 指摘.md の「junior × primary ドメイン突合 (spi)」は、部品名が総入れ替えの 2 枚で、
-// 名前の形では組が 1 つもできず「揃える」行が出なかった。並べて比較の対応表で部品名を手で結び、
-// 結んだ組を同じ「揃える」行から 1 回で自分 (primary) の図に反映する。junior の図は変わらない。
-const ALIGN_ROOT = DIR + '-align';
-const ALIGN_MINE_DIR = ALIGN_ROOT + '/primary';
-const ALIGN_OTHER_DIR = ALIGN_ROOT + '/junior';
-const SPI_PRIMARY = ['@startuml', 'title SPI_Init_Sequence', 'actor App',
-  'participant Spi_Driver', 'participant SpiRegs', 'participant Clock_Controller', 'participant Irq_Controller',
-  'App -> Spi_Driver : Spi_Init()', 'Spi_Driver -> Clock_Controller : EnableClock()',
-  'Spi_Driver -> SpiRegs : WriteConfig()', 'Spi_Driver -> Irq_Controller : EnableIrq()',
-  'Irq_Controller --> Spi_Driver : Ack', 'Spi_Driver --> App : InitDone', '@enduml'].join('\n');
-const SPI_JUNIOR = ['@startuml', 'title SPIドライバ初期化シーケンス', 'actor App',
-  'participant SpiDrv', 'participant SpiRegs', 'participant Clock_Ctrl', 'participant IRQCtrl',
-  'App -> SpiDrv : Spi_Init()', 'SpiDrv -> Clock_Ctrl : EnableClock()',
-  'SpiDrv -> SpiRegs : WriteConfig()', 'SpiDrv -> IRQCtrl : EnableIrq()',
-  'IRQCtrl --> SpiDrv : Ack', 'SpiDrv --> App : InitDone', '@enduml'].join('\n');
-
-test('手順5.5 並べて比較の対応表で部品名を手で結び、揃える行から 1 回で自分の図に反映できる', async ({ page }) => {
-  await S.bootWithSaveDir(page, ALIGN_MINE_DIR);
-  await S.clearDir(page, ALIGN_MINE_DIR);
-  await S.clearDir(page, ALIGN_OTHER_DIR);
-  await S.putDoc(page, ALIGN_MINE_DIR, 'spi_init_sequence', SPI_PRIMARY);
-  await S.putDoc(page, ALIGN_OTHER_DIR, 'spi_sequence', SPI_JUNIOR);
-  await reloadReady(page);
-  await S.openFolderItem(page, 'spi_init_sequence');
-  await S.overwriteOpenedFile(page);
-
-  // 比較相手 = 別のフォルダ (junior)。相手は同名ファイルでなく、同じ部品 (spi)・同じ図種の spi_sequence。
-  await S.compareFolder(page, 'junior');
-  if (await page.locator('#senior-pane').isHidden()) await page.locator('#btn-tab-senior').click();
-  await page.locator('#senior-target-tabs').click();
-  await page.waitForSelector('#compare-pane:not([hidden])');
-  await expect(page.locator('#xf-file')).toHaveValue('spi_sequence');
-  await page.locator('#btn-map-run').click();
-  await expect(page.locator('#map-list')).toBeVisible();
-
-  // 名前の形で結べない組 (Spi_Driver / SpiDrv など) を、対応表の行で手で結ぶ。
-  const pickFor = async (mineName, refName) => {
-    const row = page.locator('#map-list .map-row[data-map-type="state"][data-map-match="mine-only"]')
-      .filter({ has: page.locator('.map-mine', { hasText: new RegExp('^' + mineName + '$') }) });
-    if (await row.count()) await row.locator('.map-pick').selectOption(refName);
-  };
-  await pickFor('Spi_Driver', 'SpiDrv');
-  await pickFor('Clock_Controller', 'Clock_Ctrl');
-  await pickFor('Irq_Controller', 'IRQCtrl');
-
-  // 到達条件その1: 手で結んだ組も、機械が組んだ組も、同じ「揃える」行に並ぶ。
-  const align = page.locator('#map-align');
-  await expect(align).toBeVisible();
-  const froms = await align.locator('.map-align-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-align-from')).sort());
-  expect(froms).toEqual(['Clock_Controller', 'Irq_Controller', 'Spi_Driver']);
-  // 名前の形が似ていない Irq_Controller / IRQCtrl は機械では組めず、手で結んだ組として並ぶ。
-  await expect(align.locator('.map-align-row[data-align-from="Irq_Controller"]')).toContainText('IRQCtrl (手で対応)');
-  await expect(page.locator('#btn-map-align')).toHaveText('junior の綴りに揃える (3 組)');
-
-  // 到達条件その2: 1 回押すだけで 3 組が自分の図に入り、保存フォルダにも書かれる。junior の図は変わらない。
-  await page.locator('#btn-map-align').click();
-  const dsl = await page.locator('#editor').inputValue();
-  for (const w of ['participant SpiDrv', 'participant Clock_Ctrl', 'participant IRQCtrl', 'SpiDrv -> Clock_Ctrl : EnableClock()']) {
-    expect(dsl).toContain(w);
-  }
-  expect(dsl).not.toContain('Irq_Controller');
-  await expect(page.locator('#map-align-result')).toContainText('揃えました');
-  await expect.poll(async () => (await S.readDoc(page, ALIGN_MINE_DIR, 'spi_init_sequence')) || '', { timeout: 10000 })
-    .toContain('participant IRQCtrl');
-  expect(await S.readDoc(page, ALIGN_OTHER_DIR, 'spi_sequence')).toBe(SPI_JUNIOR);
-  // 揃えた組は一致になり、揃える行から消える。
-  await expect(page.locator('#map-align .map-align-row')).toHaveCount(0);
-
-  // 到達条件その3: ⇄ 一括置換と同じく、Ctrl+Z 1 手で 3 組まとめて戻る。
-  await page.locator('#editor').press('Control+z');
-  await expect.poll(async () => await page.locator('#editor').inputValue()).toContain('participant Irq_Controller');
 });

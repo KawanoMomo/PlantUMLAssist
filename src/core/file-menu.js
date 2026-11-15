@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // file-menu — FILES ツリーのファイル・フォルダの右クリックに集める操作 (design 10b)。
 //
-// ファイル 1 枚に対する操作が、タブ列 (一時控え・並べて比較)、
+// ファイル 1 枚に対する操作が、タブ列 (一時控え)、
 // ツール ▾ (この図の変遷)、下端の札 (前回保存版) と散らばっていて、「この図に何ができるか」を
 // 入口ごとに探し直していた。10b はファイルの右クリックに全部を集める。
 // フォルダの右クリックは「そこに作る」「そこを保存先 / 読むだけにする」。
@@ -17,11 +17,9 @@ window.MA.fileMenu = (function() {
   // 「過去のコミットと比較…」は保存先が Git のときだけ押せる (10c)。
   var FILE_ITEMS = [
     { id: 'open', label: '開く', key: 'Enter' },
-    { id: 'open-side', label: '右に並べて開く' },
+    // 「右に並べて開く」と比較の 3 行 (読むだけ / 前回保存版 / 過去のコミット) は
+    // TICKET-owner-20261115-2141-prune で外した。前の版と比べるのは「この図の履歴」の行から。
     { sep: true },
-    { id: 'cmp-readonly', label: '読むだけのフォルダの同じ図と比較' },
-    { id: 'cmp-saved', label: '前回保存版と比較' },
-    { id: 'cmp-commit', label: '過去のコミットと比較…', tag: 'Git', needsGit: true },
     { id: 'history', label: 'この図の履歴を表示' },
     { sep: true },
     { id: 'rename', label: '名前を変更', key: 'F2' },
@@ -37,14 +35,11 @@ window.MA.fileMenu = (function() {
 
   // フォルダの右クリック。部品のフォルダ (`SPI 4 / 6`) はファイル名の頭で束ねた見出しで
   // 実在のディレクトリではないので、「保存先にする / 読むだけにする」は出さない。
-  // 読むだけのフォルダ (design 10a「右クリックから「並べて比較」できます」「編集はできません」) は
-  // 並べて比較が先頭で、そこに作る 2 つは出さない。
+  // 読むだけのフォルダ (編集はできない) には、そこに作る 2 つは出さない。
+  // 読むだけのフォルダの図は、行を開いて図を押すと右の枠に 1 枚で出る (右クリックの操作は無い)。
+  // フォルダの右クリックの比較の行と、フォルダの図を覗く窓は
+  // TICKET-owner-20261115-2141-prune で外した。
   var FOLDER_ITEMS = [
-    { id: 'compare', label: '並べて比較', readonlyOnly: true },
-    // 覗く窓 (#peek-modal) はツリーで選んだフォルダの「道具の置き場」
-    // (部品ビュー・ドメインで揃える・自分の部品を探す・テンプレート)。
-    // 入口はここ (と「読むだけ」見出しの目の印) で、窓の中でフォルダを選び直させない。
-    { id: 'peek', label: 'このフォルダの図を調べる…', readonlyOnly: true },
     { id: 'new-doc', label: '新しい図', writable: true },
     { id: 'new-part', label: '6 図種をまとめて作る', writable: true },
     { sep: true, realOnly: true },
@@ -84,12 +79,14 @@ window.MA.fileMenu = (function() {
   function folderItems(ctx) {
     var kind = _s((ctx || {}).kind) || 'part';
     var real = kind !== 'part';
-    return FOLDER_ITEMS.filter(function(it) {
+    var items = FOLDER_ITEMS.filter(function(it) {
       if (it.targetOnly) return kind === 'target';
-      if (it.readonlyOnly) return kind === 'readonly';
       if (it.writable && kind === 'readonly') return false;
       return real || !it.realOnly;
-    }).map(function(it) {
+    });
+    // 先頭に来た区切りは出さない (読むだけのフォルダは作る 2 つが無く、区切りから始まる)。
+    while (items.length && items[0].sep) items = items.slice(1);
+    return items.map(function(it) {
       var o = _copy(it);
       if (o.id === 'set-target' && kind === 'target') {
         o.disabled = true;

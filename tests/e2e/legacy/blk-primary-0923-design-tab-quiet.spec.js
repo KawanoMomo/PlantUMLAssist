@@ -29,11 +29,11 @@ test('既定のタブ列にはボタンが 1 つも無い (図のタブと ＋ /
   }
 });
 
-// 下端の件数は ± 差分 だけ。整合・イベント整合の札 (図をまたぐ監査) は
-// TICKET-owner-20261115-1841-prune で外した。
-test('件数を持つものは下端の状態表示に出る (整合・イベント整合の札は無い)', async ({ page }) => {
+// 整合・イベント整合の札 (図をまたぐ監査) は TICKET-owner-20261115-1841-prune、
+// ± 差分の札は TICKET-owner-20261115-2141-prune で外した。
+test('下端に件数の札 (± 差分・整合・イベント整合) は無い', async ({ page }) => {
   await open7b(page);
-  await expect(page.locator('#status-diff')).toHaveCount(1);
+  await expect(page.locator('#status-diff')).toHaveCount(0);
   await expect(page.locator('#status-consistency, #status-eventsync')).toHaveCount(0);
 });
 
@@ -43,10 +43,11 @@ test('機能は Ctrl+K から引ける (ツールの分類メニューも Ctrl+K
   // BLK-human-20260923-1601 (design 9b): 分類は左列に並ぶ (渡すは TICKET-owner-20261115-1828-prune で外した)。
   await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
     // 確かめる は TICKET-owner-20261115-1841-prune、探す は TICKET-owner-20261115-2140-prune で外した。
-    '図をつくる', '書き換える', 'レビュー',
+    // レビュー は TICKET-owner-20261115-2141-prune で外した。
+    '図をつくる', '書き換える',
   ]);
-  await pickTool(page, 'btn-tab-diff');
-  await expect(page.locator('#diff-panel')).toHaveClass(/open/);
+  await pickTool(page, 'btn-tab-lines');
+  await expect(page.locator('#lines-panel')).toHaveClass(/open/);
 });
 
 // BLK-builder-20260924-1815-3 (design 9b / 9a): 既定のパネルに「ツール ▾ をタブ列に出す」は出さない
@@ -61,7 +62,7 @@ test('以前に「ツール ▾ をタブ列に出す」を選んだ人は、パ
   await page.reload();
   await page.waitForSelector('#preview-svg');
   await expect(page.locator('#btn-tab-tools')).toBeVisible();
-  await expect(page.locator('#btn-tab-diff')).toBeHidden();
+  await expect(page.locator('#btn-tab-lines')).toBeHidden();
 
   await page.locator('#btn-tab-tools').click();
   await expect(page.locator('#tool-menu-quiet')).toHaveText('ツール ▾ を右端へ戻す');

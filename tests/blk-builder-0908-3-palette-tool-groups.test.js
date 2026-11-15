@@ -22,8 +22,9 @@ function noop() {}
 var COMMANDS = [
   // TICKET-owner-20261115-1841-prune: 「確かめる」分類 (突合ボードほか) は外した。書き換えるの代表は ⇄ 一括置換。
   { id: 'tab-rename', title: '部品名の一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'ちかん'], button: 'btn-tab-rename', run: noop },
-  // 変更サマリ・引き継ぎ (渡す) は TICKET-owner-20261115-1828-prune で外した。レビューの代表は ± 差分。
-  { id: 'tab-diff', title: '変わった図の一覧 / Changed diagrams', hint: 'Tabs', button: 'btn-tab-diff', run: noop },
+  // 変更サマリ・引き継ぎ (渡す) は TICKET-owner-20261115-1828-prune で、
+  // 「レビュー」分類 (± 差分ほか) は TICKET-owner-20261115-2141-prune で外した。書き換えるの 2 つ目は ✎ 行編集。
+  { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', button: 'btn-tab-lines', run: noop },
   { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', button: 'btn-tab-template', run: noop },
   { id: 'save', title: 'ファイルを保存 / Save', hint: 'File', run: noop },
   // タブ列に残るもの (＋ / 一覧) はツールメニューに載っていないので分類しない。
@@ -39,7 +40,7 @@ describe('道具のコマンドは 6 分類に入る', () => {
   test('分類はツールメニューと同じ key になる', () => {
     var items = itemsOf();
     expect(byId(items, 'tab-rename').group).toBe('edit');
-    expect(byId(items, 'tab-diff').group).toBe('review');
+    expect(byId(items, 'tab-lines').group).toBe('edit');
     expect(byId(items, 'tab-template').group).toBe('make');
   });
 
@@ -51,7 +52,7 @@ describe('道具のコマンドは 6 分類に入る', () => {
 
   test('行のチップは分類名になる', () => {
     expect(byId(itemsOf(), 'tab-rename').badge).toBe('書き換える');
-    expect(byId(itemsOf(), 'tab-diff').badge).toBe('レビュー');
+    expect(byId(itemsOf(), 'tab-template').badge).toBe('図をつくる');
     expect(byId(itemsOf(), 'command:save').badge).toBe('コマンド');
   });
 
@@ -76,7 +77,7 @@ describe('道具のコマンドは 6 分類に入る', () => {
 describe('見出しと Tab の絞り込み', () => {
   test('見出しの並びは 図に足す → 移動 → 選択中 → 6 分類 → コマンド', () => {
     var groups = CP.groupsOf(itemsOf());
-    expect(groups).toEqual(['make', 'edit', 'review', 'command']);
+    expect(groups).toEqual(['make', 'edit', 'command']);
   });
 
   test('6 分類の見出しに日本語の名前が付く', () => {
@@ -92,8 +93,8 @@ describe('見出しと Tab の絞り込み', () => {
   });
 
   test('分類で絞り込むとその分類の道具だけになる', () => {
-    var only = CP.filterByGroup(itemsOf(), 'review');
-    expect(only.map(function(i) { return i.id; })).toEqual(['review:tab-diff']);
+    var only = CP.filterByGroup(itemsOf(), 'edit');
+    expect(only.map(function(i) { return i.id; })).toEqual(['edit:tab-rename', 'edit:tab-lines']);
   });
 });
 
@@ -128,10 +129,11 @@ describe('ツールメニューの道具はすべてパレットから引ける 
 
 describe('名指しされた道具は見出し順より前に出る', () => {
   // 見出しが 9 つに増えると、たまたま同じ語を含むだけの候補が前の見出しから
-  // 名指しの候補を抜く。「保存」で「前回保存からの差分」が 1 位になった。
+  // 名指しの候補を抜く。「保存」で「前回保存からの差分」が 1 位になった
+  // (その行は TICKET-owner-20261115-2141-prune で外したので、同じ形を ⧉ 新しい図を起こす で確かめる)。
   var CMDS = [
     { id: 'save', title: 'ファイルを保存 / Save', keywords: ['保存', 'save'], run: noop },
-    { id: 'tab-diff', title: '前回保存からの差分 / Diff', button: 'btn-tab-diff', run: noop },
+    { id: 'tab-template', title: '保存した図から新しい図を起こす / New from', button: 'btn-tab-template', run: noop },
     { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', run: noop },
   ];
 
@@ -141,8 +143,8 @@ describe('名指しされた道具は見出し順より前に出る', () => {
   });
 
   test('完全一致が無ければ従来どおり見出し順', () => {
-    var r = CP.filter(CP.buildItems(CMDS, ''), '差分');
-    expect(r[0].id).toBe('review:tab-diff');
+    var r = CP.filter(CP.buildItems(CMDS, ''), '起こす');
+    expect(r[0].id).toBe('make:tab-template');
   });
 
   test('図の中身 (足す / 移動) は見出し順のまま', () => {
@@ -160,9 +162,9 @@ describe('名指しされた道具は見出し順より前に出る', () => {
 describe('右端の呼び名', () => {
   test('言い換えと同じ文字なら出さない (同じ語が 2 度並ばない)', () => {
     var items = CP.buildItems([
-      { id: 'tab-diff', title: '前回保存からの差分 / Diff', button: 'btn-tab-diff', run: noop },
+      { id: 'tab-lines', title: '行を書き換える / Line edit', button: 'btn-tab-lines', run: noop },
     ], '');
-    expect(items[0].title).toBe('前回保存からの差分');
+    expect(items[0].title).toBe('行を書き換える');
     expect(items[0].hint).toBe('');
   });
 });

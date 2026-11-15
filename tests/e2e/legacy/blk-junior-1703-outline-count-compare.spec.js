@@ -48,13 +48,26 @@ async function typeDsl(page, text) {
   await page.waitForTimeout(1200);
 }
 
-// 1 枚目 = 先輩の図、2 枚目 = 自分の図
+// 編集中でないタブを、編集中の図の版 (`{名前}@{刻印}`) の名前にする。
+async function asVersion(page) {
+  await page.evaluate(() => {
+    const WS = window.MA.workspace;
+    const active = WS.getActive();
+    const ref = WS.list().filter((d) => d.id !== active.id)[0];
+    WS.rename(ref.id, active.name + '@20261116-0700');
+  });
+}
+
+// 1 枚目 = 前の版 (元は先輩の図)、2 枚目 = 自分の図。
+// TICKET-owner-20261115-2141-prune: 数合わせの相手はこの図の履歴の版 (`{名前}@{刻印}` のタブ) だけになったので、
+// 1 枚目をこの図の版の名前にして突き合わせる。
 async function twoTabs(page, mine) {
   await gotoApp(page);
   await typeDsl(page, SENIOR);
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(600);
   await typeDsl(page, mine);
+  await asVersion(page);
   await page.locator('#btn-editor-tab-outline').click();
   await page.waitForTimeout(600);
 }
@@ -84,6 +97,7 @@ test('数が合えば「同じ形です」と出る (先輩と同じ 4 classes �
   await page.locator('#diagram-type').selectOption('plantuml-class');
   await page.waitForTimeout(500);
   await typeDsl(page, MINE_SAME);
+  await asVersion(page);
   await page.locator('#btn-editor-tab-outline').click();
   await page.waitForTimeout(600);
   await expect(page.locator('#outline-cmp-result')).toContainText('同じ形です (4 classes · 3 relations)');
@@ -109,13 +123,13 @@ test('図種が違う参照図とは比べずに、その理由を出す', async
   await expect(page.locator('#outline-cmp-result')).toContainText('図種が違うので数を比べられません');
 });
 
-test('タブが 1 枚しかなければ、開き方を案内する', async ({ page }) => {
+test('前の版を開いていなければ、開き方を案内する', async ({ page }) => {
   await gotoApp(page);
   await typeDsl(page, SENIOR);
   await page.locator('#btn-editor-tab-outline').click();
   await page.waitForTimeout(500);
   await expect(page.locator('#outline-cmp-select')).toBeDisabled();
-  await expect(page.locator('#outline-cmp-result')).toContainText('もう 1 枚開く');
+  await expect(page.locator('#outline-cmp-result')).toContainText('前の版を開くと');
 });
 
 test('数合わせに要る手数: 構造タブを開くクリック 1 回だけ (数え直しのキー入力 0)', async ({ page }) => {
@@ -124,6 +138,7 @@ test('数合わせに要る手数: 構造タブを開くクリック 1 回だけ
   await page.locator('#btn-tab-new').click();
   await page.waitForTimeout(600);
   await typeDsl(page, MINE_SHORT);
+  await asVersion(page);
 
   await page.evaluate(() => {
     window.__m = { clicks: 0, keys: 0 };

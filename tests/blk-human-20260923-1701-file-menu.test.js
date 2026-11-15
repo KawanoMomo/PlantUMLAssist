@@ -14,8 +14,9 @@ function ids(items) {
 describe('ファイルの右クリック (design 10b)', function() {
   test('10b のモックどおりの並びと区切り', function() {
     expect(ids(FM.fileItems({}))).toEqual([
-      'open', 'open-side', '-',
-      'cmp-readonly', 'cmp-saved', 'cmp-commit', 'history', '-',
+      // 右に並べて開く・比較の 3 行は TICKET-owner-20261115-2141-prune で外した。
+      'open', '-',
+      'history', '-',
       'rename', 'copy', 'move', 'draft', '-',
       'export-svg', 'reveal', '-',
       'delete',
@@ -30,12 +31,11 @@ describe('ファイルの右クリック (design 10b)', function() {
     expect(by['delete'].key).toBe('Delete');
   });
 
-  test('過去のコミットと比較 は Git のときだけ押せる (印は Git)', function() {
-    var off = FM.fileItems({ git: false }).filter(function(it) { return it.id === 'cmp-commit'; })[0];
-    var on = FM.fileItems({ git: true }).filter(function(it) { return it.id === 'cmp-commit'; })[0];
-    expect(off.disabled).toBe(true);
-    expect(off.tag).toBe('Git');
-    expect(!!on.disabled).toBe(false);
+  test('比較の行 (読むだけ / 前回保存版 / 過去のコミット) と 右に並べて開く は無い', function() {
+    var got = FM.fileItems({ git: true }).map(function(it) { return it.id; });
+    ['open-side', 'cmp-readonly', 'cmp-saved', 'cmp-commit'].forEach(function(id) {
+      expect(got.indexOf(id)).toBe(-1);
+    });
   });
 
   test('一時控えは今の状態で言い換える', function() {
@@ -68,12 +68,11 @@ describe('フォルダの右クリック (design 10b)', function() {
 
   // BLK-builder-20260924-1749-3 (design 10a): 読むだけのフォルダは「並べて比較」が先頭で、
   // 編集できないので「新しい図 / 6 図種をまとめて作る」は出さない (前は it[4] が「読むだけにする」だった)。
-  test('読むだけのフォルダ: 並べて比較 / 保存先にする / 読むだけにする (押せない)', function() {
+  test('読むだけのフォルダ: 保存先にする / 読むだけにする (押せない)。区切りから始めない', function() {
     var it = FM.folderItems({ kind: 'readonly' });
-    // BLK-owner-20260924-1836-prune: 覗く窓 (そのフォルダの道具) の入口「このフォルダの図を調べる…」が 2 行目。
-    expect(ids(it)).toEqual(['compare', 'peek', '-', 'set-target', 'set-readonly']);
-    expect(it[1].label).toBe('このフォルダの図を調べる…');
-    expect(it[4].disabled).toBe(true);
+    // 比較の行と覗く窓「このフォルダの図を調べる…」は TICKET-owner-20261115-2141-prune で外した。
+    expect(ids(it)).toEqual(['set-target', 'set-readonly']);
+    expect(it[1].disabled).toBe(true);
   });
 });
 
@@ -82,9 +81,12 @@ describe('キーボード', function() {
     var items = FM.fileItems({ git: false });
     var first = FM.nextIndex(items, -1, 1);
     expect(items[first].id).toBe('open');
-    // cmp-saved の次は押せない cmp-commit を飛ばして history。
-    var saved = items.map(function(i) { return i.id; }).indexOf('cmp-saved');
-    expect(items[FM.nextIndex(items, saved, 1)].id).toBe('history');
+    // open の次は区切りを飛ばして history。
+    expect(items[FM.nextIndex(items, first, 1)].id).toBe('history');
+    // 押せない行は飛ばす (読むだけのフォルダの「読むだけにする」は押せない)。
+    var ro = FM.folderItems({ kind: 'readonly' });
+    var tgt = ro.map(function(i) { return i.id; }).indexOf('set-target');
+    expect(ro[FM.nextIndex(ro, tgt, 1)].id).toBe('set-target');
     // 先頭から ↑ で末尾 (削除) へ回る。
     expect(items[FM.nextIndex(items, first, -1)].id).toBe('delete');
     expect(FM.nextIndex([], 0, 1)).toBe(-1);

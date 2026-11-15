@@ -48,7 +48,7 @@ window.MA.statusBadges = (function() {
     return DOT + ' ' + label(name) + ' ' + String(count);
   }
 
-  // 件数ではなく「相手の名前」を言う項目 (並べて比較 spi_state) も同じ 1 種類の形にする
+  // 件数ではなく「相手の名前」を言う項目 (前回保存版 spi_state) も同じ 1 種類の形にする
   // count が 0 (相手がまだ決まっていない) なら出さないので '' を返す。
   function namedText(name, count) {
     if (!isVisible(count)) return '';

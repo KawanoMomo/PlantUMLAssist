@@ -256,14 +256,10 @@ test('手順8 FILES ツリーのファイル行の頭に、左レールと同じ
   expect(await page.locator('#files-body-open').textContent()).not.toContain('📌');
 
   // BLK-builder-20260924-1350-3 (design 10a / 9a): 節見出しは「名前 + 右端の件数」を 1 回だけ。
-  // 「読むだけ」の入口は絵文字ではなくレールと同じ 1px 線画。名前は何をするかで「読むだけのフォルダの図を調べる」
-  // (BLK-owner-20260924-1836-prune。以前は「他フォルダを覗く」)。
+  // 「読むだけ」の目の印 (図を調べる) は TICKET-owner-20261115-2141-prune で外した。
   await expect(page.locator('#files-sec-open .files-sec-label')).toHaveText('開いている図');
   await expect(page.locator('#files-count-open')).toHaveText(/^[1-9]\d*$/);
-  const peek = page.locator('#btn-tab-peek');
-  await expect(peek).toHaveAttribute('aria-label', '読むだけのフォルダの図を調べる');
-  await expect(peek.locator('svg')).toBeVisible();
-  expect(await peek.textContent()).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u);
+  await expect(page.locator('#btn-tab-peek')).toHaveCount(0);
 
   // BLK-builder-20260924-1358-3 (design 10a / 7a): レールの FILES はロゴ P の直下・図種の列の上にあり、
   // 印は図種と同じ線画。押せばツリーが畳まれ、もう一度押せば開く。
@@ -330,13 +326,11 @@ test('手順8 FILES ツリーのファイルを右クリックすると 10b の�
   await expect(menu).toBeVisible();
   // 到達条件その1: ファイル単位の操作がこの 1 か所に揃う。
   const labels = await menu.locator('.files-ctx-item .files-ctx-label').allTextContents();
+  // (右に並べて開く・比較の 3 行は TICKET-owner-20261115-2141-prune で外した。前の版と比べるのは この図の履歴 から)
   expect(labels).toEqual([
-    '開く', '右に並べて開く', '読むだけのフォルダの同じ図と比較', '前回保存版と比較',
-    '過去のコミットと比較…', 'この図の履歴を表示', '名前を変更', '複製', '別のフォルダへ移動…',
+    '開く', 'この図の履歴を表示', '名前を変更', '複製', '別のフォルダへ移動…',
     '一時控えにする', 'SVG で書き出す', 'エクスプローラで場所を開く', '削除',
   ]);
-  // Git でない保存先では「過去のコミットと比較」は押せない。
-  await expect(menu.locator('[data-action="cmp-commit"]')).toBeDisabled();
   await expect(menu.locator('[data-action="rename"] .files-ctx-key')).toHaveText('F2');
 
   // 到達条件その2: 「開く」でその図が開く。
@@ -527,7 +521,6 @@ test('手順8 部品フォルダの「＋ 未作成 N 図種」の略号を押�
   await expect(page.locator('#files-parts .files-part-head[data-part="spi"]')).toContainText('SPI 4 / 6');
   await expect(treeFile(page, 'spi_usecase')).toBeVisible();
   await expect(row).toHaveText('＋未作成 2 図種（CMP・ACT）');
-  await expect(page.locator('#peek-modal')).toBeHidden();
 
   // 行頭の ＋ = 残りをまとめて。
   await row.locator('.files-part-missing-all').click();
@@ -608,28 +601,11 @@ test('手順8 Ctrl+P で同じ検索欄がファイル名に絞られて開き�
   await expect.poll(() => page.locator('#editor').inputValue()).toContain('ADC 状態遷移');
 });
 
-test('手順8 右クリックから「右に並べて開く」「前回保存版と比較」「この図の履歴」へそのまま入れる', async ({ page }) => {
+// 「右に並べて開く」「前回保存版と比較」は TICKET-owner-20261115-2141-prune で外した。
+test('手順8 右クリックから「この図の履歴」へそのまま入れる', async ({ page }) => {
   await seedParts(page);
   await expandPart(page, 'spi');
   const menu = page.locator('#files-ctx-menu');
-
-  // 今の図 (spi_init_sequence) を開いたまま、spi_state を右の枠に並べる。
-  await treeFile(page, 'spi_init_sequence').click();
-  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 初期化シーケンス');
-  await treeFile(page, 'spi_state').click({ button: 'right' });
-  await menu.locator('[data-action="open-side"]').click();
-  await expect(page.locator('#compare-pane')).toBeVisible();
-  // 左 (編集中) は元の図のまま、右に並べた図が出る。
-  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 初期化シーケンス');
-  await expect(page.locator('#compare-pane')).toContainText('spi_state');
-  await page.locator('#btn-compare-close').click();
-
-  // 前回保存版と比較 → その図を開いて ± 差分の面。
-  await treeFile(page, 'spi_state').click({ button: 'right' });
-  await menu.locator('[data-action="cmp-saved"]').click();
-  await expect(page.locator('#compare-pane')).toBeVisible();
-  await expect(page.locator('#compare-pane')).toHaveClass(/mode-diff/);
-  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 状態遷移');
 
   // この図の履歴 → 変遷の画面。
   await treeFile(page, 'spi_class').click({ button: 'right' });
@@ -677,36 +653,3 @@ test('手順8 外から .puml をツリーに落とすと保存先へ取り込�
   await expect(adcHead).not.toHaveClass(/is-drop/);
 });
 
-// design 10c と組: 保存先が Git なら、右クリックの「過去のコミットと比較…」が押せて、比較する相手を選ぶ画面が開く。
-test('手順8 保存先が Git なら、右クリックの「過去のコミットと比較…」から比較相手を選べる', async ({ page }) => {
-  const fs = require('fs');
-  const path = require('path');
-  const { execFileSync } = require('child_process');
-  const rel = DIR + '-git';
-  const abs = path.join(__dirname, '..', '..', '..', rel.replace(/^\.\//, ''));
-  fs.rmSync(abs, { recursive: true, force: true });
-  fs.mkdirSync(abs, { recursive: true });
-  const git = (...a) => execFileSync('git', ['-C', abs, ...a], { stdio: 'pipe' }).toString();
-  git('init', '-q', '-b', 'main');
-  git('config', 'user.name', 'junior');
-  git('config', 'user.email', 'junior@example.invalid');
-  git('config', 'core.autocrlf', 'false');
-  fs.writeFileSync(path.join(abs, 'spi_state.puml'), S.docFor('spi_state') + '\n');
-  git('add', '-A');
-  git('commit', '-q', '-m', '初版');
-
-  await S.bootWithSaveDir(page, rel);
-  await expect(page.locator('#files-count-git')).toContainText('main');
-  await expandPart(page, 'spi');
-  await treeFile(page, 'spi_state').click({ button: 'right' });
-  const item = page.locator('#files-ctx-menu [data-action="cmp-commit"]');
-  await expect(item).toBeEnabled();
-  await item.click();
-  await expect(page.locator('#git-pick-modal')).toBeVisible();
-  await expect(page.locator('#git-pick-modal .git-pick-row').filter({ hasText: '初版' })).toHaveCount(1);
-  // BLK-builder-20260924-1818-1: ツリー下端の GIT の見出しの下へ開いて画面の外に切れない (窓の中に収まり、行が見える)。
-  const pb = await page.locator('#git-pick-modal').boundingBox();
-  expect(pb && pb.y >= 0 && pb.y + pb.height <= page.viewportSize().height).toBe(true);
-  await expect(page.locator('#git-pick-modal .git-pick-row').filter({ hasText: '初版' })).toBeInViewport();
-  await expect.poll(() => page.locator('#editor').inputValue()).toContain('SPI 状態遷移');
-});

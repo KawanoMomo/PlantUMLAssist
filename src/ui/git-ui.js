@@ -455,11 +455,6 @@ window.MA.gitUi = (function() {
     }
     var q = ($('git-pick-filter') || {}).value || '';
     list.textContent = '';
-    if (pickTab === 'folder') {
-      list.appendChild(_pickRow('読むだけのフォルダの同じ図', '別の保存フォルダの図を右に並べます', '',
-        function() { var a = APP(); if (a) a.openFolderCompare(); }));
-      return;
-    }
     if (pickTab === 'refs') {
       gp.refRows(refs, q).forEach(function(r) {
         list.appendChild(_pickRow((r.kind === 'tag' ? 'タグ ' : 'ブランチ ') + r.name, r.short + (r.current ? ' · 今のブランチ' : ''), '',

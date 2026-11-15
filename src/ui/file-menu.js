@@ -3,13 +3,13 @@ window.MA = window.MA || {};
 
 // file-menu (UI) — FILES ツリーの右クリック・キーボード・ドラッグ (design 10b)。
 //
-// ファイル 1 枚に対する操作 (一時控え・並べて比較・前回保存版・
-// 変遷・名前変更・削除…) がタブ列・ツール ▾・下端の札に散らばっていた。ツリーの
+// ファイル 1 枚に対する操作 (一時控え・変遷・名前変更・削除…) が
+// タブ列・ツール ▾・下端の札に散らばっていた。ツリーの
 // ファイルを右クリックすれば全部そこにある、を作る。中身 (どの操作を並べるか・キーの
 // 読み替え・名前の組み立て) は src/core/file-menu.js、ここは DOM と結線だけ。
 //
-// 操作の実体は app.js の既存の道 (openFromFolderByName / openCompareTarget /
-// toggleCompareView / exportSVG / _draftToggleName / タブのダブルクリック改名) を
+// 操作の実体は app.js の既存の道 (openFromFolderByName /
+// exportSVG / _draftToggleName / タブのダブルクリック改名) を
 // そのまま呼ぶ。同じ操作を 2 通りに実装しない。
 window.MA.fileMenuUi = (function() {
   var ROW_SEL = '.files-sec-head, .files-row, .files-part-head, .files-part-file, .files-ro-folder, .files-ro-file, #folder-panel .folder-item[data-file-name]';
@@ -130,26 +130,12 @@ window.MA.fileMenuUi = (function() {
   }
 
   // ── ファイルの操作 ───────────────────────────────────────────────────
-  function openSide(name) {
-    var ws = WS();
-    var prev = ws && ws.getActiveId ? ws.getActiveId() : null;
-    return ensureOpen(name).then(function(ok) {
-      var d = findDoc(name);
-      if (!ok || !d) return;
-      if (prev != null && prev !== d.id && typeof window.switchToDoc === 'function') {
-        window.switchToDoc(prev);
-      }
-      if (prev == null || prev === d.id) return;
-      window._compareRefId = d.id;
-      if (typeof window.toggleCompareView === 'function') window.toggleCompareView(true, 'ref');
-    });
-  }
 
   function renameFile(name) {
     var ws = WS();
     var d = findDoc(name);
-    // 開いている図は、タブのダブルクリックと同じ道を通す (レビューの基準・
-    // 前の名前のファイルの付け替えまで同じ 1 本で済ませる)。
+    // 開いている図は、タブのダブルクリックと同じ道を通す (前の名前のファイルの
+    // 付け替えまで同じ 1 本で済ませる)。
     if (d) {
       var tab = document.querySelector('#tab-bar .tab[data-doc-id="' + d.id + '"]');
       if (tab) {
@@ -170,7 +156,6 @@ window.MA.fileMenuUi = (function() {
     if (!next) return Promise.resolve(false);
     return fileOp({ op: 'rename', dir: _dir(), name: name, to: next }).then(function(r) {
       if (!r.ok) { toast('名前を変えられませんでした: ' + (r.data.error || r.status)); return false; }
-      if (window.MA.reviewDesk) { try { window.MA.reviewDesk.renameBaseline(name, next); } catch (e) {} }
       toast('「' + name + '」を「' + next + '」に変えました');
       refreshLists();
       return true;
@@ -356,18 +341,8 @@ window.MA.fileMenuUi = (function() {
   function runFile(action, name) {
     switch (action) {
       case 'open': return ensureOpen(name);
-      case 'open-side': return openSide(name);
-      case 'cmp-readonly':
-        return ensureOpen(name).then(function() { if (typeof window.openCompareTarget === 'function') window.openCompareTarget('folder'); });
-      case 'cmp-saved':
-        return ensureOpen(name).then(function() { if (typeof window.openCompareTarget === 'function') window.openCompareTarget('before'); });
       case 'history':
         return ensureOpen(name).then(function() { clickId('btn-tab-versions'); });
-      case 'cmp-commit':
-        return ensureOpen(name).then(function() {
-          var g = window.MA.gitUi;
-          if (g && g.openPicker) g.openPicker(document.getElementById('files-sec-git'));
-        });
       case 'rename': return renameFile(name);
       case 'copy': return copyFile(name);
       case 'move': return moveFile(name);
@@ -390,10 +365,6 @@ window.MA.fileMenuUi = (function() {
 
   function runFolder(action, folder) {
     switch (action) {
-      case 'compare':
-        if (folder && folder.dir && typeof window.compareReadonlyFolder === 'function') window.compareReadonlyFolder(folder.dir);
-        else clickId('btn-tab-senior');
-        break;
       case 'new-doc': clickId('btn-tab-new'); break;
       case 'new-part':
         // 「既存の図や雛形から新しい図を起こす」窓を「部品名だけ」で開く。
@@ -414,12 +385,7 @@ window.MA.fileMenuUi = (function() {
       case 'change-target':
         if (typeof window.openChangeTarget === 'function') window.openChangeTarget();
         break;
-      // 読むだけのフォルダの道具 (部品ビュー・ドメインで揃える…) は、
-      // ツリーで選んだそのフォルダを開いた状態で覗く窓に出す。窓の中でフォルダを選び直させない。
-      case 'peek':
-        if (typeof window.openPeekFolder === 'function') window.openPeekFolder({ dir: folder && folder.dir });
-        break;
-      // 「読むだけにする」は覗く窓を開かない (名前と違うことをしない)。保存先では押せない (folderItems)。
+      // 「読むだけにする」は何も開かない (名前と違うことをしない)。保存先では押せない (folderItems)。
       case 'set-readonly': break;
       case 'open-list':
         if (typeof window._openFolderListView === 'function') window._openFolderListView();

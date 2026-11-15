@@ -137,34 +137,6 @@ async function openFolderItem(page, name, opts) {
   await page.waitForTimeout(900);
 }
 
-// BLK-owner-20260924-1836-prune: 隣の保存フォルダを覗く窓は、FILES「読むだけ」のそのフォルダの行の
-// 右クリック「このフォルダの図を調べる…」で、そのフォルダを開いた状態で出る (窓の中でフォルダを選ばない)。
-async function peekFolder(page, dirName) {
-  const head = page.locator('#files-sec-readonly');
-  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
-  const row = page.locator('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"]');
-  await row.waitFor();
-  await row.click({ button: 'right' });
-  await page.locator('#files-ctx-menu [data-action="peek"]').click();
-  await page.waitForSelector('#peek-modal');
-  await page.waitForFunction((n) => {
-    const b = document.getElementById('peek-dir-name');
-    return b && b.textContent === n;
-  }, dirName);
-}
-
-// FILES「読むだけ」のフォルダを右クリック →「並べて比較」で比較中にする (相手のフォルダを選ぶ道はこの 1 本。
-// BLK-owner-20260924-2135-prune)。参照ペインの増分の取り込みも、このフォルダを相手にする。
-async function compareFolder(page, dirName) {
-  const head = page.locator('#files-sec-readonly');
-  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
-  const row = page.locator('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"]');
-  await row.waitFor();
-  await row.click({ button: 'right' });
-  await page.locator('#files-ctx-menu [data-action="compare"]').click();
-  await page.waitForSelector('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"][data-comparing="1"]');
-}
-
 // 一覧から開いた図は、開いたときの本文のままの間は書き戻さない (読むだけの回)。直す目的で開いたときは
 // 1 行足して戻し、以後の書き戻しが本文に関わらずそのファイルへ入る状態にする (確認の窓は出ない)。
 // 開くのに使った中央の保存先の一覧は閉じて図に戻る (窓があった頃は、窓のボタンを押すと一覧が閉じていた)。
@@ -391,7 +363,7 @@ module.exports = {
   PRIMARY_DOCS, docFor,
   dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode, reopenApp,
   putDoc, readDoc, listDir, clearDir, clearTickets,
-  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, peekFolder, compareFolder, typeDsl, typeDslDrawn, renameActive, runCommand, exportVia,
+  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, typeDsl, typeDslDrawn, renameActive, runCommand, exportVia,
   GPIO_STATE, GPIO_SEQ, IRQ_SEQ_FOLDED_DASH,
   messageClickPoints, selectedMessageLine, expectMessageHitUniform,
 };

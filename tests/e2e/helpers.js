@@ -109,24 +109,11 @@ async function pickTool(page, targetId) {
   await page.locator('.tool-menu-item[data-target="' + targetId + '"]').click();
 }
 
-// BLK-owner-20260924-2135-prune: 参照ペインの相手のフォルダは、FILES「読むだけ」で比較中にしたフォルダ 1 つ。
-// パスを打つ欄 (#xf-dir + 🔍 探す) は外した。ツリーの「並べて比較」と同じ関数で比較中にし、
-// 並べて比較の枠の相手「別タブの図」から参照ペインを開く (開くと相手のフォルダを読む)。
-async function openCrossRef(page, dir) {
-  await page.evaluate((d) => window.compareReadonlyFolder(d), dir);
-  await page.locator('#senior-target-tabs').click();
-  await page.waitForSelector('#compare-pane:not([hidden])');
-}
-
-// BLK-owner-20260923-1509-prune: 旧 ⇔ 並べて見る (#btn-tab-compare) はタブ列から外れ、
-// 並べて比較の枠の相手「別タブの図」になった (scenarios の junior-02 / primary-04 と同じ経路)。
-// 並べて比較 (FILES「読むだけ」の ⇔) を開き、相手を「別タブの図」にして参照ペインを出す。
+// TICKET-owner-20261115-2141-prune: 参照ペインの入口は「この図の履歴」の行の「比較」1 つになり、
+// 相手を「別タブの図」に選び直す口は外した。ペインの中身を見る spec はその開き口 (toggleCompareView) で開く。
 async function openCompareTabs(page) {
-  await page.waitForSelector('#btn-tab-senior');
-  if (await page.locator('#senior-pane').isHidden()) {
-    await page.locator('#btn-tab-senior').click();
-  }
-  await page.locator('#senior-target-tabs').click();
+  await page.waitForFunction(() => typeof window.toggleCompareView === 'function');
+  await page.evaluate(() => { window.toggleCompareView(true, 'ref'); });
   await page.waitForSelector('#compare-pane:not([hidden])');
 }
 
@@ -151,7 +138,7 @@ async function switchTypeWithSample(page, type) {
 }
 
 module.exports = {
-  openCrossRef, openCompareTabs,
+  openCompareTabs,
   gotoApp, loadFixture, getEditorText, getEditorLine, clickOverlayByLine, setDiagramTitle,
   saveDirFor, shotOut, E2E_SAVE_ROOT, pickTool, switchTypeWithSample,
 };

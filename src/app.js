@@ -3574,9 +3574,8 @@ function init() {
   setupDocSets();
   setupBulkApply();
   setupTemplateNew();
-  setupDiffPanel();
-  setupLiveDiff();
-  setupReviewPanel();
+  renderDiffBadge();
+  setupLiveDiffGuard();
   setupExportPick();
   setupComponentPack();
   setupMaterialExport();
@@ -3584,7 +3583,6 @@ function init() {
   setupSaveSwap();
   setupOverlayOriginSync();
   setupVersionTimeline();
-  setupPeekFolder();
   setupSeniorPane();
   setupSeniorGit();
   setupFamilyClone();
@@ -3758,45 +3756,20 @@ function initCommandPalette() {
       // (id 'tab-cross') の語に「名前突合」「表記揺れ」「name audit」を入れ、その語で引いたときは
       // ボードを「名前/表記揺れ」で絞って開く。
       { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], button: 'btn-tab-lines', run: function() { clickById('btn-tab-lines'); } },
-      // 並べる面は 1 つに統合した。パレットの項目は
-      // 「誰と並べるか」で 3 つに分かれ、どれも旧称 (並べて見る / 先輩 / 変更前後) で引ける。
-      { id: 'tab-compare', title: '並べて比較 (別タブの図) / Compare', hint: 'Compare', keywords: ['compare', 'side', 'ならべて', 'みくらべ', 'べつたぶ'], run: function() { openCompareTarget('tabs'); } },
-      // 「この図を前回保存版と比べる」行は 1 つ。旧 command:livediff (前回保存版との比較) と
-      // この行は同じ枠を同じ「± 差分」で開いていた。消した方の名前は語に残し、分類は ± 差分の一覧と同じ「レビュー」にする。
-      { id: 'compare-before', title: '前回保存版と比較 / Compare with last save', hint: 'Compare', group: 'review', keywords: ['並べて比較 (この図の前回保存版)', '前回保存版との比較', 'Compare with last save', '差分', '前回保存', 'レビュー', 'diff', 'compare', 'before', 'after', 'last', 'save', 'ならべて', 'ひかく', 'ぜんかいほぞん', 'ぜんかい', 'ほぞん', 'へんこうぜんご', 'さぶん', 'みくらべ'], run: function() { openCompareTarget('before'); } },
       // 部品を起こす・テンプレート・骨格・セット複製の 4 行を 1 行にした。何から起こすかは窓の上端で選ぶ。
       // 旧名はこの行を引く語に残す (別の行として並べない)。
       { id: 'tab-template', title: '既存の図や雛形から新しい図を起こす… / New from…', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい', 'テンプレートから作る', 'テンプレート', '部品を起こす', '6 図種まとめて', 'part', 'starter', 'new', 'ぶひん', 'おこす', 'したがき', '6', 'ろく', 'ずしゅ', '骨格から作る', '骨格', 'skeleton', 'こっかく', 'ひな形', 'セット複製', '系統ごと複製する', '系統ごと複製', 'set', 'clone', 'family', 'せっと'], button: 'btn-tab-template', run: function() { clickById('btn-tab-template'); } },
-      { id: 'tab-diff', title: '前回保存からの差分 / Diff', hint: 'Tabs', keywords: ['diff', 'change', 'さぶん', 'へんこう'], button: 'btn-tab-diff', run: function() { clickById('btn-tab-diff'); } },
       // design 7b: タブ列を畳むと Ctrl+K だけが手掛かりになるので、ツールメニューに
       // 載っている道具はすべてパレットからも引けなければならない。ここは
       // 「メニューにはあるがパレットに無かった」道具。題はメニューの言い換えに揃える。
       { id: 'tab-draft', title: '一時控えにする / Draft', hint: 'Tabs', keywords: ['draft', 'ひかえ', 'いちじ'], button: 'btn-tab-draft', run: function() { clickById('btn-tab-draft'); } },
       { id: 'tab-apply', title: '複数クラスに一括適用 / Bulk apply', hint: 'Tabs', keywords: ['apply', 'bulk', 'いっかつ', 'てきよう'], button: 'btn-tab-apply', run: function() { clickById('btn-tab-apply'); } },
-      // 「⇔ 先輩」を「並べて比較」に改名したので、
-      // Ctrl+K も新しい名前で引ける。旧称 (先輩) でも当たるように語を残す。
-      // 10a: 入口は FILES ツリーの「読むだけ」節にあるので題もそちらに読み替えるが、
-      // 走らせるのは master 側の openCompareTarget('folder') (相手を選ぶ所まで一息で開く)。
-      // 保存先の一覧の参照タブ列を外したので、旧名「参照」「先輩のフォルダ」もこの行で引き、
-      // FILES「読むだけ」節も開く (隣のフォルダを読む入口は節 1 か所)。
-      { id: 'tab-senior', title: 'FILES: 読むだけの図と並べて比較 / Files: compare', hint: 'Files', keywords: ['compare', 'files', 'readonly', 'senior', 'side', 'ならべて', 'ひかく', 'よむだけ', 'あいて', 'せんぱい', 'ふぉるだ', '参照', 'さんしょう', '参照フォルダ', '参照タブ', '先輩のフォルダ', 'せんぱいのふぉるだ'], button: 'btn-tab-senior', run: function() { revealReadonlySection(); openCompareTarget('folder'); } },
       // design 9a: 手元の .puml を開く入口は上部バーの Import ▾ へ移した。
       { id: 'import-clipboard', title: 'クリップボードの DSL から開く / Open from clipboard', hint: 'File', keywords: ['clipboard', 'paste', 'import', 'くりっぷ', 'はりつけ', 'ひらく'], run: function() { clickById('imp-clipboard'); } },
-      // 部品 1 つの 6 図種を先輩・自分の 2 列で並べる 🧩 部品ビュー。
-      // 入口が「読むだけ」節の奥にしか無く、junior は「部品パック」「部品ごと」「6 図種まとめて」の
-      // 語で探して辿り着けなかった。開くと、いま開いている図の部品が選ばれた状態で出る。
-      // 行名に立場の語 (先輩) を出さない。旧名で打っても当たるよう語には残す。
-      { id: 'part-board', title: '部品ビュー (部品ごとの 6 図種を比較相手と並べる) / Part view', hint: 'Files', keywords: ['先輩', 'せんぱい', 'part', 'board', 'pack', 'view', '部品パック', '部品ごと', '部品ビュー', '6 図種まとめて', '6図種まとめて', '6 図種', 'ぶひん', 'ぱっく', 'ごと', 'まとめて', 'ずしゅ'], run: function() {
-        var PB = window.MA.partBoard;
-        var WS = window.MA.workspace;
-        var active = WS ? WS.getActive() : null;
-        openPartBoard({ part: (PB && active) ? PB.partOf(active.name) : '' });
-      } },
-      // 名前は FILES「読むだけ」のフォルダの右クリックの行と同じ。旧名は検索の語に残す。
-      { id: 'tab-peek', title: 'このフォルダの図を調べる… / Files: inspect a read-only folder', hint: 'Files', keywords: ['peek', 'files', 'readonly', 'folder', 'よむだけ', 'ほかの', 'ふぉるだ', '他フォルダを覗く', '他の保存フォルダを覗く', '読むだけのフォルダを足す', '覗く', 'のぞく', 'しらべる'], button: 'btn-tab-peek', run: function() { clickById('btn-tab-peek'); } },
-      { id: 'tab-review', title: '基準の図と突き合わせる / Review desk', hint: 'Tabs', keywords: ['review', 'desk', 'きじゅん', 'つきあわせ'], button: 'btn-tab-review', run: function() { clickById('btn-tab-review'); } },
       // この図の履歴 を開く行は「この図の履歴を見る」1 行。旧名「変遷」は語に落とす。
-      { id: 'tab-versions', title: 'この図の履歴を見る / Version history', hint: 'Tabs', keywords: ['version', 'timeline', 'history', 'へんせん', 'りれき', '変遷', 'この図の変遷', '履歴', '保存した版'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
+      // 「前回保存からの差分」の行は TICKET-owner-20261115-2141-prune で外し、その語はこの行で引く
+      // (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。
+      { id: 'tab-versions', title: 'この図の履歴を見る / Version history', hint: 'Tabs', keywords: ['version', 'timeline', 'history', 'へんせん', 'りれき', '変遷', 'この図の変遷', '履歴', '保存した版', 'diff', 'さぶん', '差分', '前回保存', 'ぜんかいほぞん'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
       { id: 'settings', title: '設定を開く / Settings', hint: 'Ctrl', keywords: ['settings', 'config', 'せってい'], run: function() { clickById('btn-config'); } },
       { id: 'undo', title: '元に戻す / Undo', hint: 'Ctrl+Z', keywords: ['undo', 'もどす'], run: function() { clickById('btn-undo'); } },
       { id: 'redo', title: 'やり直す / Redo', hint: 'Ctrl+Y', keywords: ['redo', 'やりなおす'], run: function() { clickById('btn-redo'); } },
@@ -4806,8 +4779,6 @@ function applyActiveDoc() {
   isFirstRender = true;
   scheduleRefresh();
   renderTabs();
-  // 指摘は図ごとに違う。タブを替えたらその図の基準で引き直す。
-  try { renderReviewBadge(); } catch (e) {}
   // 保存が届いた先も図ごとに違う。
   try { renderAutoSaveStatus(); } catch (e) {}
   // 開いたファイルの未対応記法と、起動直後の入口。
@@ -4865,10 +4836,6 @@ function promptRenameDoc(docId, message, suggest) {
   var ask = (message ? message + '\n' : '') + WS.nameRuleText();
   var next = window.prompt(ask, suggest || doc.name);
   if (next == null) return null;
-  // 図の名前が変わってもレビューの基準は持ち越す。
-  if (window.MA.reviewDesk) {
-    try { window.MA.reviewDesk.renameBaseline(doc.name, next); } catch (e) {}
-  }
   var before = doc.name;
   var renamed = WS.rename(doc.id, next);
   // 図名欄で名前を変え終えたら、開いた元ファイルの錠は用済み。
@@ -4954,14 +4921,9 @@ function renderTabs() {
     if (doc.preview) el.setAttribute('data-preview', '1');
     el.setAttribute('data-doc-name', doc.name);
     el.title = doc.name + ' (' + doc.diagramType.replace('plantuml-', '')
-      + ') — ダブルクリックで名前変更 / 右クリックで変更前後を見る';
-    // 会議で「この図、変わった?」と聞かれた所から
-    // 1 手で入れる入口。開く先は差分タブだが、そのまま見比べへ切り替えられる。
-    el.addEventListener('contextmenu', function(ev) {
-      ev.preventDefault();
-      switchToDoc(doc.id);
-      toggleCompareView(true, 'diff');
-    });
+      + ') — ダブルクリックで名前変更';
+    // タブの右クリックで ± 差分を開く入口は TICKET-owner-20261115-2141-prune で外した
+    // (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。
     // 前回保存時点から変わっている図にだけ印を付ける。
     var st = window.MA.saveDiff ? window.MA.saveDiff.statusOf(doc.name, doc.dsl) : 'same';
     if (st !== 'same') {
@@ -5124,26 +5086,19 @@ function syncTabDirtyMarks(docs) {
   });
 }
 
+// 未保存の印 (タブの ●/○・上部バーの保存ボタン・FILES ツリーの行) を今の中身に合わせ直す。
+// タブ列の「± 差分」ボタンとその一覧は TICKET-owner-20261115-2141-prune で外した
+// (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。印を合わせ直す役だけ残す。
 function renderDiffBadge() {
-  var btn = document.getElementById('btn-tab-diff');
   var SD = window.MA.saveDiff;
-  if (!btn || !SD) return null;
+  if (!SD) return null;
   var docs = _diffDocs();
   syncTabDirtyMarks(docs);
   // 上部バーの保存ボタンと FILES ツリーの印も
   // タブの印と同じ機会 (打つたび・保存のたび) に合わせ直す。
   try { updateTopSaveButton(); } catch (e) {}
   try { if (window.MA.filesPanel && window.MA.filesPanel.syncMarks) window.MA.filesPanel.syncMarks(); } catch (e) {}
-  var sum = SD.summary(docs);
-  btn.textContent = SD.badgeText(sum);
-  // 件数の描き直しで className を丸ごと入れ替えると、
-  // 「タブ列から畳む」で付けた tool-folded が消えて、畳んだはずのボタンが戻ってくる。
-  // 状態を表す 1 クラスだけを付け外しする (以下の件数ボタンも同じ)。
-  btn.classList.toggle('has-change', !!sum.hasChange);
-  btn.title = sum.hasChange
-    ? ('前回保存時点から変わった図: ' + sum.changed.concat(sum.added).join(', '))
-    : '前回保存時点から変わった図はない';
-  return sum;
+  return SD.summary(docs);
 }
 
 // ── 前回保存版といまの中身 ────────────────
@@ -5185,278 +5140,51 @@ function applyStatusBadge(el, name, count, tone) {
   el.appendChild(document.createTextNode(' ' + SB.label(name) + ' ' + String(n)));
 }
 
+// 下端の「● 前回保存版 ＋a −b」(変わった行数を常時出す比較の入口) とタブ列の「± 差分」は
+// TICKET-owner-20261115-2141-prune で外した (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。
+// ただし「保存すると内容が大きく消える」形 (77 行 → 4 行の事故) の警告は、図を失わないための守りなので残す:
+// 消える向きのときだけ札を出し、押すと ± 差分タブ (消える行の名指しと「前回保存版に戻す」) が開く。
+// それ以外では札を出さない (件数を見せる比較の入口にはしない)。
 function renderLiveDiffChip() {
+  var pane = document.getElementById('compare-pane');
+  if (pane && !pane.hidden && _compareMode === 'diff') renderCompareDiffView();
   var el = document.getElementById('status-livediff');
   var LD = window.MA.liveDiff;
   if (!el || !LD) return null;
   var p = _liveDiffPair();
-  if (!p) {
-    el.setAttribute('data-livediff', 'none');
-    el.title = '開いている図がありません';
-    applyStatusBadge(el, '前回保存版', 0, 'ok');
-    return null;
-  }
-  var v = LD.verdict(p.before, p.now, p.has);
-  // 変わった行数 (増 + 減) を件数として出す。同じなら 0 件なので出ない。
-  var _ldText = LD.chipText(p.before, p.now, p.has);
-  var _ldN = 0;
-  if (v !== 'none' && v !== 'same') {
-    var _m = _ldText.match(/[0-9]+/g) || [];
-    _ldN = _m.reduce(function(a, b) { return a + parseInt(b, 10); }, 0) || 1;
-  }
-  applyStatusBadge(el, '前回保存版', _ldN, v === 'shrink' ? 'bad' : 'warn');
+  var v = p ? LD.verdict(p.before, p.now, p.has) : 'none';
   el.setAttribute('data-livediff', v);
-  el.classList.toggle('has-open', v === 'changed' || v === 'shrink');
-  el.classList.toggle('livediff-warn', v === 'shrink');
-  el.title = v === 'shrink'
-    ? LD.warnText(p.name, p.before, p.now)
-    : (v === 'none' ? 'この図はまだ保存していないので、比べる相手がありません'
-                    : '⇔ 並べて見る の ± 差分で前回保存版と並べる (押すと開きます)');
-  // ⇔ 並べて見る の ± 差分を開いたままなら、打つたびにそちらも追従させる
-  // (札と並べた画面が違うことを言わない)。
-  var pane = document.getElementById('compare-pane');
-  if (pane && !pane.hidden && _compareMode === 'diff') renderCompareDiffView();
+  if (v !== 'shrink') {
+    applyStatusBadge(el, '前回保存版', 0, 'ok');
+    el.title = '';
+    return v;
+  }
+  var sh = LD.shrink(p.before, p.now);
+  var removed = (sh && Number(sh.lost) > 0) ? Number(sh.lost) : 1;
+  applyStatusBadge(el, '前回保存版', removed, 'bad');
+  el.title = LD.warnText(p.name, p.before, p.now) + ' (押すと消える行と「前回保存版に戻す」が出ます)';
   return v;
 }
 
-// 下端の札は「前回保存版と今を並べる」ための入口で、
-// ⇔ 並べて見る の ± 差分タブと目的が同じだった。札は残し、押したときに開く画面を
-// ⇔ 並べて見る に寄せる (並べる画面の実体を増やさない)。全文で並べる・戻すは
-// そのタブの中でできる。
-function setupLiveDiff() {
+function setupLiveDiffGuard() {
   var el = document.getElementById('status-livediff');
   if (!el) return;
   el.addEventListener('click', function() {
-    var CE = window.MA.compareEntry;
-    var want = CE ? CE.targetForBadge('status-livediff') : '';
-    if (want) { openCompareTarget(want); return; }
+    toggleSeniorPane(false);
     toggleCompareView(true, 'diff');
   });
   renderLiveDiffChip();
 }
 
-// 「変更前 = 前回保存 (09/23 21:51)」。± 差分の窓・比較の枠の見出しで基準を言う。
+// 「変更前 = 前回保存 (09/23 21:51)」。± 差分タブ・比較の枠の見出しで基準を言う。
 function _savedHeadLabel(at) {
   return '変更前 = 前回保存 (' + String(at || '').replace('T', ' ').slice(0, 16) + ')';
-}
-
-function setupDiffPanel() {
-  var btn = document.getElementById('btn-tab-diff');
-  var panel = document.getElementById('diff-panel');
-  var SD = window.MA.saveDiff;
-  if (!btn || !panel || !SD) return;
-  var esc = window.MA.htmlUtils.escHtml;
-
-  function close() { panel.classList.remove('open'); }
-
-  function render() {
-    var docs = _diffDocs();
-    var sum = SD.summary(docs);
-    var html = '<div class="diff-head">' + esc(SD.badgeText(sum));
-    if (sum.markedAt) html += ' ・ ' + esc(_savedHeadLabel(sum.markedAt));
-    html += '</div>';
-    docs.forEach(function(d) {
-      var st = SD.statusOf(d.name, d.dsl);
-      var mark = st === 'same' ? '—' : (st === 'new' ? '新規' : '変更');
-      if (st === 'changed') {
-        var c = SD.changedLines(d.name, d.dsl);
-        mark += ' +' + c.added + ' −' + c.removed;
-      }
-      html += '<div class="diff-row' + (st === 'same' ? '' : ' changed') + '"'
-        + ' data-doc-id="' + esc(d.id) + '" data-diff-status="' + esc(st) + '">'
-        + '<span>' + esc(d.name) + '</span><span>' + esc(mark) + '</span></div>';
-    });
-    html += '<div class="diff-actions">'
-      // 会議中はここから参照ペインへ入り、
-      // 以降は「この図の前後」と「他の図と見比べ」をタブで行き来する。
-      + '<button type="button" id="diff-open-pane">ペインで見る (見比べと切替)</button>'
-      + '<button type="button" id="diff-mark-all">今の内容を基準にする</button></div>';
-    panel.innerHTML = html;
-
-    var rows = panel.querySelectorAll('.diff-row');
-    for (var i = 0; i < rows.length; i++) {
-      (function(row) {
-        row.addEventListener('click', function() {
-          close();
-          switchToDoc(row.getAttribute('data-doc-id'));
-        });
-      })(rows[i]);
-    }
-    var openPane = document.getElementById('diff-open-pane');
-    if (openPane) {
-      openPane.addEventListener('click', function() {
-        close();
-        toggleCompareView(true, 'diff');
-      });
-    }
-    var markAll = document.getElementById('diff-mark-all');
-    if (markAll) {
-      markAll.addEventListener('click', function() {
-        SD.markAll(_diffDocs());
-        renderTabs();
-        render();
-      });
-    }
-  }
-
-  btn.addEventListener('click', function() {
-    if (panel.classList.contains('open')) { close(); return; }
-    render();
-    panel.classList.add('open');
-    var rect = btn.getBoundingClientRect();
-    panel.style.left = Math.max(4, rect.right - 260) + 'px';
-    panel.style.top = (rect.bottom + 2) + 'px';
-  });
-
-  document.addEventListener('click', function(ev) {
-    if (!panel.classList.contains('open')) return;
-    if (panel.contains(ev.target) || ev.target === btn) return;
-    close();
-  });
-
-  renderDiffBadge();
-  try { renderLiveDiffChip(); } catch (e) {}
-}
-
-// ── レビュー机 ──────────────────────────
-// 「先輩の図と同じ型のまま作る」業務では、型からのずれも、図種特有の間違い
-// (choice を足したのに元の直接遷移が残る等) も、書いた本人からは見えない。
-// 基準にした図を図ごとに覚えておき、打つたびに突き合わせて指摘を出す。
-// 判断は review-desk が持ち、ここは並べて行へ飛ばすだけ。
-
-function _reviewFindings() {
-  var RD = window.MA.reviewDesk;
-  if (!RD) return { findings: [], ok: true, summary: '' };
-  var name = _activeDocName();
-  var base = name ? RD.baselineOf(name) : null;
-  return RD.review(mmdText, base ? base.dsl : '');
 }
 
 function _activeDocName() {
   if (!window.MA.workspace) return '';
   var d = window.MA.workspace.getActive();
   return d ? d.name : '';
-}
-
-function renderReviewBadge() {
-  var btn = document.getElementById('btn-tab-review');
-  var RD = window.MA.reviewDesk;
-  if (!btn || !RD) return null;
-  var r = _reviewFindings();
-  btn.textContent = RD.badgeText(r.findings);
-  btn.classList.toggle('has-finding', r.findings.length > 0);
-  var name = _activeDocName();
-  var base = name ? RD.baselineOf(name) : null;
-  btn.title = (base ? ('基準: ' + base.ref + ' / ') : '基準の図は未選択 / ') + r.summary;
-  // 開いたままなら中身も追従させる (直した指摘がその場で消える)。
-  var panel = document.getElementById('review-panel');
-  if (panel && panel.classList.contains('open')) renderReviewPanel();
-  return r;
-}
-
-function renderReviewPanel() {
-  var panel = document.getElementById('review-panel');
-  var RD = window.MA.reviewDesk;
-  if (!panel || !RD) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  var name = _activeDocName();
-  var base = name ? RD.baselineOf(name) : null;
-  var r = _reviewFindings();
-
-  var opts = '<option value="">(基準の図を選ぶ)</option>';
-  var listed = {};
-  if (window.MA.workspace) {
-    window.MA.workspace.list().forEach(function(d) {
-      if (d.name === name) return;   // 自分自身は基準にしない
-      listed[d.name] = true;
-      opts += '<option value="' + esc(d.name) + '"' + (base && base.ref === d.name ? ' selected' : '') + '>'
-        + esc(d.name) + '</option>';
-    });
-  }
-  // 基準は組み込みの雛形だったり、もう閉じた図だったりする。開いている図に無くても
-  // 「いま何を基準にしているか」は出す (選び直すまで基準が空欄に見えると、
-  // 何と突き合わせた指摘なのか分からなくなる)。
-  if (base && base.ref && !listed[base.ref]) {
-    opts += '<option value="' + esc(base.ref) + '" selected>' + esc(base.ref) + '</option>';
-  }
-
-  var html = '<div class="rv-head" data-review="' + (r.findings.length ? 'dirty' : 'clean') + '">'
-    + esc(r.summary) + '</div>'
-    + '<div class="rv-base"><span>基準</span><select id="rv-base-select">' + opts + '</select></div>';
-
-  if (r.findings.length === 0) {
-    html += '<div class="rv-empty" id="rv-empty">'
-      + (base ? '基準「' + esc(base.ref) + '」との型のずれも、図種特有の間違いもありません。'
-              : '図種特有の間違いはありません。基準の図を選ぶと、型からのずれも見ます。')
-      + '</div>';
-  } else {
-    html += r.findings.map(function(f) {
-      return '<div class="rv-row" data-review-kind="' + esc(f.kind) + '"'
-        + (f.line == null ? '' : ' data-review-line="' + f.line + '"') + '>'
-        + '<span class="rv-kind">' + esc(RD.kindLabel(f.kind)) + '</span>'
-        + '<span class="rv-no">' + (f.line == null ? '—' : (f.line + 1)) + '</span>'
-        + '<span class="rv-msg">' + esc(f.message) + '</span>'
-        + '</div>';
-    }).join('');
-  }
-  panel.innerHTML = html;
-
-  var sel = document.getElementById('rv-base-select');
-  if (sel) {
-    sel.addEventListener('change', function() {
-      var docName = _activeDocName();
-      if (!docName) return;
-      var refName = sel.value;
-      var cur = RD.baselineOf(docName);
-      if (!refName) { RD.clearBaseline(docName); }
-      else {
-        var ref = window.MA.workspace ? window.MA.workspace.findByName(refName) : null;
-        if (ref) RD.setBaseline(docName, refName, ref.dsl, new Date().toISOString());
-        // 開いている図に無い基準 (組み込みの雛形・閉じた図) は、覚えてある本文をそのまま使う。
-        else if (cur && cur.ref === refName) RD.setBaseline(docName, refName, cur.dsl, cur.at);
-      }
-      renderReviewBadge();
-      renderReviewPanel();
-    });
-  }
-  var rows = panel.querySelectorAll('.rv-row[data-review-line]');
-  for (var i = 0; i < rows.length; i++) {
-    (function(row) {
-      row.addEventListener('click', function() {
-        gotoOutlineLine(parseInt(row.getAttribute('data-review-line'), 10));
-      });
-    })(rows[i]);
-  }
-}
-
-function openReviewPanel() {
-  var btn = document.getElementById('btn-tab-review');
-  var panel = document.getElementById('review-panel');
-  if (!btn || !panel) return;
-  renderReviewPanel();
-  panel.classList.add('open');
-  var rect = btn.getBoundingClientRect();
-  panel.style.left = Math.max(4, rect.right - 340) + 'px';
-  panel.style.top = (rect.bottom + 2) + 'px';
-}
-
-function setupReviewPanel() {
-  var btn = document.getElementById('btn-tab-review');
-  var panel = document.getElementById('review-panel');
-  if (!btn || !panel || !window.MA.reviewDesk) return;
-
-  btn.addEventListener('click', function() {
-    if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
-    openReviewPanel();
-  });
-
-  document.addEventListener('click', function(ev) {
-    if (!panel.classList.contains('open')) return;
-    if (panel.contains(ev.target) || ev.target === btn) return;
-    panel.classList.remove('open');
-  });
-
-  renderReviewBadge();
 }
 
 // ── 変遷履歴 ─────────────────────────────
@@ -5742,1115 +5470,6 @@ function setupVersionTimeline() {
 // 自分の図が他人のフォルダに紛れ込む。読むだけなら保存先は動かさなくていい。
 // 隣のフォルダを一覧から選び、その場で図を出す。設定には一切書かない。
 var _peekDirs = [];
-var _peekDir = null;
-// 📂 一覧から持ち越した絞り込みの名前。
-var _peekQuery = '';
-var _peekNames = [];
-var _peekName = null;
-var _peekDsl = '';        // 今出している 1 枚の本文 (テンプレートの材料)
-
-// フォルダを 1 つ選んで 1 枚ずつ読む形だと、
-// 「同じドメインの図が他のフォルダにもあるか」はファイル名を推測して開いて
-// 確かめるしかなかった (GPIO の突合は 4 枚を個別に開いてテキスト比較)。
-// ドメイン名でフォルダを横断して束ね、同じ図種の組の差分をその場で色分けする。
-var _cohortOn = false;
-var _cohortGroups = [];      // 表示中のドメイン (既定は業務データだけ)
-var _cohortAllGroups = [];   // [{ domain, folders, entries }] — 本文はまだ読んでいない
-var _cohortDomain = null;
-var _cohortResult = null;    // 選んだドメインの compare 結果
-// plantuml-*.puml / diagram1.puml のような
-// アプリ同梱テンプレ・既定サンプルは各自が独立に複製しただけなので、フォルダを
-// またいで同名で並ぶ。突合に混ぜると本物の食い違い (GPIO) と同じ列に出て、
-// 毎回 puml の中身を読んで選り分けることになる。既定で外し、押せば戻せる。
-var _cohortShowTemplates = false;
-
-// 同じ組の同じ差分 (部品名/ラベルが違うだけの内部揺れ) が
-// 毎回 そのまま出続け、reviewer は同じ diff を最初から読み直して同じ結論を出し直していた。
-// domain-verdict の宣言は図の中に書く印なので、自分の図にしか書けない。reviewer は
-// junior×primary のどちらの図も持たないので、その組については置き場が無かった。
-// 確認済みの組は台帳 (作業フォルダ/_cohort-ack.json) に置き、突合の画面からは畳む。
-// 差分が変わった組は台帳があっても畳まない (確認済みの印が新しい食い違いを隠さない)。
-var _cohortAckDir = null;
-var _cohortAckMsg = '';
-
-function refreshCohortAck(force) {
-  var CA = window.MA.cohortAck;
-  if (!CA || !window.fetch) return Promise.resolve(false);
-  var dir = _wsFileDir();
-  if (!force && _cohortAckDir === dir) return Promise.resolve(false);
-  _cohortAckDir = dir;
-  return window.fetch('/cohort-ack?dir=' + encodeURIComponent(dir))
-    .then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(data) {
-      CA.setCurrent(data ? { entries: (data && data.entries) || [] } : null);
-      return true;
-    })
-    // 台帳が読めないだけで突合を止めない (1 組も確認していないのと同じ扱い)。
-    .catch(function() { CA.setCurrent(null); return false; });
-}
-
-function _saveCohortAck(ledger) {
-  var CA = window.MA.cohortAck;
-  if (!CA) return Promise.resolve(false);
-  CA.setCurrent(ledger);
-  if (!window.fetch) return Promise.resolve(false);
-  return window.fetch('/cohort-ack', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dir: _wsFileDir(), entries: CA.current().entries }),
-  }).then(function(r) { return !!(r && r.ok); }).catch(function() { return false; });
-}
-
-// 突合の組 1 つを、台帳が引ける形にする (domain-cohort.diffRows の行と同じ形)。
-function _cohortAckRow(domain, p) {
-  return {
-    domain: domain,
-    kind: p.kind,
-    leftName: p.a.name,
-    rightName: p.b.name,
-    left: p.a.folder + ' / ' + p.a.base,
-    right: p.b.folder + ' / ' + p.b.base,
-    names: p.diff.names,
-    labels: p.diff.labels,
-  };
-}
-
-// 覗いたフォルダの一覧はファイル名しか出しておらず、
-// 「その図の SVG が今の puml から作られたものか」は GUI からは分からなかった
-// (毎回 CLI で /verify-svg を叩いて確かめていた)。一覧と同じ呼び出しで判定の材料も
-// 取り、行に印を出す。
-var _peekScan = null;      // svg-freshness の scan 結果 (覗いているフォルダぶん)
-// 覗いているフォルダの一覧 entry (図種つき)。
-// 名前だけの一覧では、語尾から図種を推測しながら 30 枚を上から読むことになる。
-var _peekEntries = [];
-var _peekVerifying = false;
-// 「先輩の図の変更を自分の図に取り込む」ときに要るのは
-// 「先輩の 1 枚が前回保存からどこを変えたか」。無いと複合図を丸ごと開いて目で差分を
-// 探すことになり、変わっていない図まで開いて見比べる往復が残る。
-var _peekChanges = null;       // peek-changes の report (覗いているフォルダぶん)
-var _peekChangedOnly = false;  // 変更のある図だけに絞っているか
-// 題材 1 つぶんの「6 図種の対応要否」。
-// 自分のフォルダの一覧 (控えを読むので本文つき) と、覗いているフォルダの一覧で作る。
-var _kmMine = [];
-var _kmSubject = '';
-// 題材の選択肢に混ざらない値。部品をまたいだ表の合図。
-var KM_ALL = '*';
-
-function _peekEls() {
-  return {
-    modal: document.getElementById('peek-modal'),
-    changes: document.getElementById('peek-changes'),
-    dirs: document.getElementById('peek-dirs'),
-    files: document.getElementById('peek-files'),
-    title: document.getElementById('peek-title'),
-    svg: document.getElementById('peek-svg'),
-    dsl: document.getElementById('peek-dsl'),
-    notice: document.getElementById('peek-notice'),
-    cohort: document.getElementById('peek-cohort'),
-    cohortToggle: document.getElementById('peek-cohort-toggle'),
-    template: document.getElementById('peek-template'),
-    compare: document.getElementById('peek-compare'),
-    cohortTemplates: document.getElementById('peek-cohort-templates'),
-    sbs: document.getElementById('peek-sbs'),
-    sbsToggle: document.getElementById('peek-sbs-toggle'),
-  };
-}
-
-// ── ドメイン横断の突合 ──
-// 行き先一覧 (_peekDirs) の各フォルダのファイル名を集め、`folder/name` の形の
-// 疑似 doc にしてドメインで束ねる。本文はここでは読まない (フォルダ数 × 枚数の
-// 読み込みを、見る気になっていない段階で走らせない)。
-function _peekIndexDocs() {
-  var WS = window.MA.workspace;
-  if (!WS) return Promise.resolve([]);
-  var dirs = _peekDirs.slice();
-  return Promise.all(dirs.map(function(d) {
-    return WS.listFiles(d.path).then(function(names) {
-      return { dir: d, names: (names || []).filter(function(n) { return n; }) };
-    }).catch(function() { return { dir: d, names: [] }; });
-  })).then(function(sets) {
-    var docs = [];
-    sets.forEach(function(set) {
-      set.names.forEach(function(n) {
-        docs.push({ name: set.dir.name + '/' + n, dsl: '', _dir: set.dir.path, _file: n });
-      });
-    });
-    return docs;
-  });
-}
-
-function _cohortLoadIndex() {
-  var DC = window.MA.domainCohort;
-  if (!DC) return Promise.resolve([]);
-  // テンプレ込みで束ねておき、表示側で外す (押して戻すときに読み直さない)。
-  return _peekIndexDocs().then(function(docs) { return DC.groups(docs); });
-}
-
-// 選んだドメインの図だけ本文を読み、突合する。
-function _cohortCompare(group) {
-  var WS = window.MA.workspace;
-  var DC = window.MA.domainCohort;
-  if (!WS || !DC || !group) return Promise.resolve(null);
-  return Promise.all(group.entries.map(function(e) {
-    var src = e.doc || {};
-    return WS.loadFile(src._file, src._dir).then(function(text) {
-      return { name: e.name, dsl: typeof text === 'string' ? text : '', _dir: src._dir, _file: src._file };
-    }).catch(function() { return { name: e.name, dsl: '', _dir: src._dir, _file: src._file }; });
-  })).then(function(docs) {
-    var groups = DC.groups(docs);
-    for (var i = 0; i < groups.length; i++) {
-      if (groups[i].domain === group.domain) {
-        return DC.compare(groups[i], { includeTemplates: _cohortShowTemplates });
-      }
-    }
-    return null;
-  });
-}
-
-function _cohortChips(host, title, part, aLabel, bLabel) {
-  var wrap = document.createElement('div');
-  wrap.className = 'cohort-line';
-  var head = document.createElement('span');
-  head.className = 'cohort-line-title';
-  head.textContent = title;
-  wrap.appendChild(head);
-  function add(list, cls, prefix) {
-    (list || []).forEach(function(v) {
-      var chip = document.createElement('span');
-      chip.className = 'cohort-chip ' + cls;
-      chip.textContent = prefix + v;
-      wrap.appendChild(chip);
-    });
-  }
-  add(part.both, 'cohort-both', '');
-  add(part.onlyA, 'cohort-only-a', aLabel + ' だけ: ');
-  add(part.onlyB, 'cohort-only-b', bLabel + ' だけ: ');
-  if (!part.both.length && !part.onlyA.length && !part.onlyB.length) {
-    var none = document.createElement('span');
-    none.className = 'cohort-chip cohort-none';
-    none.textContent = 'なし';
-    wrap.appendChild(none);
-  }
-  host.appendChild(wrap);
-}
-
-function renderCohortCompare() {
-  var el = _peekEls();
-  var DK = window.MA.diagramKind;
-  if (!el.cohort) return;
-  el.cohort.textContent = '';
-  if (!_cohortOn) { el.cohort.style.display = 'none'; return; }
-  el.cohort.style.display = 'block';
-  if (!_cohortDomain) {
-    var hint = document.createElement('div');
-    hint.className = 'cohort-hint';
-    hint.id = 'cohort-hint';
-    var exN = _cohortExcluded().length;
-    var exNote = exN ? ' (テンプレ由来 ' + exN + ' ドメインは外しています)' : '';
-    hint.textContent = (_cohortGroups.length
-      ? 'フォルダをまたぐドメインを ' + _cohortGroups.length + ' 件見つけました。左でドメインを選んでください。'
-      : 'フォルダをまたぐ同じドメイン名の図がありません。') + exNote;
-    el.cohort.appendChild(hint);
-    return;
-  }
-  var r = _cohortResult;
-  if (!r) {
-    var loading = document.createElement('div');
-    loading.className = 'cohort-hint';
-    loading.textContent = '読み込み中…';
-    el.cohort.appendChild(loading);
-    return;
-  }
-  var head = document.createElement('div');
-  head.className = 'cohort-head';
-  head.id = 'cohort-head';
-  head.textContent = r.domain + ' — ' + r.folders.join(' × ')
-    + ' (' + r.pairs.length + ' 組を突合、食い違い ' + r.mismatched + ' 組)';
-  el.cohort.appendChild(head);
-  var CA = window.MA.cohortAck;
-  // 確認済みの組を畳む。畳んだ数は必ず出す (黙って減らすと「直った」と読める)。
-  var ackRows = CA ? r.pairs.map(function(p) { return _cohortAckRow(r.domain, p); }) : [];
-  var ackOf = {};
-  if (CA) {
-    var led = CA.current();
-    r.pairs.forEach(function(p, i) { ackOf[i] = CA.statusOf(led, ackRows[i]); });
-    var note = document.createElement('div');
-    note.className = 'cohort-hint';
-    note.id = 'cohort-ack-summary';
-    note.textContent = _cohortAckMsg || CA.summaryLine(ackRows, led);
-    el.cohort.appendChild(note);
-  }
-  if (!r.pairs.length) {
-    var un = document.createElement('div');
-    un.className = 'cohort-hint';
-    un.id = 'cohort-unpaired';
-    un.textContent = '同じ図種の組がフォルダ間にありません (片方にしか無い図種です)。下の一覧から 1 枚ずつ読んでください。';
-    el.cohort.appendChild(un);
-    return;
-  }
-  r.pairs.forEach(function(p, i) {
-    var ack = ackOf[i] || { status: 'new', text: '' };
-    if (ack.status === 'acked') {
-      // 確認済みで差分も当時のまま。1 行だけ残して中身は出さない。
-      var done = document.createElement('div');
-      done.className = 'cohort-pair acked';
-      done.setAttribute('data-cohort-ack', 'acked');
-      done.setAttribute('data-cohort-kind', p.kind);
-      var dt = document.createElement('span');
-      dt.className = 'cohort-verdict-note';
-      dt.textContent = '✓ ' + p.a.folder + ' / ' + p.a.base + ' × ' + p.b.folder + ' / ' + p.b.base
-        + ' — ' + ack.text;
-      done.appendChild(dt);
-      var undo = document.createElement('button');
-      undo.type = 'button';
-      undo.className = 'cohort-verdict-btn';
-      undo.setAttribute('data-cohort-unack', '1');
-      undo.textContent = '確認を取り消す';
-      undo.addEventListener('click', function() {
-        var next = window.MA.cohortAck.unack(window.MA.cohortAck.current(), ackRows[i]);
-        _cohortAckMsg = '確認を取り消しました (次の突合からまた出ます)';
-        _saveCohortAck(next).then(function() { _cohortAckMsg = ''; renderCohortCompare(); });
-        renderCohortCompare();
-      });
-      done.appendChild(undo);
-      el.cohort.appendChild(done);
-      return;
-    }
-    var box = document.createElement('div');
-    box.className = 'cohort-pair' + (p.diff.matched ? ' matched' : ' mismatched');
-    box.setAttribute('data-cohort-ack', ack.status);
-    box.setAttribute('data-cohort-kind', p.kind);
-    box.setAttribute('data-cohort-matched', p.diff.matched ? '1' : '0');
-    var t = document.createElement('div');
-    t.className = 'cohort-pair-title';
-    var kindLabel = (DK && DK.label(String(p.kind).replace(/^plantuml-/, ''))) || '';
-    t.textContent = (kindLabel ? kindLabel + ' — ' : '')
-      + p.a.folder + ' / ' + p.a.base + '  ×  ' + p.b.folder + ' / ' + p.b.base
-      + (p.diff.matched ? '  ✓ 揃っている' : '  ✗ ' + p.diff.gaps + ' 件が片方にしかない');
-    box.appendChild(t);
-    _cohortChips(box, '部品名', p.diff.names, p.a.folder, p.b.folder);
-    // 「片方だけ」の 2 列は、どの名前がどの名前の
-    // 別表記なのかを読む側が結び直すことになる。対応表にして揺れている行だけを残す。
-    _cohortPairTable(box, p.diff.names, p.a.folder, p.b.folder);
-    _cohortChips(box, '矢印ラベル', p.diff.labels, p.a.folder, p.b.folder);
-    _cohortVerdictRow(box, r.domain, p);
-    _cohortAckRowUi(box, ackRows[i], ack);
-    el.cohort.appendChild(box);
-  });
-}
-
-// 部品名の対応表。IRQCtrl ⇔ Irq_Ctrl のような
-// 表記揺れを、grep と目の結び直しではなく 1 つの表で出す。既定は揺れている行だけ。
-// 一致している行は数えて畳む (読む目的は揺れている行で、一致が先頭に並ぶと探し直しになる)。
-function _cohortPairTable(box, part, aFolder, bFolder) {
-  var NP = window.MA.namePairing;
-  if (!NP) return;
-  var t = NP.table(part, aFolder, bFolder);
-  var wrap = document.createElement('div');
-  wrap.className = 'cohort-pairs';
-  wrap.setAttribute('data-pair-variants', String(t.variants));
-  var head = document.createElement('div');
-  head.className = 'cohort-pairs-head';
-  head.textContent = NP.summaryLine(t);
-  wrap.appendChild(head);
-  var rows = NP.mismatchRows(t);
-  if (!rows.length) {
-    var none = document.createElement('div');
-    none.className = 'cohort-pairs-none';
-    none.textContent = '対応の付く表記揺れはありません';
-    wrap.appendChild(none);
-    box.appendChild(wrap);
-    return;
-  }
-  rows.forEach(function(r) {
-    var line = document.createElement('div');
-    line.className = 'cohort-pair-row cohort-pair-' + r.kind;
-    line.setAttribute('data-pair-kind', r.kind);
-    line.setAttribute('data-pair-a', r.a);
-    line.setAttribute('data-pair-b', r.b);
-    var a = document.createElement('span');
-    a.className = 'cohort-pair-a';
-    a.textContent = aFolder + ' / ' + (r.a || '—');
-    var arrow = document.createElement('span');
-    arrow.className = 'cohort-pair-arrow';
-    arrow.textContent = '⇔';
-    var b = document.createElement('span');
-    b.className = 'cohort-pair-b';
-    b.textContent = bFolder + ' / ' + (r.b || '—');
-    var note = document.createElement('span');
-    note.className = 'cohort-pair-note';
-    note.textContent = r.note;
-    line.appendChild(a);
-    line.appendChild(arrow);
-    line.appendChild(b);
-    line.appendChild(note);
-    wrap.appendChild(line);
-  });
-  box.appendChild(wrap);
-}
-
-// ── 判断 (統一する / 別物と明示する) ──
-// 突合で差分は見えても、見た後にできることが
-// 無かった。統一するなら綴りを手で打ち替え、別物とするなら title を手で書き足す
-// しかなく、決めたこと自体はどこにも残らないので次の突合で同じ食い違いがまた出る。
-// 組の片方が自分の保存フォルダのときだけ、その 1 枚に書き戻す 2 つのボタンを出す。
-function _myPeekDir() {
-  // 覗き先の一覧が自分の保存先を current として持っている。設定の値は相対パス
-  // (./autosave) のことがあり、一覧の絶対パスとは字面が合わないので、
-  // 比べるのは必ず一覧の側の path にする。
-  for (var i = 0; i < _peekDirs.length; i++) {
-    if (_peekDirs[i].current) return _peekDirs[i].path;
-  }
-  return _wsFileDir();
-}
-
-function _cohortSides(p) {
-  var PF = window.MA.peekFolder;
-  var dir = _myPeekDir();
-  if (!PF) return null;
-  var a = (p.a.doc || {})._dir, b = (p.b.doc || {})._dir;
-  if (PF.samePath(a, dir)) return { mine: p.a, other: p.b };
-  if (PF.samePath(b, dir)) return { mine: p.b, other: p.a };
-  return null;   // どちらも他人の図。読むだけ (勝手に直さない)
-}
-
-// 組 1 つの「内部揺れとして確認済みにする」行。domain-verdict の宣言 (図の持ち主が
-// 自分の図に書く印) とは別で、こちらは第三者が組について確かめた記録を台帳に残す。
-function _cohortAckRowUi(box, row, ack) {
-  var CA = window.MA.cohortAck;
-  if (!CA || !row) return;
-  var line = document.createElement('div');
-  line.className = 'cohort-verdict';
-  var note = document.createElement('span');
-  note.className = 'cohort-verdict-note';
-  note.id = 'cohort-ack-note';
-  note.textContent = ack.status === 'changed'
-    ? ack.text
-    : '内部揺れで実害が無いと確かめたら、この組を台帳に入れて次から畳みます';
-  line.appendChild(note);
-  var b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'cohort-verdict-btn';
-  b.setAttribute('data-cohort-ack-btn', '1');
-  b.textContent = ack.status === 'changed' ? '新しい差分も確認済みにする' : '内部揺れとして確認済みにする';
-  b.addEventListener('click', function() {
-    // note は空のまま (「内部揺れ・非衝突」は確認済みの文面がもう言っている。
-    // 同じ言葉を 2 度並べない)。
-    var res = CA.ack(CA.current(), row, { by: 'reviewer', at: _todayStamp() });
-    _cohortAckMsg = '確認済みにしました: ' + row.left + ' × ' + row.right;
-    _saveCohortAck(res.ledger).then(function() { _cohortAckMsg = ''; renderCohortCompare(); });
-    renderCohortCompare();
-  });
-  line.appendChild(b);
-  box.appendChild(line);
-}
-
-function _todayStamp() {
-  var d = new Date();
-  function p2(n) { return (n < 10 ? '0' : '') + n; }
-  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
-}
-
-function _cohortVerdictRow(box, domain, p) {
-  var DV = window.MA.domainVerdict;
-  var sides = DV ? _cohortSides(p) : null;
-  var row = document.createElement('div');
-  row.className = 'cohort-verdict';
-  if (!sides) {
-    row.textContent = 'どちらも自分の保存フォルダの図ではありません (読むだけ)';
-    box.appendChild(row);
-    return;
-  }
-  var mineDoc = sides.mine.doc, otherDoc = sides.other.doc;
-  var mark = DV.readVerdict(mineDoc.dsl, sides.other.folder);
-  var key = sides.mine.name + '|' + sides.other.name;
-  var note = document.createElement('span');
-  note.className = 'cohort-verdict-note';
-  note.id = 'cohort-verdict-note';
-  note.textContent = _cohortVerdictMsgs[key] ? _cohortVerdictMsgs[key] : mark
-    ? (mark.kind === 'shared' ? '判断済み: ' + sides.other.folder + ' と共有ドメイン'
-                              : '判断済み: ' + sides.other.folder + ' とは別物')
-    : sides.mine.folder + ' / ' + sides.mine.base + ' に書き戻します';
-  row.appendChild(note);
-  [
-    { kind: 'shared', label: '共有ドメインとして統一する' },
-    { kind: 'separate', label: '別物として title に明示する' },
-  ].forEach(function(spec) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'cohort-verdict-btn';
-    b.setAttribute('data-verdict', spec.kind);
-    b.textContent = spec.label;
-    b.addEventListener('click', function() {
-      applyCohortVerdict(spec.kind, domain, sides, note, b, key);
-    });
-    row.appendChild(b);
-  });
-  box.appendChild(row);
-  if (mineDoc && otherDoc) box.setAttribute('data-cohort-mine', sides.mine.folder);
-}
-
-var _cohortVerdictMsgs = {};   // 組ごとの「直前に何をしたか」。突合し直しても残す
-
-function applyCohortVerdict(kind, domain, sides, note, btn, key) {
-  var DV = window.MA.domainVerdict;
-  var WS = window.MA.workspace;
-  var mine = sides.mine, other = sides.other;
-  var src = mine.doc || {};
-  var res = DV.apply(kind, src, other.doc, {
-    domain: domain, otherFolder: other.folder, base: mine.base,
-  });
-  if (!res) return Promise.resolve(false);
-  if (btn) btn.disabled = true;
-  return WS.saveToFile({ name: src._file.replace(/\.[^.]+$/, ''), dsl: res.dsl }, src._dir)
-    .then(function(ok) {
-      if (btn) btn.disabled = false;
-      if (!ok) { note.textContent = '書き戻せませんでした (保存先を確認してください)'; return false; }
-
-      src.dsl = res.dsl;
-      var msg = DV.summaryLine(res) + ' — ' + mine.folder + ' / ' + mine.base + ' に保存しました';
-      _cohortVerdictMsgs[key] = msg;
-      note.textContent = msg;
-      // 突合し直す。直した結果が同じ画面にすぐ出ないと、直ったか確かめる手が増える。
-      return selectCohortDomain(domain).then(function() { return true; });
-    })
-    .catch(function() {
-      if (btn) btn.disabled = false;
-      note.textContent = '書き戻せませんでした (保存先を確認してください)';
-      return false;
-    });
-}
-
-function renderCohortDomains() {
-  var el = _peekEls();
-  if (!el.dirs) return;
-  _peekDirsShow();
-  el.dirs.textContent = '';
-  var head = document.createElement('div');
-  head.className = 'peek-head';
-  head.id = 'peek-dirs-head';
-  head.textContent = _cohortGroups.length
-    ? 'ドメイン (' + _cohortGroups.length + ')'
-    : 'フォルダをまたぐドメインがありません';
-  el.dirs.appendChild(head);
-  var ex = _cohortExcluded();
-  if (ex.length) {
-    var note = document.createElement('div');
-    note.className = 'cohort-hint';
-    note.id = 'cohort-excluded';
-    note.setAttribute('data-excluded', String(ex.length));
-    note.textContent = 'テンプレ由来 ' + ex.length + ' ドメインは外しています ('
-      + ex.map(function(g) { return g.domain; }).join(', ') + ')';
-    el.dirs.appendChild(note);
-  }
-  _cohortGroups.forEach(function(g) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'peek-dir cohort-domain' + (g.domain === _cohortDomain ? ' selected' : '');
-    b.setAttribute('data-domain', g.domain);
-    b.textContent = g.domain + ' (' + g.folders.join(' × ') + ' / ' + g.entries.length + ' 枚)';
-    b.addEventListener('click', function() { selectCohortDomain(g.domain); });
-    el.dirs.appendChild(b);
-  });
-  if (el.notice) el.notice.textContent = 'ドメインで揃えています (読むだけ・保存先は動きません)';
-}
-
-// 選んだドメインの図を、フォルダ付きの名前で一覧に出す。押せば従来どおり 1 枚読む。
-function renderCohortFiles() {
-  var el = _peekEls();
-  if (!el.files) return;
-  el.files.textContent = '';
-  var head = document.createElement('div');
-  head.className = 'peek-head';
-  head.id = 'peek-files-head';
-  var group = _cohortGroupOf(_cohortDomain);
-  head.textContent = group ? (group.entries.length + ' 枚') : 'ドメインを選んでください';
-  el.files.appendChild(head);
-  if (!group) return;
-  group.entries.forEach(function(e) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    var src = e.doc || {};
-    b.className = 'peek-file' + (src._file === _peekName && src._dir === _peekDir ? ' selected' : '');
-    b.setAttribute('data-file-name', src._file);
-    b.setAttribute('data-folder', e.folder);
-    b.textContent = e.folder + ' / ' + e.base;
-    b.addEventListener('click', function() {
-      _peekDir = src._dir;
-      showPeekFile(src._file).then(renderCohortFiles);
-    });
-    el.files.appendChild(b);
-  });
-}
-
-// 表示するドメイン。既定はテンプレ由来を外した業務データだけ。
-function _cohortVisibleGroups() {
-  var DC = window.MA.domainCohort;
-  if (!DC) return _cohortAllGroups.slice();
-  return DC.crossFolder(_cohortAllGroups, { includeTemplates: _cohortShowTemplates });
-}
-
-// 外したテンプレ由来のドメイン。件数を黙って減らさないために画面に必ず出す。
-function _cohortExcluded() {
-  var DC = window.MA.domainCohort;
-  if (!DC || _cohortShowTemplates) return [];
-  return DC.templateOnly(_cohortAllGroups);
-}
-
-function _cohortGroupOf(domain) {
-  for (var i = 0; i < _cohortGroups.length; i++) {
-    if (_cohortGroups[i].domain === domain) return _cohortGroups[i];
-  }
-  return null;
-}
-
-function selectCohortDomain(domain) {
-  _cohortDomain = domain;
-  _cohortResult = null;
-  renderCohortDomains();
-  renderCohortFiles();
-  renderCohortCompare();
-  var group = _cohortGroupOf(domain);
-  return _cohortCompare(group).then(function(r) {
-    if (_cohortDomain !== domain) return false;   // 途中で選び直された
-    _cohortResult = r;
-    renderCohortCompare();
-    return true;
-  });
-}
-
-function setCohortMode(on) {
-  var el = _peekEls();
-  _cohortOn = !!on;
-  // 2 つの並べ方を同時に出さない (同名で並べる方を先に畳む)。
-  if (_cohortOn && _sbsOn) setSbsMode(false);
-  if (el.cohortToggle) {
-    el.cohortToggle.setAttribute('aria-pressed', _cohortOn ? 'true' : 'false');
-    el.cohortToggle.classList.toggle('on', _cohortOn);
-  }
-  _syncCohortTemplateBtn();
-  if (!_cohortOn) {
-    _cohortDomain = null;
-    _cohortResult = null;
-    renderCohortCompare();
-    renderPeekDirs();
-    renderPeekFiles();
-    return Promise.resolve(true);
-  }
-  // 突合に切り替えたら、前に読んでいた 1 枚は消す。別ドメインの図が下に
-  // 残っていると、上の突合結果と同じドメインのものだと読み違える。
-  _peekName = null;
-  if (el.title) el.title.textContent = '';
-  if (el.svg) { el.svg.textContent = ''; el.svg.style.display = 'none'; }
-  if (el.dsl) el.dsl.textContent = '';
-  renderCohortCompare();
-  // 確認済みの台帳は突合に入るときに 1 回読む (読めなくても突合は動く)。
-  refreshCohortAck().then(function(ok) { if (ok && _cohortOn) renderCohortCompare(); });
-  return _cohortLoadIndex().then(function(groups) {
-    if (!_cohortOn) return false;
-    _cohortAllGroups = groups;
-    _cohortGroups = _cohortVisibleGroups();
-    _syncCohortTemplateBtn();
-    renderCohortDomains();
-    renderCohortFiles();
-    // 1 件しか無いなら開いておく (押して確かめる手を増やさない)。
-    if (_cohortGroups.length === 1) return selectCohortDomain(_cohortGroups[0].domain);
-    renderCohortCompare();
-    return true;
-  });
-}
-
-// テンプレ由来を含める / 外す。読み直しはしない (束ねる所まではテンプレ込み)。
-function setCohortTemplates(on) {
-  _cohortShowTemplates = !!on;
-  _syncCohortTemplateBtn();
-  _cohortGroups = _cohortVisibleGroups();
-  // 外した結果、選んでいたドメインが表示から消えたら選択も解く。
-  if (_cohortDomain && !_cohortGroupOf(_cohortDomain)) {
-    _cohortDomain = null;
-    _cohortResult = null;
-  }
-  renderCohortDomains();
-  renderCohortFiles();
-  if (!_cohortDomain) { renderCohortCompare(); return Promise.resolve(true); }
-  return selectCohortDomain(_cohortDomain);
-}
-
-function _syncCohortTemplateBtn() {
-  var el = _peekEls();
-  if (!el.cohortTemplates) return;
-  el.cohortTemplates.style.display = _cohortOn ? '' : 'none';
-  el.cohortTemplates.setAttribute('aria-pressed', _cohortShowTemplates ? 'true' : 'false');
-  el.cohortTemplates.classList.toggle('on', _cohortShowTemplates);
-  el.cohortTemplates.textContent = _cohortShowTemplates ? 'テンプレも表示中' : 'テンプレも表示';
-}
-
-// ── 切り出した部品を左右に並べる面 ──
-// 下の「複合図から部品を切り出して並べる」が使う 2 列の面。食い違う語だけを光らせ、
-// 揃え方 (どちらの綴りに寄せるか) もその場で当てられる。
-// 同じファイル名の図どうしを並べる入口は外した (2 枚を左右に置く入口は「並べて比較」1 つ)。
-var _sbsOn = false;
-var _sbsKey = null;        // 並べている部品の鍵
-var _sbsView = null;       // { pair, a, b, rows, marks, summary }
-var _sbsMsg = '';          // 直前に何をしたか (揃えた結果)
-
-// 並べる面を閉じる (開くのは selectPartPair だけ)。
-function setSbsMode(on) {
-  var el = _peekEls();
-  _sbsOn = false;
-  if (el.sbsToggle) {
-    el.sbsToggle.setAttribute('aria-pressed', 'false');
-    el.sbsToggle.classList.remove('on');
-  }
-  _sbsKey = null;
-  _sbsView = null;
-  _sbsMsg = '';
-  renderSbs();
-  if (el.modal && el.modal.style.display !== 'none') { renderPeekDirs(); renderPeekFiles(); }
-  return Promise.resolve(true);
-}
-
-// ── 複合図から部品を切り出して並べる ──
-// 先輩の該当図が GPIO 単独ではなく複合図
-// (driver_common_class.puml = 共通基底 + 6 ドライバ) にしかないとき、並べて見る
-// 機能はファイル名で対をなすためこの組は自動で並ばず、複合図を開いて
-// Gpio_Driver を目で探すことになっていた。開いた図が複合図なら部品を並べ、
-// 押した部品の所だけを切り出して、自分の同じ部品の図と左右に並べる。
-var _partSel = '';
-
-// ── 相乗り図を 1 枚のまま部品で絞る ──
-// 先輩の 1 枚に 8 部品が相乗りしていると、手本に
-// すべきクラスを全文精読で読み分けるしかなかった。切り出し (上の部品チップ) は
-// 「その部品だけの別の 1 枚」を作るので、相乗り図のどこに自分の部品が居るかは
-// 失われる。ここは絵をそのままにして、関係しない所の色だけを落とす。
-var _focusSel = '';
-var _focusMode = 'dim';
-
-function renderPartFocus() {
-  var host = document.getElementById('peek-focus');
-  var PF = window.MA.partFocus;
-  if (!host) return;
-  host.textContent = '';
-  var list = (PF && _peekDsl && PF.isComposite(_peekDsl)) ? PF.parts(_peekDsl) : [];
-  if (!list.length) { host.style.display = 'none'; _focusSel = ''; return; }
-  host.style.display = 'block';
-
-  var head = document.createElement('div');
-  head.className = 'peek-focus-head';
-  head.id = 'peek-focus-head';
-  head.textContent = PF.compositeLabel(_peekDsl);
-  host.appendChild(head);
-
-  list.forEach(function(p) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'peek-focus-chip' + (p.name === _focusSel ? ' selected' : '');
-    b.setAttribute('data-focus-part', p.name);
-    b.textContent = p.name;
-    b.addEventListener('click', function() { selectPartFocus(p.name); });
-    host.appendChild(b);
-  });
-
-  var modes = document.createElement('div');
-  modes.className = 'peek-focus-modes';
-  [{ k: 'dim', t: '他を淡色' }, { k: 'hide', t: '他を非表示' }].forEach(function(m) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'peek-focus-mode' + (_focusMode === m.k ? ' on' : '');
-    b.setAttribute('data-focus-mode', m.k);
-    b.textContent = m.t;
-    b.addEventListener('click', function() { setPartFocusMode(m.k); });
-    modes.appendChild(b);
-  });
-  if (_focusSel) {
-    var clr = document.createElement('button');
-    clr.type = 'button';
-    clr.className = 'peek-focus-mode';
-    clr.id = 'peek-focus-clear';
-    clr.textContent = 'フィルタ解除';
-    clr.addEventListener('click', function() { clearPartFocus(); });
-    modes.appendChild(clr);
-  }
-  host.appendChild(modes);
-
-  var label = document.createElement('div');
-  label.className = 'peek-focus-label';
-  label.id = 'peek-focus-label';
-  var res = _focusSel ? PF.focus(_peekDsl, _focusSel, _focusMode) : null;
-  label.textContent = res ? PF.focusLabel(res) : '';
-  if (res) label.setAttribute('data-focus-kept', String(res.kept.length));
-  host.appendChild(label);
-}
-
-// 本文も同じ絞りで読めるようにする (図で浮いた所が、打ち写す本文でも分かる)。
-function renderPeekDslText() {
-  var el = _peekEls();
-  var PF = window.MA.partFocus;
-  if (!el.dsl) return;
-  el.dsl.textContent = '';
-  if (!_focusSel || !PF) { el.dsl.textContent = _peekDsl; return; }
-  var flags = PF.lineFlags(_peekDsl, _focusSel);
-  var lines = String(_peekDsl).split(/\r?\n/);
-  lines.forEach(function(line, i) {
-    if (_focusMode === 'hide' && flags[i] === 'dim') return;
-    var span = document.createElement('span');
-    if (flags[i]) span.className = 'peek-dsl-' + flags[i];
-    span.textContent = line + '\n';
-    el.dsl.appendChild(span);
-  });
-}
-
-// 選んだ部品で図を出し直す。元の本文 (_peekDsl) は書き換えない
-// (覗く画面は読むだけなので、先輩のファイルにも自分の図にも触らない)。
-function applyPartFocus() {
-  var el = _peekEls();
-  var PF = window.MA.partFocus;
-  if (!el.svg) return Promise.resolve(false);
-  renderPartFocus();
-  renderPeekDslText();
-  var res = (_focusSel && PF) ? PF.focus(_peekDsl, _focusSel, _focusMode) : null;
-  var dsl = res ? res.dsl : _peekDsl;
-  var name = _peekName;
-  if (!dsl) return Promise.resolve(false);
-  el.svg.setAttribute('data-focus', '');
-  return renderDslToSvg(dsl, _peekDir).then(function(svg) {
-    if (name !== _peekName) return false;
-    el.svg.innerHTML = svg;
-    // 描き終わってから印を付ける (絞った絵が出る前の 1 枚と見分けが付くように)。
-    el.svg.setAttribute('data-focus', _focusSel ? _focusSel + ':' + _focusMode : '');
-    return true;
-  }).catch(function() {
-    el.svg.textContent = '図の描画に失敗しました (本文は下に出ています)';
-    return false;
-  });
-}
-
-function selectPartFocus(partName) {
-  _focusSel = _focusSel === partName ? '' : partName;
-  return applyPartFocus();
-}
-
-function setPartFocusMode(mode) {
-  _focusMode = mode === 'hide' ? 'hide' : 'dim';
-  return applyPartFocus();
-}
-
-function clearPartFocus() {
-  _focusSel = '';
-  return applyPartFocus();
-}
-
-function _peekFolderName(dir) {
-  var PF = window.MA.peekFolder;
-  for (var i = 0; i < _peekDirs.length; i++) {
-    if (PF && PF.samePath(_peekDirs[i].path, dir)) return _peekDirs[i].name;
-  }
-  return PF ? PF.baseName(dir) : '';
-}
-
-function renderPartChips() {
-  var host = document.getElementById('peek-parts');
-  var PS = window.MA.partSlice;
-  if (!host) return;
-  host.textContent = '';
-  var list = (PS && _peekDsl && PS.isComposite(_peekDsl)) ? PS.parts(_peekDsl) : [];
-  if (!list.length) { host.style.display = 'none'; _partSel = ''; return; }
-  host.style.display = 'block';
-  var head = document.createElement('div');
-  head.className = 'peek-parts-head';
-  head.id = 'peek-parts-head';
-  head.textContent = 'この図は ' + list.length + ' 部品の複合図です。部品を押すと、その所だけを切り出して自分の図と並べます';
-  host.appendChild(head);
-  list.forEach(function(p) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'peek-part-chip' + (p.name === _partSel ? ' selected' : '');
-    b.setAttribute('data-part', p.name);
-    b.textContent = p.name + ' (' + p.methods + ')';
-    b.addEventListener('click', function() { selectPartPair(p.name); });
-    host.appendChild(b);
-  });
-}
-
-// 自分の図と先輩の図はファイル名が対をなさないので、
-// 「先輩のどの図を見ればいいのか」を覗き一覧から目で当てていた (複合図を開いて
-// 中に Gpio_Driver があるかを確かめる)。今開いている自分の図の部品名で
-// 覗いているフォルダの本文を引き、載っている図を名指しして、押せばそのまま
-// 切り出しと並ぶ所まで行く。
-function findPeekPartHome() {
-  var PS = window.MA.partSlice;
-  var WS = window.MA.workspace;
-  var host = document.getElementById('peek-parts');
-  if (!PS || !WS || !host) return Promise.resolve(false);
-  var mine = WS.getActive ? WS.getActive() : null;
-  var myDsl = mine ? (window.MA.dslUtils ? window.MA.dslUtils.docDsl(mine) : mine.dsl) : '';
-  var myParts = myDsl ? PS.parts(myDsl).map(function(p) { return p.name; }) : [];
-  var dir = _peekDir;
-  host.style.display = 'block';
-  host.textContent = '';
-  var head = document.createElement('div');
-  head.className = 'peek-parts-head';
-  head.id = 'peek-find-head';
-  host.appendChild(head);
-  if (!myParts.length || !dir) {
-    head.textContent = '今開いている図に部品 (クラス) がありません';
-    return Promise.resolve(false);
-  }
-  head.textContent = myParts.join('・') + ' を ' + _peekFolderName(dir) + ' の中から探しています…';
-  return WS.listFiles(dir).then(function(names) {
-    return Promise.all((names || []).map(function(n) {
-      return WS.loadFile(n, dir)
-        .then(function(t) { return { name: n, dsl: typeof t === 'string' ? t : '' }; })
-        .catch(function() { return { name: n, dsl: '' }; });
-    }));
-  }).then(function(docs) {
-    var hits = PS.findInFolder(docs, myParts);
-    if (!hits.length) {
-      head.textContent = myParts.join('・') + ' を載せた図は ' + _peekFolderName(dir) + ' にありません';
-      head.setAttribute('data-find-hits', '0');
-      return false;
-    }
-    head.textContent = myParts.join('・') + ' を載せた先輩の図が ' + hits.length + ' 枚見つかりました';
-    head.setAttribute('data-find-hits', String(hits.length));
-    hits.forEach(function(h) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'peek-part-chip';
-      b.setAttribute('data-find-file', h.name);
-      b.setAttribute('data-find-part', h.part);
-      b.textContent = PS.foundLabel(h);
-      b.addEventListener('click', function() {
-        // 押した先で切り出しまで進む (開き直してから部品を押し直させない)。
-        showPeekFile(h.name).then(function() { return selectPartPair(h.part); });
-      });
-      host.appendChild(b);
-    });
-    return true;
-  }).catch(function() {
-    head.textContent = '探せませんでした';
-    return false;
-  });
-}
-
-// 押した部品の切り出しと、自分のフォルダの同じ部品の図を並べる。
-// 読むのは候補 (名前に部品名を含む数枚) だけ。
-function selectPartPair(partName) {
-  var PS = window.MA.partSlice;
-  var WS = window.MA.workspace;
-  var SBS = window.MA.sideBySide;
-  var el = _peekEls();
-  if (!PS || !WS || !SBS || !_peekDsl) return Promise.resolve(false);
-  var res = PS.slice(_peekDsl, partName);
-  if (!res) return Promise.resolve(false);
-
-  var key = 'part:' + _peekName + '|' + res.part.name;
-  _partSel = res.part.name;
-  if (_cohortOn) setCohortMode(false);
-  _sbsOn = true;
-  _sbsKey = key;
-  _sbsView = null;
-  _sbsMsg = '';
-  if (el.sbsToggle) {
-    el.sbsToggle.setAttribute('aria-pressed', 'true');
-    el.sbsToggle.classList.add('on');
-  }
-  renderPartChips();
-  renderSbs();
-
-  var theirDir = _peekDir;
-  var theirFile = _peekName;
-  var myDir = _myPeekDir();
-  var sliced = {
-    name: _peekFolderName(theirDir) + '/' + theirFile,
-    dsl: res.dsl, _dir: theirDir, _file: theirFile,
-  };
-  return WS.listFiles(myDir).then(function(names) {
-    var cands = PS.candidates(names || [], res.part.name);
-    return Promise.all(cands.map(function(n) {
-      return WS.loadFile(n, myDir)
-        .then(function(t) { return { name: n, dsl: typeof t === 'string' ? t : '', _dir: myDir, _file: n }; })
-        .catch(function() { return null; });
-    }));
-  }).catch(function() { return []; }).then(function(docs) {
-    if (_sbsKey !== key) return false;       // 途中で別の部品を押された
-    var mine = PS.pickOwn((docs || []).filter(function(d) { return d; }), res.part.name);
-    if (!mine) {
-      mine = { name: '(該当図なし)', dsl: '', _dir: myDir, _file: '' };
-      _sbsMsg = PS.sliceLabel(res) + ' / 自分の保存フォルダに ' + res.part.name
-        + ' のクラス図が見つかりませんでした (切り出しだけ出しています)';
-    } else {
-      _sbsMsg = PS.sliceLabel(res) + ' / 自分の ' + mine._file + ' と並べています。'
-        + window.MA.sideBySide.summaryLine(mine, sliced);
-    }
-    var pair = {
-      base: res.part.name,
-      a: { doc: mine, name: mine.name, base: mine._file || '(該当図なし)', folder: _peekFolderName(myDir) },
-      b: { doc: sliced, name: sliced.name, base: theirFile + ' の ' + res.part.name + ' 切り出し',
-           folder: _peekFolderName(theirDir) },
-    };
-    _sbsView = {
-      pair: pair, a: mine, b: sliced,
-      rows: SBS.rows(mine, sliced),
-      marks: SBS.marks(mine, sliced),
-      summary: SBS.summaryLine(mine, sliced),
-    };
-    renderSbs();
-    return true;
-  });
-}
-
-function _sbsSegmentSpans(host, segs, side) {
-  (segs || []).forEach(function(s) {
-    if (!s.mark) { host.appendChild(document.createTextNode(s.text)); return; }
-    var span = document.createElement('span');
-    span.className = 'sbs-mark sbs-mark-' + s.mark;
-    span.setAttribute('data-sbs-mark', s.mark);
-    span.setAttribute('data-sbs-side', side);
-    span.textContent = s.text;
-    // 相手側の綴りを添える。押さずに読んで分かるようにする。
-    span.title = s.mark === 'spelling'
-      ? '綴り違い: ' + s.left + ' / ' + s.right
-      : 'この図にしかありません';
-    host.appendChild(span);
-  });
-}
-
-function renderSbs() {
-  var el = _peekEls();
-  if (!el.sbs) return;
-  el.sbs.textContent = '';
-  if (!_sbsOn) { el.sbs.style.display = 'none'; return; }
-  el.sbs.style.display = 'block';
-
-  if (!_sbsKey) { el.sbs.style.display = 'none'; return; }
-  var v = _sbsView;
-  if (!v) {
-    var loading = document.createElement('div');
-    loading.className = 'sbs-hint';
-    loading.textContent = '読み込み中…';
-    el.sbs.appendChild(loading);
-    return;
-  }
-  var pair = v.pair;
-  var head = document.createElement('div');
-  head.className = 'sbs-head';
-  head.id = 'sbs-head';
-  head.textContent = window.MA.sideBySide.headerLabel(pair);
-  el.sbs.appendChild(head);
-
-  var sum = document.createElement('div');
-  sum.className = 'sbs-summary';
-  sum.id = 'sbs-summary';
-  sum.textContent = _sbsMsg || v.summary;
-  el.sbs.appendChild(sum);
-
-  var grid = document.createElement('div');
-  grid.className = 'sbs-grid';
-  grid.id = 'sbs-grid';
-  [' ', pair.a.folder + ' / ' + pair.a.base, ' ', pair.b.folder + ' / ' + pair.b.base]
-    .forEach(function(t, i) {
-      var h = document.createElement('div');
-      h.className = 'sbs-col-head' + (i === 0 || i === 2 ? ' sbs-ln' : '');
-      h.textContent = t;
-      grid.appendChild(h);
-    });
-  v.rows.forEach(function(r) {
-    function cell(cls, text) {
-      var d = document.createElement('div');
-      d.className = cls;
-      if (text != null) d.textContent = text;
-      return d;
-    }
-    var rowCls = ' sbs-row-' + r.kind;
-    var lnA = cell('sbs-ln' + rowCls, r.lineA == null ? '' : String(r.lineA));
-    var left = cell('sbs-text sbs-text-left' + rowCls, null);
-    if (r.left == null) left.classList.add('sbs-gap');
-    else _sbsSegmentSpans(left, r.leftSegments, 'left');
-    var lnB = cell('sbs-ln' + rowCls, r.lineB == null ? '' : String(r.lineB));
-    var right = cell('sbs-text sbs-text-right' + rowCls, null);
-    if (r.right == null) right.classList.add('sbs-gap');
-    else _sbsSegmentSpans(right, r.rightSegments, 'right');
-    left.setAttribute('data-sbs-kind', r.kind);
-    right.setAttribute('data-sbs-kind', r.kind);
-    grid.appendChild(lnA); grid.appendChild(left);
-    grid.appendChild(lnB); grid.appendChild(right);
-  });
-  el.sbs.appendChild(grid);
-  _renderSbsAlign(el.sbs, v);
-}
-
-// 綴り違いを「どちらに揃えるか」。書き戻せるのは自分の保存フォルダにある方だけ
-// (他人の図を勝手に直さない)。
-function _renderSbsAlign(host, v) {
-  var SBS = window.MA.sideBySide;
-  var PF = window.MA.peekFolder;
-  var spell = SBS.gaps(v.marks).filter(function(r) { return r.status === 'spelling'; });
-  if (!spell.length) return;
-  var dir = _myPeekDir();
-  var mineIsA = !!(PF && PF.samePath(v.a._dir, dir));
-  var mineIsB = !!(PF && PF.samePath(v.b._dir, dir));
-  spell.forEach(function(r) {
-    var row = document.createElement('div');
-    row.className = 'sbs-align';
-    row.setAttribute('data-sbs-align', r.key);
-    var note = document.createElement('span');
-    note.className = 'sbs-align-note';
-    note.textContent = r.left + ' / ' + r.right
-      + (r.by === '部分一致' ? ' (対応候補)' : '') + ' — ';
-    row.appendChild(note);
-    if (!mineIsA && !mineIsB) {
-      var ro = document.createElement('span');
-      ro.className = 'sbs-align-note';
-      ro.textContent = 'どちらも自分の保存フォルダの図ではありません (読むだけ)';
-      row.appendChild(ro);
-      host.appendChild(row);
-      return;
-    }
-    // 自分の図を、相手の綴りに書き替える方だけを出す。
-    var mine = mineIsA ? v.a : v.b;
-    var from = mineIsA ? r.left : r.right;
-    var to = mineIsA ? r.right : r.left;
-    var otherFolder = mineIsA ? v.pair.b.folder : v.pair.a.folder;
-    if (!from || !to) { host.appendChild(row); return; }
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'sbs-align-btn';
-    b.setAttribute('data-sbs-align-to', to);
-    b.textContent = otherFolder + ' の「' + to + '」に揃える';
-    b.addEventListener('click', function() { applySbsAlign(mine, from, to, b); });
-    row.appendChild(b);
-    host.appendChild(row);
-  });
-}
-
-function applySbsAlign(mine, from, to, btn) {
-  var BR = window.MA.bulkRename;
-  var WS = window.MA.workspace;
-  if (!BR || !WS) return Promise.resolve(false);
-  var n = BR.countIn(mine.dsl, from);
-  if (!n) { _sbsMsg = '「' + from + '」は本文に見当たりません'; renderSbs(); return Promise.resolve(false); }
-  var next = BR.replaceIn(mine.dsl, from, to);
-  if (btn) btn.disabled = true;
-  return WS.saveToFile({ name: mine._file.replace(/\.[^.]+$/, ''), dsl: next }, mine._dir)
-    .then(function(ok) {
-      if (btn) btn.disabled = false;
-      if (!ok) { _sbsMsg = '書き戻せませんでした (保存先を確認してください)'; renderSbs(); return false; }
-      var msg = from + ' → ' + to + ' を ' + n + ' 箇所、' + mine.name + ' に保存しました';
-      // 並べ直す。直った姿が同じ画面にすぐ出ないと、直ったか確かめる手が増える。
-      return selectPartPair(_partSel).then(function() {
-        _sbsMsg = msg;
-        renderSbs();
-        return true;
-      });
-    })
-    .catch(function() {
-      if (btn) btn.disabled = false;
-      _sbsMsg = '書き戻せませんでした (保存先を確認してください)';
-      renderSbs();
-      return false;
-    });
-}
-
 // ── 部品名の統一バッジ ────────────────
 // 「今日の統一は済んでいるか」を確かめるだけの回でも、⇄ 一括置換を開き、置換前・
 // 置換後を打ち、ヒット 0 件を見る空打ちが要っていた (clicks=4 / keys=16)。
@@ -6954,118 +5573,6 @@ function renderRenameBadge() {
     } catch (e) {}
   });
 }
-
-// ── 覗いた図をテンプレートにする ──
-// 読むだけで見た図は、そのまま「テンプレートから新規作成」の材料にできる。
-// 覚えて打ち直す工程が無くなるので、写し違いが起きる余地がない。
-function _peekSeed() {
-  var PF = window.MA.peekFolder;
-  return PF ? PF.templateSeed(_peekDir, _peekName, _peekDsl) : null;
-}
-
-function renderPeekTemplateBtn() {
-  var el = _peekEls();
-  var PF = window.MA.peekFolder;
-  if (!el.template || !PF) return;
-  var seed = _peekSeed();
-  el.template.disabled = !seed;
-  el.template.setAttribute('data-seed', seed ? seed.value : '');
-  el.template.title = PF.seedNotice(seed);
-  renderPeekCompareBtn();
-}
-
-// ── 覗いた図を手本として右に並べる ──
-// 覗く画面は全面のモーダルなので、開いている間は自分の書きかけが見えない。
-// 「テンプレートとして開く」は白紙から起こす用で、書きかけの図には使えない
-// (今のタブを捨てて新しいタブを作る)。ここは書きかけをそのままに、手本だけを
-// 参照図の位置へ据える。据えたあとは既にある見比べ・対応表・整合チェックが
-// そのまま手本に効くので、新しい見方を覚え直さなくてよい。
-function renderPeekCompareBtn() {
-  var el = _peekEls();
-  if (!el.compare) return;
-  var ok = !!(_peekName && _peekDsl && _peekDsl.replace(/\s/g, ''));
-  el.compare.disabled = !ok;
-  el.compare.title = ok
-    ? _peekName + ' を手本として右に並べます (保存先も今のタブも変わりません)'
-    : '図を選ぶと、手本として右に並べられます';
-}
-
-function comparePeekAsRef() {
-  var cv = window.MA.compareView;
-  var PF = window.MA.peekFolder;
-  if (!cv || !PF || !_peekName || !_peekDsl) return false;
-  var set = cv.setPeek(PF.baseName(_peekDir), _peekName, _peekDsl, '');
-  if (!set) return false;
-  closePeekFolder();
-  _compareRefId = cv.PEEK_ID;
-  _compareShownDsl = null;      // 相手が変わったので必ず描き直す
-  _clearCheckList();            // 前の参照図に対する食い違いを残さない
-  _clearStateMap();
-  toggleCompareView(true, 'ref');
-  renderCompareView();
-  // 手本と自分の図の対応表は、この機能の目的そのもの (どの状態・遷移が
-  // 自分の図に無いかを色で出す)。押し直させずにその場で出す。
-  runStateMap();
-  return true;
-}
-
-// 覗いている図をテンプレートに据えて、新規作成の画面へ渡す。
-// 保存先も workspace も動かさない (材料として本文を渡すだけ)。
-function usePeekAsTemplate() {
-  var seed = _peekSeed();
-  if (!seed || !_openTemplateNew) return false;
-  closePeekFolder();
-  _openTemplateNew(false, seed);
-  return true;
-}
-
-function closePeekFolder() {
-  var el = _peekEls();
-  if (el.modal) el.modal.style.display = 'none';
-  _peekName = null;
-  _peekDsl = '';
-  renderPeekTemplateBtn();
-  setCohortMode(false);
-  setSbsMode(false);
-}
-
-// 覗く窓の左にあったフォルダの一覧は外した。フォルダは FILES「読むだけ」の
-// ツリーで選び (右クリック「このフォルダの図を調べる…」)、窓の見出しには今見ているフォルダの名前だけを出す。
-// 名前を押すと窓を閉じてツリーのその行へ移る (別のフォルダはそこで選ぶ)。左の列は「ドメインで揃える」
-// 「同名で並べる」の間だけ、その一覧 (ドメイン・同名の組) の置き場として使う。
-function renderPeekDirs() {
-  var el = _peekEls();
-  var PF = window.MA.peekFolder;
-  if (!el.dirs || !PF) return;
-  el.dirs.textContent = '';
-  el.dirs.style.display = 'none';
-  renderPeekDirName();
-  if (el.notice) el.notice.textContent = PF.noticeText(_peekDir, _wsFileDir());
-}
-
-function _peekDirsShow() {
-  var el = _peekEls();
-  if (el.dirs) el.dirs.style.display = '';
-}
-
-function renderPeekDirName() {
-  var btn = document.getElementById('peek-dir-name');
-  var PF = window.MA.peekFolder;
-  if (!btn || !PF) return;
-  var has = !!_peekDir;
-  btn.disabled = !has;
-  btn.setAttribute('data-dir', has ? String(_peekDir) : '');
-  btn.textContent = has ? PF.baseName(_peekDir) : '隣に読めるフォルダがありません';
-  btn.title = has ? String(_peekDir) + ' — 押すと FILES の「読むだけ」のこの行へ移ります (別のフォルダはそこで選びます)' : '';
-}
-
-// 窓を閉じ、FILES「読むだけ」のそのフォルダの行を見せる (別のフォルダはツリーで選ぶ)。
-function revealPeekDirInTree() {
-  var dir = _peekDir;
-  closePeekFolder();
-  return revealReadonlyDirInTree(dir);
-}
-
 // FILES「読むだけ」のそのフォルダの行を見せる (覗く窓・参照ペインの相手フォルダ名から)。
 function revealReadonlyDirInTree(dir) {
   var FP = window.MA.filesPanel;
@@ -7098,1139 +5605,10 @@ function revealReadonlySection() {
   });
 }
 window.revealReadonlySection = revealReadonlySection;
-
-function renderPeekFiles() {
-  var el = _peekEls();
-  if (!el.files) return;
-  el.files.textContent = '';
-  var head = document.createElement('div');
-  head.className = 'peek-head';
-  head.id = 'peek-files-head';
-  head.textContent = _peekDir ? (_peekNames.length + ' 枚') : 'フォルダを選んでください';
-  el.files.appendChild(head);
-  // 持ち越した名前で絞っているなら、そう言って外せるようにする
-  // (絞られていることに気付かず「フォルダに 1 枚しか無い」と読ませない)。
-  if (_peekQuery && _peekDir) {
-    var FF0 = window.MA.folderFilter;
-    var qbar = document.createElement('div');
-    qbar.className = 'peek-query';
-    qbar.id = 'peek-query';
-    var qtext = document.createElement('span');
-    qtext.id = 'peek-query-text';
-    qtext.textContent = FF0 && FF0.peekSummaryText
-      ? FF0.peekSummaryText(peekVisibleNames().length, _peekNames.length, _peekQuery) : '';
-    qbar.appendChild(qtext);
-    var qclear = document.createElement('button');
-    qclear.type = 'button';
-    qclear.id = 'peek-query-clear';
-    qclear.textContent = '絞り込みを外す';
-    qclear.addEventListener('click', function() { _peekQuery = ''; renderPeekFiles(); });
-    qbar.appendChild(qclear);
-    el.files.appendChild(qbar);
-  }
-  appendPeekKindSummary(el.files);
-  appendPeekVerdictOffer(el.files);
-  appendPeekSvgSection(el.files);
-  appendPeekChangeSection(el.files);
-  peekVisibleNames().forEach(function(n) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'peek-file' + (n === _peekName ? ' selected' : '');
-    b.setAttribute('data-file-name', n);
-    var label = document.createElement('span');
-    label.className = 'peek-file-name';
-    label.textContent = n;
-    b.appendChild(label);
-    appendPeekKindBadge(b, n);
-    appendPeekSvgBadge(b, n);
-    appendPeekChangeBadge(b, n);
-    b.addEventListener('click', function() { showPeekFile(n); });
-    el.files.appendChild(b);
-  });
-}
-
-// ── 覗き一覧の図種 ──────────────────────────────
-// 自分の 📂 一覧と同じ印を覗き一覧にも出す。junior は先輩のフォルダに
-// 「コンポーネント図があるか」を見に行くのに、名前だけの一覧を 30 行読んで
-// 語尾から図種を推測していた。0 枚の図種も要約に出すので、
-// 「1 枚も無い」が一覧を読まずに決まる。
-
-function _peekEntryFor(name) {
-  var n = String(name == null ? '' : name);
-  for (var i = 0; i < _peekEntries.length; i++) {
-    if (_peekEntries[i] && _peekEntries[i].name === n) return _peekEntries[i];
-  }
-  return null;
-}
-
-// フォルダ全体の図種の内訳。0 枚の図種も「0」で出す
-// (「コンポーネント図は 1 枚も無い」と分かることが探しに来た答えになる)。
-function appendPeekKindSummary(host) {
-  var DK = window.MA.diagramKind;
-  if (!DK || !_peekDir || !_peekEntries.length) return;
-  var line = document.createElement('div');
-  line.className = 'peek-kinds';
-  line.id = 'peek-kinds';
-  line.textContent = DK.summaryLine(_peekEntries);
-  line.title = '覗いているフォルダの図種の内訳。0 の図種はこのフォルダに 1 枚もありません';
-  host.appendChild(line);
-}
-
-// 覗いた相手にその図種が 1 枚も無かったとき、
-// 「対応不要（手本なし）」を今開いている自分の図の中に控える。控えないと、この確認は
-// 本人の記憶にしか残らず、次に同じ図を担当するたびに 👀他フォルダからやり直しになる。
-function appendPeekVerdictOffer(host) {
-  var DK = window.MA.diagramKind;
-  var PV = window.MA.peekVerdict;
-  var PF = window.MA.peekFolder;
-  var WS = window.MA.workspace;
-  if (!DK || !PV || !WS || !_peekDir || !_peekEntries.length) return;
-  var doc = WS.getActive();
-  if (!doc) return;
-  var counts = DK.counts(_peekEntries);
-  var dirName = PF ? PF.baseName(_peekDir) : _peekDir;
-  var PS = window.MA.peekSettled;
-  loadPeekSettled();
-  var settledKinds = [];
-  DK.ORDER.forEach(function(slug) {
-    var n = counts[slug] || 0;
-    var kind = DK.label(slug);
-    var had = PV.find(doc.dsl, kind, dirName);
-    var settled = PS ? PS.find(_peekSettled, dirName, kind) : null;
-    if (settled && n === 0) settledKinds.push(kind);
-    if (n > 0 && !had && !settled) return;      // 取り込む変更があるうちは聞かない
-    // フォルダで確定済みの組は、どの図を開いていても聞き直さない
-    // (下の 1 行にまとめる)。相手に図が増えたときだけ、要確認として出す。
-    if (settled && !had && n === 0) return;
-    if (settled && !had && n > 0) {
-      var srow = document.createElement('div');
-      srow.className = 'peek-verdict-row';
-      srow.setAttribute('data-peek-verdict', kind);
-      var stxt = document.createElement('span');
-      stxt.className = 'peek-verdict-text is-stale';
-      stxt.textContent = PS.staleText(dirName, kind, n);
-      srow.appendChild(stxt);
-      srow.appendChild(_peekSettledClearButton(dirName, kind, '確定を外す'));
-      host.appendChild(srow);
-      return;
-    }
-    var row = document.createElement('div');
-    row.className = 'peek-verdict-row';
-    row.setAttribute('data-peek-verdict', kind);
-    var txt = document.createElement('span');
-    txt.className = 'peek-verdict-text';
-    if (had) {
-      var b = PV.badge(had, n);
-      txt.className += b.stale ? ' is-stale' : '';
-      txt.textContent = b.mark + ' ' + kind;
-      txt.title = b.title;
-      row.appendChild(txt);
-      var off = document.createElement('button');
-      off.type = 'button';
-      off.className = 'peek-verdict-act';
-      off.setAttribute('data-peek-verdict-clear', kind);
-      off.textContent = '控えを外す';
-      off.title = '確かめ直したので、この控えを ' + doc.name + ' から外します';
-      off.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        _writePeekVerdict(PV.remove(doc.dsl, kind, dirName));
-      });
-      row.appendChild(off);
-    } else {
-      txt.textContent = PV.offerText(kind, dirName, n);
-      row.appendChild(txt);
-      var on = document.createElement('button');
-      on.type = 'button';
-      on.className = 'peek-verdict-act';
-      on.setAttribute('data-peek-verdict-keep', kind);
-      on.textContent = '対応不要として控える';
-      on.title = doc.name + ' に「' + dirName + ' に ' + kind + ' は 0 枚」と書き残します';
-      on.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        rememberPeekSettled(dirName, kind, n, true);
-        _writePeekVerdict(PV.write(doc.dsl, {
-          kind: kind, dir: dirName, count: n, at: new Date().toISOString().slice(0, 16),
-        }));
-      });
-      row.appendChild(on);
-    }
-    host.appendChild(row);
-  });
-  if (settledKinds.length && PS) {
-    var box = document.createElement('div');
-    box.className = 'peek-verdict-row peek-settled-row';
-    box.id = 'peek-settled';
-    var st = document.createElement('span');
-    st.className = 'peek-verdict-text';
-    st.id = 'peek-settled-text';
-    st.textContent = PS.summaryText(dirName, settledKinds);
-    st.title = '保存フォルダに確定として残しています。答えを変えるときは図種の ✕ で外すと、次からまた聞きます';
-    box.appendChild(st);
-    settledKinds.forEach(function(k) { box.appendChild(_peekSettledClearButton(dirName, k, '✕ ' + k)); });
-    host.appendChild(box);
-  }
-}
-
-// 「手本なしで確定」の一覧は保存フォルダの持ち物 (GET/POST /peek-settled)。
-// 図 1 枚の @peek 行と違い、周が替わって別の図を開いても残る。
-var _peekSettled = [];
-var _peekSettledDir = null;
-function loadPeekSettled(force) {
-  var dir = _wsFileDir();
-  if (!force && _peekSettledDir === dir) return;
-  _peekSettledDir = dir;
-  window.fetch('/peek-settled?dir=' + encodeURIComponent(dir))
-    .then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(data) {
-      var PS = window.MA.peekSettled;
-      _peekSettled = PS ? PS.normalize(data && data.entries) : [];
-      try { renderPeekFiles(); } catch (e) {}
-    }, function() {});
-}
-
-function rememberPeekSettled(peer, kind, count, settled) {
-  var PS = window.MA.peekSettled;
-  if (PS) {
-    _peekSettled = settled
-      ? PS.add(_peekSettled, { peer: peer, kind: kind, count: count, at: new Date().toISOString() })
-      : PS.remove(_peekSettled, peer, kind);
-  }
-  return window.fetch('/peek-settled', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dir: _wsFileDir(), peer: peer, kind: kind, count: Number(count || 0), settled: !!settled }),
-  }).then(function(r) { return r.ok ? r.json() : null; }, function() { return null; });
-}
-
-function _peekSettledClearButton(peer, kind, label) {
-  var b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'peek-verdict-act';
-  b.setAttribute('data-peek-settled-clear', kind);
-  b.textContent = label;
-  b.title = '「' + peer + ' の ' + kind + ' は手本なし」の確定を外します。次からまた聞きます';
-  b.addEventListener('click', function(ev) {
-    ev.stopPropagation();
-    rememberPeekSettled(peer, kind, 0, false);
-    try { renderPeekFiles(); } catch (e) {}
-  });
-  return b;
-}
-
-// 控えは自分の図の本文なので、書いたらそのまま保存の道に乗せる。
-function _writePeekVerdict(nextDsl) {
-  var ed = document.getElementById('editor');
-  if (ed) { ed.value = nextDsl; ed.dispatchEvent(new Event('input')); }
-  else if (window.MA.workspace) window.MA.workspace.updateActive({ dsl: nextDsl });
-  if (window.MA.toast) window.MA.toast.show('確認の結論をこの図に控えました');
-  try { renderPeekFiles(); } catch (e) {}
-}
-
-// 行の図種の印。保存した図種の控えがあればそれを、無ければ本文からの判定を出す
-// (📂 一覧の folderKindBadge と同じ決め方)。
-function appendPeekKindBadge(host, name) {
-  var PF = window.MA.peekFolder;
-  var badge = PF ? PF.kindBadge(_peekEntryFor(name)) : null;
-  if (!badge) return;
-  var span = document.createElement('span');
-  span.className = 'peek-kind';
-  span.setAttribute('data-kind-of', name);
-  span.setAttribute('data-kind-source', badge.source);
-  span.setAttribute('data-kind', badge.slug);
-  span.textContent = badge.text;
-  span.title = badge.title;
-  host.appendChild(span);
-}
-
-// 行の印。判定は svg-freshness、見せ方は peek-freshness に置く。
-function appendPeekSvgBadge(host, name) {
-  var PFR = window.MA.peekFreshness;
-  if (!PFR || !_peekScan) return;
-  var badge = PFR.rowBadge(_peekScan, name);
-  if (!badge) return;
-  var span = document.createElement('span');
-  span.className = 'peek-svg-badge' + (badge.alert ? ' alert' : '');
-  span.setAttribute('data-svg-content', badge.content);
-  span.textContent = badge.mark;
-  span.title = badge.title;
-  host.appendChild(span);
-}
-
-// 一覧の見出しの下に、フォルダ全体の 1 行と「中身を確かめる」ボタンを出す。
-function appendPeekSvgSection(host) {
-  var PFR = window.MA.peekFreshness;
-  if (!PFR || !_peekScan || !_peekScan.rows.length) return;
-  var sum = document.createElement('div');
-  sum.className = 'peek-svg-summary' + (PFR.hasIssue(_peekScan) ? ' has-issue' : '');
-  sum.id = 'peek-svg-summary';
-  sum.textContent = PFR.summary(_peekScan);
-  host.appendChild(sum);
-  var targets = PFR.verifyTargets(_peekScan);
-  var btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'peek-svg-verify';
-  btn.id = 'peek-svg-verify';
-  btn.textContent = _peekVerifying ? '確かめています…' : PFR.verifyLabel(_peekScan);
-  btn.title = PFR.verifyTitle();
-  btn.disabled = _peekVerifying || !targets.length;
-  btn.addEventListener('click', function(ev) {
-    ev.stopPropagation();
-    verifyPeekSvg();
-  });
-  host.appendChild(btn);
-}
-
-// ── 前回保存からの差分 ─────────────────────
-// 先輩の図を自分の図に取り込む場面では、要るのは「どの図が変わったか」と
-// 「何が増えて何が消えたか」だけ。今までは複合図 (driver_common_class 等) を
-// 丸ごと開いて目で差分を探し、変わっていない図まで開いて見比べていた。
-
-// 一覧に並べる名前。判定があれば「変更のある図が上」の順に、絞り込み中なら
-// 変更のある図だけに。判定が無ければ受け取った順のまま (印の無い一覧を並べ替えない)。
-function peekVisibleNames() {
-  var PC = window.MA.peekChanges;
-  var names = PC ? PC.visibleNames(_peekChanges, _peekChangedOnly) : null;
-  names = names || _peekNames;
-  // 一覧から持ち越した名前で絞る (同じ規則。外せば全枚に戻る)。
-  var FF = window.MA.folderFilter;
-  if (_peekQuery && FF) {
-    var hits = FF.filter(names, _peekQuery);
-    if (hits.length) return hits;
-  }
-  return names;
-}
-
-// 行の印。「＋2」だけでなく内訳を title に置く (部品が増えたのか、つなぎ方が
-// 変わったのかで、取り込む側の手の動かし方が変わる)。
-function appendPeekChangeBadge(host, name) {
-  var PC = window.MA.peekChanges;
-  if (!PC || !_peekChanges) return;
-  var badge = PC.rowBadge(PC.find(_peekChanges, name));
-  if (!badge) return;
-  var span = document.createElement('span');
-  span.className = 'peek-change-badge' + (badge.changed ? ' changed' : '');
-  span.setAttribute('data-change-of', name);
-  span.setAttribute('data-change', badge.verdict);
-  span.textContent = badge.text;
-  span.title = badge.title;
-  host.appendChild(span);
-}
-
-// 見出しの下の 1 行と、「変更のある図だけ」の絞り込み。
-function appendPeekChangeSection(host) {
-  var PC = window.MA.peekChanges;
-  if (!PC || !_peekChanges || !_peekChanges.total) return;
-  var sum = document.createElement('div');
-  sum.className = 'peek-change-summary' + (PC.hasChanges(_peekChanges) ? ' has-changes' : '');
-  sum.id = 'peek-change-summary';
-  sum.textContent = PC.summary(_peekChanges);
-  host.appendChild(sum);
-  var btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'peek-change-filter' + (_peekChangedOnly ? ' on' : '');
-  btn.id = 'peek-change-filter';
-  btn.textContent = PC.filterLabel(_peekChanges, _peekChangedOnly);
-  btn.title = '前回保存から部品・関係が変わった図だけを一覧に残します';
-  btn.disabled = !PC.hasChanges(_peekChanges);
-  btn.addEventListener('click', function(ev) {
-    ev.stopPropagation();
-    _peekChangedOnly = !_peekChangedOnly;
-    renderPeekFiles();
-  });
-  host.appendChild(btn);
-}
-
-// 開いた 1 枚の内訳。本文 (peek-dsl) を上から読まずに、写す先が決まるようにする。
-function renderPeekChangeDetail(name) {
-  var el = _peekEls();
-  var PC = window.MA.peekChanges;
-  if (!el.changes) return;
-  el.changes.textContent = '';
-  var row = (PC && _peekChanges) ? PC.find(_peekChanges, name) : null;
-  if (!row) { el.changes.style.display = 'none'; return; }
-  el.changes.style.display = '';
-  var notice = document.createElement('div');
-  notice.className = 'peek-change-notice';
-  notice.id = 'peek-change-notice';
-  notice.textContent = PC.detailNotice(row);
-  el.changes.appendChild(notice);
-  PC.detailLines(row).forEach(function(d) {
-    var line = document.createElement('div');
-    line.className = 'peek-change-line' + (d.sign === '+' ? ' add' : ' del');
-    line.setAttribute('data-change-sign', d.sign);
-    line.textContent = d.sign + ' ' + d.line + ': ' + d.text;
-    el.changes.appendChild(line);
-  });
-}
-
-// ── 前回保存版と今回保存版を 1 画面に並べる ──
-// 手順 5 (意図しない変更の混入確認) と手順 6
-// (SVG のレイアウト崩れ確認) は、前回 run の控えを自分で複製し、テキスト差分と
-// audit.js --since-files を打つところから始まっていた。控えの本文は一覧の応答
-// (prev=1) で既に手元にあるので、要るのは並べて出すことだけ。判定は
-// reviewBeforeAfter が持つ (ここは描画と、SVG の描き直しだけ)。
-var _baOpen = false;        // 並びを開いているか (図を切り替えても保つ)
-var _baSvgName = '';        // SVG を描き終えている図
-var _baSvgBusy = false;
-
-function _baEls() { return { host: document.getElementById('peek-ba') }; }
-
-// 覗いているフォルダ全図の判定。一覧の応答だけで出るので追加の往復は無い。
-function _baVerdicts() {
-  var BA = window.MA.reviewBeforeAfter;
-  if (!BA) return [];
-  return _peekEntries.map(function(e) {
-    var v = BA.classify(e.prevText, e.text, { stamp: e.prevStamp });
-    v.name = e.name;
-    return v;
-  });
-}
-
-function _baEntry(name) {
-  for (var i = 0; i < _peekEntries.length; i++) {
-    if (_peekEntries[i] && _peekEntries[i].name === name) return _peekEntries[i];
-  }
-  return null;
-}
-
-function _baPane(row, side) {
-  // 左は前の版 (same/del)、右は今の版 (same/add)。片方にしか無い行は空欄にして
-  // 行の高さを合わせる (ずれると「消えた行」と「増えた行」が同じ高さに見えない)。
-  var mine = side === 'prev' ? (row.kind !== 'add') : (row.kind !== 'del');
-  var div = document.createElement('div');
-  // 片方にしか無い行の「空欄」側には印を付けない (消えた行が増えた行にも見える)。
-  div.className = 'ba-line ' + (mine ? 'ba-' + row.kind : 'ba-blank');
-  div.setAttribute('data-ba-kind', mine ? row.kind : 'blank');
-  if (!mine) { div.textContent = ' '; return div; }
-  var no = document.createElement('span');
-  no.className = 'ba-no';
-  no.textContent = String(side === 'prev' ? row.a : row.b);
-  div.appendChild(no);
-  var tx = document.createElement('span');
-  tx.textContent = row.text;
-  div.appendChild(tx);
-  return div;
-}
-
-function renderPeekBeforeAfter(name) {
-  var BA = window.MA.reviewBeforeAfter;
-  var el = _baEls();
-  if (!el.host || !BA) return;
-  el.host.textContent = '';
-  if (!_peekDir || !_peekEntries.length) { el.host.hidden = true; return; }
-  el.host.hidden = false;
-
-  // フォルダ全体の結論を先に。無変化の回は、1 枚も開かずにここで終われる。
-  var all = _baVerdicts();
-  var sum = document.createElement('div');
-  sum.className = 'ba-summary';
-  sum.id = 'peek-ba-summary';
-  sum.textContent = BA.folderSummary(all);
-  sum.setAttribute('data-ba-toread',
-    String(all.filter(function(v) { return BA.needsSvgCheck(v); }).length));
-  el.host.appendChild(sum);
-
-  var entry = _baEntry(name);
-  if (!entry) return;
-  var v = BA.classify(entry.prevText, entry.text, { stamp: entry.prevStamp });
-
-  var head = document.createElement('div');
-  head.className = 'ba-head';
-  var btn = document.createElement('button');
-  btn.id = 'peek-ba-toggle';
-  btn.className = 'ba-toggle';
-  btn.textContent = _baOpen ? '⏮ 前後の並びを閉じる' : '⏮ 前回保存版と並べる';
-  btn.title = 'この図の前回保存版と今回保存版を、ソースと SVG で並べます';
-  btn.addEventListener('click', function() {
-    _baOpen = !_baOpen;
-    _baSvgName = '';
-    renderPeekBeforeAfter(_peekName);
-  });
-  head.appendChild(btn);
-  var verdict = document.createElement('span');
-  verdict.id = 'peek-ba-verdict';
-  verdict.className = 'ba-verdict ba-verdict-' + v.verdict;
-  verdict.setAttribute('data-ba-verdict', v.verdict);
-  verdict.textContent = BA.verdictText(v);
-  head.appendChild(verdict);
-  el.host.appendChild(head);
-  if (!_baOpen) return;
-
-  var body = document.createElement('div');
-  body.className = 'ba-body';
-  body.id = 'peek-ba-body';
-
-  // ソースを左右に。全文を出す (代表行だけだと、結局 cat に戻る)。
-  var cols = document.createElement('div');
-  cols.className = 'ba-cols';
-  var left = document.createElement('div');
-  left.className = 'ba-col';
-  left.id = 'peek-ba-prev';
-  var right = document.createElement('div');
-  right.className = 'ba-col';
-  right.id = 'peek-ba-now';
-  var lh = document.createElement('div');
-  lh.className = 'ba-col-head';
-  lh.textContent = v.stamp ? '前回保存版 (' + v.stamp + ')' : '前回保存版';
-  left.appendChild(lh);
-  var rh = document.createElement('div');
-  rh.className = 'ba-col-head';
-  rh.textContent = '今回保存版';
-  right.appendChild(rh);
-  BA.panes(entry.prevText, entry.text).forEach(function(row) {
-    left.appendChild(_baPane(row, 'prev'));
-    right.appendChild(_baPane(row, 'now'));
-  });
-  cols.appendChild(left);
-  cols.appendChild(right);
-  body.appendChild(cols);
-
-  // SVG。描かれる内容が変わらないと言い切れる版では描き直さない
-  // (手順 6 が要るのは内容が動いた図だけ)。
-  var note = document.createElement('div');
-  note.className = 'ba-svg-note';
-  note.id = 'peek-ba-svg-note';
-  note.textContent = BA.svgNote(v);
-  body.appendChild(note);
-
-  if (BA.needsSvgCheck(v)) {
-    var svgs = document.createElement('div');
-    svgs.className = 'ba-cols ba-svgs';
-    svgs.id = 'peek-ba-svgs';
-    var sl = document.createElement('div');
-    sl.className = 'ba-col ba-svg';
-    sl.id = 'peek-ba-svg-prev';
-    var sr = document.createElement('div');
-    sr.className = 'ba-col ba-svg';
-    sr.id = 'peek-ba-svg-now';
-    sl.textContent = '描き直し中…';
-    sr.textContent = '描き直し中…';
-    svgs.appendChild(sl);
-    svgs.appendChild(sr);
-    body.appendChild(svgs);
-    el.host.appendChild(body);
-    if (_baSvgName !== name && !_baSvgBusy) _baRenderSvgs(name, entry);
-    return;
-  }
-  el.host.appendChild(body);
-}
-
-// 前の版と今の版をそれぞれ描き直して並べる。覗いているのは他人のフォルダなので、
-// 描いた結果は画面に出すだけで、どこにも書き戻さない。
-function _baRenderSvgs(name, entry) {
-  _baSvgBusy = true;
-  return Promise.all([
-    renderDslToSvg(entry.prevText).catch(function() { return ''; }),
-    renderDslToSvg(entry.text).catch(function() { return ''; }),
-  ]).then(function(both) {
-    _baSvgBusy = false;
-    if (name !== _peekName || !_baOpen) return false;
-    _baSvgName = name;
-    var l = document.getElementById('peek-ba-svg-prev');
-    var r = document.getElementById('peek-ba-svg-now');
-    if (l) { l.innerHTML = both[0] || ''; if (!both[0]) l.textContent = '前の版を描けませんでした'; }
-    if (r) { r.innerHTML = both[1] || ''; if (!both[1]) r.textContent = '今の版を描けませんでした'; }
-    return true;
-  }).catch(function() { _baSvgBusy = false; return false; });
-}
-
-// 覗いているフォルダの判定材料を読み直す。名前の一覧とは別の呼び出しにしない
-// (印の付く前の一覧が一瞬出ると、確かめてある図まで疑わせる)。
-function loadPeekScan(dir) {
-  var WS = window.MA.workspace;
-  var PFR = window.MA.peekFreshness;
-  if (!WS || !PFR || !WS.listFolder) return Promise.resolve(null);
-  return WS.listFolder(dir).then(function(folder) {
-    if (!window.MA.peekFolder.samePath(dir, _peekDir)) return null;   // 途中で選び直された
-    _peekScan = PFR.scan(folder);
-    return _peekScan;
-  }).catch(function() { return null; });
-}
-
-// 上書きせずに 1 枚ずつ描き直して比べる。覗いているのは他人のフォルダなので、
-// ここから作り直し (書き戻し) は決してしない。
-function verifyPeekSvg() {
-  var PFR = window.MA.peekFreshness;
-  var dir = _peekDir;
-  var targets = PFR ? PFR.verifyTargets(_peekScan) : [];
-  if (!targets.length || _peekVerifying || !dir) return Promise.resolve(false);
-  _peekVerifying = true;
-  renderPeekFiles();
-  return fetch('/verify-svg', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dir: dir, types: targets, mode: 'local' }),
-  }).then(function(r) { return r.ok; }).catch(function() { return false; })
-    .then(function(ok) {
-      _peekVerifying = false;
-      if (!window.MA.peekFolder.samePath(dir, _peekDir)) return false;
-      return loadPeekScan(dir).then(function() { renderPeekFiles(); return ok; });
-    });
-}
-
-// 題材 × 図種の表は 🧩 部品ビューの進捗帯に寄せた。
-// 自分の一覧 (_kmMine) は部品ビューと参照タブが使う。
-// 自分のフォルダの一覧。控え (@peek 行) を読むので本文も一緒に取る。
-function loadKindMatrixMine() {
-  var dir = _wsFileDir();
-  var url = '/autosave?dir=' + encodeURIComponent(dir) + '&texts=1';
-  return window.fetch(url).then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(data) {
-      _kmMine = (data && Array.isArray(data.entries)) ? data.entries : [];
-      return _kmMine;
-    }).catch(function() { _kmMine = []; return _kmMine; });
-}
-
-// ── 部品ビュー ─────────────────────────────
-// 図 (ファイル) ごとにタブを開く作りだと、1 部品の 6 図種を見比べるのは毎回タブの
-// 往復になる。先輩のクラス図でメソッド名を確かめてから自分の活動図に打ち直す、という
-// 手順は「タブ切替 → フィルタ → 控え書き → タブ切替 → 打ち直す」に広がっていた
-// ここは部品を 1 つ選ぶと、その部品の 6 図種が
-// 先輩・自分の 2 列で同時に出る。自分の欄はその場で直して保存でき、先輩の欄の名前は
-// 押すと自分の欄に入るので、控え書き自体が要らなくなる。
-var _pbOn = false;
-var _pbPart = '';
-var _pbRefDocs = [];     // 覗いているフォルダの図 (選んだ部品ぶんだけ本文を読んだもの)
-var _pbEdits = {};       // 自分の欄の編集中の本文 (図種 → 本文)
-var _pbMsg = {};         // 図種 → 直前の保存の結果
-// 名前を押したときの行き先。図種をまたいだ参照がこの画面の的なので、名前は
-// 「押した行」ではなく「いま打っている行」に入る (先輩のクラス図のメソッド名を、
-// 自分の活動図の欄へそのまま入れる)。
-var _pbFocus = '';
-
-function _pbEls() { return { host: document.getElementById('peek-board') }; }
-
-function _pbBoard() {
-  var PB = window.MA.partBoard;
-  if (!PB || !_pbPart) return null;
-  return PB.board(_pbPart, _kmMine, _pbRefDocs);
-}
-
-// 選んだ部品ぶんの本文だけを読む。フォルダ全部を読むと、見る気になっていない
-// 段階で枚数ぶんの往復が走る。部品名で拾えない図種 (相乗り図) は、その図種の
-// 残りだけを読んで本文で拾い直す。
-function _pbLoadRef(part) {
-  var WS = window.MA.workspace;
-  var PB = window.MA.partBoard;
-  if (!WS || !PB || !_peekDir) return Promise.resolve([]);
-  var want = [];
-  var seen = {};
-  function add(e) {
-    if (!e || !e.name || seen[e.name]) return;
-    seen[e.name] = true;
-    want.push(e);
-  }
-  _peekEntries.forEach(function(e) { if (PB.partOf(e) === part) add(e); });
-  var covered = {};
-  want.forEach(function(e) { covered[e.savedKind || e.kind] = true; });
-  PB.order().forEach(function(kind) {
-    if (covered[kind]) return;
-    _peekEntries.forEach(function(e) {
-      if ((e.savedKind || e.kind) === kind && want.length < 14) add(e);
-    });
-  });
-  return Promise.all(want.map(function(e) {
-    return WS.loadFile(e.name, _peekDir).then(function(text) {
-      return { name: e.name, kind: e.savedKind || e.kind, text: typeof text === 'string' ? text : '' };
-    }).catch(function() { return { name: e.name, kind: e.savedKind || e.kind, text: '' }; });
-  }));
-}
-
-function setPartBoardMode(on) {
-  var el = _peekEls();
-  var toggle = document.getElementById('peek-board-toggle');
-  _pbOn = !!on;
-  if (toggle) {
-    toggle.setAttribute('aria-pressed', _pbOn ? 'true' : 'false');
-    toggle.classList.toggle('on', _pbOn);
-  }
-  if (!_pbOn) {
-    _pbEdits = {};
-    _pbMsg = {};
-    renderPartBoard();
-    return Promise.resolve(true);
-  }
-  // 並べ方を 2 つ同時に出さない (どちらの結果を見ているのかが画面から決まらない)。
-  if (_cohortOn) setCohortMode(false);
-  if (_sbsOn) setSbsMode(false);
-  _peekName = null;
-  if (el.title) el.title.textContent = '';
-  if (el.svg) { el.svg.textContent = ''; el.svg.style.display = 'none'; }
-  if (el.dsl) el.dsl.textContent = '';
-  _pbEdits = {};
-  _pbMsg = {};
-  renderPartBoard();
-  return loadKindMatrixMine().then(function() {
-    var PB = window.MA.partBoard;
-    var list = PB ? PB.parts(_kmMine, _peekEntries) : [];
-    if (!_pbPart || list.indexOf(_pbPart) < 0) {
-      // 既定は「いま開いている自分の図」の部品。読んでいるものの続きから出す。
-      var doc = null;
-      try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) {}
-      var mine = doc && PB ? PB.partOf(doc.name) : '';
-      _pbPart = (mine && list.indexOf(mine) >= 0) ? mine : (list[0] || '');
-    }
-    return selectPartBoardPart(_pbPart);
-  });
-}
-
-function selectPartBoardPart(part) {
-  _pbPart = String(part || '');
-  _pbEdits = {};
-  _pbMsg = {};
-  _pbFocus = '';
-  _pbRefDocs = [];
-  renderPartBoard();
-  if (!_pbPart) return Promise.resolve(false);
-  var want = _pbPart;
-  return _pbLoadRef(want).then(function(docs) {
-    if (want !== _pbPart || !_pbOn) return false;
-    _pbRefDocs = docs;
-    renderPartBoard();
-    return true;
-  });
-}
-
-// 自分の欄を保存する。保存先は自分の保存フォルダ (覗いているフォルダには書かない)。
-// 図種は送らない = server の控えが残る (この画面は本文だけを直す)。
-function savePartBoardRow(kind) {
-  var WS = window.MA.workspace;
-  var bd = _pbBoard();
-  if (!WS || !bd) return Promise.resolve(false);
-  var row = bd.rows.filter(function(r) { return r.kind === kind; })[0];
-  if (!row || row.mine.missing) return Promise.resolve(false);
-  var name = row.mine.name;
-  var dsl = _pbEdits[kind] != null ? _pbEdits[kind] : row.mine.text;
-  return WS.saveToFile({ name: name, dsl: dsl }, _wsFileDir()).then(function(ok) {
-    _pbMsg[kind] = ok ? '保存しました (' + name + ')' : '保存できませんでした';
-    if (ok) {
-      // 控えの側も今の本文にそろえる (保存した直後に読み直すと前の本文が出る、を避ける)。
-      _kmMine.forEach(function(e) {
-        if (e && (e.name === name || e.type === name)) e.text = dsl;
-      });
-      delete _pbEdits[kind];
-    }
-    renderPartBoard();
-    return ok;
-  }).catch(function() {
-    _pbMsg[kind] = '保存できませんでした';
-    renderPartBoard();
-    return false;
-  });
-}
-
-function renderPartBoard() {
-  var PB = window.MA.partBoard;
-  var host = _pbEls().host;
-  if (!host) return;
-  host.textContent = '';
-  if (!_pbOn || !PB) { host.style.display = 'none'; return; }
-  host.style.display = 'block';
-
-  var list = PB.parts(_kmMine, _peekEntries);
-  var head = document.createElement('div');
-  head.className = 'pb-head';
-  var sel = document.createElement('select');
-  sel.id = 'peek-board-part';
-  sel.title = '部品を選ぶと、その部品の 6 図種が先輩・自分の 2 列で並ぶ';
-  list.forEach(function(name) {
-    var o = document.createElement('option');
-    o.value = name;
-    o.textContent = name.toUpperCase();
-    if (name === _pbPart) o.selected = true;
-    sel.appendChild(o);
-  });
-  sel.addEventListener('change', function() { selectPartBoardPart(sel.value); });
-  head.appendChild(sel);
-  var sum = document.createElement('span');
-  sum.id = 'peek-board-summary';
-  var bd = _pbBoard();
-  var c = bd ? PB.counts(bd) : null;
-  sum.className = (c && (c.mineMissing || c.none)) ? 'has-todo' : '';
-  sum.textContent = bd ? PB.summary(bd) : '';
-  head.appendChild(sum);
-  host.appendChild(head);
-
-  if (!bd || !list.length) {
-    var empty = document.createElement('div');
-    empty.className = 'pb-empty';
-    empty.textContent = '並べられる部品がありません (隣のフォルダを選んでください)。';
-    host.appendChild(empty);
-    return;
-  }
-
-  // 部品カード。6 図種を 1 まとまりとして、
-  // 「6 枚中何枚済んだか」と「どの図がまだ先輩に合っていないか」を先に出す。
-  // 本文 6 行を読み比べないと言えなかったことを、部品を選んだ時点で 1 行にする。
-  var card = _pcCard();
-  host.appendChild(_pcStrip(card));
-
-  var who = window.MA.peekFolder ? window.MA.peekFolder.baseName(_peekDir) : '相手';
-  var verdicts = {};
-  ((card && card.rows) || []).forEach(function(r) { verdicts[r.kind] = r; });
-  bd.rows.forEach(function(r) {
-    var el = _pbRow(r, who);
-    var cr = verdicts[r.kind];
-    if (cr) {
-      el.setAttribute('data-verdict', cr.verdict);
-      var kindEl = el.querySelector('.pb-kind');
-      if (kindEl) kindEl.title = window.MA.partCard.rowLine(cr);
-    }
-    host.appendChild(el);
-  });
-}
-
-function _pcCard() {
-  var PC = window.MA.partCard;
-  if (!PC || !_pbPart) return null;
-  return PC.card(_pbPart, _kmMine, _pbRefDocs);
-}
-
-// カードの帯。進捗を左、要直しの図種を右に出す。図種名は押せて、その行へ飛ぶ
-// (「合っていない」と分かった次にすることは、その行を直すことなので)。
-function _pcStrip(card) {
-  var PC = window.MA.partCard;
-  var box = document.createElement('div');
-  box.className = 'pc-strip';
-  box.id = 'peek-card';
-  if (!PC || !card) return box;
-
-  var pr = PC.progress(card);
-  var prog = document.createElement('span');
-  prog.id = 'peek-card-progress';
-  prog.className = 'pc-progress' + (pr.done === PC.TOTAL ? ' full' : '');
-  prog.textContent = pr.text;
-  prog.title = pr.missing.length ? 'まだ無い図種: ' + pr.missing.join('・') : '6 図種そろっています';
-  box.appendChild(prog);
-
-  var bar = document.createElement('span');
-  bar.className = 'pc-bar';
-  bar.setAttribute('aria-hidden', 'true');
-  for (var i = 0; i < PC.TOTAL; i++) {
-    var pip = document.createElement('i');
-    pip.className = 'pc-pip' + (i < pr.done ? ' on' : '');
-    bar.appendChild(pip);
-  }
-  box.appendChild(bar);
-
-  var gaps = PC.gaps(card);
-  var note = document.createElement('span');
-  note.id = 'peek-card-gaps';
-  note.className = 'pc-gaps' + (gaps.length ? ' has-todo' : '');
-  if (!gaps.length) {
-    note.textContent = pr.done === PC.TOTAL ? '先輩と一致' : '合っていない図種はありません';
-  } else {
-    note.appendChild(document.createTextNode('要直し ' + gaps.length + ' 図種: '));
-    gaps.forEach(function(r, n) {
-      if (n) note.appendChild(document.createTextNode('・'));
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'pc-gap';
-      b.setAttribute('data-card-gap', r.kind);
-      b.setAttribute('data-verdict', r.verdict);
-      b.textContent = r.label;
-      b.title = PC.rowLine(r);
-      b.addEventListener('click', function() { _pcJump(r.kind); });
-      note.appendChild(b);
-    });
-  }
-  box.appendChild(note);
-  box.appendChild(_pcTodo());
-  return box;
-}
-
-// 📂 一覧の棚卸しと 👀 他フォルダの対応要否の表をここに統合。
-// まだ無い図種を名指しし、先輩にも無い図種は「対応不要（手本なし）」として分けて出す
-// (無いものを全部赤くすると、作らなくてよい図まで着手先に見える)。
-function _pcTodo() {
-  var KM = window.MA.kindMatrix;
-  var line = document.createElement('div');
-  line.id = 'peek-card-todo';
-  line.className = 'pc-todo';
-  if (!KM || !_pbPart) return line;
-  var who = window.MA.peekFolder ? window.MA.peekFolder.baseName(_peekDir) : '相手';
-  var sc = KM.scan(_pbPart, _kmMine, _peekEntries, who);
-  var miss = [];
-  var skip = [];
-  sc.rows.forEach(function(r) {
-    if (r.mineCount) return;
-    if (r.state === 'no-model' || r.state === 'noted') skip.push(r);
-    else miss.push(r);
-  });
-  line.setAttribute('data-missing', String(miss.length));
-  line.setAttribute('data-not-needed', String(skip.length));
-  function group(label, rows, cls) {
-    var g = document.createElement('span');
-    g.className = 'pc-todo-group ' + cls;
-    g.appendChild(document.createTextNode(label + ' ' + rows.length + ' 図種: '));
-    rows.forEach(function(r, n) {
-      if (n) g.appendChild(document.createTextNode('・'));
-      var k = document.createElement('span');
-      k.className = 'pc-todo-kind';
-      k.setAttribute('data-todo-kind', r.kind);
-      k.setAttribute('data-state', r.state);
-      k.textContent = r.label;
-      k.title = KM.rowTitle(r, who);
-      g.appendChild(k);
-    });
-    line.appendChild(g);
-  }
-  if (miss.length) group('未', miss, 'has-todo');
-  if (skip.length) group('対応不要（手本なし）', skip, 'not-needed');
-  if (!miss.length && !skip.length) line.textContent = '6 図種そろっています';
-  return line;
-}
-
-// 📂 一覧の導線から来たとき: 👀 他フォルダを開き、部品ビューに切り替える。
-// 「並べて比較」の言い切りの行から来たときは、
-// 比較相手のフォルダと、いま開いている図の部品をそのまま引き継ぐ
-// (部品ビューを開いてからフォルダと部品を選び直させない)。
-function openPartBoard(opts) {
-  var o = opts || {};
-  return openPeekFolder({ dir: o.dir }).then(function() {
-    var PF = window.MA.peekFolder;
-    if (o.dir && PF && !PF.samePath(o.dir, _peekDir)) return selectPeekDir(o.dir);
-    return true;
-  }).then(function() {
-    if (o.part) _pbPart = String(o.part).toLowerCase();
-    return setPartBoardMode(true);
-  });
-}
-
-// 要直しの図種を押したら、その行の自分の欄に入る (探し直さずに直し始める)。
-function _pcJump(kind) {
-  var host = _pbEls().host;
-  if (!host) return;
-  var row = host.querySelector('.pb-row[data-board-kind="' + kind + '"]');
-  if (row && row.scrollIntoView) row.scrollIntoView({ block: 'center' });
-  var ta = host.querySelector('[data-board-edit="' + kind + '"]');
-  if (ta && ta.focus) { ta.focus(); _pbFocus = kind; renderPartBoardFocusMark(); }
-}
-
-function _pbRow(r, who) {
-  var PB = window.MA.partBoard;
-  var row = document.createElement('div');
-  row.className = 'pb-row';
-  row.setAttribute('data-board-kind', r.kind);
-  row.setAttribute('data-state', r.state);
-
-  var kind = document.createElement('div');
-  kind.className = 'pb-kind';
-  kind.textContent = r.label;
-  kind.title = PB.rowLabel(r);
-  row.appendChild(kind);
-
-  // 左 = 先輩の欄。読むだけ (相手のファイルには書かない)。
-  var refCol = document.createElement('div');
-  var refHead = document.createElement('div');
-  refHead.className = 'pb-col-head';
-  refHead.textContent = r.ref.missing ? who + ': 手本なし'
-    : who + ' / ' + r.ref.name + (r.ref.shared ? '（相乗り図）' : '');
-  refCol.appendChild(refHead);
-  // 部品名の図が無く共通の図を手本にした欄は、
-  // どの図のどの部分を絞ったかを 1 行で書く (全文だと思って読み違えない)。
-  if (r.ref.shared && PB.sharedNote) {
-    var src = document.createElement('div');
-    src.className = 'pb-shared-note';
-    src.setAttribute('data-board-shared', r.kind);
-    src.textContent = PB.sharedNote(r.ref, _pbPart);
-    refCol.appendChild(src);
-  }
-  var refText = document.createElement('pre');
-  refText.className = 'pb-ref-text';
-  refText.setAttribute('data-board-ref', r.kind);
-  refText.textContent = r.ref.missing ? '' : r.ref.text;
-  refCol.appendChild(refText);
-  // 手本から拾った名前。押すと自分の欄に綴りが入る (控え書きが要らなくなる)。
-  if (!r.ref.missing) {
-    var names = PB.names(r.ref.text, r.kind);
-    var chips = document.createElement('div');
-    chips.className = 'pb-names';
-    names.slice(0, 24).forEach(function(n) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'pb-name';
-      b.setAttribute('data-board-name', n.name);
-      b.setAttribute('data-role', n.role);
-      b.textContent = n.name;
-      b.title = n.roleLabel + '『' + n.name + '』を、いま打っている自分の欄のカーソル位置に入れる';
-      b.addEventListener('click', function() { _pbInsert(_pbFocus || r.kind, n.name); });
-      chips.appendChild(b);
-    });
-    refCol.appendChild(chips);
-  }
-  row.appendChild(refCol);
-
-  // 右 = 自分の欄。ここで直してそのまま保存する。
-  var mineCol = document.createElement('div');
-  var mineHead = document.createElement('div');
-  mineHead.className = 'pb-col-head';
-  mineHead.textContent = r.mine.missing ? '自分: まだ無い' : '自分 / ' + r.mine.name;
-  mineCol.appendChild(mineHead);
-  if (r.mine.missing) {
-    var none = document.createElement('div');
-    none.className = 'pb-empty';
-    none.textContent = 'この図種はまだ起こしていません（部品を起こす で作れます）。';
-    mineCol.appendChild(none);
-  } else {
-    var ta = document.createElement('textarea');
-    ta.className = 'pb-mine-text';
-    ta.setAttribute('data-board-edit', r.kind);
-    ta.value = _pbEdits[r.kind] != null ? _pbEdits[r.kind] : r.mine.text;
-    ta.addEventListener('input', function() { _pbEdits[r.kind] = ta.value; });
-    ta.addEventListener('focus', function() { _pbFocus = r.kind; renderPartBoardFocusMark(); });
-    mineCol.appendChild(ta);
-    var acts = document.createElement('div');
-    acts.className = 'pb-acts';
-    var save = document.createElement('button');
-    save.type = 'button';
-    save.setAttribute('data-board-save', r.kind);
-    save.textContent = '保存';
-    save.title = r.mine.name + ' を自分の保存フォルダに上書き保存する';
-    save.addEventListener('click', function() { savePartBoardRow(r.kind); });
-    acts.appendChild(save);
-    var open = document.createElement('button');
-    open.type = 'button';
-    open.setAttribute('data-board-open', r.kind);
-    open.textContent = 'タブで開く';
-    open.title = r.mine.name + ' をタブで開く（Export から画像を書き出せる）';
-    open.addEventListener('click', function() {
-      closePeekFolder();
-      openFromFolderByName(r.mine.name);
-    });
-    acts.appendChild(open);
-    var msg = document.createElement('span');
-    msg.className = 'pb-msg';
-    msg.setAttribute('data-board-msg', r.kind);
-    msg.textContent = _pbMsg[r.kind] || '';
-    acts.appendChild(msg);
-    mineCol.appendChild(acts);
-  }
-  row.appendChild(mineCol);
-  return row;
-}
-
-// いま打っている欄を画面にも出す (名前がどこへ入るかが押す前に分かるように)。
-function renderPartBoardFocusMark() {
-  var host = _pbEls().host;
-  if (!host) return;
-  var rows = host.querySelectorAll('.pb-row');
-  for (var i = 0; i < rows.length; i++) {
-    var k = rows[i].getAttribute('data-board-kind');
-    rows[i].setAttribute('data-editing', k === _pbFocus ? '1' : '0');
-  }
-}
-
-function _pbInsert(kind, name) {
-  var PB = window.MA.partBoard;
-  var ta = document.querySelector('#peek-board [data-board-edit="' + kind + '"]');
-  if (!ta || !PB) return false;
-  var res = PB.insertName(ta.value, ta.selectionStart, ta.selectionEnd, name);
-  ta.value = res.text;
-  _pbEdits[kind] = res.text;
-  try {
-    ta.focus();
-    ta.setSelectionRange(res.caret, res.caret);
-  } catch (e) {}
-  return true;
-}
-
-function selectPeekDir(dir) {
-  var WS = window.MA.workspace;
-  if (!WS) return Promise.resolve(false);
-  _peekDir = dir;
-  _peekName = null;
-  _peekNames = [];
-  _peekEntries = [];
-  _peekScan = null;
-  _peekChanges = null;
-  _peekChangedOnly = false;
-  renderPeekDirs();
-  renderPeekFiles();
-  // 名前と判定を同時に取る。判定を後追いにすると、印の無い一覧が先に出て
-  // 「確かめた結果うまくいっている」と読み違える余地ができる。
-  // 図種は名前と同じ一覧応答に載っている (listFolder)。別呼び出しにすると
-  // 印の無い一覧が先に出て、そこで「無い」と読み違える余地ができる。
-  // 前回保存との差分も同じ一覧応答で受け取る (prev)。1 枚ずつ版を取りに行くと
-  // 図の枚数だけ往復が増え、印の付く前の一覧が先に出る。
-  return Promise.all([WS.listFolder(dir, { prev: true }), loadPeekScan(dir)]).then(function(got) {
-    var info = got[0] || {};
-    var entries = (info.entries || []).filter(function(e) { return e && e.name; });
-    if (!window.MA.peekFolder.samePath(dir, _peekDir)) return false;   // 途中で選び直された
-    _peekEntries = entries;
-    _peekNames = entries.map(function(e) { return e.name; });
-    _peekChanges = window.MA.peekChanges ? window.MA.peekChanges.report(entries) : null;
-    renderPeekFiles();
-    // 6 図種ぶんの対応要否は、フォルダを選んだ時点で出す (図を 1 枚開くまで待たせない)。
-    loadKindMatrixMine().then(function() {
-          // 部品ビューを出したままフォルダを選び直したら、その相手で組み直す。
-      if (_pbOn) selectPartBoardPart(_pbPart);
-    });
-    // 1 枚目をそのまま出す。選んだ後に「どれか押す」を挟むと、読むだけの用でも
-    // クリックが 1 つ増える。変更のある図が上に来ているので、取り込む 1 枚目が最初に開く。
-    var first = peekVisibleNames()[0];
-    if (first) showPeekFile(first);
-    return true;
-  }).catch(function() { return false; });
-}
-
-// 読むだけ。ここで開いた図は workspace に入らないので、保存の対象にならない。
-function showPeekFile(name) {
-  var el = _peekEls();
-  var WS = window.MA.workspace;
-  if (!WS || !el.svg) return Promise.resolve(false);
-  _peekName = name;
-  _peekDsl = '';
-  _partSel = '';
-  _focusSel = '';
-  renderPartChips();
-  renderPartFocus();
-  renderPeekFiles();
-  renderPeekTemplateBtn();
-  renderPeekChangeDetail(name);
-  renderPeekBeforeAfter(name);
-  if (el.title) el.title.textContent = name + '（読むだけ・編集も保存もしません）';
-  el.svg.style.display = '';
-  el.svg.textContent = '';
-  if (el.dsl) el.dsl.textContent = '読み込み中…';
-  var dir = _peekDir;
-  return WS.loadFile(name, dir).then(function(text) {
-    if (name !== _peekName) return false;
-    if (typeof text !== 'string') {
-      if (el.dsl) el.dsl.textContent = '読めませんでした';
-      return false;
-    }
-    if (el.dsl) el.dsl.textContent = text;
-    _peekDsl = text;
-    renderPeekTemplateBtn();
-    // 開いた図が複合図なら、部品で切り出す入口をその場に出す。
-    _partSel = '';
-    renderPartChips();
-    // 切り出さずに 1 枚のまま絞る入口も同時に出す (読むだけなら絞る方が近い)。
-    _focusSel = '';
-    renderPartFocus();
-    return renderDslToSvg(text, dir).then(function(svg) {
-      if (name !== _peekName) return false;
-      el.svg.innerHTML = svg;
-      return true;
-    }).catch(function() {
-      // 図が出せなくても本文は出す。読むこと自体は止めない。
-      el.svg.textContent = '図の描画に失敗しました (本文は下に出ています)';
-      return false;
-    });
-  });
-}
-
-function stepPeekFile(delta) {
-  // ↑↓ は一覧に見えている順で送る (絞り込み中に、隠れている図へ飛ばさない)。
-  var next = window.MA.peekFolder.step(peekVisibleNames(), _peekName, delta);
-  if (next) showPeekFile(next);
-}
-
 // 覗ける行き先の一覧。覗く画面を開かないまま指摘.md を読む画面 (📂一覧) のために、
 // 一度だけ取りに行く。
 // force: 手元の控えがあっても取り直す。保存先の一覧は起動時に開いて (design 10a)
-// ここを先に呼ぶので、後から隣に増えたフォルダを「並べて比較」が知らないままになる。
+// ここを先に呼ぶので、後から隣に増えたフォルダを「読むだけ」節が知らないままになる。
 // 「読むだけ」節の並び = 保存先の隣のフォルダ + 以前「＋参照」で足したフォルダ。
 // 参照タブ列を外しても、利用者が足したフォルダ (localStorage の控え) は並びに残す (隣でなくなっても消えない)。
 function _peekDirsUrl(dir) {
@@ -8251,135 +5629,23 @@ function _ensurePeekDirs(force) {
       return true;
     }).catch(function() { return false; });
 }
-
-function openPeekFolder(opts) {
-  var el = _peekEls();
-  var PF = window.MA.peekFolder;
-  if (!el.modal || !PF) return Promise.resolve(false);
-  // 📂 一覧で打っていた名前を引き継ぐ。
-  // 探している図の名前をもう一度打たせない。
-  _peekQuery = (opts && opts.query != null) ? String(opts.query) : '';
-  el.modal.style.display = 'flex';
-  var dir = _wsFileDir();
-  var want = opts && opts.dir ? String(opts.dir) : '';
-  return fetch(_peekDirsUrl(dir))
-    .then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(data) {
-      _peekDirs = PF.choices(data);
-      // フォルダは窓の中では選ばない。右クリックしたフォルダ →
-      // 右の枠に並べている相手 → 前に覗いていたフォルダ → 先頭 の順で 1 つに決めて開く。
-      var st = _seniorState();
-      var paneOpen = !(_seniorEls().pane || {}).hidden;
-      var pick = PF.defaultDir(_peekDirs, want, paneOpen && !_seniorGit ? st.dir : '', _peekDir);
-      if (!pick) _peekDir = null;
-      renderPeekDirs();
-      if (pick) return selectPeekDir(pick);
-      renderPeekFiles();
-      return true;
-    }).catch(function() {
-      _peekDirs = [];
-      renderPeekDirs();
-      return false;
-    });
-}
-
-// ── 先輩の図の枠 ────────────────────────────
-// 先輩の変更を自分の図へ取り込む手順は、先輩を見る ↔ 自分を直す の往復になる。
-// 👀 他フォルダはモーダルなので、自分の図を書く間は閉じることになり、
-// 開くまでにツールの折りたたみを通って 5 クリックかかっていた。ここは
-// 先輩のフォルダを 1 回選べば、右の枠に読み専用で据え置く。図を切り替えると
-// その図に当たる先輩の図へ自動で入れ替わる (保存先は動かさない)。
-// どれを相手にするかの判断は senior-pane が持ち、ここは通信と画面だけ。
-var _seniorNames = [];   // 先輩フォルダのファイル名一覧
-var _seniorName = '';    // いま右に出している先輩の図
-var _seniorPick = null;  // 直近の相手選び (候補の表示に使う)
-// 先輩のクラス図は全ドライバ共通の 1 枚で、
-// 部品名では引けない。相手が共通図のときは中身を部品名で絞って出す。
-var _seniorText = '';      // いま出している先輩の図の本文 (絞り直しに使う)
-var _seniorSliceKey = '';  // 抜き出す部品名 (自分の図の名前から起こし、打ち替えられる)
-var _seniorSliceOn = true; // 部品だけ / 共通図の全体
-// 先輩が 1 枚も持たない図種 (アクティビティ図) では
-// 4 段のどれにも当たらず「ありません」で手本が絶える。自分の他部品で作り終えた
-// 同じ図種を見本として代わりに出す。どれを見本にするかは peer-sample が持つ。
-var _peerNames = [];     // 自分の保存フォルダのファイル名一覧 (見本の候補元)
-var _peerDir = '';       // その一覧を取ったフォルダ
+// ── 右の枠 (読むだけ) ────────────────────────────
+// 「読むだけ」節で押した隣のフォルダの図を 1 枚、書かずに右の枠に出す。
+// GIT 節の「この図の履歴」の版も同じ枠に出る (下の _seniorGit)。
+// 図を切り替えても、出している 1 枚は替えない。図を切り替えるたびに相手を名前で選び直す追従・
+// 据え置く / 1 回だけ・共通図からの抜き出し・自分の他部品の見本・相手の選び直しの列は
+// TICKET-owner-20261115-2141-prune で外した (2 枚を比べるのは「この図の履歴」の版との比較だけ)。
+var _seniorName = '';    // いま右に出している図
+var _seniorDir = '';     // その図のフォルダ
 
 function _seniorEls() {
   return {
     pane: document.getElementById('senior-pane'),
-    dir: document.getElementById('senior-dir'),
+    title: document.getElementById('senior-title'),
     notice: document.getElementById('senior-notice'),
-    cands: document.getElementById('senior-candidates'),
     svg: document.getElementById('senior-svg'),
     dsl: document.getElementById('senior-dsl'),
-    slice: document.getElementById('senior-slice'),
-    sliceKey: document.getElementById('senior-slice-key'),
-    sliceMode: document.getElementById('senior-slice-mode'),
-    draftRow: document.getElementById('senior-draft-row'),
-    draft: document.getElementById('senior-draft'),
-    draftNote: document.getElementById('senior-draft-note'),
-    modeKeep: document.getElementById('senior-mode-keep'),
-    modeOnce: document.getElementById('senior-mode-once'),
-    btn: document.getElementById('btn-tab-senior'),
   };
-}
-
-// 先輩がこの図種を 1 枚も持っていないとき、
-// 手順1「手本を見て直す」が成立せず、junior は要素構成と依存の粒度を決め打ちする
-// しかなかった。先輩の他図種に実際に書かれている名前だけから仮の手本を組む口を、
-// 相手が見つからなかったときにだけ出す (見つかったときは本物の手本がある)。
-function renderSeniorDraftRow(pick) {
-  var el = _seniorEls();
-  var SD = window.MA.seniorDraft;
-  var WS = window.MA.workspace;
-  if (!el.draftRow || !SD || !WS) return;
-  var active = WS.getActive();
-  var key = (pick && pick.key) || _seniorPartKeys()[0] || '';
-  var show = !!(active && key && (!pick || !pick.name));
-  el.draftRow.hidden = !show;
-  if (!show) return;
-  var kind = SD.kindLabel(String(active.diagramType || '').replace(/^plantuml-/, ''));
-  if (el.draft) el.draft.textContent = '相手に無い' + kind + 'を仮に組む';
-  if (el.draftNote) {
-    el.draftNote.textContent = '比較相手に ' + key + ' の' + kind
-      + ' がありません。相手の他の図種に書かれている名前から下書きを組めます。';
-  }
-}
-
-// 先輩のフォルダを丸ごと読み、仮の手本を新しいタブに開く。
-function makeSeniorDraft() {
-  var el = _seniorEls();
-  var SD = window.MA.seniorDraft;
-  var WS = window.MA.workspace;
-  var st = _seniorState();
-  if (!SD || !WS || !st.dir) return Promise.resolve(false);
-  var active = WS.getActive();
-  if (!active) return Promise.resolve(false);
-  var kind = String(active.diagramType || '').replace(/^plantuml-/, '');
-  var subject = (_seniorPick && _seniorPick.key) || _seniorPartKeys()[0] || '';
-  if (el.draftNote) el.draftNote.textContent = '先輩の図を読み込み中…';
-  return Promise.all(_seniorNames.map(function(name) {
-    return WS.loadFile(name, st.dir).then(function(text) {
-      return typeof text === 'string' ? { name: name, text: text } : null;
-    }).catch(function() { return null; });
-  })).then(function(loaded) {
-    var docs = loaded.filter(function(d) { return d && d.text; });
-    var res = SD.draft(subject, docs, kind);
-    if (el.draftNote) el.draftNote.textContent = SD.noticeText(res);
-    if (!res.ok) return false;
-    saveActiveDoc();
-    WS.open({
-      name: SD.docName(subject, kind),
-      dsl: res.dsl,
-      diagramType: 'plantuml-' + res.kind,
-    });
-    applyActiveDoc();
-    saveActiveDoc();
-    if (window.MA.toast) {
-      window.MA.toast.show(SD.noticeText(res));
-    }
-    return true;
-  });
 }
 
 function _seniorState() {
@@ -8391,428 +5657,55 @@ function _seniorSave(over) {
   var SP = window.MA.seniorPane;
   if (!SP) return null;
   var cur = SP.load();
-  // 比較中のフォルダが替わったら、参照ペインの相手フォルダも追う。
-  if (over && over.dir !== undefined && over.dir !== cur.dir) {
-    window.setTimeout(function() { try { syncCrossRefDir(false); } catch (e) {} }, 0);
-  }
   return SP.save({
     open: over && over.open !== undefined ? over.open : cur.open,
     dir: over && over.dir !== undefined ? over.dir : cur.dir,
     name: over && over.name !== undefined ? over.name : cur.name,
     width: over && over.width !== undefined ? over.width : cur.width,
     seen: over && over.seen !== undefined ? over.seen : cur.seen,
-    mode: over && over.mode !== undefined ? over.mode : cur.mode,
   });
 }
 
-// design 9a: 「並べて比較」は 1 つの入口で、据え置き (図の切り替えに追従) と
-// 1 回だけ (いま出している 1 枚に留める) を枠の中で切り替える。
-function renderSeniorModeRow() {
-  var el = _seniorEls();
-  var mode = _seniorState().mode;
-  if (el.modeKeep) el.modeKeep.setAttribute('aria-pressed', mode === 'keep' ? 'true' : 'false');
-  if (el.modeOnce) el.modeOnce.setAttribute('aria-pressed', mode === 'once' ? 'true' : 'false');
-}
-
-// 「2 つを左右に置いて見比べる」入口は 5 つあった。
-// 面をこの枠 1 つにし、選ぶのは「誰と並べるか」だけにする。相手の一覧と、
-// その相手に切り替えるとき鳴らす既存の入口は compare-entry が持つ。
-var _compareTarget = '';
-
-function compareTarget() {
-  var CE = window.MA.compareEntry;
-  if (!CE) return '';
-  if (!CE.isTarget(_compareTarget)) _compareTarget = CE.defaultTarget();
-  return _compareTarget;
-}
-
-// 相手の列は、どちらの枠が出ていても同じものが見える (面は 1 つとして読める)。
-function renderCompareTargetRow() {
-  var CE = window.MA.compareEntry;
-  if (!CE) return;
-  var cur = compareTarget();
-  [['senior-target', 'senior'], ['compare-target', 'compare']].forEach(function(pair) {
-    var host = document.getElementById(pair[0]);
-    if (!host) return;
-    host.innerHTML = '';
-    CE.targets().forEach(function(t) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.id = pair[1] + '-target-' + t.id;
-      b.className = 'compare-target-btn';
-      b.textContent = t.label;
-      b.title = t.title;
-      b.setAttribute('data-target', t.id);
-      b.setAttribute('aria-pressed', t.id === cur ? 'true' : 'false');
-      b.addEventListener('click', function() { openCompareTarget(t.id); });
-      host.appendChild(b);
-    });
-  });
-}
-
-// 相手を選んで枠を開く。旧い 5 つの入口 (タブ列・下端の札・Ctrl+K) は
-// すべてここを通るので、どこから押しても同じ 1 つの面が開く。
-function openCompareTarget(id) {
-  var CE = window.MA.compareEntry;
-  if (!CE) return Promise.resolve(false);
-  var route = CE.routeOf(id);
-  if (!route) return Promise.resolve(false);
-  clearSeniorGit();
-  _compareTarget = route.target;
-  renderCompareTargetRow();
-  // 面は 1 つなので、相手を切り替えたらもう一方の枠は閉じる
-  // (左右に 2 枚重なると「どちらが効いているか」が読めなくなる)。
-  if (route.target === 'folder') {
-    toggleCompareView(false);
-    return Promise.resolve(toggleSeniorPane(true));
-  }
-  // 別タブの図・この図の前回保存版は、既存の並べる面が持っている。
-  toggleSeniorPane(false);
-  toggleCompareView(true, route.mode);
-  renderCompareTargetRow();
-  return Promise.resolve(true);
-}
-
-function setSeniorMode(mode) {
-  _seniorSave({ mode: mode === 'once' ? 'once' : 'keep' });
-  renderSeniorModeRow();
-  // 据え置きに戻したら、いま開いている図の相手へその場で追い付かせる
-  // (次に図を切り替えるまで前の相手が残ると、どちらが効いているか読めない)。
-  if (mode !== 'once') syncSeniorCounterpart();
-}
-
-// 選べるフォルダ = 覗ける行き先のうち、自分の保存先でないもの。
-function renderSeniorDirs() {
-  var el = _seniorEls();
-  var PF = window.MA.peekFolder;
-  if (!el.dir || !PF) return;
-  var st = _seniorState();
-  var others = PF.others(_peekDirs);
-  el.dir.innerHTML = '';
-  if (!others.length) {
-    var none = document.createElement('option');
-    none.value = '';
-    none.textContent = '隣に読めるフォルダがありません';
-    el.dir.appendChild(none);
-    return;
-  }
-  if (!st.dir) {
-    var ph = document.createElement('option');
-    ph.value = '';
-    ph.textContent = '先輩のフォルダを選ぶ…';
-    el.dir.appendChild(ph);
-  }
-  others.forEach(function(d) {
-    var o = document.createElement('option');
-    o.value = d.path;
-    o.textContent = PF.label ? PF.label(d) : d.name;
-    if (PF.samePath(d.path, st.dir)) o.selected = true;
-    el.dir.appendChild(o);
-  });
-}
-
-function _seniorLabel() {
-  var PF = window.MA.peekFolder;
-  var st = _seniorState();
-  if (!PF || !st.dir) return '先輩';
-  for (var i = 0; i < _peekDirs.length; i++) {
-    if (PF.samePath(_peekDirs[i].path, st.dir)) return _peekDirs[i].name;
-  }
-  return PF.baseName(st.dir);
-}
-
-// 自分の図がどの部品の図か。共通図から抜き出す語になる。
-function _seniorPartKeys() {
-  var SS = window.MA.seniorSlice;
-  var WS = window.MA.workspace;
-  var active = WS ? WS.getActive() : null;
-  if (!SS || !active) return [];
-  return SS.partKeysOf(active.name);
-}
-
-// 見本の候補元 = 自分の保存フォルダ。保存先が変わったときだけ取り直す
-// (図を切り替えるたびに読みに行くと、図の切り替えがフォルダ読みを待つことになる)。
-function _peerEnsureNames() {
-  var WS = window.MA.workspace;
-  var dir = _wsFileDir();
-  if (!WS || !dir || dir === _peerDir) return;
-  _peerDir = dir;
-  _peerNames = [];
-  WS.listFolder(dir).then(function(info) {
-    if (_peerDir !== dir) return;
-    _peerNames = ((info && info.entries) || [])
-      .filter(function(e) { return e && e.name; })
-      .map(function(e) { return e.name; });
-    // 取れた時点で描き直す (それまでは見本なしの表示で動く)。
-    syncSeniorPane();
-  }).catch(function() { /* 読めなくても先輩の枠はそのまま動く */ });
-}
-
-// 先輩に相手がいないときだけ、自分の他部品の同図種を見本に差し替える。
-// 先輩が決まっているときは触らない (見本は手本が無いときの代役)。
-function _withPeerSample(pick) {
-  var PS = window.MA.peerSample;
-  var WS = window.MA.workspace;
-  _peerEnsureNames();
-  if (!PS || !WS || (pick && pick.name)) return pick;
-  // 相手にその図種はあるが、この部品の図が無い (共通図も無い)
-  // ときは見本を出さない。自分の見本図が相手の枠に出ると、相手の図と読み違える。
-  // 見本は相手がその図種を 1 枚も持たないときの代役。
-  if (pick && pick.sameKind) return pick;
-  var active = WS.getActive();
-  var s = PS.pickSample({ name: active ? active.name : '', dir: _peerDir },
-    _peerNames, _peerDir);
-  if (s.how !== 'peer-sample') return pick;
-  // 先輩がいない理由も残す (枠の 1 行が「先輩の代わり」だと読めるように)。
-  s.seniorReason = (pick && pick.reason) || '';
-  return s;
-}
-
-function renderSeniorCandidates() {
-  var el = _seniorEls();
-  if (!el.cands) return;
-  el.cands.innerHTML = '';
-  var list = (_seniorPick && _seniorPick.candidates) || [];
-  // 1 枚に決まっているときは並べない (押す物が増えるだけになる)。
-  if (list.length < 2) return;
-  list.forEach(function(name) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'senior-cand' + (name === _seniorName ? ' selected' : '');
-    b.textContent = window.MA.seniorPane.baseOf(name);
-    b.addEventListener('click', function() { showSeniorFile(name); });
-    el.cands.appendChild(b);
-  });
-}
-
-// 右の枠に 1 枚出す。読むだけなので workspace には入れない。
-function showSeniorFile(name) {
+// 右の枠に 1 枚出す。読むだけなので workspace には入れず、そのフォルダにも保存先にも書かない。
+function showSeniorFile(name, dir) {
   var el = _seniorEls();
   var WS = window.MA.workspace;
-  var st = _seniorState();
-  // 見本は自分のフォルダから読む (先輩のフォルダで探すと必ず空振りする)。
-  var dir = (_seniorPick && _seniorPick.how === 'peer-sample' && _seniorPick.dir) || st.dir;
-  if (!WS || !el.dsl || !dir) return Promise.resolve(false);
+  var SP = window.MA.seniorPane;
+  if (!WS || !el.dsl || !dir || !name) return Promise.resolve(false);
   _seniorName = name;
-  _seniorSave({ name: name });
-  renderSeniorCandidates();
+  _seniorDir = dir;
+  _seniorSave({ dir: dir, name: name });
+  if (el.notice) el.notice.textContent = SP ? SP.noticeText(dir, name) : name;
   el.dsl.textContent = '読み込み中…';
   if (el.svg) el.svg.textContent = '';
   return WS.loadFile(name, dir).then(function(text) {
-    if (name !== _seniorName) return false;
+    if (name !== _seniorName || dir !== _seniorDir) return false;
     if (typeof text !== 'string') {
       el.dsl.textContent = '読めませんでした';
       return false;
     }
-    _seniorText = text;
-    return renderSeniorBody();
+    el.dsl.textContent = text;
+    if (!el.svg) return true;
+    return renderDslToSvg(text).then(function(svg) {
+      if (name !== _seniorName || dir !== _seniorDir || !el.svg) return false;
+      el.svg.innerHTML = svg;
+      return true;
+    }).catch(function() {
+      if (el.svg) el.svg.textContent = '図の描画に失敗しました (本文は下に出ています)';
+      return false;
+    });
   }).catch(function() {
     el.dsl.textContent = '読めませんでした';
     return false;
   });
 }
 
-// 枠に出す本文を組み立てて描く。相手が共通図なら、部品名に当たる所だけを抜き出す
-// (共通図をそのまま出すと、自分の部品がどこかを
-// 目で探すことになり「先輩の粒度に合わせる」手順が共通図を読む作業に戻る)。
-function renderSeniorBody() {
-  var el = _seniorEls();
-  var SS = window.MA.seniorSlice;
-  var name = _seniorName;
-  var isCommon = !!(_seniorPick && _seniorPick.how === 'common-slice');
-  var res = null;
-  var shown = _seniorText;
-
-  if (isCommon && SS && _seniorSliceOn && _seniorSliceKey) {
-    // 自分の図の名前から起こした語は `Timer` / `TimerDrv` のように何通りかある。
-    // 当たるまで順に試し、当たった語を欄に出す (打ち替えた語は 1 つだけ試す)。
-    var keys = [_seniorSliceKey];
-    var known = (_seniorPick.keys || []);
-    var at = known.indexOf(_seniorSliceKey);
-    if (at >= 0) keys = known.slice(at);
-    for (var i = 0; i < keys.length; i++) {
-      res = SS.slice(_seniorText, [keys[i]],
-        { title: SS.baseOf(name) + '（' + keys[i] + ' の部分）' });
-      if (res.matched) { _seniorSliceKey = keys[i]; shown = res.dsl; break; }
-    }
-  }
-  renderSeniorSliceRow();
-  if (isCommon && el.notice && SS) {
-    el.notice.textContent = _seniorSliceOn
-      ? SS.sliceNotice(res, name, _seniorSliceKey)
-      : '先輩の共通図 ' + SS.baseOf(name) + ' の全体（読むだけ）';
-  }
-  if (!el.dsl) return Promise.resolve(false);
-  el.dsl.textContent = shown;
-  if (!el.svg) return Promise.resolve(true);
-  return renderDslToSvg(shown).then(function(svg) {
-    if (name !== _seniorName || !el.svg) return false;
-    el.svg.innerHTML = svg;
-    return true;
-  }).catch(function() {
-    if (el.svg) el.svg.textContent = '図の描画に失敗しました (本文は下に出ています)';
-    return false;
-  });
-}
-
-// 部品名の欄は、相手が共通図のときだけ出す (1:1 で引けている図種では要らない)。
-function renderSeniorSliceRow() {
-  var el = _seniorEls();
-  if (!el.slice) return;
-  var isCommon = !!(_seniorPick && _seniorPick.how === 'common-slice');
-  el.slice.hidden = !isCommon;
-  if (!isCommon) return;
-  if (el.sliceKey && document.activeElement !== el.sliceKey) el.sliceKey.value = _seniorSliceKey;
-  if (el.sliceMode) {
-    el.sliceMode.setAttribute('aria-pressed', _seniorSliceOn ? 'true' : 'false');
-    el.sliceMode.textContent = _seniorSliceOn ? '部品だけ' : '全体';
-  }
-}
-
-// いま開いている図に当たる先輩の図へ入れ替える。図を切り替えるたびに呼ぶ。
-// 下端の「👀 先輩」。枠を開いていなくても、いま横に出る図が読める。
-// design 7b: 件数を持つものはタブ列に置かず下端に寄せ、押せばそのパネルが開く。
-function renderSeniorStatus() {
-  try { renderReadonlyTree(); } catch (e) {}
-  var SP = window.MA.seniorPane;
-  var btn = document.getElementById('status-senior');
-  if (!btn || !SP) return;
-  var open = !(_seniorEls().pane || {}).hidden;
-  var PS = window.MA.peerSample;
-  var sample = PS && PS.statusText(_seniorPick);
-  var txt = sample
-    || SP.statusText(_seniorPick, { ready: !!(_seniorPick && _seniorNames.length) });
-  // 見本を名指ししている回は候補の数に関わらず 1 件 (横に出る図が決まっている)。
-  var n = sample ? Math.max(1, Number(txt.count) || 0) : (Number(txt.count) || 0);
-  btn.title = txt.title;
-  btn.setAttribute('data-count', String(n));
-  btn.setAttribute('aria-pressed', open ? 'true' : 'false');
-  btn.className = open ? 'on' : '';
-  // 相手が決まっていない (0 件) ときは出さない。
-  // 出すときは他の件数表示と同じ「● 名前」の 1 種類の形 (枠なし、色は点だけ)。
-  // 入口は FILES ツリーの「読むだけ」の ⇔ が持つ。
-  var SB = window.MA.statusBadges;
-  var shown = SB ? SB.namedText(txt.label, n) : (n > 0 ? txt.label : '');
-  if (!shown) {
-    btn.hidden = true;
-    btn.textContent = '';
-    btn.removeAttribute('data-dot');
-    return;
-  }
-  btn.hidden = false;
-  btn.setAttribute('data-dot', 'ok');
-  var dot = document.createElement('span');
-  dot.className = 'sb-dot';
-  dot.textContent = SB ? SB.DOT : '●';
-  btn.textContent = '';
-  btn.appendChild(dot);
-  btn.appendChild(document.createTextNode(shown.replace(/^●/, '')));
-}
-
-// 枠を閉じていても相手は決めておく (下端に出すのがこの直しの的なので、
-// 開いてからでないと分からない、では入口が 1 クリックにならない)。
-// フォルダをまだ 1 度も決めていないときは何も読まない (行き先一覧をここで
-// 取ると、まだ出来ていないフォルダの並びを掴んだまま覚えることになる)。
-function _seniorPrime() {
-  var SP = window.MA.seniorPane;
-  var WS = window.MA.workspace;
-  var dir = SP ? _seniorState().dir : '';
-  // 先輩のフォルダをまだ決めていなくても、見本は自分のフォルダだけで選べる。
-  if (!SP || !WS || !dir) { _seniorRefreshPick(); return Promise.resolve(false); }
-  if (_seniorNames.length) { _seniorRefreshPick(); return Promise.resolve(true); }
-  return WS.listFolder(dir).then(function(info) {
-    _seniorNames = ((info && info.entries) || [])
-      .filter(function(e) { return e && e.name; })
-      .map(function(e) { return e.name; });
-    _seniorRefreshPick();
-    return true;
-  }).catch(function() { renderSeniorStatus(); return false; });
-}
-
-// 相手を選び直して下端だけ描き直す (枠が閉じているときはここで止まる)。
-function _seniorRefreshPick() {
-  var SP = window.MA.seniorPane;
-  var WS = window.MA.workspace;
-  if (!SP || !WS) return;
-  var active = WS.getActive();
-  _seniorPick = _withPeerSample(SP.pickCounterpart(
-    { name: active ? active.name : '', dir: _wsFileDir() }, _seniorNames, _seniorState().dir,
-    _seniorPartKeys()));
-  renderSeniorStatus();
-}
-
-// 相手の図が無いと言い切った行 (見本に差し替えた行も)
-// から、同じ部品の 🧩 部品ビューへ 1 押しで行ける案内を 1 つだけ添える。
-// 図種ごとに「並べて比較 → 無ければ他フォルダを探す」を繰り返す代わりに、
-// 部品の 6 図種のどれが相手にあって、どれが欠けているかをまとめて見られる。
-function _seniorBoardLink(notice, pick) {
-  if (!notice || !pick || pick.name) return;
-  if (pick.how !== 'none' && pick.how !== 'peer-sample') return;
-  var PB = window.MA.partBoard;
-  var WS = window.MA.workspace;
-  var active = WS ? WS.getActive() : null;
-  var part = (PB && active) ? PB.partOf(active.name) : '';
-  if (!part) return;
-  var b = document.createElement('button');
-  b.type = 'button';
-  b.id = 'senior-to-board';
-  b.className = 'senior-to-board';
-  b.setAttribute('data-part', part);
-  b.textContent = '部品ビューで ' + part.toUpperCase() + ' の 6 図種をまとめて見る';
-  b.title = '比較相手のフォルダと自分のフォルダで、' + part.toUpperCase()
-    + ' の 6 図種を 2 列に並べます (相手に無い図種は空欄、共通の図は部品で絞って出します)';
-  b.addEventListener('click', function() {
-    openPartBoard({ part: part, dir: _seniorState().dir });
-  });
-  notice.appendChild(document.createTextNode(' '));
-  notice.appendChild(b);
-}
-
-function syncSeniorCounterpart() {
-  var el = _seniorEls();
-  var SP = window.MA.seniorPane;
-  var WS = window.MA.workspace;
-  var st = _seniorState();
-  if (!el.pane || el.pane.hidden || !SP || !WS) { _seniorRefreshPick(); return; }
-  var active = WS.getActive();
-  var pick = _withPeerSample(SP.pickCounterpart(
-    { name: active ? active.name : '', dir: _wsFileDir() }, _seniorNames, st.dir,
-    _seniorPartKeys()));
-  _seniorPick = pick;
-  // 図を切り替えたら、抜き出す語もその図の部品に付け替える (打ち替えた語は
-  // その図を見ている間だけ効く。次の図に持ち越すと別部品の所を見せてしまう)。
-  _seniorSliceKey = pick.key || '';
-  var PS = window.MA.peerSample;
-  if (el.notice) {
-    el.notice.textContent = (pick.how === 'peer-sample' && PS)
-      ? PS.noticeText(pick, pick.seniorReason)
-      : SP.noticeText(pick, _seniorLabel());
-    _seniorBoardLink(el.notice, pick);
-  }
-  renderSeniorStatus();
-  renderSeniorCandidates();
-  renderSeniorSliceRow();
-  renderSeniorDraftRow(pick);
-  if (!pick.name) {
-    _seniorName = '';
-    _seniorText = '';
-    if (el.dsl) el.dsl.textContent = '';
-    if (el.svg) el.svg.textContent = '';
-    return;
-  }
-  if (pick.name !== _seniorName) showSeniorFile(pick.name);
-  else renderSeniorBody();
-}
-
 // ── FILES「読むだけ」節 (design 10a) ─────────────
-// 隣の保存フォルダを 1 行ずつ出し、右の枠に並べている相手には「比較中」を付ける。
-// 並べる・相手を替えるの実体は並べて比較の枠 (senior-pane) の道をそのまま通る。
+// 隣の保存フォルダを 1 行ずつ出す。図を押すとその 1 枚が右の枠 (senior-pane) に出る。
 function renderReadonlyTree() {
   var FP = window.MA.filesPanel;
   if (!FP || !FP.renderReadonly) return;
-  var st = _seniorState();
-  var open = !(_seniorEls().pane || {}).hidden;
-  FP.renderReadonly(_peekDirs, open && !_seniorGit ? st.dir : '');
+  FP.renderReadonly(_peekDirs);
 }
 
 function refreshReadonlyTree(force) {
@@ -8938,59 +5831,19 @@ function openChangeTarget() {
 window.openChangeTarget = openChangeTarget;
 window.changeSaveTarget = changeSaveTarget;
 
-// 読むだけのフォルダを右の枠の相手にする。name を渡すとその 1 枚を出し、図を切り替えても
-// 入れ替えない (1 回だけ)。name が無ければ今開いている図に当たる相手を追う。
-function compareReadonlyFolder(dir, name) {
-  if (!dir) return Promise.resolve(false);
-  var PF = window.MA.peekFolder;
-  var st = _seniorState();
-  if (_seniorGit || !(PF && PF.samePath(st.dir, dir))) {
-    clearSeniorGit();
-    _seniorSave({ dir: dir });
-    _seniorNames = [];
-    _seniorName = '';
-  }
-  if (!name && _seniorState().mode === 'once') setSeniorMode('keep');
-  return Promise.resolve(openCompareTarget('folder')).then(function() {
-    if (!name) return true;
-    setSeniorMode('once');
-    var el = _seniorEls();
-    if (el.notice) {
-      var folder = String(dir).split(/[\\/]/).filter(Boolean).pop() || dir;
-      el.notice.textContent = folder + ' の ' + name + ' を並べています (読むだけ。図を切り替えてもこの 1 枚のまま)';
-    }
-    return showSeniorFile(name);
-  }).then(function(r) {
-    renderSeniorStatus();
-    return r;
-  });
-}
-window.compareReadonlyFolder = compareReadonlyFolder;
-window.openPeekFolder = openPeekFolder;
-window.refreshReadonlyTree = refreshReadonlyTree;
-
-function selectSeniorDir(dir) {
-  var el = _seniorEls();
-  var WS = window.MA.workspace;
+// 「読むだけ」節で押した図を右の枠に 1 枚出す (files-panel から)。
+// 図を切り替えてもこの 1 枚のまま。そのフォルダにも保存先にも何も書かない。
+function showReadonlyFile(dir, name) {
+  if (!dir || !name) return Promise.resolve(false);
   clearSeniorGit();
-  _seniorSave({ dir: dir });
-  _seniorNames = [];
-  _seniorName = '';
-  // 自動で選んだときも、選ばれている物が枠の上に出ていないと
-  // 「まだ選んでいない」と読める。決まった時点で並びを描き直す。
-  renderSeniorDirs();
-  if (!dir || !WS) { syncSeniorCounterpart(); return Promise.resolve(false); }
-  if (el.notice) el.notice.textContent = '読み込み中…';
-  return WS.listFolder(dir).then(function(info) {
-    var entries = ((info && info.entries) || []).filter(function(e) { return e && e.name; });
-    _seniorNames = entries.map(function(e) { return e.name; });
-    syncSeniorCounterpart();
-    return true;
-  }).catch(function() {
-    if (el.notice) el.notice.textContent = '先輩のフォルダを読めませんでした';
-    return false;
+  // 右に 2 枚重ねない (どちらが効いているか読めなくなる)。
+  toggleCompareView(false);
+  return Promise.resolve(toggleSeniorPane(true)).then(function() {
+    return showSeniorFile(name, dir);
   });
 }
+window.showReadonlyFile = showReadonlyFile;
+window.refreshReadonlyTree = refreshReadonlyTree;
 
 function toggleSeniorPane(open) {
   var el = _seniorEls();
@@ -9000,31 +5853,15 @@ function toggleSeniorPane(open) {
   applySidePaneWidth('senior-pane', 'resizer-senior',
     window.MA.seniorPane && window.MA.seniorPane.STORE_KEY);
   if (open) showSeniorFirstNote();
-  renderSeniorModeRow();
-  renderCompareTargetRow();
-  if (el.btn) {
-    el.btn.setAttribute('aria-pressed', open ? 'true' : 'false');
-    // 入口は FILES ツリーの見出しの行にあり、その置き場所のクラスも持つので上書きしない。
-    el.btn.classList.toggle('on', !!open);
-  }
   _seniorSave({ open: !!open });
-  renderSeniorStatus();
-  if (!open) { clearSeniorGit(); return Promise.resolve(true); }
+  if (!open) {
+    clearSeniorGit();
+    _seniorName = '';
+    _seniorDir = '';
+    return Promise.resolve(true);
+  }
   if (_seniorGit) return Promise.resolve(renderSeniorGit());
-  return _ensurePeekDirs(true).then(function() {
-    renderSeniorDirs();
-    var st = _seniorState();
-    var PF = window.MA.peekFolder;
-    // 隣が 1 つだけなら選ばせない (この枠の値打ちは「切り替えずに済む」ことなので、
-    // 開いた直後に選択を 1 つ挟むと元の往復に戻る)。
-    if (!st.dir && PF) {
-      var others = PF.others(_peekDirs);
-      if (others.length === 1) return selectSeniorDir(others[0].path);
-    }
-    if (st.dir && !_seniorNames.length) return selectSeniorDir(st.dir);
-    syncSeniorCounterpart();
-    return true;
-  });
+  return Promise.resolve(true);
 }
 
 // 初めて開いたときだけ「この枠は何か」を 1 行出す。読んだら二度と出さない。
@@ -9047,56 +5884,23 @@ function showSeniorFirstNote() {
   _seniorSave({ seen: true });
 }
 
-// 図を切り替えたとき、開いていれば相手も入れ替える (renderTabs から)。
-// 「1 回だけ」に切り替えてある間は入れ替えない (いま出している 1 枚を見続ける)。
+// 図を切り替えたとき (renderTabs から)。読むだけの図は 1 枚のまま替えない。
+// Git の版を出している間だけ、同じ版の「今開いている図」へ入れ替える。
 function syncSeniorPane() {
   var el = _seniorEls();
-  if (!el.pane || el.pane.hidden) { _seniorRefreshPick(); return; }
-  // Git のコミットを相手にしている間は、同じコミットの「今開いている図」へ入れ替える。
-  if (_seniorGit) { if (_seniorGit.name !== _activeDocName()) renderSeniorGit(); return; }
-  if (_seniorState().mode === 'once' && _seniorName) { renderSeniorStatus(); return; }
-  syncSeniorCounterpart();
+  if (!el.pane || el.pane.hidden) return;
+  if (_seniorGit && _seniorGit.name !== _activeDocName()) renderSeniorGit();
 }
 
 function setupSeniorPane() {
   var el = _seniorEls();
-  if (!el.pane || !el.btn || !window.MA.seniorPane) return;
-  el.btn.addEventListener('click', function() { toggleSeniorPane(el.pane.hidden); });
+  if (!el.pane || !window.MA.seniorPane) return;
   var close = document.getElementById('senior-close');
   if (close) close.addEventListener('click', function() { toggleSeniorPane(false); });
-  if (el.dir) el.dir.addEventListener('change', function() { selectSeniorDir(this.value); });
-  // 部品名を打てば、共通図のその所だけが浮かぶ (この直しの的)。
-  if (el.sliceKey) {
-    el.sliceKey.addEventListener('input', function() {
-      _seniorSliceKey = this.value.trim();
-      _seniorSliceOn = true;
-      renderSeniorBody();
-    });
-  }
-  if (el.sliceMode) {
-    el.sliceMode.addEventListener('click', function() {
-      _seniorSliceOn = !_seniorSliceOn;
-      renderSeniorBody();
-    });
-  }
-  if (el.draft) el.draft.addEventListener('click', function() { makeSeniorDraft(); });
-  if (el.modeKeep) el.modeKeep.addEventListener('click', function() { setSeniorMode('keep'); });
-  if (el.modeOnce) el.modeOnce.addEventListener('click', function() { setSeniorMode('once'); });
-  renderSeniorModeRow();
-  renderCompareTargetRow();
-  // 下端の札。札の名前はそのままで、押すと同じ 1 つの面がその相手で開く
-  // どの札がどの相手かは compare-entry が持つ。
-  var CE = window.MA.compareEntry;
-  var status = document.getElementById('status-senior');
-  if (status) status.addEventListener('click', function() {
-    var want = CE ? CE.targetForBadge('status-senior') : '';
-    if (want && !el.pane.hidden && compareTarget() === want) { toggleSeniorPane(false); return; }
-    if (want) { openCompareTarget(want); return; }
-    toggleSeniorPane(el.pane.hidden);
-  });
-  // 前回開いたままなら、次に開いたときも開いたままにする (据え置きが値打ちなので)。
-  if (_seniorState().open) toggleSeniorPane(true);
-  else _seniorPrime();
+  // 前回 1 枚を出したまま閉じたなら、次に開いたときも同じ 1 枚を出す。
+  var st = _seniorState();
+  if (st.open && st.dir && st.name) showReadonlyFile(st.dir, st.name);
+  else if (st.open) _seniorSave({ open: false });
 }
 
 // ── Git のコミットを比較相手にする (design 10c) ─────
@@ -9129,14 +5933,12 @@ function _seniorGitCommit() {
   return { hash: _seniorGit.hash, short: _seniorGit.hash.slice(0, 7), message: '' };
 }
 
-// 枠の見出しを Git の相手用に切り替える (フォルダ選びと追従の切替は Git では使わない)。
+// 枠の見出しを Git の相手用に切り替える。
 function _seniorGitHead(on) {
   var g = _seniorGitEls();
   var el = _seniorEls();
   if (g.box) g.box.hidden = !on;
-  if (el.dir) el.dir.hidden = !!on;
-  var mode = document.getElementById('senior-mode');
-  if (mode) mode.hidden = !!on;
+  if (el.title) el.title.textContent = on ? 'この図の履歴' : '読むだけ';
   if (el.pane) el.pane.setAttribute('data-compare', on ? 'git' : 'folder');
 }
 
@@ -9147,7 +5949,9 @@ function clearSeniorGit() {
   var el = _seniorEls();
   if (el.dsl) el.dsl.textContent = '';
   if (el.svg) el.svg.textContent = '';
+  if (el.notice) el.notice.textContent = '';
   _seniorName = '';
+  _seniorDir = '';
   syncGitDiagramDiff();
 }
 
@@ -9296,8 +6100,8 @@ function stepSeniorGit(dir) {
   return renderSeniorGit();
 }
 
-// 見出しの「差分だけ / 並べて比較」。押している方だけ地色
-// (据え置く / 1 回だけ と同じ形)。差分だけ = 作業中と違う行だけ、並べて比較 = 本文の全部と図。
+// 見出しの「差分だけ / 全体」。押している方だけ地色。
+// 差分だけ = 作業中と違う行だけ、全体 = 本文の全部と図。
 function _paintSeniorGitView() {
   var g = _seniorGitEls();
   var on = !!(_seniorGit && _seniorGit.diffOnly);
@@ -9316,7 +6120,7 @@ function setupSeniorGit() {
   var g = _seniorGitEls();
   if (g.prev) g.prev.addEventListener('click', function() { stepSeniorGit(-1); });
   if (g.next) g.next.addEventListener('click', function() { stepSeniorGit(1); });
-  // design 10c: 「差分だけ / 並べて比較」の 2 択。押した方にする (裏返さない)。
+  // design 10c: 「差分だけ / 全体」の 2 択。押した方にする (裏返さない)。
   if (g.diffOnly) g.diffOnly.addEventListener('click', function() { setSeniorGitView(true); });
   if (g.sbs) g.sbs.addEventListener('click', function() { setSeniorGitView(false); });
   // 相手の名前を押すと、相手選びがその場で開く (git-ui が持つ)。
@@ -9334,7 +6138,6 @@ function setupSeniorGit() {
     activeName: _activeDocName,
     fileDir: _wsFileDir,
     workingText: function() { return mmdText; },
-    openFolderCompare: function() { return openCompareTarget('folder'); },
     refreshDiff: function() { if (_seniorGit && _seniorGit.text) renderSeniorGitDsl(); },
     diagramDiff: syncGitDiagramDiff,
     // GIT 節の「この図の履歴」に控え (server の _versions) も混ぜる。
@@ -9344,48 +6147,6 @@ function setupSeniorGit() {
   };
   // 保存先が決まった後で GIT 欄を読む (FILES の骨格は init より先に出ている)。
   try { if (window.MA.gitUi) window.MA.gitUi.refresh(); } catch (e) {}
-}
-
-function setupPeekFolder() {
-  var btn = document.getElementById('btn-tab-peek');
-  var el = _peekEls();
-  if (!btn || !el.modal) return;
-  btn.addEventListener('click', function() { openPeekFolder(); });
-  var dirName = document.getElementById('peek-dir-name');
-  if (dirName) dirName.addEventListener('click', revealPeekDirInTree);
-  var close = closePeekFolder;
-  renderPeekTemplateBtn();
-  if (el.template) el.template.addEventListener('click', usePeekAsTemplate);
-  if (el.compare) el.compare.addEventListener('click', comparePeekAsRef);
-  var closeBtn = document.getElementById('peek-close');
-  if (closeBtn) closeBtn.addEventListener('click', close);
-  if (el.cohortToggle) {
-    el.cohortToggle.addEventListener('click', function() { setCohortMode(!_cohortOn); });
-  }
-  // 部品ビュー。
-  var boardToggle = document.getElementById('peek-board-toggle');
-  if (boardToggle) {
-    boardToggle.addEventListener('click', function() { setPartBoardMode(!_pbOn); });
-  }
-  var findPart = document.getElementById('peek-find-part');
-  if (findPart) findPart.addEventListener('click', function() { findPeekPartHome(); });
-  if (el.cohortTemplates) {
-    el.cohortTemplates.addEventListener('click', function() {
-      setCohortTemplates(!_cohortShowTemplates);
-    });
-    _syncCohortTemplateBtn();
-  }
-  el.modal.addEventListener('click', function(ev) { if (ev.target === el.modal) close(); });
-  var prev = document.getElementById('peek-prev');
-  var next = document.getElementById('peek-next');
-  if (prev) prev.addEventListener('click', function() { stepPeekFile(-1); });
-  if (next) next.addEventListener('click', function() { stepPeekFile(1); });
-  document.addEventListener('keydown', function(ev) {
-    if (el.modal.style.display !== 'flex') return;
-    if (ev.key === 'Escape') { ev.preventDefault(); close(); }
-    if (ev.key === 'ArrowDown') { ev.preventDefault(); stepPeekFile(1); }
-    if (ev.key === 'ArrowUp') { ev.preventDefault(); stepPeekFile(-1); }
-  });
 }
 
 // setupTabs の中の一覧を外から開く口 (design 10a)。
@@ -9426,23 +6187,8 @@ function setupTabs() {
     panel.classList.remove('open');
   }
 
-  // 一覧の頭にあった参照タブ列 (「{保存先}(保存先)」タブ・「＋参照」) は、
-  // FILES ツリーの「読むだけ」節と同じこと (隣のフォルダの図を保存先を動かさずに右の枠に並べる) を
-  // 別の登録簿でしていた。隣のフォルダを読むのは「読むだけ」節 1 か所にし、ここには行き先の案内だけを置く。
-  // 部品 × 図種の 済/未 は 🧩 部品ビュー (読むだけのフォルダの右クリック「このフォルダの図を調べる…」)。
-  function appendReadonlyHint(host) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-ro-hint';
-    b.id = 'folder-ro-hint';
-    b.textContent = '隣のフォルダは FILES の『読むだけ』で開けます';
-    b.title = '一覧を閉じて、FILES ツリーの「読むだけ」節を開きます (保存先は変わりません)';
-    b.addEventListener('click', function() {
-      panel.classList.remove('is-list');
-      revealReadonlySection();
-    });
-    host.appendChild(b);
-  }
+  // 隣のフォルダを読むのは FILES の「読むだけ」節 1 か所。一覧の頭の案内は
+  // TICKET-owner-20261115-2141-prune で外した。
 
   // 一覧に印を付けて、まとめてタブで開く。
   // 印はパネルを開いている間だけ持つ (次に開いたときは白紙から選ぶ)。
@@ -9939,7 +6685,6 @@ function setupTabs() {
       openHead.title = '保存フォルダの外にある .puml を開きます (複数可・ドラッグ&ドロップでも開けます)';
       openHead.addEventListener('click', function() { closePanel(); openFile(); });
       panel.appendChild(openHead);
-      appendReadonlyHint(panel);
       // 保存先の綴りを 1 文字誤っただけでも一覧は
       // 「図がありません」としか言わず、間違いに気づけないまま作業が止まっていた。
       // 実在しない保存先は「無い」と名指しで言い、直す場所まで書く。
@@ -9962,7 +6707,6 @@ function setupTabs() {
         empty.className = 'folder-empty';
         empty.textContent = '保存フォルダに図がありません';
         panel.appendChild(empty);
-        appendInventorySection(panel);
         return;
       }
       // 実データ / テンプレの宣言は保存フォルダに置いてある (GUI の設定ではない)。
@@ -10080,7 +6824,6 @@ function setupTabs() {
         panel.appendChild(folderFilterBar());
         panel.appendChild(folderPickBar());
         appendTargetSection(panel, dir);
-        appendInventorySection(panel);
         appendRoleSection(panel, dir);
         appendSvgSection(panel, dir);
         appendWriteSection(panel, dir);
@@ -10135,7 +6878,6 @@ function setupTabs() {
       panel.appendChild(folderFilterBar());
       panel.appendChild(folderPickBar());
       appendTargetSection(panel, dir);
-      appendInventorySection(panel);
       appendRoleSection(panel, dir);
       appendSvgSection(panel, dir);
       appendWriteSection(panel, dir);
@@ -11725,7 +8467,7 @@ function setupTabs() {
   }
 
   // 版を今の図の右に並べる。版は刻印付きの別タブとして
-  // 開き (今の図を過去の中身で塗り潰さない)、今の図に戻ってから並べて比較の参照に据える。
+  // 開き (今の図を過去の中身で塗り潰さない)、今の図に戻ってから参照ペインの相手に据える。
   function compareVersion(name, stamp) {
     var VH = window.MA.versionHistory;
     var WS = window.MA.workspace;
@@ -11918,24 +8660,6 @@ function setupTabs() {
     host.appendChild(bar);
   }
 
-  // 部品 × 6 図種の済/未は 🧩 部品ビューに寄せた
-  // (📂 一覧・👀 他フォルダ・🧩 部品ビューの 3 か所で同じ表を読ませない)。
-  // ここに残すのは、そこへ 1 押しで行く導線だけ。
-  function appendInventorySection(host) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-board-link';
-    b.id = 'folder-board-link';
-    b.textContent = '部品ビューで開く（部品ごとの 6 図種の済/未）';
-    b.title = '部品を選ぶと、6 図種のうちまだ無い図種と対応不要の図種が進捗の帯に出ます';
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      closePanel();
-      openPartBoard();
-    });
-    host.appendChild(b);
-  }
-
   // 行ごとの「対象 / 対象にする」。取り直しをせずに 1 枚だけ足す / 外せる。
   function folderTargetButton(name) {
     var TS = window.MA.targetSet;
@@ -12060,27 +8784,6 @@ function setupTabs() {
     state.className = 'folder-filter-state';
     state.id = 'folder-filter-state';
     bar.appendChild(state);
-    // 一覧は保存先フォルダだけを見せている。
-    // 先輩の図をここで探していた人は「無い」で止まるか、保存先ごと切り替えて
-    // 上書き事故の危险を背負うしかなかった。読むだけの入口をこの場に置き、
-    // 打った名前をそのまま持ち越す (保存先は動かない)。
-    var peek = document.createElement('button');
-    peek.type = 'button';
-    peek.className = 'folder-peek-open';
-    peek.id = 'folder-peek-open';
-    // 入口の名前は FILES「読むだけ」の目の印と同じ (何をするかで呼ぶ)。
-    peek.textContent = '読むだけのフォルダの図を調べる…';
-    peek.title = '保存先を変えずに、他の人のフォルダの図を読むだけ見る。'
-      + '絞り込んでいる名前はあちらへそのまま渡る';
-    peek.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      openPeekFolder({ query: folderQuery });
-    });
-    bar.appendChild(peek);
-    var hint = document.createElement('span');
-    hint.className = 'folder-peek-hint';
-    hint.id = 'folder-peek-hint';
-    bar.appendChild(hint);
     return bar;
   }
 
@@ -12149,15 +8852,6 @@ function setupTabs() {
     _folderExactFirst(rows);
     var state = panel.querySelector('.folder-filter-state');
     if (state) state.textContent = FF.summaryText(shown, rows.length, folderQuery);
-    // 探していて 0 枚のときだけ、読むだけの入口を強く出す。
-    var hint = panel.querySelector('.folder-peek-hint');
-    if (hint && FF.peekHintText) {
-      hint.textContent = FF.peekHintText(shown, folderQuery);
-      var urged = FF.peekUrged(shown, folderQuery);
-      hint.className = 'folder-peek-hint' + (urged ? ' urged' : '');
-      var pk = panel.querySelector('.folder-peek-open');
-      if (pk) pk.className = 'folder-peek-open' + (urged ? ' urged' : '');
-    }
   }
 
   function folderPickBar() {
@@ -13982,20 +10676,7 @@ function setupTemplateNew() {
     // 新しいタブは「まだ 1 度も保存されていない図」のままで、保存先ディレクトリを
     // 設定していても {name}.puml が現れない。
     saveActiveDoc();
-    // テンプレート元は、そのままこの図の「型の基準」。
-    // ここで覚えておけば、作った直後から「同じ形のままか」を見てもらえる。
-    if (window.MA.reviewDesk) {
-      try {
-        window.MA.reviewDesk.setBaseline(name, tpl.name, tpl.dsl, new Date().toISOString());
-      } catch (e) {}
-    }
     close();
-    // パネルを開くのは「作る」のクリックが抜けた後にする。同じクリックの中で開くと、
-    // 外側クリックで閉じる仕掛けが自分の open を打ち消してしまう。
-    try {
-      renderReviewBadge();
-      window.setTimeout(function() { try { openReviewPanel(); } catch (e) {} }, 0);
-    } catch (e) {}
   }
 
   // ── 骨格から新規作成 ─────────────────────
@@ -14274,7 +10955,7 @@ function setupTemplateNew() {
   }
 
   // 「既存の図や雛形から新しい図を起こす」窓は 1 つ。上端で「何から起こす」を選び、
-  // 選んだものに要る欄だけを出す (確定ボタンも見えるのは 1 つ)。前は 3 つのフォームを縦に積み、系統ぜんぶは別の窓 (#fc-modal) だった。
+  // 選んだものに要る欄だけを出す (確定ボタンも見えるのは 1 つ)。前は 3 つのフォームを縦に積み、同じ系統の図の複製は別の窓 (#fc-modal) だった。
   var KINDS = [
     { kind: 'part', label: '部品名だけ（6 図種の下書き）' },
     { kind: 'file', label: '既存の図 1 枚' },
@@ -14320,7 +11001,7 @@ function setupTemplateNew() {
     carrySubject();
   }
 
-  // 前に打った部品名を、選び直した先の欄が空なら入れる。系統ぜんぶの欄は描き直すたびに作り直すので、描いた後にも呼ぶ。
+  // 前に打った部品名を、選び直した先の欄が空なら入れる。同じ系統の図の欄は描き直すたびに作り直すので、描いた後にも呼ぶ。
   function carrySubject() {
     var el = subjectEl(curKind);
     if (!el) return;
@@ -15114,9 +11795,9 @@ function renderOutline() {
   renderOutlineCompare(result);
 }
 
-// 先輩の図と「同じ形か」を、開いた瞬間に数で出す。
-// 参照図はタブから選ぶ (compare-view と同じ選び方)。選んだ相手は覚えておくので、
-// 図を直すたびに選び直さずに済む。
+// 前の版と「同じ形か」を、開いた瞬間に数で出す。
+// 相手は compare-view と同じ選び方 (この図の履歴の版だけ。別のタブの図は相手にしない:
+// TICKET-owner-20261115-2141-prune)。選んだ相手は覚えておくので、図を直すたびに選び直さずに済む。
 var _outlineCmpRefId = null;
 
 function renderOutlineCompare(result) {
@@ -15135,10 +11816,10 @@ function renderOutlineCompare(result) {
     _outlineCmpRefId = null;
     sel.disabled = true;
     var none = document.createElement('option');
-    none.textContent = '(他のタブがありません)';
+    none.textContent = '(前の版を開いていません)';
     sel.appendChild(none);
     out.className = '';
-    out.textContent = '＋ で先輩の図をもう 1 枚開くと、要素数・関係数を突き合わせます。';
+    out.textContent = '「この図の履歴」の行の「比較」で前の版を開くと、要素数・関係数を突き合わせます。';
     return;
   }
   sel.disabled = false;
@@ -15219,11 +11900,7 @@ function toggleCompareView(open, mode) {
   applySidePaneWidth('compare-pane', 'resizer-compare', COMPARE_PANE_KEY);
   if (_compareOpen) {
     _compareShownDsl = null;   // 開き直したら必ず描く
-    // 登録した雛形は 2 枚目のタブが無くても選べる (参照図が要らないのが登録の値打ち)。
-    renderTemplateRegistry();
     setCompareMode(mode || _compareMode);
-    // 相手のフォルダ (FILES で比較中のフォルダ) を開くたびに読み直す。
-    try { syncCrossRefDir(true); } catch (e) {}
   }
 }
 
@@ -15559,13 +12236,11 @@ function renderCompareView() {
     op.value = String(o.id);
     // 「変更前」の候補は図種を添えない。名前に既に (変更前) が入っており、
     // 図種まで並ぶと別の図と読み違える。
-    // 覗いた 1 枚も図種を添えない (名前が `primary / timer_state.puml` の形で、
-    // どこの図かは名前だけで読める)。
-    op.textContent = (o.isBefore || o.isPeek) ? o.name
+    op.textContent = o.isBefore ? o.name
       : o.name + ' (' + String(o.diagramType || '').replace('plantuml-', '') + ')';
     if (o.isBefore && !o.isHistory) op.setAttribute('data-before', '1');
     if (o.isHistory) op.setAttribute('data-hist', '1');
-    if (o.isPeek) op.setAttribute('data-peek', '1');
+    if (o.isVersion) op.setAttribute('data-version', '1');
     if (ref && o.id === ref.id) op.selected = true;
     sel.appendChild(op);
   });
@@ -15579,8 +12254,9 @@ function renderCompareView() {
     var msg = document.createElement('div');
     msg.id = 'compare-empty';
     msg.style.cssText = 'font-size:11px;color:var(--text-secondary);';
-    msg.textContent = '並べる図がありません。＋ で 2 枚目のタブを開くか、'
-      + '「他の保存フォルダを覗く」で手本を選んで「⇔ 自分の図と並べる」を押してください。';
+    // 2 枚を比べるのは「この図の履歴」の版との比較だけ (TICKET-owner-20261115-2141-prune)。
+    msg.textContent = '比べる版がありません。FILES のファイルを右クリック →「この図の履歴を表示」の行の'
+      + '「比較」で、前の版を右に並べます。';
     host.appendChild(msg);
     return;
   }
@@ -15596,9 +12272,7 @@ function renderCompareView() {
     if (!_compareOpen || _compareShownDsl !== dsl) return;
     host.innerHTML = svg;
     if (status) {
-      status.textContent = full.isBefore ? '変更前 (読むだけ)'
-        : full.isPeek ? '手本 ' + (full.folder || '他フォルダ') + ' (読むだけ)'
-        : '参照 (読むだけ)';
+      status.textContent = full.isBefore ? '変更前 (読むだけ)' : '前の版 (読むだけ)';
     }
   }).catch(function(err) {
     if (!_compareOpen || _compareShownDsl !== dsl) return;
@@ -15686,1426 +12360,11 @@ function runConsistencyCheck() {
   renderCheckList();
 }
 
-// ── 対応表 ────────────────────────────────
-// 先輩の図と自分の図は、同じ GPIO ドライバの状態遷移でも状態名・イベント名・
-// 抽象度がばらばらで、読み比べても「先輩が後から足した 1 要素」を名前だけでは
-// 当てられない。名前の形だけで対応を機械的に取り、対応が付いた組と
-// 片方にしか無い状態・遷移を分けて出す。行を押すと自分の図のその行へ飛ぶ
-// (参照図だけの行は、押しても飛び先が無いので参照図の行番号を出すだけ)。
-// 対応の規則は state-map が持ち、ここは並べるだけ。
-//
-// 参照図だけの行 (橙) には「＋この図にも足す」を
-// 付ける。見つけた要素をそのまま自分の図の末尾に入れられれば、
-// 「読み比べて一括入力欄に打ち直す」がボタン 1 回になる。
-// 端点の対応が付かない遷移だけ、どの状態から出すかを 1 回聞き返す。
-//
-// クラス図にも同じ対応表を出す。図種で使う規則を
-// 選ぶだけで、並べ方も「＋この図にも足す」も共通にする (図種によらず同じ操作)。
-// クラス図の関係は向き (どちらが親か) を行に持つので、取り込みでは参照図の向きを
-// そのまま写す。Relation フォームで From/To を選び直して逆向きに張る手間が消える。
-//
-// 名前の形だけで組んだ対応は、
-// 抽象度の違う 2 枚では当たらない。「参照図だけ」の行が先輩の足した要素なのか、
-// 対応を取り損ねただけなのかを機械は決められない。対応そのものを人が
-// 「同じもの」「対応なし」で決められるようにし、推測が 0 件になった時点で
-// 残った「参照図だけ」を言い切る。決めた内容は図の組ごとに憶えておく。
-var _mapResult = null;
-var _mapMineParsed = null;
-var _mapRefParsed = null;
-var _mapModule = null;   // 今の対応表が使っている規則 (stateMap / classMap)
-var _mapOverrides = null;
-var _mapOverrideKey = '';
-
-var MAP_OVERRIDE_KEY = 'plantuml-state-map-overrides';
-
-function _loadMapOverrides(key) {
-  var sm = _mapper();
-  var empty = (sm && sm.overrides) ? sm.overrides(null) : { pairs: [], none: [] };
-  if (!key) return empty;
-  try {
-    var raw = window.localStorage.getItem(MAP_OVERRIDE_KEY);
-    if (raw == null) return empty;
-    var all = JSON.parse(raw);
-    if (!all || typeof all !== 'object') return empty;
-    return (sm && sm.overrides) ? sm.overrides(all[key]) : empty;
-  } catch (e) { return empty; }
-}
-
-function _saveMapOverrides(key, ov) {
-  if (!key) return;
-  try {
-    var raw = window.localStorage.getItem(MAP_OVERRIDE_KEY);
-    var all = {};
-    if (raw != null) {
-      var v = JSON.parse(raw);
-      if (v && typeof v === 'object') all = v;
-    }
-    if ((ov.pairs || []).length === 0 && (ov.none || []).length === 0) delete all[key];
-    else all[key] = ov;
-    window.localStorage.setItem(MAP_OVERRIDE_KEY, JSON.stringify(all));
-  } catch (e) { /* 憶えられなくても対応表そのものは使える */ }
-}
-
-// 決めた内容を入れ替えて、対応表を組み直して描き直す。
-function setMapOverrides(ov) {
-  var sm = _mapper();
-  if (!sm || !sm.supportsOverrides || !_mapRefParsed || !_mapMineParsed) return;
-  _mapOverrides = sm.overrides(ov);
-  _saveMapOverrides(_mapOverrideKey, _mapOverrides);
-  _mapResult = sm.build(_mapRefParsed, _mapMineParsed, _mapOverrides);
-  renderStateMap();
-}
-
-function _mapper() { return _mapModule || window.MA.stateMap; }
-
-// 図種を選ぶ。自分の図が読めればそれに合わせる。読めないときだけ参照図を見る。
-function _pickMapModule(refText, mineText) {
-  // シーケンス図は参加者 (部品名) とメッセージで組む。
-  var seqMod = window.MA.modules && window.MA.modules.plantumlSequence;
-  if (window.MA.seqMap && seqMod && seqMod.detect(mineText || '')) return window.MA.seqMap;
-  var classMod = window.MA.modules && window.MA.modules.plantumlClass;
-  if (!window.MA.classMap || !classMod) return window.MA.stateMap;
-  if (classMod.detect(mineText || '')) return window.MA.classMap;
-  var stateMod = window.MA.modules && window.MA.modules.plantumlState;
-  var mineStates = stateMod ? stateMod.parse(mineText || '') : null;
-  var hasState = mineStates
-    && (((mineStates.states || []).length > 0) || ((mineStates.transitions || []).length > 0));
-  if (!hasState && classMod.detect(refText || '')) return window.MA.classMap;
-  return window.MA.stateMap;
-}
-
-function _clearStateMap() {
-  _mapResult = null;
-  _mapMineParsed = null;
-  _mapRefParsed = null;
-  _mapModule = null;
-  _mapOverrides = null;
-  _mapOverrideKey = '';
-  var listEl = document.getElementById('map-list');
-  var sumEl = document.getElementById('map-summary');
-  var warnEl = document.getElementById('map-warn');
-  var decEl = document.getElementById('map-decision');
-  if (decEl) decEl.hidden = true;
-  var alignEl = document.getElementById('map-align');
-  if (alignEl) { alignEl.textContent = ''; alignEl.hidden = true; }
-  _mapAlignMsg = '';
-  if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
-  if (warnEl) { warnEl.textContent = ''; warnEl.hidden = true; }
-  if (sumEl) { sumEl.textContent = ''; sumEl.classList.remove('clean', 'dirty'); }
-}
-
-function _mapSection(listEl, title) {
-  var head = document.createElement('div');
-  head.className = 'map-head';
-  head.textContent = title;
-  listEl.appendChild(head);
-}
-
-function _mapRow(listEl, row) {
-  var sm = _mapper();
-  var el = document.createElement('div');
-  el.className = 'map-row';
-  el.setAttribute('data-map-match', row.match);
-  el.setAttribute('data-map-type', row.type);
-  if (row.decided) el.setAttribute('data-map-decided', '1');
-  if (row.mineLine != null) el.setAttribute('data-map-line', String(row.mineLine));
-
-  var match = document.createElement('span');
-  match.className = 'map-match';
-  match.textContent = sm.matchLabel(row.match);
-  var ref = document.createElement('span');
-  ref.className = 'map-ref';
-  ref.textContent = row.ref || '—';
-  if (row.ref) ref.title = row.ref;
-  var mine = document.createElement('span');
-  mine.className = 'map-mine';
-  mine.textContent = row.mine || '—';
-  if (row.mine) mine.title = row.mine;
-  el.appendChild(match); el.appendChild(ref); el.appendChild(mine);
-
-  // 自分の図に対応する行があるなら、押してそこへ飛ぶ。
-  // 参照図は読むだけなので、参照図だけの行は飛び先を持たない。
-  if (row.mineLine != null) {
-    el.addEventListener('click', function() { gotoOutlineLine(row.mineLine - 1); });
-  }
-  _mapDecideControls(el, row);
-  // 参照図だけの行は「まだ自分の図に無い要素」なので、その場で足せる。
-  // 足す道を持たない規則 (シーケンス図) では出さない (押しても何も起きない、にしない)。
-  if (row.match === 'ref-only' && sm.supportsAdopt !== false) {
-    var take = document.createElement('button');
-    take.type = 'button';
-    take.className = 'map-take';
-    take.textContent = '＋この図にも足す';
-    take.title = row.type === 'member'
-      ? 'このメンバーを自分の図の ' + (row.cls || 'クラス') + ' に足す'
-      : 'この要素を自分の図の末尾に足す';
-    take.addEventListener('click', function(e) {
-      e.stopPropagation();
-      adoptMapRow(row, el);
-    });
-    el.appendChild(take);
-  }
-  listEl.appendChild(el);
-}
-
-// 1 行に「同じもの」「対応なし」「戻す」を付ける。
-// 機械が組んだ行は人が見て確かめるまで推測のままで、決めた行だけが確定になる。
-function _mapDecideControls(el, row) {
-  var sm = _mapper();
-  if (!sm || !sm.supportsOverrides || !_mapOverrides) return;
-  var ov = _mapOverrides;
-
-  function btn(text, title, onClick) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'map-decide';
-    b.textContent = text;
-    b.title = title;
-    b.addEventListener('click', function(e) { e.stopPropagation(); onClick(); });
-    el.appendChild(b);
-    return b;
-  }
-
-  if (row.decided) {
-    btn('戻す', 'この行の対応の決めを取り消して、機械の推測に戻す', function() {
-      var next = ov;
-      if (row.ref) next = sm.without(next, row.type, 'ref', row.ref);
-      if (row.mine) next = sm.without(next, row.type, 'mine', row.mine);
-      setMapOverrides(next);
-    });
-    return;
-  }
-
-  // 機械が組にした行 — その組でよいか、別物かを決める。
-  if (row.ref && row.mine) {
-    btn('同じもの', 'この 2 つは同じものだと決める (推測が 1 件減る)', function() {
-      setMapOverrides(sm.withPair(ov, row.type, row.ref, row.mine));
-    });
-    btn('別もの', 'この 2 つは別ものだと決め、それぞれ相手のいない要素として分ける', function() {
-      var next = sm.withNone(ov, row.type, 'ref', row.ref);
-      next = sm.withNone(next, row.type, 'mine', row.mine);
-      setMapOverrides(next);
-    });
-    return;
-  }
-
-  // 片方だけの行 — 相手を選び直すか、相手がいないと決める。
-  var side = row.match === 'ref-only' ? 'ref' : 'mine';
-  var name = side === 'ref' ? row.ref : row.mine;
-  if (!name) return;
-  var opts = sm.pairOptions(_mapResult, row);
-  if (opts.length > 0) {
-    var sel = document.createElement('select');
-    sel.className = 'map-pick';
-    sel.title = 'この要素に対応する相手を選ぶ';
-    var head = document.createElement('option');
-    head.value = '';
-    head.textContent = '対応を選ぶ…';
-    sel.appendChild(head);
-    opts.forEach(function(o) {
-      var op = document.createElement('option');
-      op.value = o.value;
-      op.textContent = o.label;
-      sel.appendChild(op);
-    });
-    sel.addEventListener('click', function(e) { e.stopPropagation(); });
-    sel.addEventListener('change', function(e) {
-      e.stopPropagation();
-      if (sel.value === '') return;
-      var refName = side === 'ref' ? name : sel.value;
-      var mineName = side === 'ref' ? sel.value : name;
-      setMapOverrides(sm.withPair(ov, row.type, refName, mineName));
-    });
-    el.appendChild(sel);
-  }
-  btn('対応なし', '自分の図に対応する相手はいないと決める (足すかどうかはこの後に選ぶ)', function() {
-    setMapOverrides(sm.withNone(ov, row.type, side, name));
-  });
-}
-
-// 端点の対応が付かない遷移を足す前の確認。聞くのは対応の付かなかった端点だけ。
-function _mapConfirm(row, rowEl, plan) {
-  _closeMapConfirm();
-  var box = document.createElement('div');
-  box.className = 'map-confirm';
-  box.id = 'map-confirm';
-
-  var lead = document.createElement('div');
-  lead.className = 'map-confirm-lead';
-  lead.id = 'map-confirm-lead';
-  lead.textContent = plan.describe + '。自分の図に対応する'
-    + (plan.kind === 'relation' ? 'クラス' : '状態') + 'が見つからない端点があります。';
-  box.appendChild(lead);
-
-  var sels = {};
-  plan.needs.forEach(function(end) {
-    var line = document.createElement('div');
-    line.className = 'map-confirm-row';
-    line.setAttribute('data-side', end.side);
-
-    var label = document.createElement('span');
-    label.className = 'map-confirm-label';
-    label.textContent = (end.sideLabel || (end.side === 'from' ? '出どころ' : '行き先'))
-      + ' 「' + end.name + '」';
-    line.appendChild(label);
-
-    var sel = document.createElement('select');
-    sel.className = 'map-confirm-sel';
-    sel.id = 'map-confirm-' + end.side;
-    var mk = document.createElement('option');
-    mk.value = _mapper().NEW_STATE;
-    mk.textContent = '新しく作る: ' + (end.newLabel || end.newId);
-    sel.appendChild(mk);
-    (end.options || []).forEach(function(o) {
-      var op = document.createElement('option');
-      op.value = o.value;
-      op.textContent = o.label;
-      sel.appendChild(op);
-    });
-    line.appendChild(sel);
-    sels[end.side] = sel;
-    box.appendChild(line);
-  });
-
-  var ok = document.createElement('button');
-  ok.type = 'button';
-  ok.className = 'map-confirm-ok';
-  ok.id = 'btn-map-confirm-ok';
-  ok.textContent = 'これで足す';
-  ok.addEventListener('click', function() {
-    var picks = {};
-    Object.keys(sels).forEach(function(k) { picks[k] = sels[k].value; });
-    _closeMapConfirm();
-    _applyMapAdopt(row, picks);
-  });
-  box.appendChild(ok);
-
-  var cancel = document.createElement('button');
-  cancel.type = 'button';
-  cancel.className = 'map-confirm-cancel';
-  cancel.id = 'btn-map-confirm-cancel';
-  cancel.textContent = 'やめる';
-  cancel.addEventListener('click', function() { _closeMapConfirm(); });
-  box.appendChild(cancel);
-
-  if (rowEl && rowEl.parentNode) rowEl.parentNode.insertBefore(box, rowEl.nextSibling);
-  // 一覧は高さが限られているので、聞き返しが下に隠れたままにならないようにする。
-  if (box.scrollIntoView) box.scrollIntoView({ block: 'nearest' });
-}
-
-function _closeMapConfirm() {
-  var old = document.getElementById('map-confirm');
-  if (old && old.parentNode) old.parentNode.removeChild(old);
-}
-
-// 橙の行を 1 つ自分の図に足す。端点が全部決まっていれば聞かずに足す。
-function adoptMapRow(row, rowEl) {
-  var sm = _mapper();
-  if (!sm || !_mapResult || !editorEl) return;
-  var plan = sm.adoptPlan(row, _mapResult, _mapMineParsed);
-  if (!plan || !plan.adoptable) return;
-  if (!plan.ready) { _mapConfirm(row, rowEl, plan); return; }
-  _applyMapAdopt(row, null);
-}
-
-function _applyMapAdopt(row, picks) {
-  var sm = _mapper();
-  if (!sm || !_mapResult || !editorEl) return;
-  var out = sm.applyAdopt(editorEl.value, row, _mapResult, _mapMineParsed, picks);
-  if (!out) return;
-  editorEl.value = out.text;
-  editorEl.dispatchEvent(new Event('input'));
-  jumpToLine(out.line);
-  // 足したものは自分の図に入ったので、「対応なし」と決めた覚えは外す
-  // (外さないと、足したのに参照図だけの行として残り続ける)。
-  if (sm.supportsOverrides && _mapOverrides && row.ref) {
-    _saveMapOverrides(_mapOverrideKey, sm.without(_mapOverrides, row.type, 'ref', row.ref));
-  }
-  // 足した分だけ橙が減るので、対応表を作り直して残りを見せる。
-  runStateMap();
-  if (window.MA.toast) window.MA.toast.show('自分の図に足しました: ' + out.added.join(' / '));
-}
-
-// ── 対応表の組を相手の綴りに揃える ──────────
-// 「{相手フォルダ} の「X」に揃える」は名前の形で結べた綴り違いにしか出ず、部品名が総入れ替えの
-// 2 枚 (spi_init_sequence / spi_sequence) では揃える行が 1 つも出なかった。対応表で組になった行
-// (機械の組も、「同じもの」「対応を選ぶ」で手で結んだ組も) を同じ 1 つの行に並べ、チェックした
-// 組を 1 回で自分の図に当てる。書く道は ⇄ 一括置換と同じ (未保存の印・自動保存・元に戻すが同じに効く)。
-// 相手の図は書かない。揃えずに残した組は対応表に残る。
-var _mapAlignChecked = {};   // 組の key → false なら揃えずに残す
-var _compareRefChosen = false; // 参照図の欄 (#compare-select) を人が選び直したか
-var _mapAlignMsg = '';
-
-// 比較中のフォルダで選ばれた相手 (増分の突き合わせの相手) を、参照図の候補に据える。
-// 並べる別タブが選ばれていないときは、それを参照図にする。参照図にしたら true。
-function _xfUseAsRef() {
-  var cv = window.MA.compareView;
-  var PF = window.MA.peekFolder;
-  if (!cv || !_xfFile || !_xfRefDsl || !_xfDir) return false;
-  var cur = cv.peek ? cv.peek() : null;
-  var folder = PF && PF.baseName ? PF.baseName(_xfDir) : _xfDir;
-  var same = !!(cur && cur.folder === folder && cur.fileName === _xfFile && cur.dsl === _xfRefDsl);
-  if (!same && !cv.setPeek(folder, _xfFile, _xfRefDsl, '')) return false;
-  // 参照図の欄で別の図を自分で選んだときは、それを動かさない (候補の先頭に並ぶだけ)。
-  if (_compareRefId && _compareRefId !== cv.PEEK_ID && _compareRefChosen) return false;
-  if (_compareRefId === cv.PEEK_ID && same) return true;
-  _compareRefId = cv.PEEK_ID;
-  _compareShownDsl = null;
-  if (_compareOpen) renderCompareView();
-  return true;
-}
-
-// 参照図の置き場所の名前 (ボタンの「{相手} の綴りに揃える」)。
-function _mapRefWho() {
-  var cv = window.MA.compareView;
-  var ref = (cv && _compareRefId) ? cv.doc(_compareDocs(), _compareRefId) : null;
-  if (!ref) return '';
-  if (ref.isPeek) return ref.folder || ref.name || '';
-  return ref.name || '';
-}
-
-function renderMapAlign() {
-  var host = document.getElementById('map-align');
-  var MAL = window.MA.mapAlign;
-  if (!host) return;
-  host.textContent = '';
-  var cands = (MAL && _mapResult) ? MAL.candidates(_mapResult) : [];
-  if (!cands.length && !_mapAlignMsg) { host.hidden = true; return; }
-  host.hidden = false;
-  var who = _mapRefWho();
-  if (cands.length) {
-    var head = document.createElement('div');
-    head.className = 'map-align-head';
-    head.textContent = '綴りの違う組 ' + cands.length + ' — チェックした組を、自分の図だけ '
-      + (who || '相手') + ' の綴りに書き替えます (外した組は揃えずに残ります)';
-    host.appendChild(head);
-  }
-  cands.forEach(function(c) {
-    var row = document.createElement('label');
-    row.className = 'map-align-row';
-    row.setAttribute('data-align-from', c.from);
-    row.setAttribute('data-align-to', c.to);
-    var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.className = 'map-align-check';
-    cb.checked = _mapAlignChecked[c.key] !== false;
-    cb.addEventListener('change', function() {
-      _mapAlignChecked[c.key] = cb.checked;
-      _mapAlignMsg = '';
-      renderMapAlign();
-    });
-    row.appendChild(cb);
-    var t = document.createElement('span');
-    t.textContent = MAL.rowText(c);
-    row.appendChild(t);
-    host.appendChild(row);
-  });
-  var pairs = MAL ? MAL.pairsOf(cands, _mapAlignChecked) : [];
-  if (cands.length) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = 'btn-map-align';
-    btn.textContent = MAL.buttonLabel(who, pairs.length);
-    btn.disabled = pairs.length === 0;
-    btn.addEventListener('click', function() { applyMapAlign(); });
-    host.appendChild(btn);
-  }
-  if (_mapAlignMsg) {
-    var res = document.createElement('span');
-    res.id = 'map-align-result';
-    res.textContent = _mapAlignMsg;
-    host.appendChild(res);
-  }
-}
-
-function applyMapAlign() {
-  var MAL = window.MA.mapAlign;
-  var WS = window.MA.workspace;
-  if (!MAL || !WS || !_mapResult) return null;
-  var pairs = MAL.pairsOf(MAL.candidates(_mapResult), _mapAlignChecked);
-  if (!pairs.length) return null;
-  var active = WS.getActive ? WS.getActive() : null;
-  if (!active) return null;
-  var doc = { id: active.id, name: active.name, dsl: editorEl ? editorEl.value : active.dsl };
-  var res = renamePairsAcrossDocs(pairs, [doc]);
-  _mapAlignMsg = MAL.doneMessage(res, active.name);
-  runStateMap();
-  return res;
-}
-
-// 対応をどこまで決めたか。ここが「取り込む 1 個を選んでよいか」の判断そのものなので、
-// 表の上に常に出す (行を 1 つ決めるたびに件数が減る)。
-function renderMapDecision() {
-  var el = document.getElementById('map-decision');
-  var textEl = document.getElementById('map-decision-text');
-  var resetEl = document.getElementById('btn-map-reset');
-  var sm = _mapper();
-  if (!el || !textEl) return;
-  if (!sm || !sm.supportsOverrides || !_mapResult) {
-    el.hidden = true;
-    return;
-  }
-  var text = sm.decisionSummary(_mapResult);
-  el.hidden = (text === '');
-  textEl.textContent = text;
-  el.classList.toggle('settled', sm.settled(_mapResult));
-  if (resetEl) {
-    var ov = _mapOverrides || { pairs: [], none: [] };
-    resetEl.hidden = ((ov.pairs || []).length + (ov.none || []).length) === 0;
-  }
-}
-
-function renderStateMap() {
-  var listEl = document.getElementById('map-list');
-  var sumEl = document.getElementById('map-summary');
-  var warnEl = document.getElementById('map-warn');
-  var sm = _mapper();
-  if (!listEl || !sumEl || !sm || !_mapResult) return;
-
-  _closeMapConfirm();
-  listEl.textContent = '';
-  listEl.hidden = false;
-  sumEl.textContent = sm.summary(_mapResult);
-  sumEl.classList.remove('clean', 'dirty');
-  // メンバーの差も「片方にしかない」なので同じ数に入れる。
-  var onlyCount = _mapResult.states.concat(_mapResult.transitions)
-    .concat(_mapResult.members || []).filter(function(r) {
-      return r.match === 'ref-only' || r.match === 'mine-only';
-    }).length;
-  sumEl.classList.add(onlyCount === 0 ? 'clean' : 'dirty');
-
-  renderMapDecision();
-  renderMapAlign();
-  var warn = sm.abstractionWarning(_mapResult);
-  if (warnEl) {
-    warnEl.textContent = warn;
-    warnEl.hidden = (warn === '');
-  }
-
-  if (_mapResult.states.length === 0 && _mapResult.transitions.length === 0) {
-    var empty = document.createElement('div');
-    empty.id = 'map-empty';
-    empty.textContent = sm.emptyMessage;
-    listEl.appendChild(empty);
-    return;
-  }
-  if (_mapResult.states.length > 0) {
-    _mapSection(listEl, sm.sectionTitles.states);
-    _mapResult.states.forEach(function(r) { _mapRow(listEl, r); });
-  }
-  if (_mapResult.transitions.length > 0) {
-    _mapSection(listEl, sm.sectionTitles.transitions);
-    _mapResult.transitions.forEach(function(r) { _mapRow(listEl, r); });
-  }
-  // クラス図だけが持つ節。対応の付いたクラスの中で、片方にしかないメンバーを並べる。
-  if ((_mapResult.members || []).length > 0 && sm.sectionTitles.members) {
-    _mapSection(listEl, sm.sectionTitles.members);
-    _mapResult.members.forEach(function(r) { _mapRow(listEl, r); });
-  }
-}
-
-function runStateMap() {
-  var cv = window.MA.compareView;
-  var stateMod = window.MA.modules && window.MA.modules.plantumlState;
-  var sumEl = document.getElementById('map-summary');
-  var listEl = document.getElementById('map-list');
-  if (!cv || !stateMod || !sumEl) return;
-
-  var ref = _compareRefId ? cv.doc(_compareDocs(), _compareRefId) : null;
-  // 並べる別タブが無くても、比較中のフォルダの同じ部品・同じ図種の図
-  // (増分の突き合わせが選んだ相手) があれば、それを参照図にする。同名ファイルでなくてよい。
-  if (!ref && _xfUseAsRef()) ref = cv.doc(_compareDocs(), _compareRefId);
-  if (!ref) {
-    _clearStateMap();
-    sumEl.textContent = '参照図を選んでください';
-    sumEl.classList.add('dirty');
-    return;
-  }
-  // 図種の設定は見ずに、中身が何として読めるかで規則を選ぶ。設定が実際の中身と
-  // 食い違っていることがあり、設定を直させるより読める方を採る。
-  var sm = _pickMapModule(ref.dsl || '', mmdText || '');
-  _mapModule = sm;
-  var mod = (sm === window.MA.classMap)
-    ? (window.MA.modules && window.MA.modules.plantumlClass)
-    : (sm === window.MA.seqMap)
-      ? (window.MA.modules && window.MA.modules.plantumlSequence)
-      : stateMod;
-  var refParsed = mod.parse(ref.dsl || '');
-  var mineParsed = mod.parse(mmdText || '');
-  _mapMineParsed = mineParsed;
-  _mapRefParsed = refParsed;
-  // 決めた対応は「この参照図とこの図」の組ごとに憶える。別の図を相手にしたときに
-  // 前の決めが混ざると、決めていない対応が決まったことになってしまう。
-  _mapOverrideKey = sm.supportsOverrides
-    ? (String(ref.name || ref.id || '') + ' | ' + String(_activeDocName() || ''))
-    : '';
-  _mapOverrides = sm.supportsOverrides ? _loadMapOverrides(_mapOverrideKey) : null;
-  _mapResult = sm.build(refParsed, mineParsed, _mapOverrides);
-  renderStateMap();
-  if (listEl) listEl.hidden = false;
-}
-
-// ── 雛形との差分 ───────────────────────────
-// UART / CAN / GPIO の初期化図は、同じ雛形をペリフェラル名だけ変えて複製したもの。
-// これまでは 2 枚をまっさらな図として全文読み比べ、構造が同じかどうかを毎回
-// 目で判断していた。参照図を雛形とみなし、題材語を伏せて行を突き合わせて
-// 「この図だけ / 雛形だけ」の行を出す。並び替えは差分にしない。
-function _clearTemplateDiff() {
-  var listEl = document.getElementById('td-list');
-  var noteEl = document.getElementById('td-note');
-  var sumEl = document.getElementById('td-summary');
-  if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
-  if (noteEl) { noteEl.textContent = ''; noteEl.hidden = true; }
-  if (sumEl) { sumEl.textContent = ''; sumEl.classList.remove('clean', 'dirty'); }
-}
-
-// ── 雛形を登録して残す ─────────────────────
-// 「雛形との差分」の相手は毎回その場で探していた。別の人のフォルダにある図なら
-// 「🧩 相手のフォルダ」に絶対パスを打ち直し、名前の近い図を選び直す。同じ 2 枚を
-// 何周も突き合わせる業務では、この探し直しだけが毎周積み上がる。
-// ここは雛形を 1 回登録して呼び名で選べるようにする。登録は localStorage に残るので
-// 次の周・次の図種でもそのまま選べる。保存先設定 (autoSave の fileDir) には触らない。
-var TR_KEY = 'pua.templateRegistry';
-var _trList = null;      // 登録済みの雛形 (遅延読み込み)
-var _trPickedId = '';    // 選んでいる登録の id。空なら参照図を雛形にする
-
-function _trMod() { return window.MA.templateRegistry; }
-
-function _trLoad() {
-  if (_trList) return _trList;
-  var TR = _trMod();
-  var raw = '';
-  try { raw = (window.localStorage && window.localStorage.getItem(TR_KEY)) || ''; } catch (e) { raw = ''; }
-  _trList = TR ? TR.parse(raw) : [];
-  return _trList;
-}
-
-function _trSave(list) {
-  var TR = _trMod();
-  _trList = TR ? TR.normalize(list) : [];
-  try {
-    if (window.localStorage) window.localStorage.setItem(TR_KEY, TR ? TR.serialize(_trList) : '[]');
-  } catch (e) { /* 使えない環境でも登録はその場では効く */ }
-  return _trList;
-}
-
-function _trMessage(text, cls) {
-  var el = document.getElementById('tr-note');
-  if (!el) return;
-  el.textContent = text || '';
-  el.className = cls || '';
-  el.hidden = !text;
-}
-
-// 一覧を描く。既定は「参照図を雛形にする」。図の名前に近い登録があればそれを既定に
-// 選んでおく (毎回どれと比べるかを選び直さないで済む)。
-function renderTemplateRegistry() {
-  var TR = _trMod();
-  var sel = document.getElementById('tr-pick');
-  var label = document.getElementById('tr-label');
-  if (!TR || !sel) return;
-  var list = _trLoad();
-  if (_trPickedId && !TR.get(list, _trPickedId)) _trPickedId = '';
-  if (!_trPickedId) {
-    var near = TR.suggestFor(list, _activeDocName());
-    if (near) _trPickedId = near.id;
-  }
-  sel.textContent = '';
-  var none = document.createElement('option');
-  none.value = '';
-  none.textContent = '参照図を雛形にする';
-  sel.appendChild(none);
-  list.forEach(function(e) {
-    var op = document.createElement('option');
-    op.value = e.id;
-    op.textContent = e.label;
-    if (e.id === _trPickedId) op.selected = true;
-    sel.appendChild(op);
-  });
-  if (label && !label.value) label.value = TR.suggestLabel(_activeDocName());
-  var picked = _trPickedId ? TR.get(list, _trPickedId) : null;
-  _trMessage(picked ? TR.originNote(picked) : TR.summary(list), picked ? 'clean' : '');
-}
-
-// いま開いている図を雛形として登録する。呼び名が空なら図の名前から下書きする。
-function registerTemplate() {
-  var TR = _trMod();
-  var labelEl = document.getElementById('tr-label');
-  if (!TR) return null;
-  var dsl = editorEl ? editorEl.value : (mmdText || '');
-  if (String(dsl).trim() === '') {
-    _trMessage('この図には中身がありません (雛形にできません)', 'dirty');
-    return null;
-  }
-  var label = labelEl ? labelEl.value.trim() : '';
-  if (!label) label = TR.suggestLabel(_activeDocName());
-  if (!label) {
-    _trMessage('雛形の呼び名を入れてください', 'dirty');
-    return null;
-  }
-  var before = _trLoad();
-  var existed = !!TR.byLabel(before, label);
-  var list = _trSave(TR.add(before, { label: label, source: _activeDocName(), dsl: dsl }));
-  var saved = TR.byLabel(list, label);
-  _trPickedId = saved ? saved.id : '';
-  if (labelEl) labelEl.value = '';
-  renderTemplateRegistry();
-  _trMessage('雛形「' + label + '」を' + (existed ? '登録し直しました' : '登録しました')
-    + ' (次からはこの呼び名を選ぶだけです)', 'clean');
-  return saved;
-}
-
-function forgetTemplate() {
-  var TR = _trMod();
-  if (!TR) return;
-  var list = _trLoad();
-  var picked = _trPickedId ? TR.get(list, _trPickedId) : null;
-  if (!picked) {
-    _trMessage('消す登録を選んでください', 'dirty');
-    return;
-  }
-  _trSave(TR.remove(list, picked.id));
-  _trPickedId = '';
-  _clearTemplateDiff();
-  renderTemplateRegistry();
-  _trMessage('雛形「' + picked.label + '」の登録を消しました', '');
-}
-
-// 差分の相手。登録した雛形を選んでいればそれ、選んでいなければ参照図。
-function _templateSource() {
-  var TR = _trMod();
-  var cv = window.MA.compareView;
-  var picked = (TR && _trPickedId) ? TR.get(_trLoad(), _trPickedId) : null;
-  if (picked) return { dsl: picked.dsl, note: TR.originNote(picked) };
-  var ref = (cv && _compareRefId) ? cv.doc(_compareDocs(), _compareRefId) : null;
-  if (ref) return { dsl: ref.dsl || '', note: '参照図「' + (ref.name || ref.id) + '」を雛形にしています' };
-  return null;
-}
-
-function runTemplateDiff() {
-  var td = window.MA.templateDiff;
-  var sumEl = document.getElementById('td-summary');
-  var listEl = document.getElementById('td-list');
-  var noteEl = document.getElementById('td-note');
-  if (!td || !sumEl || !listEl) return;
-
-  var src = _templateSource();
-  if (!src) {
-    _clearTemplateDiff();
-    sumEl.textContent = '雛形にする参照図を選んでください (この図を「雛形に登録」しても比べられます)';
-    sumEl.classList.add('dirty');
-    return;
-  }
-  _trMessage(src.note, 'clean');
-  var diff = td.build(src.dsl, mmdText || '');
-  sumEl.textContent = td.summary(diff);
-  sumEl.classList.remove('clean', 'dirty');
-  var off = td.count(diff, 'added') + td.count(diff, 'removed');
-  sumEl.classList.add(off === 0 ? 'clean' : 'dirty');
-  if (noteEl) {
-    noteEl.textContent = td.subjectNote(diff);
-    noteEl.hidden = false;
-  }
-
-  listEl.textContent = '';
-  listEl.hidden = false;
-  if (diff.rows.length === 0) {
-    var empty = document.createElement('div');
-    empty.id = 'td-empty';
-    empty.textContent = '比べる行がありません。どちらにも図の中身を入れてください。';
-    listEl.appendChild(empty);
-    return;
-  }
-  diff.rows.forEach(function(row) {
-    var el = document.createElement('div');
-    el.className = 'td-row';
-    el.setAttribute('data-td-kind', row.kind);
-    var kind = document.createElement('span');
-    kind.className = 'td-kind';
-    kind.textContent = td.kindLabel(row.kind);
-    var text = document.createElement('span');
-    text.className = 'td-text';
-    text.textContent = row.derived || row.template;
-    el.appendChild(kind); el.appendChild(text);
-    listEl.appendChild(el);
-  });
-}
-
-// ── 系統ぜんぶと比べる ──────────────────────────
-// 2 枚比べ (雛形との差分) は、先発版と後発版の間に固有の行が 1 つも無いとき
-// 「違いは語の言い換えだけ」で行き止まりになり、「取り込む対象がどこにあるのか /
-// 本当にどこにも無いのか」を人が同じ 2 枚を読み直して判断し続けることになる。
-// 開いている図 (と、相手フォルダで引き当てた図) をまとめて突き合わせ、
-// 行ごとにどの図にあるかを出す。1 枚にだけある行が取り込み候補で、0 件なら
-// 「N 枚とも同じ雛形の複製」と言い切る。
-function _clearTemplateCohort() {
-  var listEl = document.getElementById('tc-list');
-  var noteEl = document.getElementById('tc-note');
-  var vEl = document.getElementById('tc-verdict');
-  var sumEl = document.getElementById('tcoh-summary');
-  if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
-  if (noteEl) { noteEl.textContent = ''; noteEl.hidden = true; }
-  if (vEl) { vEl.textContent = ''; vEl.hidden = true; }
-  if (sumEl) { sumEl.textContent = ''; sumEl.classList.remove('clean', 'dirty'); }
-}
-
-// 並べる図。開いているタブ全部に、相手フォルダで引き当てた図があればそれも足す
-// (先輩のフォルダの版を相手にしたまま系統を見たい場面がそのまま繋がる)。
-function _cohortDocs() {
-  var docs = _compareDocs().map(function(d) {
-    return { name: d.name, dsl: d.dsl || '', id: d.id };
-  });
-  if (_xfFile && _xfRefDsl) {
-    var label = '相手: ' + _xfFile;
-    var dup = docs.filter(function(d) { return d.name === label; }).length > 0;
-    if (!dup) docs.push({ name: label, dsl: _xfRefDsl, id: null });
-  }
-  return docs;
-}
-
-function runTemplateCohort() {
-  var tc = window.MA.templateCohort;
-  var sumEl = document.getElementById('tcoh-summary');
-  var listEl = document.getElementById('tc-list');
-  var noteEl = document.getElementById('tc-note');
-  var vEl = document.getElementById('tc-verdict');
-  if (!tc || !sumEl || !listEl) return;
-
-  _clearTemplateCohort();   // 前回の結果を残さない (少ない枚数で押し直したときに混ざる)
-  var docs = _cohortDocs();
-  var result = tc.build(docs);
-  var mine = _activeDocName();
-  var total = result.docs.length;
-
-  sumEl.textContent = tc.summary(result);
-  sumEl.classList.remove('clean', 'dirty');
-  if (tc.isComparable(result)) {
-    sumEl.classList.add(tc.count(result, 'only') > 0 ? 'dirty' : 'clean');
-  }
-
-  if (vEl) {
-    var v = tc.verdict(result, mine);
-    vEl.textContent = v;
-    vEl.hidden = (v === '');
-  }
-  if (noteEl) {
-    var note = tc.subjectNote(result);
-    noteEl.textContent = note;
-    noteEl.hidden = (note === '');
-  }
-
-  listEl.textContent = '';
-  listEl.hidden = false;
-  // 1 枚しかないときは行を並べない。全部の行が「共通」に見えてしまい、
-  // 比べていないことが表から読み取れなくなる。
-  if (!tc.isComparable(result)) {
-    var empty = document.createElement('div');
-    empty.id = 'tc-empty';
-    empty.textContent = (total < 2)
-      ? '並べる図が足りません。＋ でもう 1 枚開くか、探す で相手の図を引き当ててください。'
-      : '比べる行がありません。図の中身を入れてください。';
-    listEl.appendChild(empty);
-    return;
-  }
-  result.rows.forEach(function(row) {
-    var el = document.createElement('div');
-    el.className = 'tc-row';
-    el.setAttribute('data-tc-kind', row.kind);
-    if (row.owner) el.setAttribute('data-tc-owner', row.owner);
-    var kind = document.createElement('span');
-    kind.className = 'tc-kind';
-    kind.textContent = tc.kindLabel(row.kind);
-    var text = document.createElement('span');
-    text.className = 'tc-text';
-    text.textContent = row.sample;
-    var where = document.createElement('span');
-    where.className = 'tc-where';
-    where.textContent = tc.whereLabel(row, total);
-    el.appendChild(kind); el.appendChild(text); el.appendChild(where);
-    listEl.appendChild(el);
-  });
-}
-
-// ── 他の人のフォルダの同じ図と突き合わせる ──
-// 先輩版と自分版の同種図を見比べる場面で、これまでは自分の保存先設定を先輩の
-// フォルダへ一時的に替えて開き、内容を憶えてから設定を戻し、記憶を頼りに
-// 打ち直していた。相手のフォルダを打てば、名前の近い図を勝手に引き当て、
-// 「相手にしかない要素」を並べる。取り込みは行ごとに 1 クリック。
-// 自分の保存先設定 (autoSave の fileDir) には一切触らない。
-var _xfDir = '';        // 相手のフォルダ
-var _xfNames = [];      // そのフォルダのファイル名
-var _xfEntries = [];    // 同じ順の {name, kind} (相手選びは図種も見る)
-var _xfFile = null;     // 相手にしている図の名前
-var _xfRefDsl = '';     // その中身
-var _xfResult = null;   // 直近の突き合わせ結果
-// 取り込む分に入れた行 (本文をそのまま鍵にする。一覧を出し直しても選びが残る)
-var _xfChecked = Object.create(null);
-
-// 相手のフォルダは FILES「読むだけ」で比較中にしたフォルダ
-// (_seniorState().dir) 1 つから取る。以前はこの枠にパスを打つ欄 (#xf-dir + 🔍 探す) があり、
-// 控えも別 (pua.crossRef.dir) で、ツリーで比較中にしたフォルダとは連動しなかった。
-// 古い控えは、比較中のフォルダがまだ無い人に 1 度だけ引き継いで消す (控えは 1 つにする)。
-var XF_DIR_KEY = 'pua.crossRef.dir';
-
-function _xfTakeOverLegacyDir() {
-  var old = '';
-  try { old = (window.localStorage && window.localStorage.getItem(XF_DIR_KEY)) || ''; } catch (e) { old = ''; }
-  if (!old) return;
-  try { window.localStorage.removeItem(XF_DIR_KEY); } catch (e) { /* 使えない環境でも動く */ }
-  if (!_seniorState().dir) _seniorSave({ dir: old });
-}
-
-// 比較中のフォルダ (無ければ '')。Git の版を相手にしている間はフォルダではないので出さない。
-function _xfCompareDir() {
-  if (_seniorGit) return '';
-  return String(_seniorState().dir || '');
-}
-
-// 枠の頭の 1 行: 相手のフォルダ名 (押すと FILES「読むだけ」のその行へ) か、選び方の案内。
-function renderXfDirName() {
-  var btn = _xfEl('xf-dir-name'), hint = _xfEl('xf-dir-hint');
-  var dir = _xfCompareDir();
-  var PF = window.MA.peekFolder;
-  if (btn) {
-    btn.hidden = !dir;
-    btn.setAttribute('data-dir', dir);
-    btn.textContent = dir ? (PF && PF.baseName ? PF.baseName(dir) : dir) : '';
-    btn.title = dir ? dir + ' — 押すと FILES の「読むだけ」のこの行へ移ります (別のフォルダはそこで選びます。自分の保存先は変わりません)' : '';
-  }
-  if (hint) hint.hidden = !!dir;
-}
-
-function _xfPaneOpen() {
-  var pane = document.getElementById('compare-pane');
-  return !!(pane && !pane.hidden);
-}
-
-// 参照ペインを開いたとき・比較中のフォルダが替わったときに、相手のフォルダを読み直す。
-function syncCrossRefDir(force) {
-  renderXfDirName();
-  var dir = _xfCompareDir();
-  if (!dir) {
-    if (_xfDir) {
-      _xfDir = '';
-      _xfClearPick();
-      var summary = _xfEl('xf-summary');
-      if (summary) { summary.hidden = true; summary.textContent = ''; }
-    }
-    return Promise.resolve(false);
-  }
-  if (!_xfPaneOpen()) return Promise.resolve(false);
-  if (!force && dir === _xfDir) return Promise.resolve(false);
-  return loadCrossRefFolder();
-}
-window.syncCrossRefDir = syncCrossRefDir;
-
-function _xfEl(id) { return document.getElementById(id); }
-
-// 相手フォルダを読み、名前の近い図を選んで突き合わせる。
-function loadCrossRefFolder() {
-  var summary = _xfEl('xf-summary');
-  var dir = _xfCompareDir();
-  renderXfDirName();
-  if (!dir) {
-    _xfClearPick();
-    if (summary) { summary.hidden = true; summary.textContent = ''; }
-    return Promise.resolve();
-  }
-  _xfDir = dir;
-  if (summary) { summary.hidden = false; summary.className = ''; summary.textContent = '読み込み中…'; }
-  if (!window.MA.workspace) return Promise.resolve();
-  return window.MA.workspace.listFolder(dir).then(function(res) {
-    var entries = (res && res.entries) || [];
-    // 名前だけでなく図種も控える (相手選びは図種を見る)。
-    _xfEntries = entries.filter(function(e) { return e && e.name; })
-      .map(function(e) { return { name: e.name, kind: e.savedKind || e.kind || '' }; });
-    _xfNames = _xfEntries.map(function(e) { return e.name; });
-    if (res && res.exists === false) {
-      _xfShowMessage('そのフォルダが見つかりません: ' + dir, 'dirty');
-      _xfClearPick();
-      return;
-    }
-    if (_xfNames.length === 0) {
-      _xfShowMessage('そのフォルダに図がありません: ' + dir, 'dirty');
-      _xfClearPick();
-      return;
-    }
-    var CRD = window.MA.crossRefDiff;
-    var selfName = _xfSelfName();
-    // 近い名前が無いときに先頭のファイルを黙って
-    // 相手にすると、図種違いの図と突き合わせた結果が「先輩が全部書き換えた」
-    // に見える。相手が決まらないことは、それ自体が手順 1 の答えなので言う。
-    var verdict = CRD ? CRD.counterpartVerdict(_xfEntries, selfName, _xfSelfKind()) : null;
-    _xfRenderPick(verdict && verdict.name ? verdict.name : '');
-    if (!verdict || verdict.state !== 'picked') {
-      var settledState = verdict && (verdict.state === 'no-kind' || verdict.state === 'no-part');
-      _xfShowMessage(verdict ? verdict.message : '相手が決まりません', settledState ? 'clean' : 'dirty');
-      // 相手に実体が無いと言い切れたら、その場で
-      // 「対応不要（手本なし）」として自分の図に控えられるようにする (覗き一覧の控えと同じ行)。
-      if (settledState) _xfAppendKeepVerdict(dir, verdict);
-      _xfFile = null;
-      _xfResult = null;
-      var xl = _xfEl('xf-list');
-      if (xl) { xl.hidden = true; xl.textContent = ''; }
-      return Promise.resolve();
-    }
-    return _xfSelectFile(verdict.name);
-  });
-}
-
-function _xfAppendKeepVerdict(dir, verdict) {
-  var summary = _xfEl('xf-summary');
-  var PV = window.MA.peekVerdict, DK = window.MA.diagramKind, PF = window.MA.peekFolder;
-  var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
-  var slug = _xfSelfKind();
-  if (!summary || !PV || !doc || !slug) return;
-  var kind = (DK && DK.label) ? DK.label(slug) : slug;
-  var dirName = PF ? PF.baseName(dir) : dir;
-  var had = PV.find(doc.dsl, kind, dirName);
-  var b = document.createElement('button');
-  b.type = 'button';
-  b.id = 'xf-keep-verdict';
-  b.className = 'peek-verdict-act';
-  if (had && !PV.isStale(had, 0)) {
-    b.textContent = '手本なし（控え済み）';
-    b.disabled = true;
-  } else {
-    b.textContent = '対応不要（手本なし）として控える';
-    b.title = doc.name + ' に「' + dirName + ' に ' + kind + ' の手本は無い」と書き残します';
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      _writePeekVerdict(PV.write(doc.dsl, {
-        kind: kind, dir: dirName, count: 0, at: new Date().toISOString().slice(0, 16),
-        note: verdict.state === 'no-part'
-          ? '対応不要（' + verdict.part + ' の手本なし）' : '対応不要（手本なし）',
-      }));
-      b.textContent = '手本なし（控え済み）';
-      b.disabled = true;
-    });
-  }
-  summary.appendChild(document.createTextNode(' '));
-  summary.appendChild(b);
-}
-
-// いま開いている図の図種。本文から見る (保存前の図にも答えが要る)。
-// 見方は外した impact-scan の detectKind と同じ (相手選びの答えを変えない)。
-function _xfSelfKind() {
-  var text = String(editorEl ? editorEl.value : '');
-  if (/^\s*(?:abstract\s+class|class|interface|enum)\b/m.test(text)) return 'class';
-  if (/^\s*state\b/m.test(text) || /\[\*\]/.test(text)) return 'state';
-  if (/^\s*(?:participant|actor|boundary|control|entity|database|collections|queue)\b/m.test(text)) return 'sequence';
-  if (/^\s*(?:component|node|rectangle|folder)\b/m.test(text)) return 'component';
-  if (/^\s*(?:usecase)\b/m.test(text)) return 'usecase';
-  if (/^\s*(?::.*;|start\b|stop\b)/m.test(text)) return 'activity';
-  return '';
-}
-
-function _xfSelfName() {
-  try {
-    var d = window.MA.workspace ? window.MA.workspace.getActive() : null;
-    return (d && d.name) || '';
-  } catch (e) { return ''; }
-}
-
-function _xfShowMessage(text, cls) {
-  var summary = _xfEl('xf-summary');
-  if (!summary) return;
-  summary.hidden = false;
-  summary.className = cls || '';
-  summary.textContent = text;
-}
-
-function _xfClearPick() {
-  var pick = _xfEl('xf-pick'), list = _xfEl('xf-list');
-  if (pick) pick.hidden = true;
-  if (list) { list.hidden = true; list.textContent = ''; }
-  _xfFile = null;
-  _xfResult = null;
-}
-
-// 相手の候補を近い順に並べる。近さの付いた名前を先に出す。
-function _xfRenderPick(selected) {
-  var pick = _xfEl('xf-pick'), sel = _xfEl('xf-file');
-  if (!pick || !sel) return;
-  var CRD = window.MA.crossRefDiff;
-  var ranked = CRD ? CRD.counterparts(_xfEntries, _xfSelfName(), _xfSelfKind())
-                   : _xfNames.map(function(n) { return { name: n, distance: null }; });
-  var DK = window.MA.diagramKind;
-  sel.textContent = '';
-  ranked.forEach(function(c) {
-    var op = document.createElement('option');
-    op.value = c.name;
-    var tail;
-    if (c.kindMismatch) {
-      var lab = (DK && DK.label) ? DK.label(c.kind) : '';
-      tail = ' (' + (lab ? lab + '図' : '別の図種') + '。図種が違います)';
-    } else if (c.partMismatch && c.distance !== 0) {
-      // 図種は合うが部品名を含まない候補
-      tail = ' (部品名なし。' + c.part + ' を含みません)';
-    } else if (c.distance === 0) tail = ' (同じ名前)';
-    else if (c.distance == null) tail = ' (名前が離れています)';
-    else tail = '';
-    op.textContent = c.name + tail;
-    if (c.kindMismatch) op.setAttribute('data-kind-mismatch', '1');
-    if (c.partMismatch) op.setAttribute('data-part-mismatch', '1');
-    if (c.name === selected) op.selected = true;
-    sel.appendChild(op);
-  });
-  pick.hidden = false;
-}
-
-// 相手の図を 1 枚読み、要素を突き合わせて並べる。
-function _xfSelectFile(name) {
-  if (!name || !window.MA.workspace) return Promise.resolve();
-  _xfFile = name;
-  return window.MA.workspace.loadFile(name, _xfDir).then(function(dsl) {
-    _xfRefDsl = dsl == null ? '' : dsl;
-    if (_xfRefDsl === '') {
-      _xfShowMessage('その図を読めませんでした: ' + name, 'dirty');
-      return;
-    }
-    _xfUseAsRef();
-    renderCrossRefDiff();
-  });
-}
-
-// 突き合わせ結果を描く。自分の DSL が変わるたびに呼び直してよい。
-function renderCrossRefDiff() {
-  var CRD = window.MA.crossRefDiff;
-  var list = _xfEl('xf-list'), note = _xfEl('xf-rename');
-  if (!CRD || !list || !_xfFile) return;
-  var selfDsl = editorEl ? editorEl.value : '';
-  var map = CRD.renameMap(_xfSelfName(), _xfFile);
-  _xfResult = CRD.diff(selfDsl, _xfRefDsl, map);
-  if (note) {
-    note.textContent = map ? ('読み替え: ' + map.from + ' → ' + map.to) : '';
-  }
-  var clean = _xfResult.onlyRef.length === 0 && _xfResult.onlySelf.length === 0;
-  _xfShowMessage(CRD.summary(_xfResult), clean ? 'clean' : 'dirty');
-
-  // 名前が 1 つも対応しない 2 枚は、行の一覧を
-  // 「相手が足した差分」として出しても取り込む 1 個を選べない。
-  // 形 (種別ごとの件数) の見比べに切り替えて、同じ粒度かどうかを先に見せる。
-  var comp = CRD.comparability(_xfResult);
-  // 名前が対応しなくても、種別の並びが位置ごとに
-  // 一致していれば「別の粒度」ではなく「同じ骨格の言い換え」。形の件数表より、
-  // 位置で対応させた語の対応表の方が「取り込む要素は無い」と言い切れる。
-  var par = CRD.parallel(selfDsl, _xfRefDsl);
-  var isParallel = CRD.isRephrase(par);
-  if (isParallel) _xfShowMessage(CRD.parallelSummary(par), 'clean');
-  _xfRenderParallel(isParallel ? par : null);
-  _xfRenderShape((comp.level === 'disjoint' && !isParallel) ? CRD.shapeRows(selfDsl, _xfRefDsl) : null,
-    (comp.level === 'disjoint' && !isParallel) ? CRD.shapeSummary(selfDsl, _xfRefDsl) : '');
-
-  list.textContent = '';
-  _xfResult.onlyRef.forEach(function(e) { list.appendChild(_xfRow(e, 'ref')); });
-  _xfResult.onlySelf.forEach(function(e) { list.appendChild(_xfRow(e, 'self')); });
-  // 骨格が同じ 2 枚では「相手だけ」の行は言い換えであって足された要素ではない。
-  // 「取り込む」を出すと、同じ手順を別の語でもう 1 本足すことになる。
-  list.hidden = isParallel || (_xfResult.onlyRef.length + _xfResult.onlySelf.length) === 0;
-
-  // 言い換えの 2 枚に取り込む対象は無いので、まとめ取り込みも出さない。
-  if (isParallel) {
-    var bar = _xfEl('xf-take-bar');
-    if (bar) bar.hidden = true;
-  } else {
-    _xfRenderTakeBar();
-  }
-}
-
-// 語の対応表。par が null なら畳む (骨格が違う 2 枚には出さない)。
-function _xfRenderParallel(par) {
-  var host = _xfEl('xf-parallel');
-  if (!host) return;
-  host.textContent = '';
-  if (!par) { host.hidden = true; return; }
-  host.hidden = false;
-  var CRD = window.MA.crossRefDiff;
-
-  var lead = document.createElement('div');
-  lead.className = 'xf-shape-lead';
-  lead.id = 'xf-parallel-lead';
-  lead.textContent = '要素の並びが位置ごとに一致しています。'
-    + '片方にだけある要素は無いので、違いは語の言い換えだけです。';
-  host.appendChild(lead);
-
-  var table = document.createElement('table');
-  table.className = 'xf-shape-table';
-  table.id = 'xf-parallel-table';
-  var head = document.createElement('tr');
-  ['#', '要素', '自分', '相手'].forEach(function(t) {
-    var th = document.createElement('th');
-    th.textContent = t;
-    head.appendChild(th);
-  });
-  table.appendChild(head);
-  par.pairs.forEach(function(p, i) {
-    var tr = document.createElement('tr');
-    tr.className = 'xf-parallel-row' + (p.same ? '' : ' differs');
-    tr.setAttribute('data-kind', p.kind);
-    [String(i + 1), p.label, p.self.label, p.ref.label].forEach(function(t) {
-      var td = document.createElement('td');
-      td.textContent = t;
-      tr.appendChild(td);
-    });
-    table.appendChild(tr);
-  });
-  host.appendChild(table);
-
-  // 対応表を目で写して申し送りに貼る手を残さない。
-  var copy = document.createElement('button');
-  copy.type = 'button';
-  copy.id = 'btn-xf-parallel-copy';
-  copy.className = 'xf-parallel-copy';
-  copy.textContent = '対応表をコピー';
-  copy.title = '語の対応表を申し送り・レビュー依頼にそのまま貼れる形でコピーする';
-  copy.addEventListener('click', function() {
-    var text = CRD.parallelText(par, _xfSelfName(), _xfFile);
-    var done = function() { copy.textContent = 'コピーしました'; };
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done, done);
-      } else { done(); }
-    } catch (e) { done(); }
-  });
-  host.appendChild(copy);
-}
-
-// 形の見比べの表。rows が null なら畳む (名前で対応が付いているときは要らない)。
-function _xfRenderShape(rows, headline) {
-  var host = _xfEl('xf-shape');
-  if (!host) return;
-  host.textContent = '';
-  if (!rows) { host.hidden = true; return; }
-  host.hidden = false;
-
-  var lead = document.createElement('div');
-  lead.className = 'xf-shape-lead';
-  lead.id = 'xf-shape-lead';
-  lead.textContent = '名前では対応が付かないので、形で見比べます。'
-    + '同じ粒度で描き直すか、粒度の違いを申し送りに残すかを先に決めてください。';
-  host.appendChild(lead);
-
-  var sum = document.createElement('div');
-  sum.className = 'xf-shape-sum';
-  sum.id = 'xf-shape-sum';
-  sum.textContent = headline;
-  host.appendChild(sum);
-
-  var table = document.createElement('table');
-  table.className = 'xf-shape-table';
-  table.id = 'xf-shape-table';
-  var head = document.createElement('tr');
-  ['要素', '自分', '相手'].forEach(function(t) {
-    var th = document.createElement('th');
-    th.textContent = t;
-    head.appendChild(th);
-  });
-  table.appendChild(head);
-  rows.forEach(function(r) {
-    var tr = document.createElement('tr');
-    tr.className = 'xf-shape-row' + (r.self === r.ref ? '' : ' differs');
-    tr.setAttribute('data-kind', r.kind);
-    [r.label, String(r.self), String(r.ref)].forEach(function(t, i) {
-      var td = document.createElement('td');
-      td.textContent = t;
-      if (i > 0) td.className = 'num';
-      tr.appendChild(td);
-    });
-    table.appendChild(tr);
-  });
-  host.appendChild(table);
-}
-
-// 行の鍵。`Idle --> Running` は親が違えば別の遷移なので、道筋ごと鍵にする。
-function _xfKey(entry) {
-  return String((entry && entry.parent) || '') + '\u0000' + String((entry && entry.text) || '');
-}
-
-// 1 行。相手にしかない行には「取り込む」を付ける (自分にしかない行は取り込めない)。
-function _xfRow(entry, side) {
-  var row = document.createElement('div');
-  row.className = 'xf-row ' + (side === 'ref' ? 'only-ref' : 'only-self');
-  row.setAttribute('data-side', side);
-  row.setAttribute('data-kind', entry.kind || '');
-
-  // 増分が何本もある回は 1 行ずつ押していられない。
-  // 相手にしかない行にチェックを付け、まとめて取り込めるようにする。
-  if (side === 'ref') {
-    var pick = document.createElement('input');
-    pick.type = 'checkbox';
-    pick.className = 'xf-pick-row';
-    pick.title = 'この行を取り込む分に入れる';
-    pick.checked = _xfChecked[_xfKey(entry)] === true;
-    pick.addEventListener('change', function() {
-      if (pick.checked) _xfChecked[_xfKey(entry)] = true;
-      else delete _xfChecked[_xfKey(entry)];
-      _xfRenderTakeBar();
-    });
-    row.appendChild(pick);
-  }
-
-  var tag = document.createElement('span');
-  tag.className = 'xf-side';
-  tag.textContent = side === 'ref' ? '相手だけ' : '自分だけ';
-  row.appendChild(tag);
-
-  if (entry.parent) {
-    var nest = document.createElement('span');
-    nest.className = 'xf-nest';
-    nest.textContent = entry.parent + ' の中';
-    nest.title = '親「' + entry.parent + '」の中の要素';
-    row.appendChild(nest);
-    row.setAttribute('data-parent', entry.parent);
-  }
-
-  var text = document.createElement('span');
-  text.className = 'xf-text';
-  text.textContent = entry.text;
-  text.title = entry.text;
-  // 自分にしかない行はその場で見に行ける。相手の行は自分の図にまだ無いので飛べない。
-  if (side === 'self') {
-    text.addEventListener('click', function() { jumpToLine(entry.line); });
-  } else {
-    text.style.cursor = 'default';
-  }
-  row.appendChild(text);
-
-  if (side === 'ref') {
-    // 押す前に入る場所が分かるようにする (押してから探し直さない)。
-    var where = document.createElement('span');
-    where.className = 'xf-where';
-    var CRD = window.MA.crossRefDiff;
-    where.textContent = (CRD && editorEl) ? CRD.planText(editorEl.value, entry) : '';
-    where.title = '取り込んだときに入る位置';
-    row.appendChild(where);
-
-    var take = document.createElement('button');
-    take.type = 'button';
-    take.className = 'xf-take';
-    take.textContent = '取り込む';
-    take.title = 'この 1 行を自分の図に入れる';
-    take.addEventListener('click', function() { takeCrossRefEntry(entry); });
-    row.appendChild(take);
-  }
-  return row;
-}
-
-// チェックされた行 (今の一覧に出ているものだけ)。
-function _xfCheckedEntries() {
-  if (!_xfResult) return [];
-  return _xfResult.onlyRef.filter(function(e) { return _xfChecked[_xfKey(e)] === true; });
-}
-
-// 取り込みバー。件数はボタンの文字に出す (押す前に何件入るかが分かるように)。
-function _xfRenderTakeBar() {
-  var bar = _xfEl('xf-take-bar');
-  var btn = _xfEl('btn-xf-take-checked');
-  var all = _xfEl('xf-take-all');
-  if (!bar) return;
-  var rows = _xfResult ? _xfResult.onlyRef : [];
-  bar.hidden = rows.length === 0;
-  var picked = _xfCheckedEntries();
-  if (btn) {
-    btn.textContent = 'チェックした ' + picked.length + ' 件を取り込む';
-    btn.disabled = picked.length === 0;
-  }
-  if (all) all.checked = rows.length > 0 && picked.length === rows.length;
-}
-
-// チェックした分をまとめて入れ、入った行数と位置を言う。
-function takeCheckedCrossRefEntries() {
-  var CRD = window.MA.crossRefDiff;
-  var picked = _xfCheckedEntries();
-  if (!CRD || !editorEl || picked.length === 0) return;
-  var res = CRD.applyInserts(editorEl.value, picked);
-  editorEl.value = res.dsl;
-  editorEl.dispatchEvent(new Event('input'));
-  _xfChecked = Object.create(null);
-  var result = _xfEl('xf-take-result');
-  if (result) result.textContent = CRD.insertsSummary(res);
-  if (res.firstLine) jumpToLine(res.firstLine);
-  renderCrossRefDiff();
-  // 取り込んだ結果は出し直しで消えるので、書き戻してから残す。
-  if (result) result.textContent = CRD.insertsSummary(res);
-}
-
-// 相手にしかない 1 行を自分の DSL へ入れ、その行へ飛んで、一覧を出し直す。
-function takeCrossRefEntry(entry) {
-  var CRD = window.MA.crossRefDiff;
-  if (!CRD || !editorEl) return;
-  var out = CRD.applyInsert(editorEl.value, entry);
-  if (!out) return;
-  editorEl.value = out.dsl;
-  editorEl.dispatchEvent(new Event('input'));
-  jumpToLine(out.line);
-  renderCrossRefDiff();
-}
-
-function setupCrossRefDiff() {
-  var file = _xfEl('xf-file');
-  _xfTakeOverLegacyDir();
-  renderXfDirName();
-  var name = _xfEl('xf-dir-name');
-  if (name) {
-    name.addEventListener('click', function() {
-      var d = name.getAttribute('data-dir') || '';
-      if (d) revealReadonlyDirInTree(d);
-    });
-  }
-  if (file) {
-    file.addEventListener('change', function() {
-      // 相手の図を替えたら、前の図で付けたチェックは持ち越さない。
-      _xfChecked = Object.create(null);
-      var result = _xfEl('xf-take-result');
-      if (result) result.textContent = '';
-      _xfSelectFile(file.value);
-    });
-  }
-  var takeAll = _xfEl('xf-take-all');
-  if (takeAll) {
-    takeAll.addEventListener('change', function() {
-      _xfChecked = Object.create(null);
-      if (takeAll.checked && _xfResult) {
-        _xfResult.onlyRef.forEach(function(e) { _xfChecked[_xfKey(e)] = true; });
-      }
-      renderCrossRefDiff();
-    });
-  }
-  var takeBtn = _xfEl('btn-xf-take-checked');
-  if (takeBtn) takeBtn.addEventListener('click', takeCheckedCrossRefEntries);
-}
-
+// 参照ペインの別フォルダとの突き合わせ (名前の組・雛形・系統・増分の取り込み) は
+// TICKET-owner-20261115-2141-prune で外した (2 枚を比べるのは「この図の履歴」の版との比較)。
 function setupCompareView() {
-  setupCrossRefDiff();
   var checkBtn = document.getElementById('btn-check-run');
   if (checkBtn) checkBtn.addEventListener('click', runConsistencyCheck);
-  var mapBtn = document.getElementById('btn-map-run');
-  if (mapBtn) mapBtn.addEventListener('click', runStateMap);
-  var mapReset = document.getElementById('btn-map-reset');
-  if (mapReset) {
-    mapReset.addEventListener('click', function() {
-      var sm = _mapper();
-      setMapOverrides(sm && sm.EMPTY_OVERRIDES ? sm.EMPTY_OVERRIDES : null);
-    });
-  }
-  var tdBtn = document.getElementById('btn-td-run');
-  if (tdBtn) tdBtn.addEventListener('click', runTemplateDiff);
-  // 雛形の登録・選択・取り消し
-  var trAdd = document.getElementById('btn-tr-add');
-  if (trAdd) trAdd.addEventListener('click', function() { registerTemplate(); });
-  var trDel = document.getElementById('btn-tr-del');
-  if (trDel) trDel.addEventListener('click', forgetTemplate);
-  var trPick = document.getElementById('tr-pick');
-  if (trPick) {
-    trPick.addEventListener('change', function() {
-      _trPickedId = trPick.value;
-      _clearTemplateDiff();
-      renderTemplateRegistry();
-    });
-  }
-  var tcBtn = document.getElementById('btn-tc-run');
-  if (tcBtn) tcBtn.addEventListener('click', runTemplateCohort);
   var btn = document.getElementById('btn-tab-compare');
   var sel = document.getElementById('compare-select');
   var close = document.getElementById('btn-compare-close');
@@ -17120,11 +12379,8 @@ function setupCompareView() {
   if (sel) {
     sel.addEventListener('change', function() {
       _compareRefId = sel.value;
-      _compareRefChosen = true;
       _compareShownDsl = null;
       _clearCheckList();
-      _clearStateMap();
-      _clearTemplateDiff();
       renderCompareView();
     });
   }
@@ -20850,7 +16106,7 @@ function openFamilySet() {
   closeFamilyClone();
 }
 
-// 系統ぜんぶの複製は「既存の図や雛形から新しい図を起こす」窓 (#tpl-modal) の
+// 同じ系統の図の複製は「既存の図や雛形から新しい図を起こす」窓 (#tpl-modal) の
 // 「同じ系統の図ぜんぶ」で出す (別の窓 #fc-modal と入口 ⧉⧉ セット複製 は畳んだ)。中身の描き方はそのまま。
 function closeFamilyClone() {
   var modal = document.getElementById('tpl-modal');
@@ -20930,8 +16186,6 @@ function syncEditedText() {
   try { renderVersionBadge(); } catch (e) {}
   // Git のコミットを並べている間は、作業中との色付けも追う (design 10c)。
   try { if (window.MA.appGit) window.MA.appGit.refreshDiff(); } catch (e) {}
-  // 「見てもらいながらその場で直す」ので、指摘は書き換えるたびに引き直す。
-  try { renderReviewBadge(); } catch (e) {}
   // 今の本文をタブ (workspace) に控える。以前は下端の「整合」の札を数え直すついでに
   // ここで控えていて、右パネルのフォームだけで足した行もこれでタブ・自動保存・タブの印に届いていた。
   // 札は TICKET-owner-20261115-1841-prune で外したので、控えだけを明示して残す。
@@ -21037,135 +16291,8 @@ function refresh() {
 // 右パネルに常設のタブを置き、選ぶとその場で DSL 先頭に skinparam / title が
 // 書き込まれ、書き込まれる行も同じ画面に出す。
 var dsSettings = null;
-
-// ── ドメイン宣言 ──────────────────────────
-// 図の設定に置く「隣のフォルダの同名ドメインと同一 / 別物」の宣言欄。
-// 書くのは domain-verdict の印 1 行だけで、名前の置換や title の書き換えはしない
-// (それは突合の画面で差分を見ながら決めること)。宣言は手順 4 / 4.7 の突合が読む。
-
-// 隣のフォルダ名の候補。覗きの一覧をまだ取っていなければ 1 回だけ取りに行き、
-// 取れたら描き直す (取れなくても欄は使える — 手で打てる)。
-var _dsPeekFetched = false;
-
-function _dsOtherFolders() {
-  var PF = window.MA.peekFolder;
-  var mine = _myPeekDir();
-  return (_peekDirs || []).filter(function(d) {
-    return d && d.path && !(PF && PF.samePath(d.path, mine));
-  }).map(function(d) { return window.MA.domainCohort ? window.MA.domainCohort.baseOf(d.path) : d.path; });
-}
-
-function _dsEnsurePeekDirs() {
-  if (_dsPeekFetched || (_peekDirs && _peekDirs.length)) return;
-  _dsPeekFetched = true;
-  var PF = window.MA.peekFolder;
-  if (!PF || !window.fetch) return;
-  fetch(_peekDirsUrl(_wsFileDir()))
-    .then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(data) {
-      if (!data) return;
-      _peekDirs = PF.choices(data);
-      renderDiagramSettings(true);
-    }).catch(function() {});
-}
-
-function _dsSetDsl(next) {
-  if (next === mmdText) return;
-  if (window.MA.history) window.MA.history.pushHistory();
-  mmdText = next;
-  suppressSync = true;
-  editorEl.value = next;
-  suppressSync = false;
-  scheduleRefresh();
-}
-
-function dsVerdictGroup(group) {
-  var DV = window.MA.domainVerdict;
-  var DC = window.MA.domainCohort;
-  if (!DV || !DC) return;
-  _dsEnsurePeekDirs();
-  var g = group('ドメイン宣言 / Domain verdict');
-  g.id = 'ds-verdict-group';
-  var domain = DC.domainOf(_dsActiveDocName());
-
-  var marks = DV.listMarks(mmdText);
-  var list = document.createElement('div');
-  list.id = 'ds-verdict-list';
-  list.className = 'ds-note';
-  if (!marks.length) {
-    list.textContent = 'まだ宣言していません (突合では「これから判断するもの」として出ます)';
-  } else {
-    marks.forEach(function(m) {
-      var row = document.createElement('div');
-      row.className = 'ds-row';
-      row.setAttribute('data-verdict-other', m.other);
-      var text = document.createElement('span');
-      text.textContent = DV.markText(m);
-      row.appendChild(text);
-      var off = document.createElement('button');
-      off.type = 'button';
-      off.className = 'ds-choice';
-      off.textContent = '解除';
-      off.title = m.other + ' についての宣言を消す';
-      off.addEventListener('click', function() {
-        _dsSetDsl(DV.removeMark(mmdText, m.other));
-        renderDiagramSettings(true);
-      });
-      row.appendChild(off);
-      list.appendChild(row);
-    });
-  }
-  g.appendChild(list);
-
-  var others = _dsOtherFolders();
-  var pick = document.createElement('input');
-  pick.type = 'text';
-  pick.id = 'ds-verdict-folder';
-  pick.placeholder = '相手のフォルダ名 (例: junior)';
-  pick.setAttribute('list', 'ds-verdict-folders');
-  if (others.length === 1) pick.value = others[0];
-  g.appendChild(pick);
-  var dl = document.createElement('datalist');
-  dl.id = 'ds-verdict-folders';
-  others.forEach(function(f) {
-    var o = document.createElement('option');
-    o.value = f;
-    dl.appendChild(o);
-  });
-  g.appendChild(dl);
-
-  var note = document.createElement('div');
-  note.id = 'ds-verdict-note';
-  note.className = 'ds-note';
-  note.textContent = domain ? 'このドメイン: ' + domain : 'ドメイン名が図名から決まりません';
-  var row = document.createElement('div');
-  row.className = 'ds-row';
-  [
-    { kind: 'shared', label: '同一ドメイン', hint: '同じものを指している。名前の食い違いは直すべき指摘' },
-    { kind: 'separate', label: '別ドメイン', hint: '名前が同じだけの別物。突合は以後この組を出さない' },
-  ].forEach(function(spec) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'ds-choice';
-    b.id = 'ds-verdict-' + spec.kind;
-    b.textContent = spec.label;
-    b.title = spec.hint;
-    b.addEventListener('click', function() {
-      var folder = (pick.value || '').trim();
-      if (!folder) { note.textContent = '相手のフォルダ名を入れてください'; return; }
-      _dsSetDsl(DV.applyMark(mmdText, spec.kind, domain, folder));
-      note.textContent = folder + ' とは' + (spec.kind === 'shared' ? '同一' : '別')
-        + 'ドメインと宣言しました (突合がこの宣言を読みます)';
-      var msg = note.textContent;
-      renderDiagramSettings(true);
-      var after = document.getElementById('ds-verdict-note');
-      if (after) after.textContent = msg;
-    });
-    row.appendChild(b);
-  });
-  g.appendChild(row);
-  g.appendChild(note);
-}
+// 隣のフォルダの同名ドメインと同一 / 別物を宣言する欄は TICKET-owner-20261115-2141-prune で外した。
+// 既にある `' domain-verdict:` の行はただのコメントとして読み、書き換えない。
 
 function dsApplyToDsl() {
   var ds = window.MA.diagramSettings;
@@ -21295,9 +16422,6 @@ function _dsRenameActive(next) {
   var VT = window.MA.versionTimeline;
   var version = (RG && VT && saved) ? RG.previousVersion(VT.historyOf(from), mmdText) : null;
 
-  if (window.MA.reviewDesk) {
-    try { window.MA.reviewDesk.renameBaseline(from, to); } catch (e) {}
-  }
   var id = ws.getActiveId();
   ws.rename(id, to);
   var name = _dsActiveDocName();
@@ -21467,13 +16591,6 @@ function renderDiagramSettings(keepState) {
   titleHint.className = 'ds-note';
   titleHint.textContent = '末尾に付け足した文字は 図名 / File name にも同じように付きます (逆も同じ)';
   gTitle.appendChild(titleHint);
-
-  // ドメイン宣言 / Domain verdict
-  // 「この図は隣のフォルダの同名ドメインと同一か別物か」は、これまで突合の画面まで
-  // 行かないと決められず、決めた印は DSL のコメント行の手書き規約だった。reviewer は
-  // 突合が出した食い違い 1 件ごとに「もう判断済みか」を grep で確かめ直していた。
-  // 図を開いたまま宣言でき、宣言済みの組は突合が最初から外す。
-  dsVerdictGroup(group);
 
   // 外観 / Theme
   var gTheme = group('外観 / Theme');

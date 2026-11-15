@@ -15,7 +15,8 @@ const TOOLS = [
   'btn-tab-lines',
   // BLK-owner-20260923-1509-prune: ⇔ 並べて見る は「並べて比較」1 つに畳み、タブバーのボタンは無くなった
   'btn-tab-template',
-  'btn-tab-diff',
+  // ± 差分 (btn-tab-diff) は TICKET-owner-20261115-2141-prune で外した
+  'btn-tab-versions',
 ];
 
 test.describe('BLK-primary-0923 タブバーが潰れない', () => {

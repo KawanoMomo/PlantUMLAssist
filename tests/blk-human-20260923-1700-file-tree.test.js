@@ -28,8 +28,9 @@ describe('FILES ツリーの節 (design 10a)', function() {
     expect(FT.defaultOpen('git')).toBe(false);
   });
 
-  test('畳んだままでも件数が読める (比較中 N / main · M 2 ↑1)', function() {
-    expect(FT.readonlyCountLabel(1)).toBe('比較中 1');
+  // 読むだけはフォルダの数だけ (右の枠に出している相手の札は TICKET-owner-20261115-2141-prune で外した)。
+  test('畳んだままでも件数が読める (N / main · M 2 ↑1)', function() {
+    expect(FT.readonlyCountLabel(2)).toBe('2');
     expect(FT.readonlyCountLabel(0)).toBe('');
     expect(FT.gitCountLabel({ branch: 'main', modified: 2, ahead: 1 })).toBe('main · M 2 ↑1');
     expect(FT.gitCountLabel({ branch: 'main', modified: 0, ahead: 0 })).toBe('main');

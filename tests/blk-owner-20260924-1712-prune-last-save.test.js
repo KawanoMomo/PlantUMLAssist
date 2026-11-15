@@ -33,15 +33,12 @@ describe('下端の差分の件数は変わった図の数', function() {
   });
 });
 
-describe('Ctrl+K の「前回保存版と比べる」は 1 行', function() {
-  test('旧 livediff の行は無く、compare-before が「前回保存版と比較」を名乗りレビューに入る', function() {
-    expect(/\{ id: 'livediff'/.test(app)).toBe(false);
-    var m = /\{ id: 'compare-before', title: '([^']*)'[^\n]*/.exec(app);
-    expect(m).not.toBe(null);
-    expect(m[1]).toBe('前回保存版と比較 / Compare with last save');
-    expect(m[0].indexOf("group: 'review'") >= 0).toBe(true);
-    ['並べて比較 (この図の前回保存版)', '前回保存版との比較', '差分', '前回保存', 'レビュー'].forEach(function(w) {
-      expect(m[0].indexOf("'" + w + "'") >= 0).toBe(true);
+// TICKET-owner-20261115-2141-prune: 前回保存版と比べるのは「この図の履歴」の行から。
+// Ctrl+K の「前回保存版と比較」「並べて比較 (別タブの図)」「読むだけの図と並べて比較」の行は外した。
+describe('Ctrl+K に「前回保存版と比較」「並べて比較」の行は無い', function() {
+  test('livediff / compare-before / tab-compare / tab-senior の行はコマンド表に無い', function() {
+    ['livediff', 'compare-before', 'tab-compare', 'tab-senior'].forEach(function(id) {
+      expect(app.indexOf("{ id: '" + id + "'")).toBe(-1);
     });
   });
 });

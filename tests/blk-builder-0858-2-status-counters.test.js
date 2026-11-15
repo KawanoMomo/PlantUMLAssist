@@ -14,11 +14,13 @@ const html = fs.readFileSync(path.resolve(__dirname, '..', 'plantuml-assist.html
 
 describe('下端に寄せる件数', function() {
   // TICKET-owner-20261115-1840-prune: 指摘・指摘箱の件数はピン留めと指摘箱ごと外した。
-  test('下端に寄せる件数は ± 差分 だけ', function() {
-    expect(SC.items().map(function(it) { return it.prefix; }))
-      .toEqual(['± 差分']);
+  // TICKET-owner-20261115-2141-prune: ± 差分 (status-diff / btn-tab-diff) も外した。
+  test('下端に寄せる件数は今は無い (± 差分・指摘・指摘箱は外した)', function() {
+    expect(SC.items()).toEqual([]);
     expect(html.indexOf('id="status-pins"')).toBe(-1);
     expect(html.indexOf('id="status-inbox"')).toBe(-1);
+    expect(html.indexOf('id="status-diff"')).toBe(-1);
+    expect(html.indexOf('id="btn-tab-diff"')).toBe(-1);
   });
 
   test('出どころのタブ列ボタンと下端のボタンがどちらも実在する', function() {

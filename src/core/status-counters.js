@@ -10,9 +10,9 @@ window.MA = window.MA || {};
 window.MA.statusCounters = (function() {
   // src はタブ列のボタン (件数の出どころ)、id は下端に置くボタン。
   // prefix は下端での見出し。subsetOf は内数の行が持つ (今は無い)。
-  var ITEMS = [
-    { id: 'status-diff',  src: 'btn-tab-diff',  prefix: '± 差分',  title: '前回保存した時点から変わった図の一覧' },
-  ];
+  // 「± 差分」(下端の札とタブ列のボタン) は TICKET-owner-20261115-2141-prune で外したので、今は無い
+  // (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。
+  var ITEMS = [];
 
   function items() {
     return ITEMS.map(function(it) {

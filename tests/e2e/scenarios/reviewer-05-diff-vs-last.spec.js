@@ -171,22 +171,23 @@ test('手順5 前回保存版から何行消えるかが、保存を押す前に
   await S.typeDsl(page, BIG_CLASS.replace('+Init()', '+Start()'));
   await page.waitForTimeout(400);
   await expect(chip).toHaveAttribute('data-livediff', 'changed');
-  // 変わった行数 (増 1 + 減 1) が件数として 1 種類の形で出る。
-  await expect(chip).toBeVisible();
-  await expect(chip).toHaveText('● 前回保存版 2');
+  // TICKET-owner-20261115-2141-prune: 変わった行数を常時出す札 (比較の入口) は外した
+  // (前回保存版と比べるのは「この図の履歴」の比較)。普通の増減では札は出ない。
+  await expect(chip).toBeHidden();
 
   // 事故の形: 中身が雛形に戻ってしまった (77 行 → 4 行と同じ向き)。
   await S.typeDsl(page, TEMPLATE_CLASS);
   await page.waitForTimeout(400);
-  // 到達条件その2: 保存を押す前に、消える側だと分かる印が出る。
+  // 到達条件その2: 保存を押す前に、消える側だと分かる印が出る (図を失わないための守りなので、この形のときだけ出す)。
   await expect(chip).toHaveAttribute('data-livediff', 'shrink');
+  await expect(chip).toBeVisible();
   // 警告は文字ではなく点の色で出す (文字色・形は他の札と同じ)。
   await expect(chip).toHaveAttribute('data-dot', 'bad');
   await expect(chip).toHaveAttribute('title', /いま保存すると .* 行に減ります/);
 
   // 到達条件その3: 押すと前回保存版と現在が並び、消える行が名指しされる (1 操作)。
-  // BLK-owner-20260923-1307-prune: 並べる画面は ⇔ 並べて見る の ± 差分タブ 1 つに寄せた。
-  // 札はその画面を開く入口で、開いた先で見えるもの (警告・消える行・戻す) は変わらない。
+  // BLK-owner-20260923-1307-prune: 並べる画面は参照ペインの ± 差分タブ 1 つに寄せた。
+  // 警告の札はその画面を開く入口で、開いた先で見えるもの (警告・消える行・戻す) は変わらない。
   await chip.click();
   const panel = page.locator('#compare-pane');
   await expect(panel).toBeVisible();
@@ -287,77 +288,3 @@ const BA_V2 = BA_V1.replace('@enduml', 'Irq_Ctrl -> Timer_Driver : ack()\n@endum
 // 改名だけ (同じ語の一斉付け替え)。
 const BA_REN = BA_V1.split('Timer_Driver').join('TimerDriver');
 
-async function openPeekAt(page, name) {
-  await page.locator('#btn-tab-peek').click();
-  await page.waitForSelector('#peek-modal');
-  await page.waitForSelector('#peek-files .peek-file[data-file-name="' + name + '"]');
-  await page.locator('#peek-files .peek-file[data-file-name="' + name + '"]').click();
-  await page.waitForSelector('#peek-ba-verdict');
-}
-
-test.describe('reviewer 手順 5〜6: primary の前回保存版と今回保存版を 1 画面で並べる', () => {
-  test.beforeEach(async ({ page }) => {
-    await S.bootWithSaveDir(page, BA_MINE);
-    await S.clearDir(page, BA_MINE);
-    await S.clearDir(page, BA_PRIMARY);
-    await S.putDoc(page, BA_MINE, 'reviewer_memo', BA_V1);
-  });
-
-  test('無変化の回は、図を 1 枚も開かずに「読む図はありません」で終わる', async ({ page }) => {
-    // 行末の空白だけが違う保存 = 控えは取られるが、描かれる内容は変わっていない。
-    // reviewer が手順 5 で最も多く出会う「読まなくてよい差分」がこの形。
-    await S.putDoc(page, BA_PRIMARY, 'timer_sequence', BA_V1);
-    await S.putDoc(page, BA_PRIMARY, 'timer_sequence', BA_V1 + '   ');
-    await page.reload();
-    await page.waitForSelector('#btn-tab-peek');
-    await openPeekAt(page, 'timer_sequence');
-
-    // 到達条件その1: フォルダ全体の結論が、図を開く前に 1 行で出る。
-    await expect(page.locator('#peek-ba-summary')).toContainText('読む図はありません');
-    await expect(page.locator('#peek-ba-summary')).toHaveAttribute('data-ba-toread', '0');
-    // 到達条件その2: 1 図の判定も「差分なし」と言い切る (控えを複製して diff を打たない)。
-    await expect(page.locator('#peek-ba-verdict')).toHaveAttribute('data-ba-verdict', 'same');
-    await expect(page.locator('#peek-ba-verdict')).toContainText('読み直す必要はありません');
-  });
-
-  test('内容が変わった図は、前後のソースと SVG が並んで出る', async ({ page }) => {
-    await S.putDoc(page, BA_PRIMARY, 'timer_sequence', BA_V1);
-    await S.putDoc(page, BA_PRIMARY, 'timer_sequence', BA_V2);
-    await page.reload();
-    await page.waitForSelector('#btn-tab-peek');
-    await openPeekAt(page, 'timer_sequence');
-
-    await expect(page.locator('#peek-ba-verdict')).toHaveAttribute('data-ba-verdict', 'content');
-    await expect(page.locator('#peek-ba-verdict')).toContainText('中身を読んでください');
-    await expect(page.locator('#peek-ba-summary')).toHaveAttribute('data-ba-toread', '1');
-
-    // 到達条件その3: 押せば前後のソースが左右に並ぶ (全文。代表行に切り詰めない)。
-    await page.locator('#peek-ba-toggle').click();
-    await page.waitForSelector('#peek-ba-body');
-    await expect(page.locator('#peek-ba-prev')).toContainText('前回保存版');
-    await expect(page.locator('#peek-ba-prev')).toContainText('enable()');
-    await expect(page.locator('#peek-ba-now')).toContainText('ack()');
-    // 増えた行は今回側だけに印が付く。
-    await expect(page.locator('#peek-ba-now .ba-add')).toHaveCount(1);
-    await expect(page.locator('#peek-ba-prev .ba-add')).toHaveCount(0);
-
-    // 到達条件その4: 手順 6 の材料 (前後の SVG) が同じ画面に並ぶ。
-    await expect(page.locator('#peek-ba-svg-note')).toContainText('描き直して並べます');
-    await page.waitForSelector('#peek-ba-svg-prev svg', { timeout: 60000 });
-    await page.waitForSelector('#peek-ba-svg-now svg', { timeout: 60000 });
-  });
-
-  test('改名だけの差分は、組を名指しして「改名だけ」と言う', async ({ page }) => {
-    await S.putDoc(page, BA_PRIMARY, 'timer_sequence', BA_V1);
-    await S.putDoc(page, BA_PRIMARY, 'timer_sequence', BA_REN);
-    await page.reload();
-    await page.waitForSelector('#btn-tab-peek');
-    await openPeekAt(page, 'timer_sequence');
-
-    await expect(page.locator('#peek-ba-verdict')).toHaveAttribute('data-ba-verdict', 'rename');
-    await expect(page.locator('#peek-ba-verdict')).toContainText('Timer_Driver → TimerDriver');
-    // 改名でも描画の幅は動くので、手順 6 は省かない。
-    await page.locator('#peek-ba-toggle').click();
-    await expect(page.locator('#peek-ba-svg-note')).toContainText('描き直して並べます');
-  });
-});
