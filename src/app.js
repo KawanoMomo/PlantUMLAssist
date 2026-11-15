@@ -5117,8 +5117,10 @@ function promptRenameDoc(docId, message, suggest) {
   var isActive = doc.id === WS.getActiveId();
   if (renamed && renamed.name && renamed.name !== before && !doc.fresh) {
     var body = isActive ? mmdText : String(renamed.dsl == null ? '' : renamed.dsl);
+    // 付け替えは前の自動保存を書き切ってから終わるので、その間に押した Ctrl+S の
+    // 「…に保存しました」より後に届く。上書きすると保存したことが下端から消えるので後ろに足す。
     _sweepRenamedFile(before, renamed.name, body).then(function(text) {
-      if (text) setSaveStatus(text);
+      if (text) appendSaveStatus(text);
     });
   }
   renderTabs();
@@ -29895,7 +29897,8 @@ function _dsRenameActive(next) {
         : text,
       canRestore: offer, from: from, dsl: offer ? restoreDsl : '',
     };
-    setSaveStatus(text);
+    // 付け替えの間に押した保存の「…に保存しました」を消さず、後ろに足す。
+    appendSaveStatus(text);
     renderDiagramSettings(true);
   });
   return name;
