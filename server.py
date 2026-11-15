@@ -740,8 +740,6 @@ API_INDEX = {
          'request': '?dir=&type='},
         {'endpoint': 'POST /autosave-svg', 'summary': '書き出した svg を保存する (印を刻む)',
          'request': "{type, dir, svg}"},
-        {'endpoint': 'POST /autosave-image', 'summary': '資料化した画像 (png / svg) を保存フォルダに置き、書けた大きさを返す',
-         'request': "{name, dir, image: {ext, base64}}"},
         {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
         {'endpoint': 'GET /git-status', 'summary': '保存先が Git 作業木ならブランチ・ahead/behind・変更 (M/A/D)。読むだけで通信しない',
@@ -769,14 +767,8 @@ API_INDEX = {
         {'endpoint': 'GET /rename-pairs', 'summary': 'そのフォルダで打たれた置換の組', 'request': '?dir='},
         {'endpoint': 'POST /rename-pairs', 'summary': '置換の組を 1 つ覚える',
          'request': "{dir, from, to, hits, applied}"},
-        {'endpoint': 'GET /doc-sets', 'summary': 'そのフォルダに登録した資料セット', 'request': '?dir='},
-        {'endpoint': 'POST /doc-sets', 'summary': '資料セットを 1 つ登録する (同じ名前は置き換え)',
-         'request': "{dir, name, docs, items}"},
-        {'endpoint': 'DELETE /doc-sets', 'summary': '資料セットを 1 つ消す', 'request': '?dir=&name='},
         {'endpoint': 'POST /file-roles', 'summary': '保存フォルダの _roles.json を置き換える',
          'request': "{dir, roles}"},
-        {'endpoint': 'POST /export-zip', 'summary': '書き出した zip を保存フォルダに置き、書けたバイト数を返す',
-         'request': "{dir, name, base64}"},
         {'endpoint': 'POST /file-op', 'summary': 'FILES ツリーの右クリック: 図の名前変更 / 複製 / 別フォルダへ移動 / 場所を開く'},
         {'endpoint': 'GET /prefs', 'summary': 'この機械に保存した設定'},
         {'endpoint': 'GET /data-root', 'summary': '設定と既定の保存先の置き場所 {dataRoot, sandbox} (sandbox は PUA_DATA_ROOT で起こしたテスト用)'},
@@ -1447,9 +1439,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/rename-pairs':
             with _fs_lock:
                 return self._handle_rename_pairs_get()
-        if self.path.split('?')[0] == '/doc-sets':
-            with _fs_lock:
-                return self._handle_doc_sets_get()
         if self.path.startswith('/autosave'):
             with _fs_lock:
                 return self._handle_autosave_get()
@@ -1514,18 +1503,12 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/autosave-svg':
             with _fs_lock:
                 return self._handle_autosave_svg_post()
-        if self.path == '/autosave-image':
-            with _fs_lock:
-                return self._handle_autosave_image_post()
         if self.path == '/rename-pairs':
             with _fs_lock:
                 return self._handle_rename_pairs_post()
         if self.path == '/peek-settled':
             with _fs_lock:
                 return self._handle_peek_settled_post()
-        if self.path == '/doc-sets':
-            with _fs_lock:
-                return self._handle_doc_sets_post()
         if self.path == '/name-registry':
             with _fs_lock:
                 return self._handle_name_registry_post()
@@ -1535,9 +1518,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
-        if self.path == '/export-zip':
-            with _fs_lock:
-                return self._handle_export_zip_post()
         if self.path == '/verify-svg':
             with _fs_lock:
                 return self._handle_verify_svg_post()
@@ -2566,72 +2546,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json(200, {'dir': str(save_dir), 'pairs': pairs})
 
-    # --- 資料セット (BLK-primary-20260914-2006-wish) --------------------------
-    #
-    # 「全図を SVG で保存 (zip)」の対象は開いているタブだけで、保存フォルダに
-    # 25 枚あってもタブが 1 枚なら 1 枚しか入らなかった。資料に入れる図の組は
-    # タブの状態ではなく利用者の決めごとなので、名前を付けてフォルダ側に置く。
-    # 図と同じフォルダの持ち物なので、ブラウザやプロファイルが変わっても残る。
-    SETS_DIRNAME = '_sets'
-    SETS_MAX = 50
-
-    def _sets_path(self, save_dir):
-        return save_dir / self.SETS_DIRNAME / 'sets.json'
-
-    def _read_doc_sets(self, save_dir):
-        try:
-            data = json.loads(self._sets_path(save_dir).read_text(encoding='utf-8'))
-        except (ValueError, OSError):
-            return []
-        if not isinstance(data, dict):
-            return []
-        sets = data.get('sets')
-        if not isinstance(sets, list):
-            return []
-        out = []
-        for s in sets:
-            if not isinstance(s, dict):
-                continue
-            name = s.get('name')
-            docs = s.get('docs')
-            if not isinstance(name, str) or not name or not isinstance(docs, list):
-                continue
-            out.append({'name': name,
-                        'docs': [d for d in docs if isinstance(d, str) and d],
-                        'items': self._sanitize_set_items(s.get('items')),
-                        'at': s.get('at') if isinstance(s.get('at'), str) else ''})
-        return out
-
-    # BLK-primary-20260916-0100-wish: 資料に貼るときの体裁 (見出し・1 行説明) は
-    # 図の中身ではなく資料セットの持ち物なので、DSL ではなくここに置く。
-    # 見出しと説明は資料の 1 行に載る文なので、改行は畳んで 1 行に保つ。
-    @staticmethod
-    def _sanitize_set_items(items):
-        out = []
-        seen = set()
-        if not isinstance(items, list):
-            return out
-        for it in items:
-            if not isinstance(it, dict):
-                continue
-            name = it.get('name')
-            if not isinstance(name, str) or not name.strip() or name in seen:
-                continue
-            seen.add(name)
-
-            def _line(v):
-                return ' '.join(str(v).split()) if isinstance(v, str) else ''
-
-            out.append({'name': name,
-                        'heading': _line(it.get('heading')),
-                        'note': _line(it.get('note'))})
-        return out
-
-    def _write_doc_sets(self, save_dir, sets):
-        path = self._sets_path(save_dir)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        _atomic_write_text(path, json.dumps({'sets': sets}, ensure_ascii=False, indent=1))
-
     # BLK-reviewer-20260915-0506-wish: 表記揺れの「揃える先」を 3 人が同じ 1 冊で
     # 見るための口。保存フォルダはペルソナごとに別なので、共有できる場所は親
     # (persona-data) だけ。ここが唯一の置き場所で、親より上は辿らない。
@@ -2809,77 +2723,6 @@ class Handler(BaseHTTPRequestHandler):
         out.sort(key=lambda x: x['canonical'])
         return out
 
-    def _handle_doc_sets_get(self):
-        """GET /doc-sets?dir= — そのフォルダに登録した資料セット."""
-        parsed = urllib.parse.urlparse(self.path)
-        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
-        save_dir = self._autosave_resolve_dir(params.get('dir'))
-        self._send_json(200, {'dir': str(save_dir), 'sets': self._read_doc_sets(save_dir)})
-
-    def _handle_doc_sets_post(self):
-        """POST /doc-sets {dir, name, docs} — 1 つ登録する (同じ名前は置き換え)."""
-        length = int(self.headers.get('Content-Length', 0))
-        try:
-            data = json.loads(self.rfile.read(length).decode('utf-8'))
-        except ValueError:
-            self._send_json(400, {'error': 'invalid JSON'})
-            return
-        if not isinstance(data, dict):
-            self._send_json(400, {'error': 'body must be an object'})
-            return
-        name = data.get('name')
-        docs = data.get('docs')
-        if not isinstance(name, str) or not name.strip():
-            self._send_json(400, {'error': 'name must be a non-empty string'})
-            return
-        if not isinstance(docs, list):
-            self._send_json(400, {'error': 'docs must be a list'})
-            return
-        # 図が 1 枚も無いセットは作らない。選べてしまうと、また 0 枚の zip が出る。
-        names = []
-        for d in docs:
-            if isinstance(d, str) and d and d not in names:
-                names.append(d)
-        if not names:
-            self._send_json(400, {'error': 'docs must not be empty'})
-            return
-        name = name.strip()
-        save_dir = self._autosave_resolve_dir(data.get('dir'))
-        prev = [s for s in self._read_doc_sets(save_dir) if s.get('name') == name]
-        # items を渡さない登録 (図の組だけ入れ替える) では、前に書いた体裁を残す。
-        # 図を足し直しただけで見出しと説明が消えると、貼る前の手戻りが戻ってくる。
-        raw_items = data.get('items') if 'items' in data else (prev[0].get('items') if prev else [])
-        entry = {'name': name, 'docs': names,
-                 'items': [it for it in self._sanitize_set_items(raw_items)
-                           if it['name'] in names],
-                 'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
-        sets = [s for s in self._read_doc_sets(save_dir) if s.get('name') != name]
-        sets.insert(0, entry)
-        sets = sets[:self.SETS_MAX]
-        try:
-            self._write_doc_sets(save_dir, sets)
-        except OSError as e:
-            self._send_json(500, {'error': f'write failed: {e}'})
-            return
-        self._send_json(200, {'dir': str(save_dir), 'sets': sets})
-
-    def _handle_doc_sets_delete(self):
-        """DELETE /doc-sets?dir=&name= — 1 つ消す."""
-        parsed = urllib.parse.urlparse(self.path)
-        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
-        name = (params.get('name') or '').strip()
-        if not name:
-            self._send_json(400, {'error': 'name is required'})
-            return
-        save_dir = self._autosave_resolve_dir(params.get('dir'))
-        sets = [s for s in self._read_doc_sets(save_dir) if s.get('name') != name]
-        try:
-            self._write_doc_sets(save_dir, sets)
-        except OSError as e:
-            self._send_json(500, {'error': f'write failed: {e}'})
-            return
-        self._send_json(200, {'dir': str(save_dir), 'sets': sets})
-
     def _autosave_read_meta(self, save_dir):
         p = self._autosave_meta_path(save_dir)
         if not p.exists():
@@ -3025,59 +2868,6 @@ class Handler(BaseHTTPRequestHandler):
         stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
         return base + '-' + stamp, prev_kind, new_kind
 
-    def _handle_export_zip_post(self):
-        """書き出した zip を保存フォルダに置き、置けたバイト数を答える。
-
-        BLK-primary-20260918-0249: zip の受け渡しがブラウザの a[download] だけだと、
-        どこへ落ちたか (落ちたのか) をアプリ側が知る術が無く、届いていなくても
-        「保存しました」と出てしまう。ここで実際に書いた結果を返し、画面は
-        この答えを見てから成功を名乗る。
-        """
-        length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(length).decode('utf-8')
-        try:
-            data = json.loads(body)
-        except ValueError:
-            self._send_json(400, {'error': 'invalid JSON'})
-            return
-        name = data.get('name')
-        if not isinstance(name, str) or not name.lower().endswith('.zip'):
-            self._send_json(400, {'error': 'name must end with .zip'})
-            return
-        # パス区切り・上位への脱出・Windows の禁止文字を弾く (保存フォルダの外に書かない)。
-        if not self._autosave_validate_type(name[:-4]):
-            self._send_json(400, {'error': 'invalid name — パス区切り・制御文字・Windows の禁止文字は使えません'})
-            return
-        b64 = data.get('base64')
-        if not isinstance(b64, str) or b64 == '':
-            self._send_json(400, {'error': 'base64 must be a non-empty string'})
-            return
-        try:
-            raw = base64.b64decode(b64, validate=True)
-        except (binascii.Error, ValueError):
-            self._send_json(400, {'error': 'base64 decode failed'})
-            return
-        # zip の先頭 (PK\x03\x04) が無いものは受け取らない。空の zip を「届いた」と言わない。
-        if len(raw) < 4 or raw[:2] != b'PK':
-            self._send_json(400, {'error': 'not a zip'})
-            return
-        save_dir = self._autosave_resolve_dir(data.get('dir'))
-        try:
-            save_dir.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            self._send_json(500, {'error': f'mkdir failed: {e}'})
-            return
-        target = save_dir / name
-        try:
-            _atomic_write_bytes(target, raw)
-            written = target.stat().st_size
-        except OSError as e:
-            self._send_json(500, {'error': f'write failed: {e}'})
-            return
-        if written != len(raw):
-            self._send_json(500, {'error': 'short write'})
-            return
-        self._send_json(200, {'ok': True, 'path': str(target), 'bytes': written})
 
     def _handle_autosave_svg_post(self):
         """保存フォルダの {type}.svg だけを書き直す。
@@ -3119,65 +2909,6 @@ class Handler(BaseHTTPRequestHandler):
             mtime = None
         self._send_json(200, {'ok': True, 'path': str(svg_path), 'svgMtime': mtime})
 
-    # BLK-junior-20260928-2255: 資料化した画像 (PNG / SVG) を保存フォルダに置く。
-    # これまで画像はブラウザのダウンロードに渡すだけで、保存フォルダには puml しか入らなかった。
-    IMAGE_EXTS = ('png', 'svg')
-
-    @classmethod
-    def _decode_image(cls, image):
-        """{ext, base64} を (ext, bytes) にする。形が違えば (None, 理由)。"""
-        if not isinstance(image, dict):
-            return None, 'image must be an object'
-        ext = str(image.get('ext') or '').lower().lstrip('.')
-        if ext not in cls.IMAGE_EXTS:
-            return None, 'ext must be png or svg'
-        b64 = image.get('base64')
-        if not isinstance(b64, str) or b64 == '':
-            return None, 'base64 must be a non-empty string'
-        try:
-            data = base64.b64decode(b64, validate=True)
-        except (binascii.Error, ValueError):
-            return None, 'base64 を読めません'
-        if not data:
-            return None, '画像が空です'
-        return ext, data
-
-    def _handle_autosave_image_post(self):
-        """POST /autosave-image {name, dir, image: {ext, base64}} — 保存フォルダに {name}.{ext} を書く。
-
-        書けたら書いた後のファイルの大きさを返す (呼び手は送ったバイト数と突き合わせてから成功を出す)。
-        """
-        length = int(self.headers.get('Content-Length', 0))
-        try:
-            data = json.loads(self.rfile.read(length).decode('utf-8'))
-        except ValueError:
-            self._send_json(400, {'error': 'invalid JSON'})
-            return
-        if not isinstance(data, dict):
-            self._send_json(400, {'error': 'body must be an object'})
-            return
-        name = data.get('name')
-        if not self._autosave_validate_type(name):
-            self._send_json(400, {'error': 'invalid name — パス区切り・制御文字・Windows の禁止文字は使えません'})
-            return
-        ext, blob = self._decode_image(data.get('image'))
-        if ext is None:
-            self._send_json(400, {'error': blob})
-            return
-        save_dir = self._autosave_resolve_dir(data.get('dir'))
-        try:
-            save_dir.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            self._send_json(500, {'error': f'mkdir failed: {e}'})
-            return
-        path = save_dir / (name + '.' + ext)
-        try:
-            _atomic_write_bytes(path, blob)
-            size = path.stat().st_size
-        except OSError as e:
-            self._send_json(500, {'error': f'write failed: {e}'})
-            return
-        self._send_json(200, {'ok': True, 'path': str(path), 'size': size})
 
     # BLK-reviewer-20260908-1103: mtime 比較だけでは「svg が今の puml から作られたか」は
     # 分からない (保存し直しただけで中身は追いついている図と、前々回の編集から
@@ -3574,9 +3305,6 @@ class Handler(BaseHTTPRequestHandler):
     # --- autosave DELETE -----------------------------------------------------
 
     def do_DELETE(self):
-        if self.path.split('?')[0] == '/doc-sets':
-            with _fs_lock:
-                return self._handle_doc_sets_delete()
         if self.path.startswith('/autosave'):
             return self._handle_autosave_delete()
         self.send_error(404)

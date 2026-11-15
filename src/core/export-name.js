@@ -11,8 +11,7 @@ window.MA = window.MA || {};
 //
 // .puml 側の save-target.decide は「doc.name があればそれ、無ければ title」
 // という順で既に決めている。書き出しも同じ順に揃えると、.puml と画像は
-// 常に同じ名前で並ぶ。zip の一括書き出し (bulk-export.plan) も doc.name を
-// 使っているので、1 枚と一括で名前が食い違うこともなくなる。
+// 常に同じ名前で並ぶ (zip の一括書き出しは TICKET-owner-20261116-0140-prune で外した)。
 window.MA.exportName = (function() {
 
   function _s(v) { return String(v == null ? '' : v).trim(); }
