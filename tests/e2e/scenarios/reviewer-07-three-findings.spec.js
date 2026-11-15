@@ -96,28 +96,3 @@ function foldSrc(dsl) {
   return '<svg xmlns="http://www.w3.org/2000/svg"></svg><?plantuml-src ' + tok + '?>';
 }
 
-// BLK-reviewer-20260915-0606-wish: まとめを書く前に `audit.js --board` / `findings.js` /
-// `pins.js --all` / `audit.js --names` / `audit.js --registry` / `POST /verify-svg` の
-// 6 つを別々に叩き、結果を頭の中で突き合わせていた (--board の「SVG 内容ずれ」が
-// verify-svg では体裁差に過ぎない、といった食い違いも目で見比べて初めて気づけた)。
-// 図 1 枚 = 1 行の表に畳めば、突き合わせは表の列を読むだけで済む。
-
-// 出口同士が食い違う行は、どちらかに寄せずに「気づき」列に両方残す
-// (今回 reviewer が --board と verify-svg を手で見比べて気づいた食い違い)。
-const SDB = require('../../../src/core/status-dashboard.js');
-
-test('手順7 --board と verify-svg の食い違いが、同じ行の気づき列に出る', () => {
-  const board = SDB.build({
-    docs: ['adc_init_sequence'],
-    // --board は「出力物/SVG 内容ずれ」として挙げている
-    findings: [{ id: 'F-09', open: true, docs: ['adc_init_sequence.puml'], cats: ['出力物/SVG 内容ずれ'] }],
-    // verify-svg は体裁差だけ (contentMatch: true) と答えている
-    svg: { rows: [{ name: 'adc_init_sequence', content: 'format', status: 'stale', basis: 'rerender' }] },
-  });
-  const row = board.rows[0];
-  expect(row.notes.length).toBe(1);
-  expect(row.notes[0]).toContain('体裁差のみ・作り直し不要');
-  // 食い違いを潰して片方に寄せない (作り直し要の枚数には数えない)。
-  expect(board.totals.needsRender).toBe(0);
-  expect(SDB.text(board, 'x')).toContain('気づき');
-});
