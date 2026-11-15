@@ -66,9 +66,10 @@ describe('BLK-human-1203 先輩の枠の記憶', function() {
 
   test('閉じた状態・フォルダ・幅を一緒に覚える', function() {
     const st = store();
-    SP.save({ open: false, dir: './primary', name: 'gpio_state.puml', width: 500, seen: true }, st);
+    // 前の版が覚えていた mode (据え置く / 1 回だけ) は読み捨てる (TICKET-owner-20261115-2141-prune)。
+    SP.save({ open: false, dir: './primary', name: 'gpio_state.puml', width: 500, seen: true, mode: 'once' }, st);
     assert.deepStrictEqual(SP.load(st),
-      { open: false, dir: './primary', name: 'gpio_state.puml', width: 500, seen: true, mode: 'keep' });
+      { open: false, dir: './primary', name: 'gpio_state.puml', width: 500, seen: true });
   });
 
   test('幅は先輩の枠でも同じ下限で丸める', function() {

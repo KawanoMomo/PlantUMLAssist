@@ -107,7 +107,7 @@ html, body {
 #files-panel button.files-sec-head:hover { background: var(--bg-tertiary); }
 #files-panel .files-caret { flex: 0 0 auto; color: var(--text-secondary); font-size: 9px; }
 #files-panel .files-sec-label { flex: 1 1 auto; }
-/* 畳んだままでも件数が読める (比較中 1 / main · M 2 ↑1) */
+/* 畳んだままでも件数が読める (2 / main · M 2 ↑1) */
 #files-panel .files-sec-count { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); white-space: nowrap; }
 #files-panel .files-sec-body { padding: 0 0 4px; }
 /* 見出しの行に入口を並べる節 (読むだけ)。見出しが幅を取り、入口は右端に寄る。 */
@@ -118,8 +118,8 @@ html, body {
 }
 #files-panel .files-sec-headrow button.files-sec-act .files-act-glyph { display: block; }
 #files-panel .files-sec-body[hidden] { display: none; }
-/* design 10a: 読むだけのフォルダの行 (senior 比較中 / release_v1.2)。
-   押すと開閉してそのフォルダの図が並ぶ。右の枠に並べている相手には「比較中」。 */
+/* design 10a: 読むだけのフォルダの行 (senior / release_v1.2)。
+   押すと開閉してそのフォルダの図が並ぶ。図を押すとその 1 枚が右の枠に出る。 */
 #files-panel .files-ro-folder {
   display: flex; align-items: center; gap: 4px; width: 100%;
   background: none; border: 0; padding: 2px 8px 2px 10px;
@@ -128,7 +128,6 @@ html, body {
 }
 #files-panel .files-ro-folder:hover { background: var(--bg-tertiary); }
 #files-panel .files-ro-folder .files-part-label { flex: 1 1 auto; min-width: 0; }
-#files-panel .files-ro-tag { flex: 0 0 auto; font-size: 9px; color: var(--accent); }
 #files-panel .files-ro-body[hidden] { display: none; }
 #files-panel .files-ro-file {
   display: flex; align-items: center; gap: 4px; width: 100%; background: none; border: 0;
@@ -287,10 +286,10 @@ html, body {
 #git-pick-modal .git-pick-tag { display: inline-block; margin-left: 6px; font-size: 9px; line-height: 13px; padding: 0 4px; border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary); vertical-align: 1px; }
 #git-pick-modal .git-pick-stat { flex: 0 0 auto; color: var(--text-secondary); font-size: 10px; }
 #senior-git { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; min-width: 0; padding: 2px 6px; }
-#senior-git[hidden], #senior-mode[hidden], #senior-dir[hidden] { display: none; }
+#senior-git[hidden] { display: none; }
 #senior-git #senior-git-pick { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #senior-git #senior-git-sides { font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
-/* 差分だけ / 並べて比較 の 2 択。#senior-mode (据え置く / 1 回だけ) と同じ形 */
+/* 差分だけ / 全体 の 2 択。押している方だけを地色で示す */
 #senior-git #senior-git-view { display: inline-flex; flex-shrink: 0; }
 #senior-git #senior-git-view button {
   font-size: 11px; padding: 1px 6px; border-radius: 0;
@@ -991,7 +990,7 @@ html, body {
   white-space: nowrap;
   flex-shrink: 0;
 }
-/* design 9a: フォルダ操作 (一覧 / 並べて比較) は枠なしの文字にして、
+/* design 9a: フォルダ操作 (一覧) は枠なしの文字にして、
    枠付きで残すのは右端の「ツール ▾」だけにする。 */
 #tab-bar .tab-tool.tab-tool-plain {
   border-color: transparent;
@@ -1057,11 +1056,6 @@ html, body {
 #folder-panel button:hover { background: var(--bg-secondary); }
 /* 前回見た版からの差 */
 #folder-panel { min-width: 260px; }
-/* 参照タブ列の跡。隣のフォルダを読む入口 (FILES「読むだけ」節) への案内 1 行。 */
-#folder-panel button.folder-ro-hint {
-  display: block; width: 100%; text-align: left; border: none; border-bottom: 1px solid var(--border);
-  background: transparent; color: var(--accent); font-family: inherit; font-size: 11px; padding: 4px 6px;
-}
 /* 最近開いた図。同じ図への出戻りは一覧を目で探さず
    上端のこの行から 1 クリックで戻る。履歴が空なら行ごと出ないので、普段の一覧は今までのまま。 */
 #folder-panel .folder-recent-bar {
@@ -4490,9 +4484,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 
 
 /* ── Properties Pane ───────────────────────────────────────────────────────── */
-/* ── 先輩の図の枠 ───────────────────────────
+/* ── 右の枠 (読むだけ) ───────────────────────────
    モーダルではなく据え置きの 2 枠目。左で自分の図を編集したまま、右に
-   先輩の同じ図が読み専用で残る。 */
+   読むだけのフォルダの図 1 枚か、この図の履歴の版が残る。 */
 #senior-pane {
   display: flex;
   flex-direction: column;
@@ -4522,75 +4516,21 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   display: flex; align-items: center; gap: 6px;
   padding: 6px 8px; border-bottom: 1px solid var(--border);
   font-size: 12px; color: var(--text-primary);
-  /* 枠が狭いときは相手選びを次の行へ回し、
-     見出し「比較相手」を押し縮めない (「比較相 / 手」と 2 行に折れていた)。 */
+  /* 枠が狭いときは Git の見出しを次の行へ回し、見出しを押し縮めない。 */
   flex-wrap: wrap;
   position: relative; padding-right: 30px;
 }
 #senior-head > strong { flex-shrink: 0; white-space: nowrap; }
 /* 閉じる × は折り返しても枠の右上に留める (折り返した行の頭に 1 つだけ落ちない)。 */
 #senior-head > #senior-close { position: absolute; top: 6px; right: 8px; }
-#senior-head select { flex: 1 1 120px; min-width: 120px; font-size: 11px; }  /* 折り返すときは潰れず次の行へ */
-/* design 9a: 据え置く / 1 回だけ。押している方だけを地色で示す 2 択 */
-#senior-mode { display: inline-flex; flex-shrink: 0; }
-/* 相手を選ぶ列。据え置きの切替と同じ見た目で、
-   枠の中で 1 つの組として読めるようにする。 */
-#senior-target { display: inline-flex; flex-shrink: 0; }
-#compare-target-row { display: flex; align-items: center; gap: 6px; padding: 4px 8px 0 8px; font-size: 11px; }
-#compare-target { display: inline-flex; flex-shrink: 0; }
-#compare-target button {
-  font-size: 11px; padding: 1px 6px; border-radius: 0;
-  border: 1px solid var(--border); background: transparent;
-  color: var(--text-secondary); cursor: pointer; white-space: nowrap;
-}
-#compare-target button + button { border-left: none; }
-#compare-target button[aria-pressed="true"] {
-  background: var(--bg-primary); color: var(--text-primary);
-}
-#senior-target button {
-  font-size: 11px; padding: 1px 6px; border-radius: 0;
-  border: 1px solid var(--border); background: transparent;
-  color: var(--text-secondary); cursor: pointer; white-space: nowrap;
-}
-#senior-target button + button { border-left: none; }
-#senior-target button[aria-pressed="true"] {
-  background: var(--bg-primary); color: var(--text-primary);
-}
-#senior-mode button {
-  font-size: 11px; padding: 1px 6px; border-radius: 0;
-  border: 1px solid var(--border); background: transparent;
-  color: var(--text-secondary); cursor: pointer;
-}
-#senior-mode button + button { border-left: none; }
-#senior-mode button[aria-pressed="true"] {
-  background: var(--bg-primary); color: var(--text-primary);
-}
 #senior-head button { border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
 #senior-notice { padding: 4px 8px; font-size: 11px; color: var(--text-secondary); }
-#senior-slice { padding: 0 8px 4px 8px; display: flex; align-items: center; gap: 4px; font-size: 11px; }
-/* display 指定は hidden 属性より強い。共通図の抜き出し以外 (見本・1:1 の相手) では
-   効かない欄なので、隠すと言った時は隠す (押せない欄が残ると何の欄か読めない)。 */
-#senior-slice[hidden] { display: none; }
-#senior-slice label { color: var(--text-secondary); }
-#senior-slice input { flex: 1; min-width: 0; font-size: 11px; padding: 1px 4px; }
-#senior-slice button {
-  font-size: 11px; padding: 1px 8px; border-radius: 10px;
-  border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer;
-}
-#senior-slice button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
-#senior-candidates { padding: 0 8px 4px 8px; display: flex; flex-wrap: wrap; gap: 4px; }
-#senior-candidates .senior-cand {
-  font-size: 11px; padding: 1px 8px; border-radius: 10px;
-  border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer;
-}
-#senior-candidates .senior-cand.selected { border-color: var(--accent); color: var(--accent); }
 #senior-view { flex: 1; overflow: auto; padding: 0 8px 8px 8px; }
 #senior-svg svg { max-width: 100%; height: auto; }
 #senior-dsl {
   font-family: var(--font-mono); font-size: 11px; white-space: pre-wrap;
   color: var(--text-secondary); margin: 6px 0 0 0;
 }
-#btn-tab-senior.on { border-color: var(--accent); color: var(--accent); }
 
 #props-pane {
   display: flex;
@@ -5269,8 +5209,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           </div>
           <!-- design 10a: 保存先の下は部品ごとのフォルダ (`SPI 4 / 6`)。
                中身は #folder-panel の一覧をそのまま読んで組むので、数える所は 1 つのまま。
-               6 図種の済/未の表そのものは 部品ビューの職掌
-               なので、ここは束ねて数えるところまでにして、未作成はそこへ渡す。 -->
+               6 図種の済/未の表は持たず、ここは束ねて数えるところまでにする。 -->
           <div id="files-parts"></div>
           <div id="folder-panel"></div>
         </div>
@@ -5281,19 +5220,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
          開くと下端から上へ伸び、伸びすぎたらこの中で流れる。 -->
     <div class="files-foot">
       <section class="files-sec" data-files-section="readonly">
-        <!-- design 10a: 「読むだけ」は既定で畳む。入口の 2 つ (👀 / ⇔) は見出しの行に置き、
-             畳んだままでも押せるようにする (節を開く手数を入口ごとに足さない)。 -->
+        <!-- design 10a: 「読むだけ」は既定で畳む。隣のフォルダを開いて図を押すと、その 1 枚を右の枠に出す。
+             見出しの ⇔ (別のフォルダの図を横に据える入口) は TICKET-owner-20261115-2141-prune で外した。 -->
         <div class="files-sec-headrow">
           <button type="button" class="files-sec-head" id="files-sec-readonly" aria-expanded="false"
                   aria-controls="files-body-readonly"><span class="files-caret" aria-hidden="true">▸</span><span
                   class="files-sec-label">読むだけ</span><span class="files-sec-count" id="files-count-readonly"></span></button>
-          <!-- design 9a: 「先輩」は使う人の立場の名前で、機能の中身を表していない。
-               相手が先輩でも他チームでも過去の自分の版でも動きは同じなので、何をするかで名付ける。 -->
-          <button class="tab-tool tab-tool-plain files-sec-act" id="btn-tab-senior" aria-pressed="false" aria-label="並べて比較"
-                  title="並べて比較: 別の保存フォルダの図を右の枠に並べる。図を切り替えると相手も自動で入れ替わる (読むだけ)">⇔</button>
         </div>
         <div class="files-sec-body" id="files-body-readonly">
-          <div class="files-empty" id="files-ro-hint">見出しの右の目の印で他のフォルダを覗く / ⇔ で右の枠に並べる。どちらも保存先には書き込みません</div>
+          <div class="files-empty" id="files-ro-hint">隣に読めるフォルダがありません。フォルダの図を押すと右の枠に出ます (保存先には書き込みません)</div>
         </div>
       </section>
       <section class="files-sec" data-files-section="git">
@@ -5477,16 +5412,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              文字は「ツール ▾」、置き場所はタブ列の右端 -->
         <button class="tab-tool tab-tool-mini" id="btn-tab-tools-mini" aria-expanded="false" aria-controls="tool-menu"
                 title="畳んでいるツールを分類から選ぶ (Ctrl+K でも同じ操作が引ける)">ツール ▾</button>
-        <!-- 👀 他フォルダ と 並べて比較 は
-             FILES ツリーの「読むだけ」節へ引っ越した (id はそのまま) -->
+        <!-- 隣のフォルダの図は FILES ツリーの「読むだけ」節から開く -->
         <!-- やり直し途中の控えに印を付け、📂 一覧で畳む -->
         <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、保存先の一覧から畳む">一時控え</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
         <button class="tab-tool" id="btn-tab-apply" title="指摘に並んだ複数のクラスへ同じメソッド・属性を 1 回で追加する">⊞ 一括適用</button>
         <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
-        <!-- 「⇔ 並べて見る」は「並べて比較」とタブ列で隣り合い、
-             名前では違いが読めなかった。タブ列から外し、並べて比較の枠の
-             相手「別タブの図」にした (並べる面 compare-pane 自体はそのまま使う)。 -->
+        <!-- 「⇔ 並べて見る」はタブ列から外した (並べる面 compare-pane は「この図の履歴」の比較が使う)。 -->
         <!-- 既存の図をテンプレートに新しい図を作る -->
         <!-- 部品を起こす・テンプレート・骨格から・セット複製の 4 つの入口を 1 つにした。
              何から起こす (部品名だけ / 既存の図 1 枚 / 同じ系統の図ぜんぶ / 組み込みの骨格) は窓の上端で選ぶ。 -->
@@ -5696,12 +5628,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="compare-mode-diff" class="compare-mode" role="tab"
                 aria-selected="false" title="この図の前回保存時点との差分を行で見る">± 差分</button>
       </div>
-      <!-- 並べる面は 1 つ。どちらの枠が出ていても
-           同じ「相手」の列を持ち、押せば相手だけが入れ替わる。 -->
-      <div id="compare-target-row">
-        <strong>比較相手</strong>
-        <span id="compare-target" role="group" aria-label="比較する相手"></span>
-      </div>
       <div id="compare-pane-header">
         <select id="compare-select" title="並べて見る図を選ぶ"></select>
         <span id="compare-status"></span>
@@ -5729,28 +5655,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="compare-diff-view"></div>
     </div>
 
-    <!-- 先輩の図を読み専用の 2 枠目として据え置く。
-         フォルダを 1 回選べば、図を切り替えても相手が自動で入れ替わる。 -->
+    <!-- 右の枠 (読むだけ): 「読むだけ」節で押した図 1 枚か、GIT 節の「この図の履歴」で選んだ版を出す。
+         相手の選び直し・据え置く / 1 回だけ・部品で抜き出すは TICKET-owner-20261115-2141-prune で外した。 -->
     <div class="pane-resizer" id="resizer-senior" hidden
-         role="separator" aria-orientation="vertical" aria-label="比較相手の枠の幅"></div>
+         role="separator" aria-orientation="vertical" aria-label="読むだけの枠の幅"></div>
     <div id="senior-pane" hidden>
       <div id="senior-head">
-        <!-- design 9a: 「先輩」は使う人の立場で、中身を表していない。相手が先輩でも
-             他チームでも過去の版でも動きは同じなので「比較相手」と呼ぶ。 -->
-        <strong>比較相手</strong>
-        <!-- 「2 つを左右に置いて見比べる」入口が 5 つあり、
-             うち 2 つはタブ列で隣り合って名前で区別できなかった。面はこの枠 1 つにし、
-             「誰と並べるか」を枠の中で選ぶ (選択肢と旧称は compare-entry が持つ)。 -->
-        <span id="senior-target" role="group" aria-label="比較する相手"></span>
-        <select id="senior-dir" aria-label="比較相手の保存フォルダ"></select>
-        <!-- design 9a: 「並べて比較」を 1 つの入口にするため、据え置き (図を切り替えると
-             相手も入れ替わる) と 1 回だけ (いま出している 1 枚に留める) を枠の中で切り替える -->
-        <span id="senior-mode" role="group" aria-label="比較相手の追従">
-          <button type="button" id="senior-mode-keep" aria-pressed="true"
-                  title="図を切り替えるたびに、その図に当たる相手へ自動で入れ替えます">据え置く</button>
-          <button type="button" id="senior-mode-once" aria-pressed="false"
-                  title="いま出している 1 枚に留めます (図を切り替えても相手は変わりません)">1 回だけ</button>
-        </span>
+        <strong id="senior-title">読むだけ</strong>
         <button type="button" id="senior-close" title="この枠を閉じる">×</button>
       </div>
       <!-- 相手が Git のコミットのときの見出し。
@@ -5760,11 +5671,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="senior-git-prev" title="1 つ古いコミット">◀</button>
         <button type="button" id="senior-git-next" title="1 つ新しいコミット">▶</button>
         <span id="senior-git-sides"></span>
-        <!-- 「差分だけ / 並べて比較」の 2 択 (据え置く / 1 回だけ と同じ形)。
-             押している方だけ地色。既定は並べて比較 (本文の全部と図) -->
+        <!-- 「差分だけ / 全体」の 2 択。押している方だけ地色。既定は全体 (本文の全部と図) -->
         <span id="senior-git-view" role="group" aria-label="コミットとの見比べ方">
           <button type="button" id="senior-git-diffonly" aria-pressed="false" title="作業中と違う行だけを出す">差分だけ</button>
-          <button type="button" id="senior-git-sbs" aria-pressed="true" title="コミット時点の本文の全部と図を並べる">並べて比較</button>
+          <button type="button" id="senior-git-sbs" aria-pressed="true" title="コミット時点の本文の全部と図を並べる">全体</button>
         </span>
         <!-- 図の上の差分の色の意味を 1 行で言う -->
         <span id="senior-git-legend"></span>
@@ -5772,16 +5682,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <!-- 初めて開いたときだけ「この枠は何か」を 1 行出す -->
       <div id="senior-first-note" hidden></div>
       <div id="senior-notice"></div>
-      <!-- 先輩のクラス図は全ドライバ共通の 1 枚なので
-           部品名で 1:1 に引けない。共通図が相手のときだけ、部品名で抜き出す欄を出す。 -->
-      <div id="senior-slice" hidden>
-        <label for="senior-slice-key">部品</label>
-        <input type="text" id="senior-slice-key" placeholder="Timer"
-               aria-label="共通図から抜き出す部品名">
-        <button type="button" id="senior-slice-mode" aria-pressed="true"
-                title="共通図の全体と、部品の所だけを切り替えます">部品だけ</button>
-      </div>
-      <div id="senior-candidates"></div>
       <div id="senior-view">
         <div id="senior-svg"></div>
         <pre id="senior-dsl"></pre>
@@ -6075,9 +5975,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/peek-settled.js"></script>
 <script src="src/core/side-pane.js"></script>
 <script src="src/core/senior-pane.js"></script>
-<script src="src/core/compare-entry.js"></script>
-<script src="src/core/senior-slice.js"></script>
-<script src="src/core/peer-sample.js"></script>
 <script src="src/core/peek-freshness.js"></script>
 <script src="src/core/audit-scope.js"></script>
 <script src="src/core/blank-doc.js"></script>

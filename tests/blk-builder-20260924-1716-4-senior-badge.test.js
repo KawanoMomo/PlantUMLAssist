@@ -13,7 +13,8 @@ describe('下端の並べて比較の札は無い', function() {
     expect(/#status-senior\b/.test(html)).toBe(false);
   });
 
-  test('入口は FILES「読むだけ」の ⇔ に残っている', function() {
-    expect(html).toContain('id="btn-tab-senior"');
+  test('見出しの ⇔ も無く、入口は FILES「読むだけ」の図の行だけ', function() {
+    expect(html).not.toContain('id="btn-tab-senior"');
+    expect(html).toContain('id="files-sec-readonly"');
   });
 });

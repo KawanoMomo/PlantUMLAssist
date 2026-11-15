@@ -5193,9 +5193,7 @@ function setupLiveDiff() {
   var el = document.getElementById('status-livediff');
   if (!el) return;
   el.addEventListener('click', function() {
-    var CE = window.MA.compareEntry;
-    var want = CE ? CE.targetForBadge('status-livediff') : '';
-    if (want) { openCompareTarget(want); return; }
+    toggleSeniorPane(false);
     toggleCompareView(true, 'diff');
   });
   renderLiveDiffChip();
@@ -5725,7 +5723,7 @@ window.revealReadonlySection = revealReadonlySection;
 // 覗ける行き先の一覧。覗く画面を開かないまま指摘.md を読む画面 (📂一覧) のために、
 // 一度だけ取りに行く。
 // force: 手元の控えがあっても取り直す。保存先の一覧は起動時に開いて (design 10a)
-// ここを先に呼ぶので、後から隣に増えたフォルダを「並べて比較」が知らないままになる。
+// ここを先に呼ぶので、後から隣に増えたフォルダを「読むだけ」節が知らないままになる。
 // 「読むだけ」節の並び = 保存先の隣のフォルダ + 以前「＋参照」で足したフォルダ。
 // 参照タブ列を外しても、利用者が足したフォルダ (localStorage の控え) は並びに残す (隣でなくなっても消えない)。
 function _peekDirsUrl(dir) {
@@ -5746,41 +5744,22 @@ function _ensurePeekDirs(force) {
       return true;
     }).catch(function() { return false; });
 }
-// ── 先輩の図の枠 ────────────────────────────
-// 先輩の変更を自分の図へ取り込む手順は、先輩を見る ↔ 自分を直す の往復になる。
-// 👀 他フォルダはモーダルなので、自分の図を書く間は閉じることになり、
-// 開くまでにツールの折りたたみを通って 5 クリックかかっていた。ここは
-// 先輩のフォルダを 1 回選べば、右の枠に読み専用で据え置く。図を切り替えると
-// その図に当たる先輩の図へ自動で入れ替わる (保存先は動かさない)。
-// どれを相手にするかの判断は senior-pane が持ち、ここは通信と画面だけ。
-var _seniorNames = [];   // 先輩フォルダのファイル名一覧
-var _seniorName = '';    // いま右に出している先輩の図
-var _seniorPick = null;  // 直近の相手選び (候補の表示に使う)
-// 先輩のクラス図は全ドライバ共通の 1 枚で、
-// 部品名では引けない。相手が共通図のときは中身を部品名で絞って出す。
-var _seniorText = '';      // いま出している先輩の図の本文 (絞り直しに使う)
-var _seniorSliceKey = '';  // 抜き出す部品名 (自分の図の名前から起こし、打ち替えられる)
-var _seniorSliceOn = true; // 部品だけ / 共通図の全体
-// 先輩が 1 枚も持たない図種 (アクティビティ図) では
-// 4 段のどれにも当たらず「ありません」で手本が絶える。自分の他部品で作り終えた
-// 同じ図種を見本として代わりに出す。どれを見本にするかは peer-sample が持つ。
-var _peerNames = [];     // 自分の保存フォルダのファイル名一覧 (見本の候補元)
-var _peerDir = '';       // その一覧を取ったフォルダ
+// ── 右の枠 (読むだけ) ────────────────────────────
+// 「読むだけ」節で押した隣のフォルダの図を 1 枚、書かずに右の枠に出す。
+// GIT 節の「この図の履歴」の版も同じ枠に出る (下の _seniorGit)。
+// 図を切り替えても、出している 1 枚は替えない。図を切り替えるたびに相手を名前で選び直す追従・
+// 据え置く / 1 回だけ・共通図からの抜き出し・自分の他部品の見本・相手の選び直しの列は
+// TICKET-owner-20261115-2141-prune で外した (2 枚を比べるのは「この図の履歴」の版との比較だけ)。
+var _seniorName = '';    // いま右に出している図
+var _seniorDir = '';     // その図のフォルダ
 
 function _seniorEls() {
   return {
     pane: document.getElementById('senior-pane'),
-    dir: document.getElementById('senior-dir'),
+    title: document.getElementById('senior-title'),
     notice: document.getElementById('senior-notice'),
-    cands: document.getElementById('senior-candidates'),
     svg: document.getElementById('senior-svg'),
     dsl: document.getElementById('senior-dsl'),
-    slice: document.getElementById('senior-slice'),
-    sliceKey: document.getElementById('senior-slice-key'),
-    sliceMode: document.getElementById('senior-slice-mode'),
-    modeKeep: document.getElementById('senior-mode-keep'),
-    modeOnce: document.getElementById('senior-mode-once'),
-    btn: document.getElementById('btn-tab-senior'),
   };
 }
 
@@ -5799,355 +5778,49 @@ function _seniorSave(over) {
     name: over && over.name !== undefined ? over.name : cur.name,
     width: over && over.width !== undefined ? over.width : cur.width,
     seen: over && over.seen !== undefined ? over.seen : cur.seen,
-    mode: over && over.mode !== undefined ? over.mode : cur.mode,
   });
 }
 
-// design 9a: 「並べて比較」は 1 つの入口で、据え置き (図の切り替えに追従) と
-// 1 回だけ (いま出している 1 枚に留める) を枠の中で切り替える。
-function renderSeniorModeRow() {
-  var el = _seniorEls();
-  var mode = _seniorState().mode;
-  if (el.modeKeep) el.modeKeep.setAttribute('aria-pressed', mode === 'keep' ? 'true' : 'false');
-  if (el.modeOnce) el.modeOnce.setAttribute('aria-pressed', mode === 'once' ? 'true' : 'false');
-}
-
-// 「2 つを左右に置いて見比べる」入口は 5 つあった。
-// 面をこの枠 1 つにし、選ぶのは「誰と並べるか」だけにする。相手の一覧と、
-// その相手に切り替えるとき鳴らす既存の入口は compare-entry が持つ。
-var _compareTarget = '';
-
-function compareTarget() {
-  var CE = window.MA.compareEntry;
-  if (!CE) return '';
-  if (!CE.isTarget(_compareTarget)) _compareTarget = CE.defaultTarget();
-  return _compareTarget;
-}
-
-// 相手の列は、どちらの枠が出ていても同じものが見える (面は 1 つとして読める)。
-function renderCompareTargetRow() {
-  var CE = window.MA.compareEntry;
-  if (!CE) return;
-  var cur = compareTarget();
-  [['senior-target', 'senior'], ['compare-target', 'compare']].forEach(function(pair) {
-    var host = document.getElementById(pair[0]);
-    if (!host) return;
-    host.innerHTML = '';
-    CE.targets().forEach(function(t) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.id = pair[1] + '-target-' + t.id;
-      b.className = 'compare-target-btn';
-      b.textContent = t.label;
-      b.title = t.title;
-      b.setAttribute('data-target', t.id);
-      b.setAttribute('aria-pressed', t.id === cur ? 'true' : 'false');
-      b.addEventListener('click', function() { openCompareTarget(t.id); });
-      host.appendChild(b);
-    });
-  });
-}
-
-// 相手を選んで枠を開く。旧い 5 つの入口 (タブ列・下端の札・Ctrl+K) は
-// すべてここを通るので、どこから押しても同じ 1 つの面が開く。
-function openCompareTarget(id) {
-  var CE = window.MA.compareEntry;
-  if (!CE) return Promise.resolve(false);
-  var route = CE.routeOf(id);
-  if (!route) return Promise.resolve(false);
-  clearSeniorGit();
-  _compareTarget = route.target;
-  renderCompareTargetRow();
-  // 面は 1 つなので、相手を切り替えたらもう一方の枠は閉じる
-  // (左右に 2 枚重なると「どちらが効いているか」が読めなくなる)。
-  if (route.target === 'folder') {
-    toggleCompareView(false);
-    return Promise.resolve(toggleSeniorPane(true));
-  }
-  // 別タブの図・この図の前回保存版は、既存の並べる面が持っている。
-  toggleSeniorPane(false);
-  toggleCompareView(true, route.mode);
-  renderCompareTargetRow();
-  return Promise.resolve(true);
-}
-
-function setSeniorMode(mode) {
-  _seniorSave({ mode: mode === 'once' ? 'once' : 'keep' });
-  renderSeniorModeRow();
-  // 据え置きに戻したら、いま開いている図の相手へその場で追い付かせる
-  // (次に図を切り替えるまで前の相手が残ると、どちらが効いているか読めない)。
-  if (mode !== 'once') syncSeniorCounterpart();
-}
-
-// 選べるフォルダ = 覗ける行き先のうち、自分の保存先でないもの。
-function renderSeniorDirs() {
-  var el = _seniorEls();
-  var PF = window.MA.peekFolder;
-  if (!el.dir || !PF) return;
-  var st = _seniorState();
-  var others = PF.others(_peekDirs);
-  el.dir.innerHTML = '';
-  if (!others.length) {
-    var none = document.createElement('option');
-    none.value = '';
-    none.textContent = '隣に読めるフォルダがありません';
-    el.dir.appendChild(none);
-    return;
-  }
-  if (!st.dir) {
-    var ph = document.createElement('option');
-    ph.value = '';
-    ph.textContent = '先輩のフォルダを選ぶ…';
-    el.dir.appendChild(ph);
-  }
-  others.forEach(function(d) {
-    var o = document.createElement('option');
-    o.value = d.path;
-    o.textContent = PF.label ? PF.label(d) : d.name;
-    if (PF.samePath(d.path, st.dir)) o.selected = true;
-    el.dir.appendChild(o);
-  });
-}
-
-function _seniorLabel() {
-  var PF = window.MA.peekFolder;
-  var st = _seniorState();
-  if (!PF || !st.dir) return '先輩';
-  for (var i = 0; i < _peekDirs.length; i++) {
-    if (PF.samePath(_peekDirs[i].path, st.dir)) return _peekDirs[i].name;
-  }
-  return PF.baseName(st.dir);
-}
-
-// 自分の図がどの部品の図か。共通図から抜き出す語になる。
-function _seniorPartKeys() {
-  var SS = window.MA.seniorSlice;
-  var WS = window.MA.workspace;
-  var active = WS ? WS.getActive() : null;
-  if (!SS || !active) return [];
-  return SS.partKeysOf(active.name);
-}
-
-// 見本の候補元 = 自分の保存フォルダ。保存先が変わったときだけ取り直す
-// (図を切り替えるたびに読みに行くと、図の切り替えがフォルダ読みを待つことになる)。
-function _peerEnsureNames() {
-  var WS = window.MA.workspace;
-  var dir = _wsFileDir();
-  if (!WS || !dir || dir === _peerDir) return;
-  _peerDir = dir;
-  _peerNames = [];
-  WS.listFolder(dir).then(function(info) {
-    if (_peerDir !== dir) return;
-    _peerNames = ((info && info.entries) || [])
-      .filter(function(e) { return e && e.name; })
-      .map(function(e) { return e.name; });
-    // 取れた時点で描き直す (それまでは見本なしの表示で動く)。
-    syncSeniorPane();
-  }).catch(function() { /* 読めなくても先輩の枠はそのまま動く */ });
-}
-
-// 先輩に相手がいないときだけ、自分の他部品の同図種を見本に差し替える。
-// 先輩が決まっているときは触らない (見本は手本が無いときの代役)。
-function _withPeerSample(pick) {
-  var PS = window.MA.peerSample;
-  var WS = window.MA.workspace;
-  _peerEnsureNames();
-  if (!PS || !WS || (pick && pick.name)) return pick;
-  // 相手にその図種はあるが、この部品の図が無い (共通図も無い)
-  // ときは見本を出さない。自分の見本図が相手の枠に出ると、相手の図と読み違える。
-  // 見本は相手がその図種を 1 枚も持たないときの代役。
-  if (pick && pick.sameKind) return pick;
-  var active = WS.getActive();
-  var s = PS.pickSample({ name: active ? active.name : '', dir: _peerDir },
-    _peerNames, _peerDir);
-  if (s.how !== 'peer-sample') return pick;
-  // 先輩がいない理由も残す (枠の 1 行が「先輩の代わり」だと読めるように)。
-  s.seniorReason = (pick && pick.reason) || '';
-  return s;
-}
-
-function renderSeniorCandidates() {
-  var el = _seniorEls();
-  if (!el.cands) return;
-  el.cands.innerHTML = '';
-  var list = (_seniorPick && _seniorPick.candidates) || [];
-  // 1 枚に決まっているときは並べない (押す物が増えるだけになる)。
-  if (list.length < 2) return;
-  list.forEach(function(name) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'senior-cand' + (name === _seniorName ? ' selected' : '');
-    b.textContent = window.MA.seniorPane.baseOf(name);
-    b.addEventListener('click', function() { showSeniorFile(name); });
-    el.cands.appendChild(b);
-  });
-}
-
-// 右の枠に 1 枚出す。読むだけなので workspace には入れない。
-function showSeniorFile(name) {
+// 右の枠に 1 枚出す。読むだけなので workspace には入れず、そのフォルダにも保存先にも書かない。
+function showSeniorFile(name, dir) {
   var el = _seniorEls();
   var WS = window.MA.workspace;
-  var st = _seniorState();
-  // 見本は自分のフォルダから読む (先輩のフォルダで探すと必ず空振りする)。
-  var dir = (_seniorPick && _seniorPick.how === 'peer-sample' && _seniorPick.dir) || st.dir;
-  if (!WS || !el.dsl || !dir) return Promise.resolve(false);
+  var SP = window.MA.seniorPane;
+  if (!WS || !el.dsl || !dir || !name) return Promise.resolve(false);
   _seniorName = name;
-  _seniorSave({ name: name });
-  renderSeniorCandidates();
+  _seniorDir = dir;
+  _seniorSave({ dir: dir, name: name });
+  if (el.notice) el.notice.textContent = SP ? SP.noticeText(dir, name) : name;
   el.dsl.textContent = '読み込み中…';
   if (el.svg) el.svg.textContent = '';
   return WS.loadFile(name, dir).then(function(text) {
-    if (name !== _seniorName) return false;
+    if (name !== _seniorName || dir !== _seniorDir) return false;
     if (typeof text !== 'string') {
       el.dsl.textContent = '読めませんでした';
       return false;
     }
-    _seniorText = text;
-    return renderSeniorBody();
+    el.dsl.textContent = text;
+    if (!el.svg) return true;
+    return renderDslToSvg(text).then(function(svg) {
+      if (name !== _seniorName || dir !== _seniorDir || !el.svg) return false;
+      el.svg.innerHTML = svg;
+      return true;
+    }).catch(function() {
+      if (el.svg) el.svg.textContent = '図の描画に失敗しました (本文は下に出ています)';
+      return false;
+    });
   }).catch(function() {
     el.dsl.textContent = '読めませんでした';
     return false;
   });
 }
 
-// 枠に出す本文を組み立てて描く。相手が共通図なら、部品名に当たる所だけを抜き出す
-// (共通図をそのまま出すと、自分の部品がどこかを
-// 目で探すことになり「先輩の粒度に合わせる」手順が共通図を読む作業に戻る)。
-function renderSeniorBody() {
-  var el = _seniorEls();
-  var SS = window.MA.seniorSlice;
-  var name = _seniorName;
-  var isCommon = !!(_seniorPick && _seniorPick.how === 'common-slice');
-  var res = null;
-  var shown = _seniorText;
-
-  if (isCommon && SS && _seniorSliceOn && _seniorSliceKey) {
-    // 自分の図の名前から起こした語は `Timer` / `TimerDrv` のように何通りかある。
-    // 当たるまで順に試し、当たった語を欄に出す (打ち替えた語は 1 つだけ試す)。
-    var keys = [_seniorSliceKey];
-    var known = (_seniorPick.keys || []);
-    var at = known.indexOf(_seniorSliceKey);
-    if (at >= 0) keys = known.slice(at);
-    for (var i = 0; i < keys.length; i++) {
-      res = SS.slice(_seniorText, [keys[i]],
-        { title: SS.baseOf(name) + '（' + keys[i] + ' の部分）' });
-      if (res.matched) { _seniorSliceKey = keys[i]; shown = res.dsl; break; }
-    }
-  }
-  renderSeniorSliceRow();
-  if (isCommon && el.notice && SS) {
-    el.notice.textContent = _seniorSliceOn
-      ? SS.sliceNotice(res, name, _seniorSliceKey)
-      : '先輩の共通図 ' + SS.baseOf(name) + ' の全体（読むだけ）';
-  }
-  if (!el.dsl) return Promise.resolve(false);
-  el.dsl.textContent = shown;
-  if (!el.svg) return Promise.resolve(true);
-  return renderDslToSvg(shown).then(function(svg) {
-    if (name !== _seniorName || !el.svg) return false;
-    el.svg.innerHTML = svg;
-    return true;
-  }).catch(function() {
-    if (el.svg) el.svg.textContent = '図の描画に失敗しました (本文は下に出ています)';
-    return false;
-  });
-}
-
-// 部品名の欄は、相手が共通図のときだけ出す (1:1 で引けている図種では要らない)。
-function renderSeniorSliceRow() {
-  var el = _seniorEls();
-  if (!el.slice) return;
-  var isCommon = !!(_seniorPick && _seniorPick.how === 'common-slice');
-  el.slice.hidden = !isCommon;
-  if (!isCommon) return;
-  if (el.sliceKey && document.activeElement !== el.sliceKey) el.sliceKey.value = _seniorSliceKey;
-  if (el.sliceMode) {
-    el.sliceMode.setAttribute('aria-pressed', _seniorSliceOn ? 'true' : 'false');
-    el.sliceMode.textContent = _seniorSliceOn ? '部品だけ' : '全体';
-  }
-}
-
-// 比較の相手が替わったら「読むだけ」節の印を描き直す。
-// 下端の「● 並べて比較」の札は TICKET-owner-20261115-2141-prune で外した。
-function renderSeniorStatus() {
-  try { renderReadonlyTree(); } catch (e) {}
-}
-
-// 枠を閉じていても相手は決めておく (下端に出すのがこの直しの的なので、
-// 開いてからでないと分からない、では入口が 1 クリックにならない)。
-// フォルダをまだ 1 度も決めていないときは何も読まない (行き先一覧をここで
-// 取ると、まだ出来ていないフォルダの並びを掴んだまま覚えることになる)。
-function _seniorPrime() {
-  var SP = window.MA.seniorPane;
-  var WS = window.MA.workspace;
-  var dir = SP ? _seniorState().dir : '';
-  // 先輩のフォルダをまだ決めていなくても、見本は自分のフォルダだけで選べる。
-  if (!SP || !WS || !dir) { _seniorRefreshPick(); return Promise.resolve(false); }
-  if (_seniorNames.length) { _seniorRefreshPick(); return Promise.resolve(true); }
-  return WS.listFolder(dir).then(function(info) {
-    _seniorNames = ((info && info.entries) || [])
-      .filter(function(e) { return e && e.name; })
-      .map(function(e) { return e.name; });
-    _seniorRefreshPick();
-    return true;
-  }).catch(function() { renderSeniorStatus(); return false; });
-}
-
-// 相手を選び直して下端だけ描き直す (枠が閉じているときはここで止まる)。
-function _seniorRefreshPick() {
-  var SP = window.MA.seniorPane;
-  var WS = window.MA.workspace;
-  if (!SP || !WS) return;
-  var active = WS.getActive();
-  _seniorPick = _withPeerSample(SP.pickCounterpart(
-    { name: active ? active.name : '', dir: _wsFileDir() }, _seniorNames, _seniorState().dir,
-    _seniorPartKeys()));
-  renderSeniorStatus();
-}
-
-function syncSeniorCounterpart() {
-  var el = _seniorEls();
-  var SP = window.MA.seniorPane;
-  var WS = window.MA.workspace;
-  var st = _seniorState();
-  if (!el.pane || el.pane.hidden || !SP || !WS) { _seniorRefreshPick(); return; }
-  var active = WS.getActive();
-  var pick = _withPeerSample(SP.pickCounterpart(
-    { name: active ? active.name : '', dir: _wsFileDir() }, _seniorNames, st.dir,
-    _seniorPartKeys()));
-  _seniorPick = pick;
-  // 図を切り替えたら、抜き出す語もその図の部品に付け替える (打ち替えた語は
-  // その図を見ている間だけ効く。次の図に持ち越すと別部品の所を見せてしまう)。
-  _seniorSliceKey = pick.key || '';
-  var PS = window.MA.peerSample;
-  if (el.notice) {
-    el.notice.textContent = (pick.how === 'peer-sample' && PS)
-      ? PS.noticeText(pick, pick.seniorReason)
-      : SP.noticeText(pick, _seniorLabel());
-  }
-  renderSeniorStatus();
-  renderSeniorCandidates();
-  renderSeniorSliceRow();
-  if (!pick.name) {
-    _seniorName = '';
-    _seniorText = '';
-    if (el.dsl) el.dsl.textContent = '';
-    if (el.svg) el.svg.textContent = '';
-    return;
-  }
-  if (pick.name !== _seniorName) showSeniorFile(pick.name);
-  else renderSeniorBody();
-}
-
 // ── FILES「読むだけ」節 (design 10a) ─────────────
-// 隣の保存フォルダを 1 行ずつ出し、右の枠に並べている相手には「比較中」を付ける。
-// 並べる・相手を替えるの実体は並べて比較の枠 (senior-pane) の道をそのまま通る。
+// 隣の保存フォルダを 1 行ずつ出す。図を押すとその 1 枚が右の枠 (senior-pane) に出る。
 function renderReadonlyTree() {
   var FP = window.MA.filesPanel;
   if (!FP || !FP.renderReadonly) return;
-  var st = _seniorState();
-  var open = !(_seniorEls().pane || {}).hidden;
-  FP.renderReadonly(_peekDirs, open && !_seniorGit ? st.dir : '');
+  FP.renderReadonly(_peekDirs);
 }
 
 function refreshReadonlyTree(force) {
@@ -6273,58 +5946,19 @@ function openChangeTarget() {
 window.openChangeTarget = openChangeTarget;
 window.changeSaveTarget = changeSaveTarget;
 
-// 読むだけのフォルダを右の枠の相手にする。name を渡すとその 1 枚を出し、図を切り替えても
-// 入れ替えない (1 回だけ)。name が無ければ今開いている図に当たる相手を追う。
-function compareReadonlyFolder(dir, name) {
-  if (!dir) return Promise.resolve(false);
-  var PF = window.MA.peekFolder;
-  var st = _seniorState();
-  if (_seniorGit || !(PF && PF.samePath(st.dir, dir))) {
-    clearSeniorGit();
-    _seniorSave({ dir: dir });
-    _seniorNames = [];
-    _seniorName = '';
-  }
-  if (!name && _seniorState().mode === 'once') setSeniorMode('keep');
-  return Promise.resolve(openCompareTarget('folder')).then(function() {
-    if (!name) return true;
-    setSeniorMode('once');
-    var el = _seniorEls();
-    if (el.notice) {
-      var folder = String(dir).split(/[\\/]/).filter(Boolean).pop() || dir;
-      el.notice.textContent = folder + ' の ' + name + ' を並べています (読むだけ。図を切り替えてもこの 1 枚のまま)';
-    }
-    return showSeniorFile(name);
-  }).then(function(r) {
-    renderSeniorStatus();
-    return r;
-  });
-}
-window.compareReadonlyFolder = compareReadonlyFolder;
-window.refreshReadonlyTree = refreshReadonlyTree;
-
-function selectSeniorDir(dir) {
-  var el = _seniorEls();
-  var WS = window.MA.workspace;
+// 「読むだけ」節で押した図を右の枠に 1 枚出す (files-panel から)。
+// 図を切り替えてもこの 1 枚のまま。そのフォルダにも保存先にも何も書かない。
+function showReadonlyFile(dir, name) {
+  if (!dir || !name) return Promise.resolve(false);
   clearSeniorGit();
-  _seniorSave({ dir: dir });
-  _seniorNames = [];
-  _seniorName = '';
-  // 自動で選んだときも、選ばれている物が枠の上に出ていないと
-  // 「まだ選んでいない」と読める。決まった時点で並びを描き直す。
-  renderSeniorDirs();
-  if (!dir || !WS) { syncSeniorCounterpart(); return Promise.resolve(false); }
-  if (el.notice) el.notice.textContent = '読み込み中…';
-  return WS.listFolder(dir).then(function(info) {
-    var entries = ((info && info.entries) || []).filter(function(e) { return e && e.name; });
-    _seniorNames = entries.map(function(e) { return e.name; });
-    syncSeniorCounterpart();
-    return true;
-  }).catch(function() {
-    if (el.notice) el.notice.textContent = '先輩のフォルダを読めませんでした';
-    return false;
+  // 右に 2 枚重ねない (どちらが効いているか読めなくなる)。
+  toggleCompareView(false);
+  return Promise.resolve(toggleSeniorPane(true)).then(function() {
+    return showSeniorFile(name, dir);
   });
 }
+window.showReadonlyFile = showReadonlyFile;
+window.refreshReadonlyTree = refreshReadonlyTree;
 
 function toggleSeniorPane(open) {
   var el = _seniorEls();
@@ -6334,31 +5968,15 @@ function toggleSeniorPane(open) {
   applySidePaneWidth('senior-pane', 'resizer-senior',
     window.MA.seniorPane && window.MA.seniorPane.STORE_KEY);
   if (open) showSeniorFirstNote();
-  renderSeniorModeRow();
-  renderCompareTargetRow();
-  if (el.btn) {
-    el.btn.setAttribute('aria-pressed', open ? 'true' : 'false');
-    // 入口は FILES ツリーの見出しの行にあり、その置き場所のクラスも持つので上書きしない。
-    el.btn.classList.toggle('on', !!open);
-  }
   _seniorSave({ open: !!open });
-  renderSeniorStatus();
-  if (!open) { clearSeniorGit(); return Promise.resolve(true); }
+  if (!open) {
+    clearSeniorGit();
+    _seniorName = '';
+    _seniorDir = '';
+    return Promise.resolve(true);
+  }
   if (_seniorGit) return Promise.resolve(renderSeniorGit());
-  return _ensurePeekDirs(true).then(function() {
-    renderSeniorDirs();
-    var st = _seniorState();
-    var PF = window.MA.peekFolder;
-    // 隣が 1 つだけなら選ばせない (この枠の値打ちは「切り替えずに済む」ことなので、
-    // 開いた直後に選択を 1 つ挟むと元の往復に戻る)。
-    if (!st.dir && PF) {
-      var others = PF.others(_peekDirs);
-      if (others.length === 1) return selectSeniorDir(others[0].path);
-    }
-    if (st.dir && !_seniorNames.length) return selectSeniorDir(st.dir);
-    syncSeniorCounterpart();
-    return true;
-  });
+  return Promise.resolve(true);
 }
 
 // 初めて開いたときだけ「この枠は何か」を 1 行出す。読んだら二度と出さない。
@@ -6381,45 +5999,23 @@ function showSeniorFirstNote() {
   _seniorSave({ seen: true });
 }
 
-// 図を切り替えたとき、開いていれば相手も入れ替える (renderTabs から)。
-// 「1 回だけ」に切り替えてある間は入れ替えない (いま出している 1 枚を見続ける)。
+// 図を切り替えたとき (renderTabs から)。読むだけの図は 1 枚のまま替えない。
+// Git の版を出している間だけ、同じ版の「今開いている図」へ入れ替える。
 function syncSeniorPane() {
   var el = _seniorEls();
-  if (!el.pane || el.pane.hidden) { _seniorRefreshPick(); return; }
-  // Git のコミットを相手にしている間は、同じコミットの「今開いている図」へ入れ替える。
-  if (_seniorGit) { if (_seniorGit.name !== _activeDocName()) renderSeniorGit(); return; }
-  if (_seniorState().mode === 'once' && _seniorName) { renderSeniorStatus(); return; }
-  syncSeniorCounterpart();
+  if (!el.pane || el.pane.hidden) return;
+  if (_seniorGit && _seniorGit.name !== _activeDocName()) renderSeniorGit();
 }
 
 function setupSeniorPane() {
   var el = _seniorEls();
-  if (!el.pane || !el.btn || !window.MA.seniorPane) return;
-  el.btn.addEventListener('click', function() { toggleSeniorPane(el.pane.hidden); });
+  if (!el.pane || !window.MA.seniorPane) return;
   var close = document.getElementById('senior-close');
   if (close) close.addEventListener('click', function() { toggleSeniorPane(false); });
-  if (el.dir) el.dir.addEventListener('change', function() { selectSeniorDir(this.value); });
-  // 部品名を打てば、共通図のその所だけが浮かぶ (この直しの的)。
-  if (el.sliceKey) {
-    el.sliceKey.addEventListener('input', function() {
-      _seniorSliceKey = this.value.trim();
-      _seniorSliceOn = true;
-      renderSeniorBody();
-    });
-  }
-  if (el.sliceMode) {
-    el.sliceMode.addEventListener('click', function() {
-      _seniorSliceOn = !_seniorSliceOn;
-      renderSeniorBody();
-    });
-  }
-  if (el.modeKeep) el.modeKeep.addEventListener('click', function() { setSeniorMode('keep'); });
-  if (el.modeOnce) el.modeOnce.addEventListener('click', function() { setSeniorMode('once'); });
-  renderSeniorModeRow();
-  renderCompareTargetRow();
-  // 前回開いたままなら、次に開いたときも開いたままにする (据え置きが値打ちなので)。
-  if (_seniorState().open) toggleSeniorPane(true);
-  else _seniorPrime();
+  // 前回 1 枚を出したまま閉じたなら、次に開いたときも同じ 1 枚を出す。
+  var st = _seniorState();
+  if (st.open && st.dir && st.name) showReadonlyFile(st.dir, st.name);
+  else if (st.open) _seniorSave({ open: false });
 }
 
 // ── Git のコミットを比較相手にする (design 10c) ─────
@@ -6452,14 +6048,12 @@ function _seniorGitCommit() {
   return { hash: _seniorGit.hash, short: _seniorGit.hash.slice(0, 7), message: '' };
 }
 
-// 枠の見出しを Git の相手用に切り替える (フォルダ選びと追従の切替は Git では使わない)。
+// 枠の見出しを Git の相手用に切り替える。
 function _seniorGitHead(on) {
   var g = _seniorGitEls();
   var el = _seniorEls();
   if (g.box) g.box.hidden = !on;
-  if (el.dir) el.dir.hidden = !!on;
-  var mode = document.getElementById('senior-mode');
-  if (mode) mode.hidden = !!on;
+  if (el.title) el.title.textContent = on ? 'この図の履歴' : '読むだけ';
   if (el.pane) el.pane.setAttribute('data-compare', on ? 'git' : 'folder');
 }
 
@@ -6470,7 +6064,9 @@ function clearSeniorGit() {
   var el = _seniorEls();
   if (el.dsl) el.dsl.textContent = '';
   if (el.svg) el.svg.textContent = '';
+  if (el.notice) el.notice.textContent = '';
   _seniorName = '';
+  _seniorDir = '';
   syncGitDiagramDiff();
 }
 
@@ -6619,8 +6215,8 @@ function stepSeniorGit(dir) {
   return renderSeniorGit();
 }
 
-// 見出しの「差分だけ / 並べて比較」。押している方だけ地色
-// (据え置く / 1 回だけ と同じ形)。差分だけ = 作業中と違う行だけ、並べて比較 = 本文の全部と図。
+// 見出しの「差分だけ / 全体」。押している方だけ地色。
+// 差分だけ = 作業中と違う行だけ、全体 = 本文の全部と図。
 function _paintSeniorGitView() {
   var g = _seniorGitEls();
   var on = !!(_seniorGit && _seniorGit.diffOnly);
@@ -6639,7 +6235,7 @@ function setupSeniorGit() {
   var g = _seniorGitEls();
   if (g.prev) g.prev.addEventListener('click', function() { stepSeniorGit(-1); });
   if (g.next) g.next.addEventListener('click', function() { stepSeniorGit(1); });
-  // design 10c: 「差分だけ / 並べて比較」の 2 択。押した方にする (裏返さない)。
+  // design 10c: 「差分だけ / 全体」の 2 択。押した方にする (裏返さない)。
   if (g.diffOnly) g.diffOnly.addEventListener('click', function() { setSeniorGitView(true); });
   if (g.sbs) g.sbs.addEventListener('click', function() { setSeniorGitView(false); });
   // 相手の名前を押すと、相手選びがその場で開く (git-ui が持つ)。
@@ -6657,7 +6253,6 @@ function setupSeniorGit() {
     activeName: _activeDocName,
     fileDir: _wsFileDir,
     workingText: function() { return mmdText; },
-    openFolderCompare: function() { return openCompareTarget('folder'); },
     refreshDiff: function() { if (_seniorGit && _seniorGit.text) renderSeniorGitDsl(); },
     diagramDiff: syncGitDiagramDiff,
     // GIT 節の「この図の履歴」に控え (server の _versions) も混ぜる。
@@ -6707,23 +6302,8 @@ function setupTabs() {
     panel.classList.remove('open');
   }
 
-  // 一覧の頭にあった参照タブ列 (「{保存先}(保存先)」タブ・「＋参照」) は、
-  // FILES ツリーの「読むだけ」節と同じこと (隣のフォルダの図を保存先を動かさずに右の枠に並べる) を
-  // 別の登録簿でしていた。隣のフォルダを読むのは「読むだけ」節 1 か所にし、ここには行き先の案内だけを置く。
-  // 部品 × 図種の 済/未 は 🧩 部品ビュー (読むだけのフォルダの右クリック「このフォルダの図を調べる…」)。
-  function appendReadonlyHint(host) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-ro-hint';
-    b.id = 'folder-ro-hint';
-    b.textContent = '隣のフォルダは FILES の『読むだけ』で開けます';
-    b.title = '一覧を閉じて、FILES ツリーの「読むだけ」節を開きます (保存先は変わりません)';
-    b.addEventListener('click', function() {
-      panel.classList.remove('is-list');
-      revealReadonlySection();
-    });
-    host.appendChild(b);
-  }
+  // 隣のフォルダを読むのは FILES の「読むだけ」節 1 か所。一覧の頭の案内は
+  // TICKET-owner-20261115-2141-prune で外した。
 
   // 一覧に印を付けて、まとめてタブで開く。
   // 印はパネルを開いている間だけ持つ (次に開いたときは白紙から選ぶ)。
@@ -7220,7 +6800,6 @@ function setupTabs() {
       openHead.title = '保存フォルダの外にある .puml を開きます (複数可・ドラッグ&ドロップでも開けます)';
       openHead.addEventListener('click', function() { closePanel(); openFile(); });
       panel.appendChild(openHead);
-      appendReadonlyHint(panel);
       // 保存先の綴りを 1 文字誤っただけでも一覧は
       // 「図がありません」としか言わず、間違いに気づけないまま作業が止まっていた。
       // 実在しない保存先は「無い」と名指しで言い、直す場所まで書く。
@@ -9003,7 +8582,7 @@ function setupTabs() {
   }
 
   // 版を今の図の右に並べる。版は刻印付きの別タブとして
-  // 開き (今の図を過去の中身で塗り潰さない)、今の図に戻ってから並べて比較の参照に据える。
+  // 開き (今の図を過去の中身で塗り潰さない)、今の図に戻ってから参照ペインの相手に据える。
   function compareVersion(name, stamp) {
     var VH = window.MA.versionHistory;
     var WS = window.MA.workspace;
@@ -11491,7 +11070,7 @@ function setupTemplateNew() {
   }
 
   // 「既存の図や雛形から新しい図を起こす」窓は 1 つ。上端で「何から起こす」を選び、
-  // 選んだものに要る欄だけを出す (確定ボタンも見えるのは 1 つ)。前は 3 つのフォームを縦に積み、系統ぜんぶは別の窓 (#fc-modal) だった。
+  // 選んだものに要る欄だけを出す (確定ボタンも見えるのは 1 つ)。前は 3 つのフォームを縦に積み、同じ系統の図の複製は別の窓 (#fc-modal) だった。
   var KINDS = [
     { kind: 'part', label: '部品名だけ（6 図種の下書き）' },
     { kind: 'file', label: '既存の図 1 枚' },
@@ -11537,7 +11116,7 @@ function setupTemplateNew() {
     carrySubject();
   }
 
-  // 前に打った部品名を、選び直した先の欄が空なら入れる。系統ぜんぶの欄は描き直すたびに作り直すので、描いた後にも呼ぶ。
+  // 前に打った部品名を、選び直した先の欄が空なら入れる。同じ系統の図の欄は描き直すたびに作り直すので、描いた後にも呼ぶ。
   function carrySubject() {
     var el = subjectEl(curKind);
     if (!el) return;
@@ -12899,7 +12478,7 @@ function runConsistencyCheck() {
   renderCheckList();
 }
 
-// 対応表・雛形との差分・系統ぜんぶと比べる・相手フォルダの増分の取り込みは
+// 参照ペインの別フォルダとの突き合わせ (名前の組・雛形・系統・増分の取り込み) は
 // TICKET-owner-20261115-2141-prune で外した (2 枚を比べるのは「この図の履歴」の版との比較)。
 function setupCompareView() {
   var checkBtn = document.getElementById('btn-check-run');
@@ -16645,7 +16224,7 @@ function openFamilySet() {
   closeFamilyClone();
 }
 
-// 系統ぜんぶの複製は「既存の図や雛形から新しい図を起こす」窓 (#tpl-modal) の
+// 同じ系統の図の複製は「既存の図や雛形から新しい図を起こす」窓 (#tpl-modal) の
 // 「同じ系統の図ぜんぶ」で出す (別の窓 #fc-modal と入口 ⧉⧉ セット複製 は畳んだ)。中身の描き方はそのまま。
 function closeFamilyClone() {
   var modal = document.getElementById('tpl-modal');

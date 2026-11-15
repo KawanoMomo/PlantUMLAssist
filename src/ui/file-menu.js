@@ -3,13 +3,13 @@ window.MA = window.MA || {};
 
 // file-menu (UI) — FILES ツリーの右クリック・キーボード・ドラッグ (design 10b)。
 //
-// ファイル 1 枚に対する操作 (一時控え・並べて比較・前回保存版・
-// 変遷・名前変更・削除…) がタブ列・ツール ▾・下端の札に散らばっていた。ツリーの
+// ファイル 1 枚に対する操作 (一時控え・変遷・名前変更・削除…) が
+// タブ列・ツール ▾・下端の札に散らばっていた。ツリーの
 // ファイルを右クリックすれば全部そこにある、を作る。中身 (どの操作を並べるか・キーの
 // 読み替え・名前の組み立て) は src/core/file-menu.js、ここは DOM と結線だけ。
 //
-// 操作の実体は app.js の既存の道 (openFromFolderByName / openCompareTarget /
-// toggleCompareView / exportSVG / _draftToggleName / タブのダブルクリック改名) を
+// 操作の実体は app.js の既存の道 (openFromFolderByName /
+// exportSVG / _draftToggleName / タブのダブルクリック改名) を
 // そのまま呼ぶ。同じ操作を 2 通りに実装しない。
 window.MA.fileMenuUi = (function() {
   var ROW_SEL = '.files-sec-head, .files-row, .files-part-head, .files-part-file, .files-ro-folder, .files-ro-file, #folder-panel .folder-item[data-file-name]';
@@ -365,10 +365,6 @@ window.MA.fileMenuUi = (function() {
 
   function runFolder(action, folder) {
     switch (action) {
-      case 'compare':
-        if (folder && folder.dir && typeof window.compareReadonlyFolder === 'function') window.compareReadonlyFolder(folder.dir);
-        else clickId('btn-tab-senior');
-        break;
       case 'new-doc': clickId('btn-tab-new'); break;
       case 'new-part':
         // 「既存の図や雛形から新しい図を起こす」窓を「部品名だけ」で開く。

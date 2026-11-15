@@ -40,13 +40,11 @@ describe('ツールメニューの分類', function() {
     });
   });
 
-  // BLK-junior-20260914-1406-wish: ⇔ 先輩の図 を残す側に足した。開いて終わる道具ではなく
-  // 画面の枠の出し入れで、畳むと据え置き (深い経路を通らない) の値打ちが消えるため。
-  test('タブ列に残すのは 図の出し入れ と 枠の出し入れ だけで、それらは畳まない', function() {
-    expect(tm.keepIds()).toEqual(['btn-tab-new', 'btn-tab-folder', 'btn-open-file', 'btn-tab-senior']);
+  // ⇔ の入口 (btn-tab-senior) は TICKET-owner-20261115-2141-prune で外した。
+  test('タブ列に残すのは 図の出し入れ だけで、それらは畳まない', function() {
+    expect(tm.keepIds()).toEqual(['btn-tab-new', 'btn-tab-folder', 'btn-open-file']);
     expect(tm.isFoldable('btn-tab-new')).toBe(false);
     expect(tm.isFoldable('btn-tab-folder')).toBe(false);
-    expect(tm.isFoldable('btn-tab-senior')).toBe(false);
     expect(tm.isFoldable('btn-tab-diff')).toBe(true);
     // メニューに載っていない未知のボタンは畳まない (画面から消してしまわない)
     expect(tm.isFoldable('btn-tab-unknown')).toBe(false);

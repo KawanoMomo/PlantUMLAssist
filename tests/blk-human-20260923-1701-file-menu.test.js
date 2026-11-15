@@ -68,11 +68,11 @@ describe('フォルダの右クリック (design 10b)', function() {
 
   // BLK-builder-20260924-1749-3 (design 10a): 読むだけのフォルダは「並べて比較」が先頭で、
   // 編集できないので「新しい図 / 6 図種をまとめて作る」は出さない (前は it[4] が「読むだけにする」だった)。
-  test('読むだけのフォルダ: 並べて比較 / 保存先にする / 読むだけにする (押せない)', function() {
+  test('読むだけのフォルダ: 保存先にする / 読むだけにする (押せない)。区切りから始めない', function() {
     var it = FM.folderItems({ kind: 'readonly' });
-    // 覗く窓「このフォルダの図を調べる…」は TICKET-owner-20261115-2141-prune で外した。
-    expect(ids(it)).toEqual(['compare', '-', 'set-target', 'set-readonly']);
-    expect(it[3].disabled).toBe(true);
+    // 比較の行と覗く窓「このフォルダの図を調べる…」は TICKET-owner-20261115-2141-prune で外した。
+    expect(ids(it)).toEqual(['set-target', 'set-readonly']);
+    expect(it[1].disabled).toBe(true);
   });
 });
 
@@ -86,7 +86,7 @@ describe('キーボード', function() {
     // 押せない行は飛ばす (読むだけのフォルダの「読むだけにする」は押せない)。
     var ro = FM.folderItems({ kind: 'readonly' });
     var tgt = ro.map(function(i) { return i.id; }).indexOf('set-target');
-    expect(ro[FM.nextIndex(ro, tgt, 1)].id).toBe('compare');
+    expect(ro[FM.nextIndex(ro, tgt, 1)].id).toBe('set-target');
     // 先頭から ↑ で末尾 (削除) へ回る。
     expect(items[FM.nextIndex(items, first, -1)].id).toBe('delete');
     expect(FM.nextIndex([], 0, 1)).toBe(-1);

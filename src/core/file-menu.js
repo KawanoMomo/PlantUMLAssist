@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // file-menu — FILES ツリーのファイル・フォルダの右クリックに集める操作 (design 10b)。
 //
-// ファイル 1 枚に対する操作が、タブ列 (一時控え・並べて比較)、
+// ファイル 1 枚に対する操作が、タブ列 (一時控え)、
 // ツール ▾ (この図の変遷)、下端の札 (前回保存版) と散らばっていて、「この図に何ができるか」を
 // 入口ごとに探し直していた。10b はファイルの右クリックに全部を集める。
 // フォルダの右クリックは「そこに作る」「そこを保存先 / 読むだけにする」。
@@ -35,11 +35,11 @@ window.MA.fileMenu = (function() {
 
   // フォルダの右クリック。部品のフォルダ (`SPI 4 / 6`) はファイル名の頭で束ねた見出しで
   // 実在のディレクトリではないので、「保存先にする / 読むだけにする」は出さない。
-  // 読むだけのフォルダ (design 10a「右クリックから「並べて比較」できます」「編集はできません」) は
-  // 並べて比較が先頭で、そこに作る 2 つは出さない。
+  // 読むだけのフォルダ (編集はできない) には、そこに作る 2 つは出さない。
+  // 読むだけのフォルダの図は、行を開いて図を押すと右の枠に 1 枚で出る (右クリックの操作は無い)。
+  // フォルダの右クリックの比較の行と覗く窓 (このフォルダの図を調べる…) は
+  // TICKET-owner-20261115-2141-prune で外した。
   var FOLDER_ITEMS = [
-    { id: 'compare', label: '並べて比較', readonlyOnly: true },
-    // 覗く窓 (このフォルダの図を調べる…) は TICKET-owner-20261115-2141-prune で外した。
     { id: 'new-doc', label: '新しい図', writable: true },
     { id: 'new-part', label: '6 図種をまとめて作る', writable: true },
     { sep: true, realOnly: true },
@@ -79,12 +79,14 @@ window.MA.fileMenu = (function() {
   function folderItems(ctx) {
     var kind = _s((ctx || {}).kind) || 'part';
     var real = kind !== 'part';
-    return FOLDER_ITEMS.filter(function(it) {
+    var items = FOLDER_ITEMS.filter(function(it) {
       if (it.targetOnly) return kind === 'target';
-      if (it.readonlyOnly) return kind === 'readonly';
       if (it.writable && kind === 'readonly') return false;
       return real || !it.realOnly;
-    }).map(function(it) {
+    });
+    // 先頭に来た区切りは出さない (読むだけのフォルダは作る 2 つが無く、区切りから始まる)。
+    while (items.length && items[0].sep) items = items.slice(1);
+    return items.map(function(it) {
       var o = _copy(it);
       if (o.id === 'set-target' && kind === 'target') {
         o.disabled = true;

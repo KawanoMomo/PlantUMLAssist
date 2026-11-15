@@ -116,7 +116,7 @@ describe('描き直してもフォーカスを同じ行に戻す (design 10b)', 
     } finally { restore(); }
   });
 
-  test('読むだけのフォルダの図: 比較中が変わって描き直されても同じ図の行にフォーカスがある', function() {
+  test('読むだけのフォルダの図: フォルダの図の数が変わって描き直されても同じ図の行にフォーカスがある', function() {
     var W = boot();
     try {
       var d = W.document;
@@ -124,13 +124,14 @@ describe('描き直してもフォーカスを同じ行に戻す (design 10b)', 
         { name: 'junior', path: 'D:/pd/junior', files: 3, current: true },
         { name: 'senior', path: 'D:/pd/senior', files: 2, current: false },
       ];
-      W.compareReadonlyFolder = function() {};
+      var DIRS2 = [DIRS[0], { name: 'senior', path: 'D:/pd/senior', files: 3, current: false }];
+      W.showReadonlyFile = function() {};
       W.MA.filesPanel.setSec('readonly', true);   // 読むだけの節は既定で畳んである
-      W.MA.filesPanel.renderReadonly(DIRS, '');
+      W.MA.filesPanel.renderReadonly(DIRS);
       d.querySelector('#files-ro-list .files-ro-folder[data-ro-name="senior"]').click();
       var old = d.querySelector('.files-ro-file[data-file-name="spi_state"]');
       old.focus();
-      W.MA.filesPanel.renderReadonly(DIRS, 'D:/pd/senior');
+      W.MA.filesPanel.renderReadonly(DIRS2);
       var now = d.querySelector('.files-ro-file[data-file-name="spi_state"]');
       expect(now).not.toBe(old);
       expect(d.activeElement).toBe(now);

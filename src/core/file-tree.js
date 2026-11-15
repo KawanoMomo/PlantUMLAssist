@@ -275,26 +275,16 @@ window.MA.fileTree = (function() {
     return !!stored;
   }
 
-  // 畳んだままでも読める件数。読むだけは「比較中 N」、GIT は「main · M 2 ↑1」。
-  // total (読むだけのフォルダの数) を渡すと「2 · 比較中 1」(design 10a の `読むだけ 2 比較中 1`)。
-  function readonlyCountLabel(comparing, total) {
-    var n = Number(comparing) || 0;
-    var cmp = n > 0 ? ('比較中 ' + n) : '';
-    if (total === undefined || total === null) return cmp;
+  // 畳んだままでも読める件数。読むだけはフォルダの数、GIT は「main · M 2 ↑1」。
+  // 右の枠に出している相手の札は TICKET-owner-20261115-2141-prune で外した (読むだけの図は 1 枚を見るだけ)。
+  function readonlyCountLabel(total) {
     var t = Number(total) || 0;
-    if (t <= 0) return cmp;
-    return cmp ? (t + ' · ' + cmp) : String(t);
-  }
-
-  function _samePath(a, b) {
-    var f = function(p) { return _s(p).split('\\').join('/').replace(/\/+$/, '').toLowerCase(); };
-    return !!_s(a) && f(a) === f(b);
+    return t > 0 ? String(t) : '';
   }
 
   // design 10a: 「読むだけ」節の行。隣の保存フォルダ (peek-dirs の
-  // 自分以外) を 1 行ずつ。右の枠に並べている相手 (comparingDir) の行には「比較中」。
-  // 並びは名前の順 (毎回同じ所にある)。
-  function readonlyRows(dirs, comparingDir) {
+  // 自分以外) を 1 行ずつ。並びは名前の順 (毎回同じ所にある)。
+  function readonlyRows(dirs) {
     var out = [];
     (dirs || []).forEach(function(d) {
       if (!d || d.current || !_s(d.path)) return;
@@ -302,7 +292,6 @@ window.MA.fileTree = (function() {
         name: _s(d.name) || _s(d.path).split(/[\\/]/).filter(Boolean).pop() || _s(d.path),
         path: _s(d.path),
         files: Number(d.files) || 0,
-        comparing: _samePath(comparingDir, d.path),
       });
     });
     out.sort(function(a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });

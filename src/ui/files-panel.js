@@ -8,8 +8,8 @@ window.MA = window.MA || {};
 // ここはその 4 つを 1 本のツリーに畳んだ後の、節の開閉・絞り込み・件数・
 // 「開いている図」の行を受け持つ。
 //
-// 引っ越してきた入口 (#btn-tab-folder / #top-save-target /
-// #btn-tab-senior) の中身そのものは app.js に残っていて、ここでは触らない。
+// 引っ越してきた入口 (#btn-tab-folder / #top-save-target) の中身そのものは
+// app.js に残っていて、ここでは触らない (⇔ の入口は TICKET-owner-20261115-2141-prune で外した)。
 // 置き場所だけがツリーの中に変わる (呼び出し側と台本が同じ id で同じ操作を指せる)。
 window.MA.filesPanel = (function() {
   var KEY_OPEN = 'pua.files.open';        // パネルそのものの開閉
@@ -233,8 +233,7 @@ window.MA.filesPanel = (function() {
   // ── 保存先の下の「部品ごとのフォルダ」(design 10a) ───────────────────
   // 一覧の実体は #folder-panel が持っているので、束ねるのもそこから読む
   // (同じ図を 2 か所から数えると、片方だけが古くなる)。
-  // 6 図種の済/未の表そのものは 🧩 部品ビューの職掌なので
-  // ここは `SPI 4 / 6` と未作成の件数まで。
+  // 6 図種の済/未の表は持たず、ここは `SPI 4 / 6` と未作成の件数まで。
   var KEY_PART = 'pua.files.part.';
 
   function _folderNames() {
@@ -318,7 +317,7 @@ window.MA.filesPanel = (function() {
 
   // design 10a: 「＋ 未作成 2 図種（UC・ACT）」。
   // 「展開すると、まだ作っていない図種が薄い文字で出て、押すとその場で作れます」。
-  // 前は行を押すと 🧩 部品ビュー (読むだけの他フォルダの比較枠) が開くだけで、作るには
+  // 前は行を押すと読むだけの他フォルダの比較枠が開くだけで、作るには
   // ➕ 部品を起こす で部品名を打ち直していた。略号を押せばその図種を、＋ で未作成をまとめて作る。
   function _missingRow(g) {
     var FT = window.MA.fileTree;
@@ -497,18 +496,18 @@ window.MA.filesPanel = (function() {
   }
 
   // ── 件数 (畳んだままでも読める) ───────────────────────────────────────
-  function setReadonlyCount(comparing, total) {
+  function setReadonlyCount(total) {
     var FT = window.MA.fileTree;
     var c = $('files-count-readonly');
-    if (c && FT) c.textContent = FT.readonlyCountLabel(comparing, total);
+    if (c && FT) c.textContent = FT.readonlyCountLabel(total);
   }
 
   // ── 読むだけのフォルダ (design 10a) ─────────
-  // 「読むだけのフォルダ（先輩・過去の版）は下に分けて置き、右クリックから「並べて比較」できます」
-  // 「右の枠に並べている間は「比較中」と出ます。編集はできません」。
+  // 隣の保存フォルダを書かずに開く骨格。編集はできない。
   // 前は節を開いても説明の 1 行だけで、隣の保存フォルダが 1 行も並ばず、見出しに件数も出なかった。
-  // dirs は /peek-dirs の選択肢 (peek-folder.choices)、comparingDir は右の枠に並べている相手。
-  // 行を押すと開閉し、そのフォルダの図が並ぶ。図を押すとその 1 枚を右の枠に並べる (読むだけ)。
+  // dirs は /peek-dirs の選択肢 (peek-folder.choices)。
+  // 行を押すと開閉し、そのフォルダの図が並ぶ。図を押すとその 1 枚を右の枠に出す (読むだけ)。
+  // 右クリックの比較の行と、右の枠に出している相手の札は TICKET-owner-20261115-2141-prune で外した。
   var KEY_RO_DIR = 'pua.files.ro.';
 
   function _roFill(box, path) {
@@ -541,14 +540,14 @@ window.MA.filesPanel = (function() {
           b.className = 'files-ro-file';
           b.setAttribute('data-ro-dir', path);
           b.setAttribute('data-file-name', f.name);
-          b.title = f.name + ' を右の枠に並べる (読むだけ)';
+          b.title = f.name + ' を右の枠に出す (読むだけ)';
           b.appendChild(_glyphEl(FT && FT.fileKind ? FT.fileKind(f.name, f.kind) : f.kind));
           var nm = document.createElement('span');
           nm.className = 'files-row-name';
           nm.textContent = f.name;
           b.appendChild(nm);
           b.addEventListener('click', function() {
-            if (typeof window.compareReadonlyFolder === 'function') window.compareReadonlyFolder(path, f.name);
+            if (typeof window.showReadonlyFile === 'function') window.showReadonlyFile(path, f.name);
           });
           box.appendChild(b);
         });
@@ -568,12 +567,12 @@ window.MA.filesPanel = (function() {
     });
   }
 
-  function renderReadonly(dirs, comparingDir) {
+  function renderReadonly(dirs) {
     var body = $('files-body-readonly');
     var FT = window.MA.fileTree;
     if (!body || !FT || !FT.readonlyRows) return;
-    var rows = FT.readonlyRows(dirs, comparingDir);
-    setReadonlyCount(rows.filter(function(r) { return r.comparing; }).length, rows.length);
+    var rows = FT.readonlyRows(dirs);
+    setReadonlyCount(rows.length);
     var host = $('files-ro-list');
     if (!host) {
       host = document.createElement('div');
@@ -582,7 +581,7 @@ window.MA.filesPanel = (function() {
     }
     var hint = $('files-ro-hint');
     if (hint) hint.hidden = rows.length > 0;
-    // 並べて比較の枠は図を切り替えるたびに状態を描き直す。行が同じなら作り直さない
+    // 保存先を替えるたびに描き直す。行が同じなら作り直さない
     // (開いているフォルダの中身を毎回読み直さない)。
     var sig = JSON.stringify(rows);
     if (host.getAttribute('data-sig') === sig && host.childNodes.length === rows.length * 2) return;
@@ -597,8 +596,7 @@ window.MA.filesPanel = (function() {
       head.setAttribute('data-ro-dir', r.path);
       head.setAttribute('data-ro-name', r.name);
       head.setAttribute('aria-expanded', open ? 'true' : 'false');
-      if (r.comparing) head.setAttribute('data-comparing', '1');
-      head.title = r.path + ' (読むだけ。右クリックで並べて比較)';
+      head.title = r.path + ' (読むだけ。開いて図を押すと右の枠に出ます)';
       var caret = document.createElement('span');
       caret.className = 'files-caret';
       caret.setAttribute('aria-hidden', 'true');
@@ -608,12 +606,6 @@ window.MA.filesPanel = (function() {
       lab.className = 'files-part-label';
       lab.textContent = r.name;
       head.appendChild(lab);
-      if (r.comparing) {
-        var tag = document.createElement('span');
-        tag.className = 'files-ro-tag';
-        tag.textContent = '比較中';
-        head.appendChild(tag);
-      }
       var cnt = document.createElement('span');
       cnt.className = 'files-sec-count';
       cnt.textContent = String(r.files);

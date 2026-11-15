@@ -4,8 +4,8 @@ window.MA = window.MA || {};
 // git-panel — FILES ツリー下端の GIT 欄と「比較する相手を選ぶ」の判断 (design 10c)。
 //
 // 保存先が Git リポジトリのとき、ブランチ・変更・コミットと
-// 「この図の履歴」をツリーの下端に出し、過去のコミットを並べて比較の相手に選べるようにする。
-// 相手の枠は読むだけのフォルダを比べるときと同じ #senior-pane (操作を覚え直させない)。
+// 「この図の履歴」をツリーの下端に出し、過去のコミットを比較の相手に選べるようにする。
+// 相手の枠は読むだけのフォルダの図を出すときと同じ #senior-pane (操作を覚え直させない)。
 //
 // DOM も通信も触らない。server.py の /git-status・/git-log・/git-refs の返り値を
 // 画面の文字と並びに直すだけ。
@@ -261,11 +261,11 @@ window.MA.gitPanel = (function() {
     return '左: 作業中 右: ' + (c ? _s(c.short || _s(c.hash).slice(0, 7)) : '—');
   }
 
-  // 「比較する相手を選ぶ」のタブ。読むだけのフォルダは今までの相手 (別のフォルダの図)。
+  // 「比較する相手を選ぶ」のタブ。相手はこの図の過去の版だけ
+  // (読むだけのフォルダの図を相手にするタブは TICKET-owner-20261115-2141-prune で外した)。
   var PICK_TABS = [
     { id: 'commits', label: 'コミット' },
     { id: 'refs', label: 'ブランチ / タグ' },
-    { id: 'folder', label: '読むだけのフォルダ' },
   ];
   function pickTabs() { return PICK_TABS.map(function(t) { return { id: t.id, label: t.label }; }); }
 
