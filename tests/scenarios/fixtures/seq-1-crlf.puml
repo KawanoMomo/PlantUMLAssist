@@ -1,0 +1,16 @@
+@startuml
+title SPI 送信シーケンス
+' 手で整えた図。改行は CRLF、字下げとコメントは道具に崩させない
+participant App
+participant SpiDrv
+participant SpiDrvMon
+participant Hw
+
+App -> SpiDrv : Spi_Write()
+  SpiDrv -> Hw : WriteReg(DATA)
+	Hw --> SpiDrv : ack
+/' 監視は別の流れ。
+   この塊は書き換えない '/
+SpiDrvMon -> SpiDrv : watch()
+SpiDrv --> App : E_OK
+@enduml

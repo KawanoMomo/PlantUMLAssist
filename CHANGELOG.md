@@ -1,3 +1,4 @@
+- TICKET-releaser-20261115-1820-3: primary 手順 5 (保存先の CRLF の図を一覧から開き、メッセージ 1 本の追加と参加者 1 つの改名をして Ctrl+S) を scenario tests/scenarios/primary-5-s1.spec.js で確かめる。同じファイルに CRLF のまま書かれ、字下げ (空白・タブ)・行コメント・ブロックコメントは 1 バイトも変わらず、差分は一覧の分だけ
 - v4.1.0: package.json の version を 4.1.0 に (releaser run 20261115-1820)
 - TICKET-releaser-20261115-1820-2: primary 手順 4 (class-1 のメンバーを 1 つ直す・comp-1 に部品と関係を 1 つずつ足す・Undo で 1 操作ずつ戻る) を scenario tests/scenarios/primary-4-s1.spec.js で確かめる
 - TICKET-releaser-20261115-1820-1: primary 手順 3 (state-1 に状態を 1 つ足し、図で終点を押して遷移を 2 本つなぐ) を scenario tests/scenarios/primary-3-s1.spec.js で確かめる。1 操作 1 行・元の行は 1 字も動かない・描ける

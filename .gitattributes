@@ -1,1 +1,2 @@
 CHANGELOG.md merge=union
+tests/scenarios/fixtures/*-crlf.puml -text
