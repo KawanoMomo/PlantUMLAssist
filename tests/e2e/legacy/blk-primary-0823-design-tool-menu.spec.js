@@ -26,7 +26,7 @@ test('ツールボタンで分類のメニューが開き、Ctrl+K の注記が�
   await expect(menu).toBeVisible();
   // 「渡す」(引き継ぎ・納品) は TICKET-owner-20261115-1828-prune で外した。
   await expect(menu.locator('.tool-menu-cat .tool-cat-name')).toHaveText([
-    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー',
+    '図をつくる', '書き換える', '探す', 'レビュー', // 確かめる は TICKET-owner-20261115-1841-prune で外した
   ]);
   await expect(menu.locator('.tool-menu-note')).toHaveText('Ctrl+K でも引けます');
   await expect(page.locator('#btn-tab-tools')).toHaveAttribute('aria-expanded', 'true');
@@ -52,7 +52,7 @@ test('タブ列から畳むと機能ボタンが消え、次に開いても畳�
 
   // 畳んだ後は既定 (＋ と右端のツール ▾) に戻る (BLK-builder-20260924-1815-3)
   await expect(page.locator('#btn-tab-diff')).toBeHidden();
-  await expect(page.locator('#btn-tab-family')).toBeHidden();
+  await expect(page.locator('#btn-tab-rename')).toBeHidden();
   await expect(page.locator('#btn-tab-new')).toBeVisible();
   await expect(page.locator('#btn-tab-tools-mini')).toBeVisible();
 
@@ -103,7 +103,7 @@ test('分類はホバーで切り替わり、どの分類もパネル内をス�
   await expect(page.locator('#tool-menu-files-note')).toContainText('FILES の読むだけ');
 
   // パネルの中は溢れない (1 画面に収まる)
-  for (const key of ['make', 'edit', 'find', 'check', 'review']) {
+  for (const key of ['make', 'edit', 'find', 'review']) {
     await page.locator('.tool-menu-cat[data-group="' + key + '"]').hover();
     const over = await menu.evaluate((el) => el.scrollHeight - el.clientHeight);
     expect(over).toBeLessThanOrEqual(1);
@@ -131,8 +131,8 @@ test('絞り込み欄は全分類を横断し、キーボードだけで実行�
 
 test('←→ で分類、↑↓ で項目を選び、Enter で開く', async ({ page }) => {
   await page.locator('#btn-tab-tools').click();
-  // 図をつくる → 書き換える → 探す → 確かめる → レビュー
-  for (let i = 0; i < 4; i += 1) await page.keyboard.press('ArrowRight');
+  // 図をつくる → 書き換える → 探す → レビュー (確かめる は TICKET-owner-20261115-1841-prune で外した)
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowRight');
   await expect(page.locator('.tool-menu-cat[data-group="review"]'))
     .toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.tool-menu-group[data-group="review"]')).toBeVisible();

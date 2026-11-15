@@ -24,7 +24,6 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-lines',  label: '行を書き換える', group: 'まとめて直す' },
       { id: 'btn-tab-rename', label: '部品名を一括置換する', group: 'まとめて直す' },
       { id: 'btn-tab-apply',  label: '複数クラスに一括適用する', group: 'まとめて直す' },
-      { id: 'btn-tab-unify',  label: '表記を登録簿に揃える', group: '表記を揃える' },
     ] },
     { key: 'find', title: '探す', items: [
       { id: 'btn-tab-symptom', label: '症状から関連図を探す', group: '図をたどる' },
@@ -32,18 +31,7 @@ window.MA.toolMenu = (function() {
       // 🕸 参照関係の画面は畳み、旧名のまま ▤ 影響を見る を開く案内にした。
       { id: 'btn-tab-xref',    label: '部品名で図をまたいで辿る → ▤ 影響を見る', group: '図をたどる' },
     ] },
-    { key: 'check', title: '確かめる', items: [
-      // 🔍 名前突合 (名前の表記揺れ) の画面は畳んだ。同じ指摘は
-      // ▦ 突合ボードの「名前/表記揺れ」に出る。「表記揺れ」「名前突合」と絞り込むとボードの行に当たり、
-      // 押すとそのカテゴリで絞って開く (app.js が絞り込み欄の語を渡す)。
-      { id: 'btn-tab-family',         label: '系統内の動作名のずれ', group: '名前と系統' },
-      { id: 'btn-tab-drivermap',      label: '系統マップの崩れ', group: '名前と系統' },
-      { id: 'btn-tab-trace',          label: '状態遷移のトレース漏れ', group: '名前と系統' },
-      // 並びは小見出しごとにまとめ、9b の右列と同じ順にする。
-      { id: 'btn-tab-cross',          label: '突合ボード (表記揺れ・宣言なし・メソッドも 1 画面で)', group: 'まとめて点検',
-        keywords: ['名前突合', '名前の表記揺れ', '表記ゆれ', 'name audit', 'メソッド突合'] },
-      { id: 'btn-tab-pattern',        label: '1 つの観点で全図を棚卸し', group: 'まとめて点検' },
-    ] },
+    // 「確かめる」(図をまたぐ監査) の分類は TICKET-owner-20261115-1841-prune で中身ごと外した。
     // 「2 つの版・2 枚の図を並べて違いを見る」入口を 2 つに絞る。
     // 前の回 は 5 つの入口をここに並べて名前だけ揃えたが、
     // 目的が同じ画面が 5 つ並ぶこと自体が「どれを開けばよいか」を選ばせていた。

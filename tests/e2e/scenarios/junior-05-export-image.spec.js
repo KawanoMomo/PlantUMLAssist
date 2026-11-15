@@ -412,71 +412,8 @@ async function openReqTrace(page) {
   await page.waitForTimeout(300);
 }
 
-test('手順5 要求ID対応: クラス図の要素が一覧に出て、要求IDを付けると図に残る', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.typeDsl(page, GPIO_CLASS);
-  await S.renameActive(page, 'GPIOドライバ派生クラス');
-  await openReqTrace(page);
 
-  // 到達条件その1: 要求 ID を付けられる要素 (クラス・メソッド) が並ぶ。
-  await expect(page.locator('tr.req-row[data-key="Gpio_Driver"]')).toHaveCount(1);
-  await expect(page.locator('tr.req-row[data-key="Gpio_Driver.Init()"]')).toHaveCount(1);
-  await expect(page.locator('#req-summary')).toContainText('要求 ID が付いています');
 
-  // 到達条件その2: 付けた対応は図 (DSL) に残る — 別文書を作らない。
-  await page.locator('tr.req-row[data-key="Gpio_Driver.Init()"] input.req-ids').fill('SWReq-101, SWReq-102');
-  await page.locator('tr.req-row[data-key="Gpio_Driver.Init()"] input.req-ids').blur();
-  await page.waitForTimeout(400);
-  await expect(page.locator('tr.req-row[data-key="Gpio_Driver.Init()"]')).toHaveAttribute('data-status', 'assigned');
-  const dsl = await page.locator('#editor').inputValue();
-  expect(dsl).toContain("' @req Gpio_Driver.Init() = SWReq-101, SWReq-102");
-  // 付け忘れは一覧のまま残る (どれが残っているかが読める)。
-  await expect(page.locator('#req-summary')).toContainText('残り');
-});
-
-test('手順5 要求ID対応: 画像と一緒に対応表(CSV)が書き出せる', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.typeDsl(page, GPIO_CLASS);
-  await S.renameActive(page, 'GPIOドライバ派生クラス');
-  await openReqTrace(page);
-
-  await page.locator('tr.req-row[data-key="Gpio_Driver.Init()"] input.req-ids').fill('SWReq-101');
-  await page.locator('tr.req-row[data-key="Gpio_Driver.Init()"] input.req-ids').blur();
-  await page.waitForTimeout(300);
-
-  const dl = page.waitForEvent('download', { timeout: 30000 }).catch(() => null);
-  await page.locator('#req-export').click();
-  const download = await dl;
-
-  // 到達条件: 画像と並ぶ名前の対応表が 1 本出る。
-  expect(download).not.toBeNull();
-  expect(download.suggestedFilename()).toBe('GPIOドライバ派生クラス_要求対応表.csv');
-});
-
-test('手順5 要求ID対応: 脚注に入れると、書き出す画像そのものが対応表を持つ', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.typeDsl(page, GPIO_CLASS);
-  await S.renameActive(page, 'GPIOドライバ派生クラス');
-  await openReqTrace(page);
-
-  await page.locator('tr.req-row[data-key="Gpio_Driver.Init()"] input.req-ids').fill('SWReq-101');
-  await page.locator('tr.req-row[data-key="Gpio_Driver.Init()"] input.req-ids').blur();
-  await page.waitForTimeout(300);
-  await page.locator('#req-footnote').check();
-  await page.waitForTimeout(500);
-
-  // 到達条件: 図に脚注が入り、描画も通る (画像だけを貼っても対応が伝わる)。
-  const dsl = await page.locator('#editor').inputValue();
-  expect(dsl).toContain('legend bottom');
-  expect(dsl).toContain('Gpio_Driver.Init() : SWReq-101');
-  await page.waitForTimeout(1500);
-  await expect(page.locator('#preview-svg svg')).toBeVisible();
-
-  // 外せば元に戻る (脚注入りのまま配り続けない)。
-  await page.locator('#req-footnote').uncheck();
-  await page.waitForTimeout(400);
-  expect(await page.locator('#editor').inputValue()).not.toContain('legend bottom');
-});
 
 // BLK-junior-20260914-2006: 「1 枚を資料化」の部品欄は先頭の部品で開き、図種欄には
 // その部品の図種しか出ない。ほぼ資料化済みの GPIO が先頭に来ていると、実際に手を

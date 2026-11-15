@@ -301,7 +301,10 @@ window.MA.componentDeps = (function() {
   // チェックリスト本体。
   // rows: この図に無い候補 (実績が先、定石、他の図の順)。present: 既にある定石。
   // 実績を先に置くのは、見比べずにチェックできる確かな候補だから。
-  function check(dsl, docs, exceptId, subject) {
+  // opts.noUsage: 他の図の呼び出しから拾う実績を見ない (依存チェックの画面。
+  // 図をまたぐ「実際の呼び出し」枠は TICKET-owner-20261115-1841-prune で外した。
+  // 部品を起こす component-starter は実績を使うので既定は従来どおり)。
+  function check(dsl, docs, exceptId, subject, opts) {
     var names = namesIn(dsl);
     var rows = [];
     var present = [];
@@ -312,7 +315,7 @@ window.MA.componentDeps = (function() {
     // 実績。定石と同じ相手なら、定石の名前・理由も併せて 1 行にまとめる —
     // 同じ依存が「実績」と「定石」で 2 行に割れると、どちらを押すか迷う。
     var usageRows = [];
-    usageTargets(dsl, docs, exceptId, subject).forEach(function(t) {
+    (opts && opts.noUsage ? [] : usageTargets(dsl, docs, exceptId, subject)).forEach(function(t) {
       var k = normName(t.name);
       if (!k || have[k] || takenKeys[k]) return;
       var entry = null;

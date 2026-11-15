@@ -20,8 +20,8 @@ function noop() {}
 
 // 道具のコマンド (button 付き) と、道具でないコマンド (button 無し) を混ぜる。
 var COMMANDS = [
-  // BLK-owner-20260924-1332-prune: 🔍 名前突合の行は ▦ 突合ボードの行に畳んだので、確かめるの代表はボード。
-  { id: 'tab-cross', title: '突合ボード / Cross-check board', hint: 'Tabs', keywords: ['名前突合', 'name audit'], button: 'btn-tab-cross', run: noop },
+  // TICKET-owner-20261115-1841-prune: 「確かめる」分類 (突合ボードほか) は外した。書き換えるの代表は ⇄ 一括置換。
+  { id: 'tab-rename', title: '部品名の一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'ちかん'], button: 'btn-tab-rename', run: noop },
   // 変更サマリ・引き継ぎ (渡す) は TICKET-owner-20261115-1828-prune で外した。レビューの代表は ± 差分。
   { id: 'tab-diff', title: '変わった図の一覧 / Changed diagrams', hint: 'Tabs', button: 'btn-tab-diff', run: noop },
   { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', button: 'btn-tab-template', run: noop },
@@ -38,7 +38,7 @@ function byId(items, id) {
 describe('道具のコマンドは 6 分類に入る', () => {
   test('分類はツールメニューと同じ key になる', () => {
     var items = itemsOf();
-    expect(byId(items, 'tab-cross').group).toBe('check');
+    expect(byId(items, 'tab-rename').group).toBe('edit');
     expect(byId(items, 'tab-diff').group).toBe('review');
     expect(byId(items, 'tab-template').group).toBe('make');
   });
@@ -50,14 +50,14 @@ describe('道具のコマンドは 6 分類に入る', () => {
   });
 
   test('行のチップは分類名になる', () => {
-    expect(byId(itemsOf(), 'tab-cross').badge).toBe('確かめる');
+    expect(byId(itemsOf(), 'tab-rename').badge).toBe('書き換える');
     expect(byId(itemsOf(), 'tab-diff').badge).toBe('レビュー');
     expect(byId(itemsOf(), 'command:save').badge).toBe('コマンド');
   });
 
   test('題はツールメニューと同じ言い換えになる (メニューで覚えた語で引ける)', () => {
-    expect(byId(itemsOf(), 'tab-cross').title).toBe('突合ボード (表記揺れ・宣言なし・メソッドも 1 画面で)');
-    expect(byId(itemsOf(), 'tab-cross').title).toBe(TM.labelOf('btn-tab-cross'));
+    expect(byId(itemsOf(), 'tab-rename').title).toBe('部品名を一括置換する');
+    expect(byId(itemsOf(), 'tab-rename').title).toBe(TM.labelOf('btn-tab-rename'));
   });
 
   test('右端には道具の短い呼び名が残る (どの道具かが消えない)', () => {
@@ -66,20 +66,17 @@ describe('道具のコマンドは 6 分類に入る', () => {
 
   test('元の題でもメニューの言い換えでも引ける', () => {
     var items = itemsOf();
-    expect(CP.filter(items, 'Cross-check').map(function(i) { return i.id; }))
-      .toContain('check:tab-cross');
-    // 旧 🔍 名前突合の語でもボードの行に当たる (Ctrl+K は 1 画面 1 行)。
-    expect(CP.filter(items, 'Name audit').map(function(i) { return i.id; }))
-      .toContain('check:tab-cross');
-    expect(CP.filter(items, '表記揺れ').map(function(i) { return i.id; }))
-      .toContain('check:tab-cross');
+    expect(CP.filter(items, 'Bulk rename').map(function(i) { return i.id; }))
+      .toContain('edit:tab-rename');
+    expect(CP.filter(items, '一括置換').map(function(i) { return i.id; }))
+      .toContain('edit:tab-rename');
   });
 });
 
 describe('見出しと Tab の絞り込み', () => {
   test('見出しの並びは 図に足す → 移動 → 選択中 → 6 分類 → コマンド', () => {
     var groups = CP.groupsOf(itemsOf());
-    expect(groups).toEqual(['make', 'check', 'review', 'command']);
+    expect(groups).toEqual(['make', 'edit', 'review', 'command']);
   });
 
   test('6 分類の見出しに日本語の名前が付く', () => {
@@ -90,7 +87,7 @@ describe('見出しと Tab の絞り込み', () => {
   test('Tab は 6 分類も巡回先にする', () => {
     var present = CP.groupsOf(itemsOf());
     expect(CP.cycleGroup(null, present, 1)).toBe('make');
-    expect(CP.cycleGroup('make', present, 1)).toBe('check');
+    expect(CP.cycleGroup('make', present, 1)).toBe('edit');
     expect(CP.cycleGroup('command', present, 1)).toBe(null);
   });
 

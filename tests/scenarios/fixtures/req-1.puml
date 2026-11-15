@@ -1,0 +1,18 @@
+@startuml
+title SPI ドライバの構成 (要求 ID の注記つき)
+' 他の道具で要求 ID と担当範囲を書き込んだ図。GUI は読まないが、行は残す
+' @req Spi_Driver = SWReq-101
+' @req Spi_Driver.init() = SWReq-102, SWReq-103
+' @covers Idle -> Ready
+class Spi_Driver {
+  - baud : uint16
+  + init(cfg : Spi_Config) : Std_ReturnType
+}
+class Spi_Config
+Spi_Driver ..> Spi_Config : uses
+legend bottom
+' --- 要求ID対応 (req-trace) ---
+要求ID対応
+Spi_Driver : SWReq-101
+endlegend
+@enduml

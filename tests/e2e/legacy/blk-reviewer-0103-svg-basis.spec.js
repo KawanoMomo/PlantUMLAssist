@@ -78,7 +78,7 @@ test.describe('BLK-reviewer-0103: 内容判定の根拠を画面と API で言�
     await expect(page.locator('#folder-svg-content')).toContainText('今の puml から作られています');
     const basis = page.locator('#folder-svg-basis');
     await expect(basis).toBeVisible();
-    await expect(basis).toContainText('判定の根拠: 印 (@pua-source-sha1) の突合 1 枚');
+    await expect(basis).toContainText('判定の根拠: 印 (@pua-source-sha1) の照合 1 枚');
     await expect(basis).toContainText('/render の応答とそのままバイト比較すると必ず食い違います');
   });
 

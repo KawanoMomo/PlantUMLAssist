@@ -60,7 +60,7 @@ describe('svgFreshness — 根拠を行と要約で言う', function() {
   test('基準の 1 行が枚数と、印はバイト比較できないことを言う', function() {
     var rec = { b: { pumlHash: H1, svgHash: 'sv1', result: 'match' } };
     var note = SF.basisNote(SF.scan([stamped('a', H1), unstamped('b')], rec));
-    expect(note).toContain('印 (@pua-source-sha1) の突合 1 枚');
+    expect(note).toContain('印 (@pua-source-sha1) の照合 1 枚');
     expect(note).toContain('描き直してのバイト比較 1 枚');
     // reviewer が server.py を読みに行った理由そのものを、その場に書く
     expect(note).toContain('/render の応答とそのままバイト比較すると必ず食い違います');
@@ -83,7 +83,7 @@ describe('svgFreshness — 根拠を行と要約で言う', function() {
   });
 
   test('印には根拠が添えられる (どちらで出た答えか)', function() {
-    expect(SF.contentBadge('differ', 'stamp').title).toContain('根拠: 印 (@pua-source-sha1) の突合');
+    expect(SF.contentBadge('differ', 'stamp').title).toContain('根拠: 印 (@pua-source-sha1) の照合');
     expect(SF.contentBadge('match', 'rerender').title).toContain('根拠: 描き直してのバイト比較');
     // 根拠が無いときはこれまでどおりの文言のまま
     expect(SF.contentBadge('differ').title).not.toContain('根拠');

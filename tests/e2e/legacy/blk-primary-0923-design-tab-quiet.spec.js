@@ -24,26 +24,17 @@ test('既定のタブ列にはボタンが 1 つも無い (図のタブと ＋ /
   await expect(page.locator('#btn-tab-folder')).toBeVisible();
   await expect(page.locator('#btn-tab-tools')).toBeHidden();
   // 25 個の機能ボタンはどれも出ない。
-  for (const id of ['btn-tab-rename', 'btn-tab-xref', 'btn-tab-family', 'btn-tab-diff']) {
+  for (const id of ['btn-tab-rename', 'btn-tab-xref', 'btn-tab-lines', 'btn-tab-diff']) {
     await expect(page.locator('#' + id), id).toBeHidden();
   }
 });
 
-// 下端の札は件数が 1 以上のときだけ出る (0 件の札は消えて静か。BLK-releaser-20260929-0851-2 で今の画面に合わせた)。
-// 件数を持たせると札が出て、押すとそのパネルが開く。
-test('件数を持つものは下端の状態表示に出て、押せばそのパネルが開く', async ({ page }) => {
+// 下端の件数は ± 差分 だけ。整合・イベント整合の札 (図をまたぐ監査) は
+// TICKET-owner-20261115-1841-prune で外した。
+test('件数を持つものは下端の状態表示に出る (整合・イベント整合の札は無い)', async ({ page }) => {
   await open7b(page);
-  for (const id of ['status-diff',
-                    'status-consistency', 'status-eventsync']) {
-    await expect(page.locator('#' + id), id).toHaveCount(1);
-  }
-  // 遷移のイベントに対応するクラスが無い state 図 → イベント整合の札に件数が出る
-  await page.locator('#diagram-type').selectOption('plantuml-state');
-  await page.locator('#editor').fill('@startuml\n[*] --> Idle\nIdle --> Busy : Adc_StartConv\n@enduml');
-  const badge = page.locator('#status-eventsync');
-  await expect(badge).toBeVisible();
-  await badge.click();
-  await expect(page.locator('#ev-modal')).toBeVisible();
+  await expect(page.locator('#status-diff')).toHaveCount(1);
+  await expect(page.locator('#status-consistency, #status-eventsync')).toHaveCount(0);
 });
 
 test('機能は Ctrl+K から引ける (ツールの分類メニューも Ctrl+K から開く)', async ({ page }) => {
@@ -51,7 +42,8 @@ test('機能は Ctrl+K から引ける (ツールの分類メニューも Ctrl+K
   await openToolMenu(page);
   // BLK-human-20260923-1601 (design 9b): 分類は左列に並ぶ (渡すは TICKET-owner-20261115-1828-prune で外した)。
   await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
-    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー',
+    // 確かめる は TICKET-owner-20261115-1841-prune で外した。
+    '図をつくる', '書き換える', '探す', 'レビュー',
   ]);
   await pickTool(page, 'btn-tab-diff');
   await expect(page.locator('#diff-panel')).toHaveClass(/open/);

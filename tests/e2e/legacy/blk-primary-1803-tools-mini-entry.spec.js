@@ -31,7 +31,7 @@ test('札を 1 クリックで畳んだ一覧が開く', async ({ page }) => {
   await expect(page.locator('#tool-menu')).toBeVisible();
   // 「渡す」(引き継ぎ・納品) は TICKET-owner-20261115-1828-prune で外した。
   await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
-    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー',
+    '図をつくる', '書き換える', '探す', 'レビュー', // 確かめる は TICKET-owner-20261115-1841-prune で外した
   ]);
 });
 

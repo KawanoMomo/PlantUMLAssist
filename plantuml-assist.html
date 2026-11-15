@@ -1582,27 +1582,6 @@ html, body {
 }
 #folder-panel .folder-swapq-badge { font-size: 9px; margin-left: 3px; white-space: nowrap; color: var(--text-secondary); }
 #folder-panel .folder-swapq-badge-apply, #folder-panel .folder-swapq-badge-restore { color: var(--accent); }
-/* 部品ごとの突合。audit.js の JSON を読む代わりに
-   一覧の頭で読む行なので、欠落は赤字で、束ねた図はその場で開けるボタンにする。 */
-#folder-panel .folder-part-cross-summary {
-  font-size: 10px; color: var(--text-secondary); padding: 0 6px 2px;
-}
-#folder-panel .folder-part-cross-summary.has-stale { color: var(--accent-red); font-weight: bold; }
-#folder-panel .folder-part-cross-row {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 6px 3px;
-}
-#folder-panel .folder-part-cross-missing {
-  font-size: 10px; color: var(--accent-red); font-weight: bold;
-}
-#folder-panel button.folder-part-cross-doc {
-  font-size: 9px; width: auto; padding: 0 4px;
-  border: 1px solid var(--border); border-radius: 3px;
-}
-#folder-panel .folder-part-cross {
-  flex: 0 0 auto; font-size: 9px; white-space: nowrap; font-weight: bold;
-  border: 1px solid var(--accent-red); border-radius: 2px; padding: 0 3px;
-  color: var(--accent-red);
-}
 #folder-panel button.folder-svg-proof-btn,
 #folder-panel button.folder-svg-render {
   border: 1px solid var(--border);
@@ -2166,7 +2145,6 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 
 
 
-#btn-tab-drivermap.has-red { color: var(--accent-red); border-color: var(--accent-red); }
 .dm-family { border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; margin-bottom: 10px; }
 .dm-family.red { border-color: var(--accent-red); }
 .dm-member { display: inline-block; border: 1px solid var(--border); border-radius: 3px; padding: 2px 8px; margin: 2px 4px 2px 0; cursor: pointer; font-size: 12px; }
@@ -2512,28 +2490,6 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #peek-dsl .peek-dsl-keep { color: var(--text-primary); font-weight: 600; }
 /* ── 突合ダッシュボード ────────────
    別々のモーダルに分かれていた突合の出口を 1 枚の表にまとめる。 */
-#ab-modal-content {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  width: 92vw;
-  max-width: 1280px;
-  height: 88vh;
-  display: flex;
-  flex-direction: column;
-}
-#ab-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  color: var(--text-primary);
-}
-#ab-summary { color: var(--accent); font-family: var(--font-mono); }
-#ab-tools { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-#ab-body { flex: 1; overflow: auto; padding: 10px 14px; }
 .ab-empty { color: var(--text-secondary); font-size: 12px; padding: 12px 0; }
 /* 出典ごとに畳んだ表。出典の組み合わせが
    1 つの塊で、その中に指摘が並ぶ。出口の名前は本文と見分けが付く印にする。 */
@@ -3220,43 +3176,8 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   padding: 6px 8px; font-family: monospace; font-size: 11px; color: var(--text-primary);
 }
 #mexp-readback-body .mexp-rb-hit { background: rgba(217, 138, 42, 0.25); }
-/* 要求ID対応 */
-#req-modal-content {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  width: 76vw;
-  max-width: 900px;
-  max-height: 84vh;
-  display: flex;
-  flex-direction: column;
-}
-#req-head {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px; border-bottom: 1px solid var(--border);
-}
-#req-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-#req-tools button, #req-tools label {
-  background: var(--bg-tertiary); border: 1px solid var(--border);
-  color: var(--text-primary); border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer;
-}
-#req-tools #req-export { border-color: var(--accent); color: var(--accent); }
-#req-tools #req-export[disabled] { opacity: 0.5; cursor: default; border-color: var(--border); color: var(--text-secondary); }
-#req-summary { padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); }
-#req-body { padding: 4px 14px 10px; overflow: auto; }
-#req-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-#req-table th, #req-table td {
-  border-bottom: 1px solid var(--border); padding: 4px 6px; text-align: left; vertical-align: middle;
-}
-#req-table th { color: var(--text-secondary); font-weight: normal; font-size: 11px; }
-#req-table td.req-kind { white-space: nowrap; color: var(--text-secondary); }
-#req-table input.req-ids {
-  width: 100%; background: var(--bg-primary); color: var(--text-primary);
-  border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; font-size: 12px;
-}
 tr.req-row[data-status="none"] td.req-kind { color: #d19a66; }
 tr.req-row[data-status="orphan"] td.req-element { color: #e06c75; }
-#req-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
 /* 部品の資料一式 */
 #mboard-modal-content {
   background: var(--bg-secondary);
@@ -3747,75 +3668,6 @@ table.ct-table button.ct-open:hover { border-color: var(--accent); }
 }
 #lines-panel .lines-actions button#btn-lines-apply { border-color: var(--accent); }
 #lines-panel .lines-actions button:disabled { opacity: 0.45; cursor: default; }
-/* 観点一括パネル (指摘 1 件を全図に当て、欠けている図だけを出す) */
-#pattern-panel {
-  display: none;
-  position: absolute;
-  z-index: 41;
-  width: 360px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 8px;
-  font-size: 11px;
-  color: var(--text-primary);
-}
-#pattern-panel.open { display: block; }
-#pattern-panel label {
-  display: block;
-  font-size: 10px;
-  color: var(--text-secondary);
-  margin: 5px 0 2px;
-}
-#pattern-panel label:first-child { margin-top: 0; }
-#pattern-panel input, #pattern-panel select {
-  width: 100%;
-  box-sizing: border-box;
-  font-size: 11px;
-  padding: 3px 4px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-}
-#pattern-hint { margin-top: 3px; font-size: 10px; color: var(--text-secondary); }
-#pattern-head {
-  margin-top: 5px;
-  font-size: 10px;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 3px;
-}
-#pattern-results { max-height: 200px; overflow-y: auto; font-size: 10px; }
-#pattern-results .pat-doc { padding: 3px 0; border-bottom: 1px solid var(--border); }
-#pattern-results .pat-doc-name {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
-  font-family: var(--font-mono);
-  color: var(--text-primary);
-}
-#pattern-results .pat-kind { color: var(--text-secondary); white-space: nowrap; }
-#pattern-results .pat-miss {
-  display: flex;
-  gap: 5px;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  padding: 1px 0;
-}
-#pattern-results .pat-miss:hover { background: var(--bg-secondary); }
-#pattern-results .pat-miss-line { color: var(--text-secondary); min-width: 2em; text-align: right; }
-#pattern-panel .pattern-actions { display: flex; gap: 4px; margin-top: 6px; }
-#pattern-panel .pattern-actions button {
-  flex: 1;
-  font-size: 11px;
-  padding: 3px 6px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  cursor: pointer;
-}
 /* 混入点パネル (部品名がどの版から入ったかを時系列で見る) */
 #blame-panel {
   display: none;
@@ -4118,55 +3970,6 @@ table.ct-table button.ct-open:hover { border-color: var(--accent); }
 }
 /* 表記統一パネル。見た目は一括置換と同じ枠に
    揃える — 同じ「図をまたいで名前を直す」道具が 2 通りに見えないようにする。 */
-#unify-panel {
-  display: none;
-  position: absolute;
-  z-index: 41;
-  width: 300px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 8px;
-  font-size: 11px;
-  color: var(--text-primary);
-}
-#unify-panel.open { display: block; }
-#unify-panel label {
-  display: block;
-  font-size: 10px;
-  color: var(--text-secondary);
-  margin: 4px 0 2px;
-}
-#unify-panel select {
-  width: 100%;
-  box-sizing: border-box;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 3px 4px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-}
-#unify-panel .unify-summary { font-size: 10px; color: var(--accent); margin-bottom: 4px; }
-#unify-panel .unify-files {
-  max-height: 180px;
-  overflow-y: auto;
-  margin-top: 6px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-}
-#unify-panel .unify-file {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  padding: 1px 0;
-}
-#unify-panel .unify-file input { width: auto; flex: 0 0 auto; }
-#unify-panel .unify-file .uf-name { flex: 1 1 auto; overflow-wrap: anywhere; }
-#unify-panel .unify-file .uf-hits { flex: 0 0 auto; color: var(--text-secondary); }
-#unify-panel .unify-empty { color: var(--text-secondary); padding: 6px 0; }
-#unify-panel .unify-result { font-size: 10px; color: var(--text-secondary); margin-top: 6px; }
 /* 一括置換パネル (複数の図をまたいで部品名を置換する) */
 #rename-panel {
   display: none;
@@ -6704,18 +6507,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #statusbar button[data-dot="warn"] .sb-dot { color: var(--accent-orange); }
 #statusbar button[data-dot="bad"]  .sb-dot { color: var(--accent-red); }
 
-/* 整合性チェックのバッジ。常時見えている必要がある */
-#status-consistency {
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--accent-green);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 0 6px;
-  cursor: pointer;
-}
-#status-consistency:hover, #status-eventsync:hover { background: var(--bg-tertiary); }
 /* 下端に寄せた件数表示。整合と同じ見た目に揃える */
 #status-livediff, #status-diff, #status-rename {
   background: transparent;
@@ -6737,20 +6528,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 /* 統一が済んでいることは緑で言い切る。「開かなくてよい」と読める色が要る */
 #status-rename { max-width: 24em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #status-rename[data-tone="done"] { color: var(--accent-green); border-color: var(--accent-green); }
-#status-consistency.has-warning, #status-eventsync.has-warning { color: var(--accent-orange); border-color: var(--accent-orange); }
 
-/* イベント⇔メソッド整合のバッジ */
-#status-eventsync {
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--accent-green);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 0 6px;
-  margin-left: 6px;
-  cursor: pointer;
-}
 
 /* ── Scrollbar Styling ─────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -7053,9 +6831,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- 設計書に貼る資料は 1 部品の複数図種で 1 組。
              どの図種の資料用がまだ無いか・元の図が資料用より新しくないかを一覧で見せ、
              手当ての要る図種だけをまとめて 1 回で書き出す -->
-        <!-- 図の要素と設計書の要求 ID (SWReq-xxx) の対応を
-             図の中に持ち、Export のときに対応表 (CSV) と画像の脚注を同時に確定させる -->
-        <button id="exp-req-trace" title="クラス・メソッド・状態・遷移に要求ID（SWReq-xxx）を付け、対応表をCSVで書き出す（画像の脚注にも入れられる）">要求ID対応を付ける／対応表を書き出す…</button>
       </div>
       <div id="bulk-export-status" role="status"></div>
     </div>
@@ -7131,21 +6906,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- やり直し途中の控えに印を付け、📂 一覧で畳む -->
         <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、保存先の一覧から畳む">一時控え</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
-        <!-- 揃える先は登録簿が知っている。組を選ぶだけで
-             揺れの残るファイルが出て、チェックした分をまとめて当てる -->
-        <button class="tab-tool" id="btn-tab-unify" title="登録簿で決めた正式表記に揃っていない図を挙げ、選んだ分にまとめて当てる (どの図に残っているかを探さなくてよい)">表記統一</button>
         <!-- 症状文を貼るだけで関連しそうな図を出す -->
         <button class="tab-tool" id="btn-tab-symptom" title="不具合の症状文を貼ると、部品名を思い付かなくても関連しそうな図を関連度順に出す">⇄ 症状検索</button>
         <!-- 部品名がどの版から入ったか (混入点) を全図の版から 1 回で出す -->
         <button class="tab-tool" id="btn-tab-blame" title="部品名を入れると、保存フォルダの全図の過去版を一度に走査して「その名前が増えた版・消えた版」を時系列で出す。表記が混在し始めた版にも印が付く">◉ 混入点</button>
-        <!-- 指摘 1 件を観点として全図に当て、欠けている図だけを出す -->
-        <button class="tab-tool" id="btn-tab-pattern" title="レビュー指摘を観点として開いている図全部に当て、同じ抜けがある図だけを一覧する">◎ 観点一括</button>
         <button class="tab-tool" id="btn-tab-apply" title="指摘に並んだ複数のクラスへ同じメソッド・属性を 1 回で追加する">⊞ 一括適用</button>
-        <!-- 同じ系統の複数枚で動作名が揃っているかを見る -->
-        <button class="tab-tool" id="btn-tab-family" title="同じ系統の図を並べて、片方にしか無いメッセージ名・遷移名を探す">⇉ 系統チェック</button>
-        <button class="tab-tool" id="btn-tab-drivermap" title="どの図がどの図の相手かを系統として宣言し、1 プロジェクトとして持つ。宣言した対応が崩れたら赤くなる">系統マップ −</button>
-        <!-- 状態遷移がどのシーケンスにも現れない「トレース漏れ」を出す -->
-        <button class="tab-tool" id="btn-tab-trace" title="状態遷移図の遷移が、同じ系統のシーケンス図のどれかに現れているかを見る">◎ トレース</button>
         <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
         <!-- 「⇔ 並べて見る」は「並べて比較」とタブ列で隣り合い、
              名前では違いが読めなかった。タブ列から外し、並べて比較の枠の
@@ -7162,8 +6927,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-lineage" title="この図の継承元 (どの図から派生したか) を 1 回登録すると、継承元が更新されたときに差分の行数で知らせる">⇡ 継承元 −</button>
         <!-- 変わった図の変更前後をまとめて 1 画面に並べる -->
         <!-- レビューの指摘を図の該当行に貼り、未読/既読で追う -->
-        <!-- 図をまたいで未対応の指摘を集める受信箱 -->
-        <button class="tab-tool" id="btn-tab-cross" title="名前の不一致・未使用 participant・粒度のばらつき・SVG 実体不一致・手動指摘を、保存フォルダ 1 つ分の 1 画面にまとめて出す。行を押すとその図へ飛ぶ">▦ 突合ボード</button>
         <!-- 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
         <button class="tab-tool" id="btn-tab-review" title="型の基準にした図と突き合わせて、この図のずれと図種特有の間違いを出す">レビュー −</button>
         <!-- 引き継ぎに要る確認結果と図を 1 つの zip に固める -->
@@ -7231,24 +6994,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              あとから伸びるものは、動かされて困るものより下に置く -->
         <div id="rename-redo"></div>
       </div>
-      <!-- 表記統一の一括反映。⇄ 一括置換は「何を打つか」を
-           人が知っている前提の道具だが、揃える先は登録簿 (_names.json) に既にある。
-           ここは組を選ぶだけで、揺れの残るファイルと件数が出て、チェックした分を
-           保存まで 1 回で当てる (ファイルを 1 枚ずつ開いて探す工程が要らない)。 -->
-      <div id="unify-panel">
-        <div id="unify-summary" class="unify-summary"></div>
-        <label for="unify-entry">揃える組 (登録簿)</label>
-        <select id="unify-entry"></select>
-        <div id="unify-files" class="unify-files"></div>
-        <div class="rename-actions">
-          <button id="btn-unify-all" title="出ている図を全部選ぶ / 全部外す">全選択</button>
-          <button id="btn-unify-apply" disabled title="チェックした図の揺れを正式表記に直して保存フォルダへ書く">まとめて適用</button>
-          <button id="btn-unify-cancel">閉じる</button>
-        </div>
-        <div id="unify-result" class="unify-result"></div>
-        <!-- 登録簿に無い社内略語の組 (旧 📤 提出前チェックの対応表) -->
-        <div id="unify-abbrev"></div>
-      </div>
       <!-- 部品名がどの版から入ったか (混入点) を、全図の版を 1 回走査して時系列に並べる -->
       <div id="blame-panel">
         <label for="blame-term">探す部品名 (空白区切りで複数。混在を見るなら 2 つ)</label>
@@ -7294,20 +7039,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div class="symptom-actions">
           <button id="btn-symptom-clear">消す</button>
           <button id="btn-symptom-close">閉じる</button>
-        </div>
-      </div>
-      <!-- 指摘 1 件を観点として全図に当て、同じ抜けがある図だけを出す (棚卸ししてから開く) -->
-      <div id="pattern-panel">
-        <label for="pattern-note">指摘 (貼ると観点を選びます)</label>
-        <input id="pattern-note" autocomplete="off" spellcheck="false"
-          placeholder="GpioDrv クラスにコンストラクタが無い">
-        <label for="pattern-kind">観点</label>
-        <select id="pattern-kind"></select>
-        <div id="pattern-hint"></div>
-        <div id="pattern-head"></div>
-        <div id="pattern-results"></div>
-        <div class="pattern-actions">
-          <button id="btn-pattern-close">閉じる</button>
         </div>
       </div>
       <!-- 指摘に並んだ複数のクラスへ同じメンバーを 1 回で足す -->
@@ -7689,10 +7420,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
          押せば 1 クリックで先輩の枠が開く -->
     <!-- 相手が決まるまでは出さない。入口は FILES「読むだけ」の ⇔ -->
     <button type="button" id="status-senior" hidden title="別のフォルダの図を読むだけで横に並べます (押すと開きます)"></button>
-    <!-- 整合性チェックの警告件数を常時出す -->
-    <button type="button" id="status-consistency" title="命名規約・未使用 participant・メソッド不一致・粒度不一致の一覧">整合 —</button>
-    <!-- state の遷移イベントと class のメソッドの突合表 -->
-    <button type="button" id="status-eventsync" title="state 図の遷移イベントと class 図のメソッドの突合表を開く">⇄ イベント —</button>
   </div>
 
   </div><!-- /#app-body -->
@@ -7738,22 +7465,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <div id="seq-sc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="seq-sc-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:640px;max-width:880px;max-height:80vh;overflow-y:auto;"></div>
 </div>
-<div id="ev-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="ev-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:1000px;max-height:82vh;overflow-y:auto;"></div>
-</div>
 
-<div id="ck-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="ck-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:680px;max-width:960px;max-height:82vh;overflow-y:auto;"></div>
-</div>
-<div id="dm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="dm-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:660px;max-width:940px;max-height:80vh;overflow-y:auto;"></div>
-</div>
-<div id="fa-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="fa-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:660px;max-width:940px;max-height:80vh;overflow-y:auto;"></div>
-</div>
-<div id="tc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="tc-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:660px;max-width:940px;max-height:80vh;overflow-y:auto;"></div>
-</div>
 <div id="cfg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="cfg-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 10px 0;">
@@ -8003,7 +7715,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/symptom-search.js"></script>
 <script src="src/core/symptom-systems.js"></script>
 <script src="src/core/symptom-flow.js"></script>
-<script src="src/core/pattern-check.js"></script>
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/export-name.js"></script>
 <script src="src/core/svg-export.js"></script>
@@ -8016,7 +7727,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/material-matrix.js"></script>
 <script src="src/core/material-summary.js"></script>
 <script src="src/core/material-anchor.js"></script>
-<script src="src/core/req-trace.js"></script>
 <script src="src/core/rename-history.js"></script>
 <script src="src/core/rename-redo.js"></script>
 <script src="src/core/rename-seed.js"></script>
@@ -8036,9 +7746,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/name-audit.js"></script>
 <script src="src/core/add-kind-vocab.js"></script>
 <script src="src/core/name-registry.js"></script>
-<script src="src/core/name-unify.js"></script>
-<script src="src/core/vocab-match.js"></script>
-<script src="src/core/vocab-canon.js"></script>
 <script src="src/core/review-before-after.js"></script>
 <script src="src/core/save-dir-handoff.js"></script>
 <script src="src/core/semantic-refs.js"></script>
@@ -8062,7 +7769,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/svg-freshness.js"></script>
 <script src="src/core/svg-compare-row.js"></script>
 <script src="src/core/svg-cross.js"></script>
-<script src="src/core/part-cross.js"></script>
 <script src="src/core/svg-diff-summary.js"></script>
 <script src="src/core/svg-visual-diff.js"></script>
 <script src="src/core/dsl-visible-diff.js"></script>
@@ -8085,17 +7791,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/editor-indent.js"></script>
 <script src="src/core/top-status.js"></script>
 <script src="src/core/family-audit.js"></script>
-<script src="src/core/driver-map.js"></script>
 <script src="src/core/scope-decl.js"></script>
 <script src="src/core/trace-coverage.js"></script>
-<script src="src/core/transition-density.js"></script>
-<script src="src/core/trace-label-table.js"></script>
-<script src="src/core/label-position.js"></script>
 <script src="src/core/rename-guard.js"></script>
 <script src="src/core/rename-sweep.js"></script>
 <script src="src/core/name-title-link.js"></script>
-<script src="src/core/consistency.js"></script>
-<script src="src/core/event-sync.js"></script>
 <script src="src/core/line-edit.js"></script>
 <script src="src/core/outline.js"></script>
 <script src="src/core/select-at-line.js"></script>
@@ -8110,9 +7810,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/show-before-after.js"></script>
 <script src="src/core/export-select.js"></script>
 <script src="src/core/call-graph.js"></script>
-<script src="src/core/audit-timeline.js"></script>
-<script src="src/core/audit-board.js"></script>
-<script src="src/core/status-dashboard.js"></script>
 <script src="src/core/save-swap.js"></script>
 <script src="src/core/live-diff.js"></script>
 <script src="src/core/twin-restore.js"></script>
@@ -8158,7 +7855,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/line-peek.js"></script>
 <script src="src/core/lineage-mark.js"></script>
 <script src="src/core/label-colors.js"></script>
-<script src="src/core/glossary.js"></script>
 <script src="src/core/sequence-autonumber.js"></script>
 <script src="src/core/class-scaffold.js"></script>
 <script src="src/core/class-derive.js"></script>
@@ -8251,7 +7947,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
             <option value="2" selected>2 段</option>
             <option value="3">3 段</option>
           </select>
-          <button type="button" id="dg-ticket" title="今出ている影響一覧を「変更チケット」として保存フォルダに残す。次の run はこの札の未チェックだけを直せばよい">この変更をチケットにする</button>
         </div>
         <div id="dg-body">
           <div id="dg-canvas"></div>
@@ -8590,50 +8285,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </table>
     </div>
     <div id="mboard-state" role="status"></div>
-  </div>
-</div>
-<!-- 要求ID対応 -->
-<div id="req-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="req-modal-content">
-    <div id="req-head">
-      <strong>要求ID対応</strong>
-      <span id="req-title"></span>
-      <span id="req-tools">
-        <label><input type="checkbox" id="req-footnote"> 画像の脚注にも入れる</label>
-        <button type="button" id="req-export">対応表を書き出す</button>
-        <button type="button" id="req-close">閉じる</button>
-      </span>
-    </div>
-    <div id="req-summary" role="status"></div>
-    <div id="req-body">
-      <table id="req-table">
-        <thead>
-          <tr><th>種別</th><th>要素</th><th>要求ID（SWReq-101, SWReq-102 …）</th></tr>
-        </thead>
-        <tbody id="req-rows"></tbody>
-      </table>
-    </div>
-    <div id="req-state" role="status"></div>
-  </div>
-</div>
-<!-- 突合の結果を 1 画面に集める -->
-<div id="ab-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="ab-modal-content">
-    <div id="ab-head">
-      <strong id="ab-title">突合ダッシュボード</strong>
-      <span id="ab-summary"></span>
-      <span id="ab-tools">
-        <select id="ab-view" aria-label="表の見方">
-          <option value="issues">指摘ごと</option>
-          <option value="docs">図ごと (整合)</option>
-        </select>
-        <select id="ab-kind" aria-label="カテゴリで絞る"></select>
-        <select id="ab-doc" aria-label="図で絞る"></select>
-        <button type="button" id="ab-copy">指摘.md 用にコピー</button>
-        <button type="button" id="ab-close">閉じる</button>
-      </span>
-    </div>
-    <div id="ab-body"></div>
   </div>
 </div>
 
