@@ -315,7 +315,7 @@ window.MA.autoSave = (function() {
 
   // 返り値: { name: 書くべきファイル名 / null (= ディスクへは書かない), reason: 書かない訳 / null }
   // 解決器は名前の文字列だけを返してもよい (従来どおり)。書かない訳まで知らせたいときは
-  // { name: '', reason: 'ask' } の形で返す —— 訳が分かると、画面は「まだディスクに
+  // { name: '', reason: 'untouched' } の形で返す —— 訳が分かると、画面は「まだディスクに
   // 書いていない」と「書く必要が無い」を言い分けられる。
   // dsl — 書こうとしている本文 (見本・白紙のままなら書かないと決めるのに使う)。
   function _fileNameFor(diagramType, dsl) {
@@ -349,8 +349,8 @@ window.MA.autoSave = (function() {
   var _lastWrite = null;
 
   // 別の経路 (手で押す 💾 保存 = app.js の saveActiveDoc) がディスクへ書いたときも、
-  // 届いた先の記録はここに揃える。揃えないと、返事をして本体に書けた後も
-  // 状態バーが「確認中」のまま居座る。
+  // 届いた先の記録はここに揃える。揃えないと、手で保存して書けた後も
+  // 状態バーが「書いていない」のまま居座る。
   function noteFileWritten(fileName, diagramType) {
     _lastWrite = {
       at: new Date().toISOString(),
@@ -371,8 +371,8 @@ window.MA.autoSave = (function() {
     } : null;
   }
 
-  // 書かずに済ませた回を app.js へ知らせる。返事待ち (reason 'ask') をここで
-  // 拾えないと、打っても何も起きない状態が黙って続く。
+  // 書かずに済ませた回を app.js へ知らせる。ここで拾えないと、
+  // 打っても何も起きない状態が黙って続く。
   var _deferredListeners = [];
   function onFileDeferred(listener) {
     if (typeof listener === 'function') _deferredListeners.push(listener);

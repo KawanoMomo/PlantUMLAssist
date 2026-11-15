@@ -28,7 +28,7 @@ describe('保存状態の 1 行に絵文字を付けない (design 9c)', functio
   });
 
   test('書けなかった回の ⚠ は残す', function() {
-    var d = AST.describe(meta, { where: 'deferred', reason: 'ask' }, 'たった今', 'spi', '13:31');
+    var d = AST.describe(meta, { where: 'deferred', reason: 'no-name' }, 'たった今', 'spi', '13:31');
     expect(d.text.indexOf('⚠')).toBe(0);
   });
 

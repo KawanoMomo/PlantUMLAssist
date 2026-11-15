@@ -154,9 +154,7 @@ test.describe('BLK-junior-20260908-1803: テンプレは自動保存で壊れな
     await page.waitForTimeout(300);
     await page.locator('#editor').click();
     await page.keyboard.type('\nCPU --> (Run)');
-    // BLK-junior-20260908-1803-wish の錠: 開いたファイルへ最初に書く前に一度だけ聞く。
-    // ここは「書き換える」を選び、これまでどおり保存される道を見る。
-    await page.locator('#source-lock-overwrite').click();
+    // 保存先の図は聞かずにそのファイルへ書く (TICKET-owner-20261115-1829-prune で確認の窓を外した)。
     await page.waitForTimeout(1500);
 
     const after = await fileText(page, 'J1803_data');
