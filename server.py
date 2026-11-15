@@ -1172,15 +1172,36 @@ def run_git(cwd, args, timeout=GIT_TIMEOUT_SEC):
     env = dict(os.environ)
     env['GIT_TERMINAL_PROMPT'] = '0'   # 資格情報を端末で訊かない (画面が固まる)
     env['LC_ALL'] = 'C'
-    try:
-        r = subprocess.run([exe, '-C', str(cwd), '-c', 'core.quotepath=false'] + list(args),
-                           capture_output=True, timeout=timeout, env=env, **_SUBPROCESS_KWARGS)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        return (1, '', str(e))
+    # 画面は保存のたびに変更 (M / A) を数え直す (status)。status が索引の書き直しのために
+    # .git/index.lock を一瞬取ると、同じ時に押したコミット (add / commit) が
+    # 「index.lock: File exists」で落ちていた。読むだけの命令には索引の錠を取らせない。
+    env['GIT_OPTIONAL_LOCKS'] = '0'
 
     def dec(b):
         return (b or b'').decode('utf-8', 'replace')
-    return (r.returncode, dec(r.stdout), dec(r.stderr))
+    # それでも別の git (利用者の端末・エディタ) が錠を持っている間は、少し待って打ち直す
+    # (錠は長くても 1 秒ほどで外れる。打ち直しても失うものは無い: 錠で落ちた回は何も書いていない)。
+    for attempt in range(GIT_LOCK_RETRIES + 1):
+        try:
+            r = subprocess.run([exe, '-C', str(cwd), '-c', 'core.quotepath=false'] + list(args),
+                               capture_output=True, timeout=timeout, env=env, **_SUBPROCESS_KWARGS)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            return (1, '', str(e))
+        out = (r.returncode, dec(r.stdout), dec(r.stderr))
+        if r.returncode == 0 or not _git_lock_busy(out[2]) or attempt == GIT_LOCK_RETRIES:
+            return out
+        time.sleep(GIT_LOCK_WAIT_SEC)
+    return out
+
+
+GIT_LOCK_RETRIES = 8
+GIT_LOCK_WAIT_SEC = 0.25
+
+
+def _git_lock_busy(stderr):
+    """別の git が錠 (index.lock など) を持っていて落ちた回か。"""
+    s = stderr or ''
+    return '.lock' in s and ('File exists' in s or 'Another git process' in s)
 
 
 def git_toplevel(save_dir):

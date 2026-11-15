@@ -62,13 +62,16 @@ test('migrator 手順 5 — 保存フォルダにクラス図があっても、�
   await expect(page.locator('#editor')).toHaveValue(/EnableClock/, { timeout: 20000 });
 
   // 何も変えずに保存する (実キー)。
+  // 下端の「保存しました」は 1 枚目の保存の分が残っているので、それでは 2 回目の保存を待てない
+  // (全体実行の負荷で、書き終わる前にファイルを見て赤になっていた)。この図の名前が出るまで待つ。
   await page.locator('#editor').click();
   await page.keyboard.press('Control+s');
-  await expect(page.locator('#status-save-result')).toContainText('保存しました', { timeout: 20000 });
+  await expect(page.locator('#status-save-result')).toContainText('foreign-figure-5', { timeout: 20000 });
+  await expect(page.locator('#status-save-result')).toContainText('保存しました');
 
   // 保存は監査で止めない (保存前の突合は整理で外した)。書かれていれば止まっていない。
   const written = path.join(dir, 'foreign-figure-5.puml');
-  expect(fs.existsSync(written), '保存先に書かれている').toBe(true);
+  await expect.poll(() => fs.existsSync(written), { message: '保存先に書かれている', timeout: 10000 }).toBe(true);
   expect(Buffer.compare(fs.readFileSync(written), fs.readFileSync(src))).toBe(0);
 });
 
