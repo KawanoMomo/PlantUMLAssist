@@ -12,7 +12,6 @@ const sourceFiles = [
   'src/core/html-utils.js',
   'src/core/svg-export.js',
   'src/core/saved-kind.js',
-  'src/core/folder-export.js',
   'src/core/diagram-kind.js',
   'src/core/kind-mismatch.js',
   'src/core/dsl-utils.js',

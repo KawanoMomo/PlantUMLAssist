@@ -847,16 +847,6 @@ html, body {
 }
 #export-menu button:hover { background: var(--bg-tertiary); }
 
-/* メニュー内のまとまりの見出し (押せない) */
-#export-menu .exp-group-title {
-  padding: 6px 14px 2px 14px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--text-secondary);
-  border-top: 1px solid var(--border);
-}
-#export-menu .exp-group-title:first-child { border-top: none; }
 
 /* design 2c: 行の右にキー割り当てを小さく置く */
 #export-menu button { display: flex; align-items: center; justify-content: space-between; gap: 16px; white-space: nowrap; }
@@ -867,20 +857,6 @@ html, body {
   white-space: nowrap;
 }
 
-#bulk-export-status {
-  display: none;
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  white-space: nowrap;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 11px;
-  padding: 6px 10px;
-  z-index: 199;
-}
 
 /* Diagram / render mode selects */
 #diagram-type, #render-mode {
@@ -1990,20 +1966,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   cursor: default;
 }
 #folder-panel button.folder-open-many:disabled:hover { background: transparent; }
-/* 印を付けた図を開かずに zip にする。
-   「開く」と同じ列に並べる —— どちらも印を付けた図をどうするかのボタン。 */
-#folder-panel button.folder-export-svg {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--accent);
-  font-size: 11px;
-  text-align: right;
-}
-#folder-panel button.folder-export-svg:disabled {
-  color: var(--text-secondary);
-  cursor: default;
-}
-#folder-panel button.folder-export-svg:disabled:hover { background: transparent; }
+
 /* 差分バッジと一覧 (前回保存時点との差) */
 #tab-bar .tab .tab-dot {
   font-size: 9px;
@@ -4850,7 +4813,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- 「渡す」見出しと資料セット・「その他」は TICKET-owner-20261116-0140-prune で外した。
              Export ▾ は 1 枚の図の SVG / PNG / 透過 PNG / クリップボードの 4 項目 -->
       </div>
-      <div id="bulk-export-status" role="status"></div>
+
     </div>
 
     <select id="diagram-type" title="図の種類" tabindex="-1" aria-hidden="true">
@@ -5468,7 +5431,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/review-diff.js"></script>
 <script src="src/core/selected-endpoints.js"></script>
 <script src="src/core/folder-select.js"></script>
-<script src="src/core/folder-export.js"></script>
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
 <script src="src/core/ref-folders.js"></script>
@@ -5499,7 +5461,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/export-name.js"></script>
 <script src="src/core/svg-export.js"></script>
-<script src="src/core/bulk-export.js"></script>
 <script src="src/core/component-pack.js"></script>
 <script src="src/core/rename-history.js"></script>
 <script src="src/core/rename-redo.js"></script>

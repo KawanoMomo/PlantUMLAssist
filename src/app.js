@@ -8843,66 +8843,9 @@ function setupTabs() {
     // 一覧は長いと縦にスクロールする。開くボタンを末尾に置くと 14 枚のときに
     // 画面の外へ出るので、印を付ける行の上に固定して常に見えるようにする。
     bar.appendChild(folderOpenButton());
-    // 印を付けた図を、開かずにそのまま zip にする。
-    // 「開く」の隣に置く —— どちらも「印を付けた図をどうするか」のボタンで、
-    // 資料を作る場面では開かずに出せることがここで分かる必要がある。
-    bar.appendChild(folderExportButton());
+    // 印を付けた図を開かずに zip にする「選んだ図を SVG で書き出す」は TICKET-owner-20261116-0140-prune で外した
+    // (複数の図をまとめて書き出す zip はやらない。書き出しは Export ▾ の 1 枚ずつ)。
     return bar;
-  }
-
-  function folderExportButton() {
-    var FE = window.MA.folderExport;
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-export-svg';
-    b.setAttribute('data-export-count', '0');
-    if (FE) b.title = FE.buttonTitle();
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      exportPickedFromFolder();
-    });
-    return b;
-  }
-
-  // 印を付けた図の本文を保存フォルダから読み、開かずに zip へ。
-  // 読めない図があっても残りは出す (1 枚のために資料作りが止まらない)。
-  function exportPickedFromFolder() {
-    var FE = window.MA.folderExport;
-    var WS = window.MA.workspace;
-    if (!FE || !WS) return Promise.resolve(null);
-    var names = FE.toExport(folderPicked, folderNames);
-    if (!names.length) {
-      if (window.MA.toast) window.MA.toast.show('書き出す図に印が付いていません');
-      return Promise.resolve(null);
-    }
-    var dir = _wsFileDir();
-    // 開いているタブの編集中の内容は、先に保存フォルダへ書き戻してから読む
-    // (ファイルの中身を出す口なので、書き戻す前に読むと 1 枚だけ古い図が出る)。
-    saveActiveDoc();
-    var btn = panel.querySelector('.folder-export-svg');
-    if (btn) { btn.disabled = true; btn.textContent = 'SVG を書き出しています…'; }
-    var texts = {};
-    return Promise.all(names.map(function(n) {
-      return WS.loadFile(n, dir).then(function(t) {
-        if (typeof t === 'string') texts[n] = t;
-      }, function() {});
-    })).then(function() {
-      var built = FE.docsFrom(names, texts);
-      if (!built.docs.length) {
-        if (window.MA.toast) window.MA.toast.show('選んだ図の本文を読めませんでした');
-        syncFolderPickUi();
-        return null;
-      }
-      return exportAllSVG(built.docs).then(function(summary) {
-        var note = FE.missingNote(built.missing);
-        if (note && window.MA.toast) window.MA.toast.show(summary.message + note);
-        syncFolderPickUi();
-        return summary;
-      });
-    }, function() {
-      syncFolderPickUi();
-      return null;
-    });
   }
 
   function folderOpenButton() {
@@ -8945,15 +8888,6 @@ function setupTabs() {
     if (open) {
       open.textContent = FS.openLabel(folderPicked, folderNames, _openDocNames());
       open.disabled = FS.toOpen(folderPicked, folderNames, _openDocNames()).length === 0;
-    }
-    // 書き出しは「開いていない図」も対象なので、
-    // 枚数は印そのものの数 (開く側と違い、開いているタブを引かない)。
-    var exp = panel.querySelector('.folder-export-svg');
-    var FE = window.MA.folderExport;
-    if (exp && FE) {
-      var expNames = FE.toExport(folderPicked, folderNames);
-      exp.textContent = FE.buttonLabel(expNames.length);
-      exp.disabled = expNames.length === 0;
     }
   }
 
@@ -13098,44 +13032,6 @@ function browserDownload(filename, blob) {
   setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
 }
 
-// a[download] はどこへ落ちたか (落ちたのか) を
-// 呼び出し側に返さないので、届いていない zip にも「保存しました」と出ていた。
-// zip は保存フォルダに書いて、書けたバイト数を確かめてから成功を名乗る。
-// ブラウザのダウンロードは今まで通り併せて出す (落とし先を選びたい人のため)。
-function _zipToBase64(bytes) {
-  var CHUNK = 0x8000;
-  var parts = [];
-  for (var i = 0; i < bytes.length; i += CHUNK) {
-    parts.push(String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK)));
-  }
-  return btoa(parts.join(''));
-}
-
-function deliverZip(filename, bytes) {
-  downloadBlob(filename, new Blob([bytes], { type: 'application/zip' }));
-  var payload;
-  try {
-    payload = { name: filename, dir: _wsFileDir(), base64: _zipToBase64(bytes) };
-  } catch (e) {
-    return Promise.resolve({ ok: false, error: 'zip を読めませんでした' });
-  }
-  return fetch('/export-zip', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  }).then(function(resp) {
-    return resp.json().then(function(j) {
-      if (!resp.ok || !j || !j.ok) {
-        return { ok: false, error: (j && j.error) || ('HTTP ' + resp.status) };
-      }
-      // 書いたバイト数が作った zip と違えば届いていない。
-      if (j.bytes !== bytes.length) return { ok: false, error: '書き込みが途中で切れました' };
-      return { ok: true, path: j.path, bytes: j.bytes };
-    }, function() { return { ok: false, error: '保存先からの応答を読めませんでした' }; });
-  }, function() {
-    return { ok: false, error: '保存先に届きませんでした' };
-  });
-}
 
 // アプリ版 (pywebview) にはブラウザのダウンロード先が無く、
 // a[download] を押しても何も起きない。アプリ版のときだけネイティブの保存ダイアログに
@@ -13156,59 +13052,6 @@ function downloadBlob(filename, blob) {
   };
   fr.onerror = function() { browserDownload(filename, blob); };
   fr.readAsDataURL(blob);
-}
-
-// extraFiles は zip に同梱する図以外の紙 (資料の体裁の 1 枚物など)。
-function exportAllSVG(pickedDocs, statusEl, extraFiles) {
-  if (!window.MA.bulkExport || !window.MA.workspace) return;
-  // 編集中の内容が workspace に載っていないと 1 枚だけ古い DSL で書き出される。
-  saveActiveDoc();
-  var docs = Array.isArray(pickedDocs) ? pickedDocs : window.MA.workspace.list();
-  var status = statusEl || document.getElementById('bulk-export-status');
-  if (status) { status.style.display = 'block'; status.textContent = 'SVG を書き出しています…'; }
-  var files = [];
-  return window.MA.bulkExport.run(docs, {
-    render: renderDslToSvg,
-    save: function(filename, svg) { files.push({ name: filename, content: svg }); },
-    onProgress: function(done, total) {
-      if (status) status.textContent = 'SVG を書き出しています… ' + done + ' / ' + total;
-    },
-  }).then(function(summary) {
-    var msg = summary.message;
-    if (files.length === 0) {
-      if (status) status.textContent = msg;
-      if (window.MA.toast) window.MA.toast.show(msg);
-      return summary;
-    }
-    (extraFiles || []).forEach(function(f) {
-      if (f && f.name) files.push({ name: f.name, content: String(f.content == null ? '' : f.content) });
-    });
-    // 何を zip に入れたかは、書き出した後に資料として見返す側が要る
-    summary.files = files;
-    var name = window.MA.bulkExport.zipName();
-    var bytes = window.MA.bulkExport.buildZip(files);
-    // 届いたことを確かめる前に「保存しました」と言わない。
-    return deliverZip(name, bytes).then(function(res) {
-      if (!res.ok) {
-        var bad = 'zip を保存できませんでした（' + name + '）— ' + res.error;
-        summary.delivered = false;
-        summary.deliverError = res.error;
-        summary.message = bad;
-        if (status) status.textContent = bad;
-        if (window.MA.toast) window.MA.toast.show(bad);
-        return summary;
-      }
-      msg = msg + '（' + name + '）';
-      summary.zipFile = name;
-      summary.delivered = true;
-      summary.savedTo = res.path;
-      summary.zipBytes = res.bytes;
-      summary.message = msg;
-      if (status) status.textContent = msg;
-      if (window.MA.toast) window.MA.toast.show(msg);
-      return summary;
-    });
-  });
 }
 
 

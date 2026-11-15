@@ -149,21 +149,3 @@ describe('componentPack.packName', function() {
   });
 });
 
-describe('bulkExport.buildZip がバイト列を素通しする', function() {
-  test('PNG のバイト列が文字列化されずに入る', function() {
-    try { delete require.cache[require.resolve('../src/core/bulk-export.js')]; } catch (e) {}
-    require('../src/core/bulk-export.js');
-    var be = global.window.MA.bulkExport;
-    var png = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-    var zip = be.buildZip([{ name: '図1.png', content: png }]);
-    // local file header の直後に名前、その後ろに中身がそのまま並ぶ
-    var bytes = Array.prototype.slice.call(zip);
-    var found = false;
-    for (var i = 0; i + png.length <= bytes.length; i++) {
-      var same = true;
-      for (var j = 0; j < png.length; j++) if (bytes[i + j] !== png[j]) { same = false; break; }
-      if (same) { found = true; break; }
-    }
-    expect(found).toBe(true);
-  });
-});
