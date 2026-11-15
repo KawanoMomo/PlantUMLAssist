@@ -1,3 +1,4 @@
+- TICKET-releaser-20261116-0300-2: junior 場面 4 手順 3 の scenario (`tests/scenarios/junior-3-s4.spec.js`)。同じ状態遷移図を Export ▾ → PNGとして保存 で書き出し、受けた .png が PNG の署名を持ち、描いた図と同じ寸法で、線と文字の画素があり (空同然でない)、失敗の知らせが出ず、本文が 1 行も動かないことを守る
 - releaser: reviewer-07-three-findings の status-dashboard.js(突合ボードの整理で外れた)を読む試験を外した。読み込みで落ちて同じファイルの他の試験ごと赤だった
 - TICKET-releaser-20261116-0300-1: junior 場面 4 手順 2 の scenario (`tests/scenarios/junior-2-s4.spec.js`)。状態遷移図を Export ▾ → SVGとして保存 の 2 クリックで書き出し、受けた .svg が空でなく状態名・遷移ラベルの文字を持ち、本文が 1 行も動かないことを守る
 - TICKET-owner-20261115-1900-1: 右パネルの「末尾に追加」で 1 件足した直後、手が欄に残ったまま Ctrl+Z を押すと足した 1 件が戻り、Ctrl+Y で戻る (6 図種とも)。欄に字を打ち始めた後の Ctrl+Z は今どおり欄の字を戻す
