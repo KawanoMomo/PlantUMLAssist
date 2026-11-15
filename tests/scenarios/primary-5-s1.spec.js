@@ -20,16 +20,8 @@ const OLD = 'SpiDrv';
 const NEW = 'Spi_Driver';
 const MSG = { from: 'SpiDrv', to: 'Hw', label: 'WriteReg(BAUD)' };
 
-// 一覧から開いた図に最初に書き戻すとき「開いたファイルを上書きしますか」を聞く版がある。
-// 聞かれたら「このファイルを書き換える」と答える (聞かない版ではそのまま進む)。答えたら 1 操作と数える。
-async function answerLockIfAsked(page) {
-  const modal = page.locator('#source-lock-modal');
-  const asked = await modal.waitFor({ state: 'visible', timeout: 3000 }).then(() => true, () => false);
-  if (!asked) return 0;
-  await page.locator('#source-lock-overwrite').click();
-  await expect(modal).toBeHidden({ timeout: 10000 });
-  return 1;
-}
+// 保存先の図は、ほかの図と同じく Ctrl+S と自動保存でそのファイルに書く。「開いたファイルを上書きしますか」の
+// 窓は出さず、`{名前}-編集中` の控えも作らない (TICKET-owner-20261115-1829-prune)。
 
 test('primary 手順5 CRLF の図を直して保存しても CRLF・字下げ・コメントが保たれ、差分が一覧と一致する', async ({ page }, testInfo) => {
   const dir = S.absDirFor(__filename);
@@ -62,15 +54,29 @@ test('primary 手順5 CRLF の図を直して保存しても CRLF・字下げ・
   ops += 5;
   expect(rm.diffLines).toBe(1);
   expect(H.removedLines(rm.before, rm.after)).toEqual([]);
-  ops += await answerLockIfAsked(page);
-  // 答えた後も本文は直した後のまま (答えるだけで本文を変えない)。
-  expect(await H.getEditorText(page)).toBe(rm.after);
+  // 足したメッセージの矢印の種類を替え、Ctrl+Z 1 回で戻す (窓に吸われず図の Undo が効く)。
+  const msgLine = rm.after.split('\n').findIndex((l) => l.indexOf(MSG.label) >= 0) + 1;
+  await clickOverlayByLine(page, msgLine);
+  await page.locator('#seq-edit-arrow-seg .prop-seg[data-value="-\\>x"]').click();
+  await expect.poll(() => H.getEditorText(page), { timeout: 5000 }).toContain(MSG.from + ' ->x ' + MSG.to);
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => H.getEditorText(page), { timeout: 5000 }).toBe(rm.after);
+  ops += 4;
+  // 窓は出ない。自動保存が聞かずに同じファイルへ書く (足した 1 行だけの差分・CRLF のまま)。
+  await expect(page.locator('#source-lock-modal')).toHaveCount(0);
+  const wantAuto = Buffer.from(rm.after.replace(/\n/g, '\r\n'), 'utf8');
+  await expect.poll(() => Buffer.compare(fs.readFileSync(file), wantAuto), { timeout: 15000 }).toBe(0);
+  expect(fs.readdirSync(dir)).toEqual([NAME + '.puml']);
 
   // 一覧 2: 参加者 SpiDrv を図の上で選び、Alias を Spi_Driver に変える (参照も追従)。
   const declLine = rm.after.split('\n').findIndex((l) => /^participant SpiDrv$/.test(l)) + 1;
   expect(declLine).toBeGreaterThan(0);
   const rr = await H.measure(page, testInfo, async () => {
-    await page.locator('#seq-tail-kind-chip-participant').click();
+    // 直前に矢印を替えたメッセージが選ばれたままなら、右は編集パネルで「末尾に追加」は出ていない
+    // (参加者を押せばそのまま選び替わる)。出ているときだけ種類を「参加者」へ切り替えて離れる。
+    const chip = page.locator('#seq-tail-kind-chip-participant');
+    if (await chip.isVisible()) await chip.click();
     await clickOverlayByLine(page, declLine);
     await expect(page.locator('#seq-edit-alias')).toHaveValue(OLD);
     await expect(page.locator('#seq-edit-rename-refs')).toBeChecked();

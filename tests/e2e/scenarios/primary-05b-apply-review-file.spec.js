@@ -23,14 +23,6 @@ test('手順5.5 参加者名だけの指摘は、対象図だけに絞って反�
   await S.openFolderItem(page, 'can_init_sequence');
   expect(await page.locator('#editor').inputValue()).toContain('participant Can_Driver');
 
-  // BLK-primary-20260909-0403 で入った「開いたファイルを書き換えるか」の問いに、
-  // 指摘を直す目的で開いた側の答え (書き換える) を先に返す。答える前に他の操作へ
-  // 進むと、この問いが操作を受け取ってしまう。
-  const lock = page.locator('#source-lock-modal');
-  if (await lock.isVisible().catch(() => false)) {
-    await page.locator('#source-lock-overwrite').click();
-    await page.waitForTimeout(800);
-  }
 
   await S.runCommand(page, '一括置換');
   const allDocs = page.locator('#rename-all-docs');
@@ -57,10 +49,11 @@ test('手順5.5 参加者名だけの指摘は、対象図だけに絞って反�
 // 丸ごと保存フォルダへ書き戻していた。見比べのために開いて「元のまま保つ」と答えた
 // ファイルまで、タブの編集途中の本文で潰される。primary から見ると「打ち直して保存した
 // 内容が別の図のファイルに入っている」= 内容シャッフルとして現れる。
-// 置換が当たった図だけを書き、錠の答えはここでも効く、を到達条件にする。
+// 置換が当たった図だけを書き、見比べのために開いただけの図は書かない、を到達条件にする
+// (「元のまま保つ」の窓は TICKET-owner-20261115-1829-prune で外した)。
 const LOCK_DIR = DIR + '-lock';
 
-test('手順5.5 「元のまま保つ」と答えた図は、一括置換の後始末でも書き換わらない', async ({ page }) => {
+test('手順5.5 見比べのために開いただけの図は、一括置換の後始末でも書き換わらない', async ({ page }) => {
   await S.bootWithSaveDir(page, LOCK_DIR);
   await S.clearDir(page, LOCK_DIR);
   await S.putDoc(page, LOCK_DIR, 'driver_common_class', S.docFor('driver_common_class'));
@@ -69,20 +62,11 @@ test('手順5.5 「元のまま保つ」と答えた図は、一括置換の後�
   await page.waitForSelector('#editor');
   await page.waitForTimeout(600);
 
-  // 見比べ目的で開き、手を入れたうえで「元ファイルは元のまま保つ」を選ぶ。
+  // 見比べ目的で開くだけ (手を入れない)。
   await S.openFolderItem(page, 'driver_common_class');
-  const opened = await page.locator('#editor').inputValue();
-  await S.typeDsl(page, opened.replace('Spi_Driver', 'Spi_Ctrl'));
-  await page.waitForTimeout(900);
-  const lock = page.locator('#source-lock-modal');
-  await expect(lock).toBeVisible();
-  // この 1 枚だけの答えにする (既定は「以後も同じ扱い」が入っている)。
-  const applyAll = page.locator('#source-lock-all');
-  if (await applyAll.isChecked()) await applyAll.uncheck();
-  await page.locator('#source-lock-keep').click();
+  const opened = await S.readDoc(page, LOCK_DIR, 'driver_common_class');
   await page.waitForTimeout(1200);
-  // 前提: この時点では元ファイルは守られ、編集は控えの側に出ている。
-  expect(await S.readDoc(page, LOCK_DIR, 'driver_common_class')).not.toContain('Spi_Ctrl');
+  await expect(page.locator('#source-lock-modal')).toHaveCount(0);
 
   // 置換が当たる図も開いておく (当たらないと後始末まで進まない)。
   await S.openFolderItem(page, 'can_init_sequence');
@@ -91,19 +75,20 @@ test('手順5.5 「元のまま保つ」と答えた図は、一括置換の後�
   await S.runCommand(page, '一括置換');
   const allDocs = page.locator('#rename-all-docs');
   if (await allDocs.count() && !(await allDocs.isChecked())) await allDocs.check();
-  await page.locator('#rename-from').fill('Can_Driver');
-  await page.locator('#rename-to').fill('Can_Ctrl');
+  // 置換するのは can_init_sequence にだけある語 (共通クラス図には無い)。窓を外した後は、置換が当たった図は
+  // 開いた図でもそのまま書くので、「当たっていない図を書かない」をこの語で見る。
+  await page.locator('#rename-from').fill('Hw_Ctrl');
+  await page.locator('#rename-to').fill('Hw_Reg');
   await page.waitForTimeout(1200);
   await expect(page.locator('#btn-rename-apply')).toBeEnabled();
   await page.locator('#btn-rename-apply').click();
   await page.waitForTimeout(1800);
 
   // 到達条件その1: 置換が当たった図には反映される。
-  expect(await S.readDoc(page, LOCK_DIR, 'can_init_sequence')).toContain('Can_Ctrl');
-  // 到達条件その2: 錠に「元のまま保つ」と答えた図は、後始末でも書き換わらない。
+  expect(await S.readDoc(page, LOCK_DIR, 'can_init_sequence')).toContain('Hw_Reg');
+  // 到達条件その2: 開いただけで置換が当たらなかった図は、後始末でも書き換わらない (中身は置いたときのまま)。
   const kept = await S.readDoc(page, LOCK_DIR, 'driver_common_class');
-  expect(kept).not.toContain('Spi_Ctrl');
-  expect(kept).toContain('Spi_Driver');
+  expect(kept).toBe(opened);
 });
 
 // BLK-primary-20260909-0503-wish: 同じ 5.5 の中でも、指摘が「junior の GPIO 図と
@@ -337,11 +322,6 @@ test('手順5.5 塗り潰された図を、打ち直さずに直前の版へ 1 �
   // 到達条件 2: 1 クリックで、打ち直し無しに中身が戻る。
   await restore.click();
   await page.waitForTimeout(1200);
-  const lock = page.locator('#source-lock-modal');
-  if (await lock.isVisible().catch(() => false)) {
-    await page.locator('#source-lock-overwrite').click();
-    await page.waitForTimeout(800);
-  }
   const editor = await page.locator('#editor').inputValue();
   expect(editor).toContain('class Driver_Common {');
   expect(editor).not.toContain('class Foo');
@@ -711,11 +691,6 @@ test('手順5.5 保存フォルダの diagram1 は、起動しただけでは見
   // (= GUI から SVG を作り直せる)。
   await S.openFolderItem(page, 'diagram1');
   await page.waitForTimeout(600);
-  const lock = page.locator('#source-lock-modal');
-  if (await lock.isVisible().catch(() => false)) {
-    await page.locator('#source-lock-overwrite').click();
-    await page.waitForTimeout(600);
-  }
   expect(await page.locator('#editor').inputValue()).toContain('domain-verdict');
   // 画面に出ている保存は上部バーの [💾 保存] (#btn-save はツールを畳むと隠れる)。
   await page.locator('#top-save').click();
@@ -848,12 +823,6 @@ test.describe('手順5.5 空洞化した図を、戻す先を探さずに戻す'
     // 到達条件その2: その 1 クリックで、保存フォルダの実体が充実した版に戻る。
     await notice.locator('.folder-version-shrink-restore').click();
     await page.waitForTimeout(1200);
-    // 開いた図への書き戻しなので、一覧から開いたファイルの錠が一度だけ聞く。
-    const lock = page.locator('#source-lock-modal');
-    if (await lock.isVisible().catch(() => false)) {
-      await page.locator('#source-lock-overwrite').click();
-      await page.waitForTimeout(800);
-    }
     await expect.poll(async () => (await S.readDoc(page, VDIR, NAME)) || '',
       { timeout: 15000 }).toContain('class NVIC');
     const saved = (await S.readDoc(page, VDIR, NAME)) || '';

@@ -165,19 +165,16 @@ async function compareFolder(page, dirName) {
   await page.waitForSelector('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"][data-comparing="1"]');
 }
 
-// 一覧から開いた図は錠がかかっている。直す目的で開いたときは「このファイルを書き換える」を選ぶ。
-// 錠は最初の書き戻しの直前に一度だけ聞くので、1 文字足して問いを出してから答える。
+// 一覧から開いた図は、開いたときの本文のままの間は書き戻さない (読むだけの回)。直す目的で開いたときは
+// 1 行足して戻し、以後の書き戻しが本文に関わらずそのファイルへ入る状態にする (確認の窓は出ない)。
+// 開くのに使った中央の保存先の一覧は閉じて図に戻る (窓があった頃は、窓のボタンを押すと一覧が閉じていた)。
 async function overwriteOpenedFile(page) {
   const current = await page.locator('#editor').inputValue();
   await typeDsl(page, current + "\n' review");
   await page.waitForTimeout(900);
-  const modal = page.locator('#source-lock-modal');
-  if (await modal.isVisible().catch(() => false)) {
-    await page.locator('#source-lock-overwrite').click();
-    await page.waitForTimeout(1200);
-  }
   await typeDsl(page, current);
   await page.waitForTimeout(600);
+  await closeFolderList(page);
 }
 
 // エディタに DSL を流し込む (ペルソナが GUI で書き上げた状態の代わり)。

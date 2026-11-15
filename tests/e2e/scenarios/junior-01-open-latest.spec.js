@@ -510,7 +510,8 @@ test.describe('junior 手順 1: 指摘.md の 1 件から先輩の図と並べ�
 // BLK-junior-20260914-0906: 一覧から自分の図を開き直すだけの手順 1 で、
 // 「開いたファイルを上書きしますか」が毎回割り込んでいた (過去 run が残した
 // -編集中 の控えがあるため錠が ask のまま、開いた直後の自動保存がその問いに当たる)。
-// 読むだけの回は聞かれず、本文を変えたときだけ聞かれることを到達条件にする。
+// 読むだけの回は何も書かず、本文を変えたら聞かれずにそのファイルへ書く (TICKET-owner-20261115-1829-prune で
+// 窓を外した)。残っている -編集中 の控えは普通の図として残し、書き先にしない。
 const LOCK_DIR = DIR + '-lock';
 const LOCK_DOC = 'GPIOドライバ状態遷移(資料用)';
 const LOCK_DSL = ['@startuml', 'title GPIOドライバ状態遷移',
@@ -533,25 +534,22 @@ test.describe('junior 手順 1: 開き直すだけの回は錠に止められな
     // 到達条件その1: 開いた本文が出ていて、確認は割り込まない。
     expect(await page.locator('#editor').inputValue()).toContain('Gpio_Init');
     await expect(page.locator('#source-lock-modal')).toHaveCount(0);
-    // 到達条件その2: 錠はかかったままで、何も書かないことが読める。
-    await expect(page.locator('#top-source-lock')).toBeVisible();
-    expect(await page.locator('#top-source-lock').getAttribute('title'))
-      .toContain('読むだけなら何も書きません');
+    // 到達条件その2: 読むだけの回はファイルを書かない (置いたときのまま)。
+    expect(await S1.readDoc(page, LOCK_DIR, LOCK_DOC)).toBe(LOCK_DSL);
   });
 
-  test('本文を変えたときだけ、今までどおり一度だけ聞かれる', async ({ page }) => {
+  test('本文を変えたら、聞かれずにそのファイルへ書き、-編集中 の控えには書かない', async ({ page }) => {
     await S1.openFolderItem(page, LOCK_DOC);
     await page.waitForTimeout(1200);
     await expect(page.locator('#source-lock-modal')).toHaveCount(0);
 
     const opened = await page.locator('#editor').inputValue();
     await S1.typeDsl(page, opened.replace('Gpio_Init', 'Gpio_Init2'));
-    await page.waitForTimeout(1200);
-    const modal = page.locator('#source-lock-modal');
-    await expect(modal).toBeVisible();
-    // 到達条件その3: なぜ今聞かれるかと、古い控えが図に入らないことを本文が言う。
-    await expect(page.locator('#source-lock-body')).toContainText('開いたときから本文が変わった');
-    await expect(page.locator('#source-lock-body')).toContainText('古い控えの中身が図に入ることはありません');
+    await expect.poll(async () => (await S1.readDoc(page, LOCK_DIR, LOCK_DOC)) || '', { timeout: 10000 })
+      .toContain('Gpio_Init2');
+    await expect(page.locator('#source-lock-modal')).toHaveCount(0);
+    // 過去の控えは消さず、中身も変えない。
+    expect(await S1.readDoc(page, LOCK_DIR, LOCK_DOC + '-編集中')).toBe(LOCK_DSL);
   });
 });
 
@@ -970,11 +968,6 @@ test.describe('junior 手順 1〜2: 先輩に実体が無い図種の結論を�
 
   test('先輩に 0 枚の図種は「対応不要」を自分の図に控えられ、次に開いても見える', async ({ page }) => {
     await S1.openFolderItem(page, 'gpio_state');
-    const lock = page.locator('#source-lock-modal');
-    if (await lock.isVisible().catch(() => false)) {
-      await page.locator('#source-lock-overwrite').click();
-      await page.waitForTimeout(600);
-    }
     // BLK-owner-20260924-1836-prune: 覗く窓は FILES「読むだけ」の primary の右クリックから、primary を開いた状態で出る。
     // 窓の中にフォルダの一覧は無く、見出しの名前を押すとツリーのその行へ戻る。
     await S1.peekFolder(page, 'primary');
@@ -1007,11 +1000,6 @@ test.describe('junior 手順 1〜2: 先輩に実体が無い図種の結論を�
     await page.waitForTimeout(500);
     await page.locator('#top-save').click();
     await page.waitForTimeout(1200);
-    const lock2 = page.locator('#source-lock-modal');
-    if (await lock2.isVisible().catch(() => false)) {
-      await page.locator('#source-lock-overwrite').click();
-      await page.waitForTimeout(900);
-    }
     await page.waitForTimeout(1200);
     expect(await S1.readDoc(page, NOTE_MINE, 'gpio_state') || '').toContain("' @peek アクティビティ");
   });
@@ -1026,11 +1014,6 @@ async function clearPeekSettled(page, dir) {
 
 async function openPeekPrimary(page, name) {
   await S1.openFolderItem(page, name);
-  const lock = page.locator('#source-lock-modal');
-  if (await lock.isVisible().catch(() => false)) {
-    await page.locator('#source-lock-overwrite').click();
-    await page.waitForTimeout(600);
-  }
   await S1.peekFolder(page, 'primary');
   await page.waitForTimeout(1200);
 }

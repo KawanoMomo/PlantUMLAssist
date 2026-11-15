@@ -696,77 +696,6 @@ html, body {
   padding: 0 4px;
   color: var(--text-secondary);
 }
-/* 開いた元ファイルを書き換える前の一度きりの確認 */
-/* 画面を塞がない。見比べのために別の図を開く・一覧を出すといった作業を
-   止めずに、答えるまで元ファイルへの書き込みだけを保留する。 */
-/* 上部バー (#toolbar, 38px + 境界線) の下から出す。
-   top:8px だと札が上部バーに被り、答えようとしている当人が「保存」を押せない
-   (FILES ツリーが幅を取って #top-save が札の真下に来ると必ず塞がる)。
-   「画面を塞がない」は、上部バーの操作も止めないということ。 */
-#source-lock-modal {
-  position: fixed;
-  top: 47px;
-  left: 0;
-  right: 0;
-  z-index: 1300;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-}
-#source-lock-panel {
-  pointer-events: auto;
-  width: 520px;
-  max-width: 90vw;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 16px 18px;
-  color: var(--text-primary);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
-}
-#source-lock-panel button {
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  padding: 8px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  text-align: left;
-}
-#source-lock-panel button:hover { border-color: var(--accent); color: var(--accent); }
-/* 二択が同格に見えると、直した本文を元ファイルへ入れる
-   つもりの人が「保つ」を押して、直した表記が元ファイルに入らないまま進んでしまう。
-   主 (書き換える) と副 (保つ) を見た目で分ける。強調は主の側にだけ付ける。 */
-#source-lock-overwrite {
-  background: var(--accent) !important;
-  border-color: var(--accent) !important;
-  color: var(--bg-primary) !important;
-  font-weight: 600;
-}
-#source-lock-overwrite:hover { filter: brightness(1.1); color: var(--bg-primary) !important; }
-#source-lock-keep { color: var(--text-secondary); }
-/* まとめて当てる道は二択の「どちらか」ではなく、
-   同じ直しが何枚も続く回の逃がし道。二択と並べず、区切ってから下に置く。 */
-#source-lock-bulk {
-  color: var(--text-secondary);
-  border-style: dashed !important;
-  margin-top: 4px;
-  padding-top: 8px;
-}
-.source-lock-note { display: block; font-size: 11px; font-weight: normal; opacity: 0.85; margin-top: 2px; }
-#top-source-lock.undoable { cursor: pointer; }
-#top-source-lock.undoable:hover { border-color: var(--accent); }
-#top-source-lock {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--accent);
-  padding: 2px 6px;
-  font-size: 11px;
-  cursor: default;
-  white-space: nowrap;
-}
-
 #cp-modal {
   display: none;
   position: fixed;
@@ -1621,27 +1550,6 @@ html, body {
 #folder-panel .folder-svg-cross-summary {
   font-size: 10px; color: var(--accent-red); font-weight: bold; padding: 0 6px 2px;
 }
-/* この周の保存が効いたか。引き継ぐ前に見る行なので、
-   効かなかった図があるときだけ赤くする。 */
-#folder-panel .folder-save-verify {
-  font-size: 10px; color: var(--text-secondary); padding: 2px 6px;
-}
-#folder-panel .folder-save-verify.has-stale { color: var(--accent-red); font-weight: bold; }
-#folder-panel .folder-save-verify-bar {
-  display: flex; flex-wrap: wrap; gap: 4px; padding: 0 6px 3px;
-}
-#folder-panel button.folder-save-verify-check,
-#folder-panel button.folder-save-verify-act {
-  flex: 0 0 auto; width: auto; font-size: 9px; white-space: nowrap;
-  border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px;
-  background: transparent; color: var(--text-primary); cursor: pointer;
-}
-#folder-panel button.folder-save-verify-check:disabled { opacity: 0.5; cursor: default; }
-#folder-panel .folder-save-verify-row {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 6px 3px;
-}
-#folder-panel .folder-save-verify-name { font-size: 10px; color: var(--text-secondary); }
-#folder-panel .folder-save-verify-name.is-bad { color: var(--accent-red); }
 /* 中身が同じ図の統合と 1 枚削除。
    重複が 0 組なら行ごと出さないので、普段の一覧は今までのまま。 */
 #folder-panel .folder-dupe-summary {
@@ -6352,17 +6260,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   border: 1px solid #8a6a23; border-radius: 3px; padding: 0 6px;
 }
 
-#save-redirect-overlay {
-  position: sticky; top: 0; left: 0; z-index: 31;
-  margin: -16px -16px 12px -16px; padding: 6px 12px;
-  background: rgba(60, 40, 14, 0.96); color: #ffd79a;
-  border-bottom: 1px solid #8a6a23; font-size: 12px;
-}
-#save-redirect-overlay .srd-head { display: flex; align-items: center; gap: 8px; }
-#save-redirect-overlay .srd-head span { flex: 1; }
-#save-redirect-overlay button { font-size: 11px; padding: 1px 6px; cursor: pointer; }
-#save-redirect-overlay button:disabled { opacity: 0.6; cursor: default; }
-
 #save-swap-overlay {
   position: sticky;
   top: 0;
@@ -7448,7 +7345,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <button id="top-save" type="button" title="保存" data-save-state="saved">保存済み<span id="top-save-key"></span></button>
     <!-- 手で保存した直後に「いつ・どこへ」を数秒だけ出す -->
     <span id="top-save-flash" role="status" hidden></span>
-    <button id="top-source-lock" type="button" hidden></button>
 
     <!-- コマンド中心。名前を打って実行する入口 -->
     <button class="tb-btn" id="btn-command-palette" title="コマンド・要素を検索 (Ctrl+K)">
@@ -7874,15 +7770,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <ul id="ssw-twins" hidden></ul>
           <button type="button" id="btn-ssw-restore" hidden></button>
           <ol id="ssw-log" hidden></ol>
-        </div>
-        <!-- 押した保存が控え (`{名前}-編集中`) へ逸れたことを
-             その場で言い、1 押しで本体へ書き直せる帯。中身は save-redirect.js -->
-        <div id="save-redirect-overlay" role="alert" hidden>
-          <div class="srd-head">
-            <span id="srd-summary"></span>
-            <button type="button" id="btn-srd-overwrite"></button>
-            <button type="button" id="btn-srd-keep"></button>
-          </div>
         </div>
         <!-- 継承元の増減行に対応する図形を
              図の上で色付けしたときの帯。当たらなかった行はここに並べる -->
@@ -8492,7 +8379,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/file-open.js"></script>
 <script src="src/core/save-prefs.js"></script>
 <script src="src/core/save-target.js"></script>
-<script src="src/core/save-redirect.js"></script>
 <script src="src/core/source-lock.js"></script>
 <script src="src/core/export-shortcuts.js"></script>
 <script src="src/core/diagram-settings.js"></script>
@@ -8520,7 +8406,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/activity-branch-pattern.js"></script>
 <script src="src/core/swimlane-move.js"></script>
 <script src="src/core/save-diff.js"></script>
-<script src="src/core/save-verify.js"></script>
 <script src="src/core/version-timeline.js"></script>
 <script src="src/core/lineage.js"></script>
 <script src="src/core/svg-freshness.js"></script>

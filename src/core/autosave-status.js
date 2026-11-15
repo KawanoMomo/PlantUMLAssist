@@ -59,14 +59,6 @@ window.MA.autosaveStatus = (function() {
       // 見本・白紙のまま。行を足すか Ctrl+S を押すまでファイルは作らない。
       return { text: '見本のまま · ' + target + ' には書いていません', title: target + ' は見本・白紙のままなので、保存フォルダに書いていません。行を足すか Ctrl+S を押すとファイルになります', pending: false };
     }
-    if (last.reason === 'ask') {
-      return {
-        text: '⚠ 未保存 · ' + target + ' に書いてよいか確認中',
-        title: '一覧から開いたファイルです。「上書きする / 元のまま保つ」に答えるまで、'
-          + 'ディスクへは書きません（打った内容はブラウザに残っています）。押すと確認を出します',
-        pending: true,
-      };
-    }
     return {
       text: '⚠ 未保存 · ' + target + ' には書けません',
       title: '図に名前が付いていないため、保存フォルダのどのファイルに書けばよいか決まりません。'
