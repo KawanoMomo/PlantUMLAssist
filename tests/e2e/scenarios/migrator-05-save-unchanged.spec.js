@@ -94,9 +94,8 @@ test('migrator 手順 5 — 保存先の一覧から開いた LF の図を 1 行
   await page.keyboard.press('End');
   await page.keyboard.type('2');
   await page.waitForTimeout(600);
-  // 一覧から開いたファイルを直したので、上書きしてよいかを先に聞かれる。上書きすると答える。
-  await page.locator('#source-lock-overwrite').click({ timeout: 20000 });
-  await page.waitForTimeout(800);
+  // 一覧から開いたファイルを直しても、上書きしてよいかは聞かれない。
+  await expect(page.locator('#source-lock-modal')).toHaveCount(0);
   await page.locator('#editor').click();
   await page.keyboard.press('Control+s');
   await expect(page.locator('#status-save-result')).toContainText('保存しました', { timeout: 20000 });

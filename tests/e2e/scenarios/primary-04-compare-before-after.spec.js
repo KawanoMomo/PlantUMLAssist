@@ -45,12 +45,6 @@ async function bulkRename(page, from, to) {
   await expect(apply).toBeEnabled();
   await apply.click();
   await page.waitForTimeout(1500);
-  // 開いたままのファイルへ書くので上書きの確認が出る。会議の前に片付けておく。
-  const lock = page.locator('#source-lock-modal');
-  if (await lock.isVisible().catch(() => false)) {
-    await page.locator('#source-lock-overwrite').click();
-    await page.waitForTimeout(1200);
-  }
 }
 
 test('手順4 置換の前後を並べて見せられ、その画面を控えられる', async ({ page }) => {
@@ -145,11 +139,6 @@ test('手順4 保存フォルダへ直接書いた回を、後から履歴で選
   await expect(page.locator('#rename-summary')).toHaveAttribute('data-unopened-docs', '1');
   await page.locator('#btn-rename-apply').click();
   await page.waitForTimeout(2000);
-  const lock = page.locator('#source-lock-modal');
-  if (await lock.isVisible().catch(() => false)) {
-    await page.locator('#source-lock-overwrite').click();
-    await page.waitForTimeout(1200);
-  }
 
   // 到達条件その1: 1 回の置換が 1 件として残り、当たった図が並ぶ
   // (開いていた図も、開かずに書き戻した図も同じ 1 回)。

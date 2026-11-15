@@ -28,7 +28,6 @@ global.document = dom.window.document;
 });
 var WS = global.window.MA.workspace;
 var AS = global.window.MA.autoSave;
-var SL = global.window.MA.sourceLock;
 
 describe('workspace: タブの書き先のフォルダ', function() {
   beforeEach(function() {
@@ -156,18 +155,6 @@ describe('auto-save: 書き先のフォルダは解決器がタブごとに返�
       expect(posts.length).toBe(1);
       expect(posts[0].dir).toBe('C:/A');
     });
-  });
-});
-
-describe('source-lock: 確認の窓はどのフォルダのファイルかも言う', function() {
-  test('dir を渡すとフォルダ名が本文に入る', function() {
-    var t = SL.askText('ok_class', 'C:/work/diff-B/');
-    expect(t.body).toContain('ok_class.puml');
-    expect(t.body).toContain('C:/work/diff-B の中');
-  });
-  test('dir を渡さなければ従来の本文', function() {
-    var t = SL.askText('ok_class');
-    expect(t.body).not.toContain('の中）');
   });
 });
 

@@ -277,163 +277,11 @@ function promptComponentDraft() {
   return makeComponentDraft(s);
 }
 
-// 一覧から開いたときの本文 (docId → dsl)。
-var _openedDslById = {};
-
+// 一覧から開いたファイルは、開いたときの本文を憶える。読むだけの回 (本文が開いたときのまま) は
+// 書き戻さない。本文を変えたら、ほかの図と同じく Ctrl+S と自動保存でそのファイルに書く。
 function markOpenedSource(doc) {
   if (!doc || !window.MA.sourceLock) return;
-  // 開いたときの本文も憶える。読むだけの回で確認が割り込まないための材料
   try { window.MA.sourceLock.mark(doc.id, doc.name, doc.dsl); } catch (e) {}
-  // 開いたときの本文そのもの。確認から一括置換へ渡すとき、
-  // 「この 1 枚で何を何に直したか」を差分から読むために要る (錠は指紋しか憶えない)。
-  // localStorage には置かない (枚数ぶんの本文で膨らむ)。開き直したら諦めて空で出す。
-  try { _openedDslById[doc.id] = String(doc.dsl == null ? '' : doc.dsl); } catch (e) {}
-  try { updateTopSourceLock(); } catch (e) {}
-}
-
-function updateTopSourceLock() {
-  var el = document.getElementById('top-source-lock');
-  var SL = window.MA.sourceLock;
-  if (!el) return;
-  var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
-  var info = (SL && doc) ? SL.label(doc.id, doc.name) : null;
-  if (!info) { el.hidden = true; el.textContent = ''; el.title = ''; return; }
-  el.hidden = false;
-  el.textContent = info.text;
-  el.title = info.title;
-  // 「元ファイル保護」を選び間違えた人は、ここから 1 クリックで書き換える方へ戻す。
-  el.classList.toggle('undoable', !!info.undoable);
-  if (info.undoable && !el._slUndo) {
-    el._slUndo = true;
-    el.addEventListener('click', function() {
-      var SL2 = window.MA.sourceLock;
-      var d = window.MA.workspace ? window.MA.workspace.getActive() : null;
-      if (!SL2 || !d || !el.classList.contains('undoable')) return;
-      var r = SL2.answer(d.id, 'overwrite', _openDocNames(), false);
-      setSaveStatus('✎ ' + r.name + '.puml を書き換えます（元ファイル保護をやめました）');
-      updateTopSourceLock();
-      saveActiveDoc();
-    });
-  }
-}
-
-// 開いているタブの名前一覧 (控えの名前が既存タブと衝突しないように渡す)。
-function _openDocNames() {
-  try { return window.MA.workspace ? window.MA.workspace.list().map(function(d) { return d.name; }) : []; }
-  catch (e) { return []; }
-}
-
-// 確認は 1 枚のドキュメントにつき 1 回きり。開いている間に何度も出さない。
-var _sourceAskOpenFor = null;
-function askSourceLock(doc) {
-  var SL = window.MA.sourceLock;
-  if (!SL || !doc || _sourceAskOpenFor === doc.id) return;
-  if (document.getElementById('source-lock-modal')) return;
-  _sourceAskOpenFor = doc.id;
-  // どのフォルダのファイルを書き換えるのかも言う。
-  var t = SL.askText(doc.name, _docDir(doc));
-  var used = _openDocNames();
-  var wrap = document.createElement('div');
-  wrap.id = 'source-lock-modal';
-  wrap.innerHTML = '<div id="source-lock-panel" role="dialog" aria-modal="true" aria-label="' + t.title + '">'
-    + '<h3 style="margin:0 0 8px;">' + t.title + '</h3>'
-    + '<p id="source-lock-body" style="margin:0 0 12px;line-height:1.6;">' + t.body + '</p>'
-    // 主 (書き換える) を上に、強調して置く。副 (保つ) は
-    // 下に地味に置き、選んだ先がどうなるかを小さく添える。同格に並べない。
-    + '<div style="display:flex;flex-direction:column;gap:6px;">'
-    + '<button type="button" id="source-lock-overwrite">' + t.overwrite
-    + '<span class="source-lock-note">' + (t.overwriteNote || '') + '</span></button>'
-    + '<button type="button" id="source-lock-keep">' + t.keep
-    + '<span class="source-lock-note">' + (t.keepNote || '') + '</span></button>'
-    // 表記統一の反映は同じ直しが何枚にも及ぶ。1 枚ずつ
-    // 開いて答える道しか見えていないと、枚数だけ同じ操作を繰り返すことになる。
-    // 詰まったその場に、保存フォルダをまたぐ一括置換への入口を置く。
-    + '<button type="button" id="source-lock-bulk">' + (t.bulk || '')
-    + '<span class="source-lock-note">' + (t.bulkNote || '') + '</span></button>'
-    + '</div>'
-    // 開いたファイルの数だけ聞かれると、タブを切り替える
-    // たびに割り込まれる。既定で「他のファイルも同じ扱い」にして 1 回で済ませる。
-    + '<label id="source-lock-all-label" style="display:flex;gap:6px;align-items:center;margin-top:10px;font-size:12px;">'
-    + '<input type="checkbox" id="source-lock-all" checked>' + t.all + '</label>'
-    + '</div>';
-  document.body.appendChild(wrap);
-  // 既定はおすすめの方。ただし焦点は奪わない: この確認が出ている間も本文は打てて
-  // いなければならず (答えるまで書かないだけ)、焦点を奪うと打った字がどこにも入らない。
-  // 「どちらが既定か」は見た目と印で見せ、モーダルに焦点を移した人には Enter も効く。
-  var mainBtn = wrap.querySelector('#source-lock-overwrite');
-  if (mainBtn) {
-    mainBtn.setAttribute('data-default', '1');
-    mainBtn.setAttribute('aria-keyshortcuts', 'Enter');
-  }
-  wrap.addEventListener('keydown', function(ev) {
-    if (ev.key === 'Enter' && document.activeElement !== wrap.querySelector('#source-lock-keep')) {
-      ev.preventDefault();
-      answer(t.recommended === 'keep' ? 'keep' : 'overwrite');
-    }
-  });
-  function close() {
-    _sourceAskOpenFor = null;
-    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-  }
-  function answer(choice) {
-    var allEl = wrap.querySelector('#source-lock-all');
-    var all = !allEl || allEl.checked;
-    var res = SL.answer(doc.id, choice, used, all);
-    close();
-    var also = all ? '（開いている他のファイルも同じ扱いにします）' : '';
-    // 選んだ結果を必ず言い切る。keep のときは「元ファイルは変わらない」ことと
-    // 戻せる入口まで言う (静かに元の表記に戻ったように見える)。
-    var said = SL.answeredText
-      ? SL.answeredText(choice, doc.name, res.name)
-      : { text: '✎ ' + res.name + '.puml を書き換えます', undo: '' };
-    setSaveStatus(said.text + also + (said.undo ? '　' + said.undo : ''));
-    updateTopSourceLock();
-    saveActiveDoc();
-  }
-  wrap.querySelector('#source-lock-keep').addEventListener('click', function() { answer('keep'); });
-  wrap.querySelector('#source-lock-overwrite').addEventListener('click', function() { answer('overwrite'); });
-  // まとめて当てる道: このファイルは書き換えると答えたうえで、⇄ 一括置換を開く。
-  // ここで答えておかないと、一括置換の最中に同じ確認がまた割り込む。
-  var bulkBtn = wrap.querySelector('#source-lock-bulk');
-  if (bulkBtn) {
-    bulkBtn.addEventListener('click', function() {
-      // 先に答えておく (一括置換の最中に同じ確認が割り込まないように)。
-      // 書き戻しの途中で転んでも一括置換の入口までは必ず開く: 答えたのに
-      // 何も起きない画面にしない。
-      try { answer('overwrite'); } catch (e) {}
-      // 答えた直後は書き戻しとタブ列の描き直しが走る。その場で開くと描き直しに
-      // 畳み返されるので、1 拍置いてから開く。
-      setTimeout(function() {
-        var rb = document.getElementById('btn-tab-rename');
-        var panel = document.getElementById('rename-panel');
-        if (rb && panel && !panel.classList.contains('open')) rb.click();
-        var allEl = document.getElementById('rename-all-docs');
-        if (allEl && !allEl.checked) {
-          allEl.checked = true;
-          allEl.dispatchEvent(new Event('change'));
-        }
-        // この 1 枚で直した組をそのまま欄に入れる。打ち直させない
-        // (読み取れないときだけ空のまま出す)。
-        var fromEl = document.getElementById('rename-from');
-        var toEl = document.getElementById('rename-to');
-        var BR = window.MA.bulkRename;
-        var pair = null;
-        try {
-          var live = window.MA.workspace ? window.MA.workspace.getActive() : null;
-          if (BR && BR.detectRename && live) {
-            pair = BR.detectRename(_openedDslById[doc.id], live.dsl);
-          }
-        } catch (e) { pair = null; }
-        if (pair && fromEl && toEl) {
-          fromEl.value = pair.from;
-          toEl.value = pair.to;
-          fromEl.dispatchEvent(new Event('input'));
-          toEl.dispatchEvent(new Event('input'));
-        }
-        if (fromEl) { try { fromEl.focus(); } catch (e) {} }
-      }, 0);
-    });
-  }
 }
 
 // updateTopRenderStatus: レンダリングの相と所要時間を上部バーに映す。
@@ -3763,7 +3611,6 @@ function init() {
       if (sec < 3600) return Math.floor(sec / 60) + '分前';
       return Math.floor(sec / 3600) + '時間前';
     }
-    var _autoSavePending = null;
     // 直近の記録をどのタブの図の回かで分けて持つ (札は今のタブの図の回を言う)。
     var _asSeen = null;
     var _asByDoc = {};
@@ -3793,14 +3640,7 @@ function init() {
       var d = AST.describe(meta, last, relTime(meta.lastSavedAt), doc && doc.name, _clock);
       span.textContent = d.text;
       span.title = d.title;
-      // 返事待ちは押せば進む。文字だけだと「出ているのに何もできない」になる。
-      span.classList.toggle('autosave-pending', !!d.pending);
-      span.style.cursor = d.pending ? 'pointer' : '';
-      _autoSavePending = d.pending ? doc : null;
     }
-    span.addEventListener('click', function() {
-      if (_autoSavePending) { try { askSourceLock(_autoSavePending); } catch (e) {} }
-    });
     renderAutoSaveStatus = update;
     window.MA.autoSave.onSave(function() { update(); });
     update();
@@ -4872,20 +4712,17 @@ function writeDocToFolder(doc, fileDir) {
   if (!doc || !window.MA.workspace) return false;
   if (_sourcePathOf(doc.id)) return false;  // 手元から開いたファイルは元の場所にだけ書く
   // まだ見本のままのタブは書かない。
-  if (_isUntouchedDoc(doc)) { _noteSaveVerify(doc, 'untouched'); return false; }
+  if (_isUntouchedDoc(doc)) return false;
   if (_blockedFileWrite(doc.name)) {
     if (window.MA.autoSave && window.MA.autoSave.noteFileBlocked) {
       window.MA.autoSave.noteFileBlocked(doc.name, _blockedFileWrite(doc.name));
     }
     return false;
   }
-  var SL = window.MA.sourceLock;
-  var d = SL ? SL.decide(doc.id, doc.name, _openDocNames(), doc.dsl) : { action: 'write', name: doc.name };
-  if (d.action === 'ask') return false;
   // 開いたときのまま (読むだけ) なら、書き戻す中身は元ファイルと同じ。何もしない。
-  if (d.action === 'skip') return false;
-  var out = (d.name === doc.name) ? doc
-    : { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
+  var SL = window.MA.sourceLock;
+  if (SL && SL.decide(doc.id, doc.dsl).action === 'skip') return false;
+  var out = doc;
   window.MA.workspace.saveToFile(_withSourceEol(out), fileDir);
   if (window.MA.autoSave && window.MA.autoSave.noteFileWritten) {
     window.MA.autoSave.noteFileWritten(out.name, out.diagramType);
@@ -4910,13 +4747,6 @@ function writeChangedToFolder(changed) {
 }
 
 // アクティブなタブの現在の編集内容を workspace に書き戻す。
-// 保存を試すたびに「何を・どの道で書いたか」を控える。
-// 引き継ぐ前に、ここの控えとディスクを突き合わせて効いた図と効かなかった図を名指しする。
-function _noteSaveVerify(doc, outcome) {
-  var SV = window.MA.saveVerify;
-  if (!SV || !doc || !doc.name) return;
-  try { SV.note(doc.name, doc.dsl, outcome); } catch (e) {}
-}
 
 function saveActiveDoc() {
   if (!window.MA.workspace) return null;
@@ -4936,46 +4766,25 @@ function saveActiveDoc() {
       if (window.MA.autoSave && window.MA.autoSave.noteFileBlocked) {
         window.MA.autoSave.noteFileBlocked(doc.name, blocked);
       }
-      // 書かなかった道もここで控える。
-      // 控えないと、画面には「保存した」しか残らない。
-      _noteSaveVerify(doc, 'blocked');
       renderDiffBadge();
       try { renderLiveDiffChip(); } catch (e) {}
       return doc;
     }
-    if (doc && cfg && cfg.backend !== 'file') _noteSaveVerify(doc, 'download');
     // まだ見本・白紙のままのタブは、自動の書き戻しではディスクへ書かない
     // (起動しただけで既存の図が見本で潰れる)。
     if (doc && cfg && cfg.backend === 'file' && _isUntouchedDoc(doc)) {
-      _noteSaveVerify(doc, 'untouched');
       renderDiffBadge();
       try { renderLiveDiffChip(); } catch (e) {}
       return doc;
     }
     if (doc && cfg && cfg.backend === 'file') {
-      // 開いたままのファイルへ最初に書き戻す前に
-      // 一度だけ聞く。答えるまでは書かない (見比べ中の元ファイルを守る)。
+      // 一覧から開いて眺めるだけの回は書かない (本文は開いたときのままで、元ファイルは既にこの内容)。
       var SL = window.MA.sourceLock;
-      var d = SL ? SL.decide(doc.id, doc.name, _openDocNames(), doc.dsl) : { action: 'write', name: doc.name };
-      if (d.action === 'ask') {
-        try { askSourceLock(doc); } catch (e) {}
-        _noteSaveVerify(doc, 'asked');
+      if (SL && SL.decide(doc.id, doc.dsl).action === 'skip') {
         renderDiffBadge();
         try { renderLiveDiffChip(); } catch (e) {}
         return doc;
       }
-      // 一覧から開いて眺めるだけの回。本文は開いたときの
-      // ままなので、元ファイルは既にこの内容で、書く必要も守るものも無い。聞かない。
-      if (d.action === 'skip') {
-        try { updateTopSourceLock(); } catch (e) {}
-        _noteSaveVerify(doc, 'skipped');
-        renderDiffBadge();
-        try { renderLiveDiffChip(); } catch (e) {}
-        return doc;
-      }
-      // 既定が当たって書き先が変わることがあるので、上部バーの錠表示も合わせ直す。
-      try { updateTopSourceLock(); } catch (e) {}
-      if (d.name !== doc.name) doc = { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
       // 書き先はそのタブのフォルダ (保存先を替える前に開いたタブは開いたフォルダ)。
       window.MA.workspace.saveToFile(_withSourceEol(doc), _docDir(doc));
       // 保存先が Git なら、変更 (M / A) の数え直しを予約する (design 10c)。
@@ -4984,9 +4793,6 @@ function saveActiveDoc() {
       if (window.MA.autoSave && window.MA.autoSave.noteFileWritten) {
         window.MA.autoSave.noteFileWritten(doc.name, doc.diagramType);
       }
-      // 書きに行った。効いたかどうかはディスクと突き合わせるまで分からないので、
-      // 「何を書くつもりだったか」だけを控える。
-      _noteSaveVerify(doc, 'written');
       try { _fwNoteSaved(doc.name); } catch (e) {}
       // 保存した時点を差分の基準にする。
       if (window.MA.saveDiff) window.MA.saveDiff.mark(doc.name, doc.dsl);
@@ -5127,7 +4933,6 @@ function promptRenameDoc(docId, message, suggest) {
   // 図の設定の「図名 / File name」欄も新しい名前に揃える
   // (前の名前のまま残ると、その欄を触ったときに前の名前へ戻してしまう)。
   try { renderDiagramSettings(true); } catch (e) {}
-  try { updateTopSourceLock(); } catch (e) {}
   try { renderLineageBadge(); } catch (e) {}
   // 新しい名前で書き直す (名前を選び直した新しい図は、ここで初めてファイルになる)。
   if (renamed && renamed.fresh && isActive) { try { saveActiveDoc(); } catch (e) {} }
@@ -5251,7 +5056,6 @@ function renderTabs() {
   });
   renderDiffBadge();
   try { renderLiveDiffChip(); } catch (e) {}
-  try { updateTopSourceLock(); } catch (e) {}
   try { renderConsistencyBadge(); } catch (e) {}
   try { renderEventSyncBadge(); } catch (e) {}
   try { renderPinBadge(); } catch (e) {}
@@ -12266,7 +12070,6 @@ function setupTabs() {
         appendSvgSection(panel, dir);
       appendPartCrossSection(panel);
         appendWriteSection(panel, dir);
-        appendSaveVerifySection(panel, dir);
         appendDupeSection(panel, dir);
       appendSyncSection(panel, dir);
         appendSwapQueueSection(panel, dir);
@@ -12326,7 +12129,6 @@ function setupTabs() {
       appendSvgSection(panel, dir);
       appendPartCrossSection(panel);
       appendWriteSection(panel, dir);
-      appendSaveVerifySection(panel, dir);
       appendDupeSection(panel, dir);
       appendSyncSection(panel, dir);
       appendSwapQueueSection(panel, dir);
@@ -12499,136 +12301,6 @@ function setupTabs() {
   // 状態遷移図の遷移ラベルとクラス図のメソッドの
   // 対応は、これまで tools/audit.js を実行して JSON を読み解くしかなかった。
   // 部品ごとに 3 枚を束ねた行を一覧の頭に置き、宣言の無い名前を赤字で名指しする。
-  // ── この周の保存が効いたか ──────────────
-  // 今の画面は「保存操作をした」ことしか言わず、錠の問いに答えていない・テンプレ
-  // 宣言で止めている・保存先がダウンロードのまま、のどれかで黙って書かれない道が
-  // いくつもある。新人に引き継ぐ前に、保存先ファイルの中身と突き合わせて
-  // 「効いた図 / 効かなかった図」を名指しする。
-
-  // 書きに行った図だけディスクを読み直して突き合わせる。読めなければ「無い」。
-  function verifySaves(dir) {
-    var SV = window.MA.saveVerify;
-    var WS = window.MA.workspace;
-    if (!SV || !WS) return Promise.resolve([]);
-    var todo = SV.pending();
-    var chain = Promise.resolve();
-    todo.forEach(function(n) {
-      chain = chain.then(function() {
-        return Promise.resolve(WS.loadFile(n, dir)).then(function(text) {
-          SV.applyDisk(n, text);
-        }, function() { SV.applyDisk(n, null); });
-      });
-    });
-    return chain.then(function() { return SV.rows(); });
-  }
-
-  // 効かなかった図を、控えてある「書くつもりだった本文」で書き直す。
-  // 錠の問いを待たずに書く (名指しして押した 1 枚なので、守るものは無い)。
-  function resaveVerified(name, dir) {
-    var SV = window.MA.saveVerify;
-    var WS = window.MA.workspace;
-    var r = SV && SV.record(name);
-    if (!r || !WS) return Promise.resolve(null);
-    return Promise.resolve(WS.saveToFile({ name: name, dsl: r.dsl }, dir)).then(function() {
-      SV.note(name, r.dsl, 'written');
-      return Promise.resolve(WS.loadFile(name, dir)).then(function(text) {
-        var st = SV.applyDisk(name, text);
-        if (window.MA.toast) {
-          window.MA.toast.show(st === 'ok' ? name + ' を保存し直しました（ディスクの中身が一致しました）'
-                                           : name + ' は書き直してもディスクが変わりません: ' + SV.reasonText(st));
-        }
-        renderFolderPanel();
-        return st;
-      });
-    });
-  }
-
-  function appendSaveVerifySection(host, dir) {
-    var SV = window.MA.saveVerify;
-    if (!SV) return;
-    var rows = SV.rows();
-    if (!rows.length) return;
-    var bad = rows.filter(function(r) { return r.bad; });
-    var sum = document.createElement('div');
-    sum.className = 'folder-save-verify' + (bad.length ? ' has-stale' : '');
-    sum.id = 'folder-save-verify';
-    sum.textContent = SV.summary(rows);
-    sum.title = '「保存操作をした」ではなく「保存先ファイルの中身が編集後になっているか」です。'
-      + '引き継ぐ前にここが 0 枚であることを確かめます';
-    host.appendChild(sum);
-
-    var bar = document.createElement('div');
-    bar.className = 'folder-save-verify-bar';
-    var check = document.createElement('button');
-    check.type = 'button';
-    check.className = 'folder-save-verify-check';
-    check.id = 'btn-save-verify';
-    check.textContent = '保存を確かめる（' + rows.length + ' 枚）';
-    check.title = 'この周に保存を試した図のファイルを読み直し、編集後の中身と突き合わせます';
-    check.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      check.disabled = true;
-      check.textContent = '確かめています…';
-      verifySaves(dir).then(function() { renderFolderPanel(); },
-                            function() { renderFolderPanel(); });
-    });
-    bar.appendChild(check);
-    // 引き継ぎ資料にそのまま貼れる形で写す (受け取った側が 14 枚を開き直さずに済む)。
-    var copy = document.createElement('button');
-    copy.type = 'button';
-    copy.className = 'folder-save-verify-check';
-    copy.id = 'btn-save-verify-copy';
-    copy.textContent = '引き継ぎ用に写す';
-    copy.title = '効いた図 / 効かなかった図の一覧を、引き継ぎ資料に貼れる形でクリップボードへ写します';
-    copy.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      var text = SV.handoffText(SV.rows());
-      var done = function() { if (window.MA.toast) window.MA.toast.show('引き継ぎ用の一覧を写しました'); };
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(done, done);
-        } else { done(); }
-      } catch (e) { done(); }
-    });
-    bar.appendChild(copy);
-    host.appendChild(bar);
-
-    rows.forEach(function(r) {
-      if (!r.bad && r.status !== 'unknown') return;   // 効いた図は 1 行の要約で足りる
-      var row = document.createElement('div');
-      row.className = 'folder-save-verify-row';
-      row.setAttribute('data-save-verify', r.name);
-      row.setAttribute('data-save-status', r.status);
-      var txt = document.createElement('span');
-      txt.className = 'folder-save-verify-name' + (r.bad ? ' is-bad' : '');
-      txt.textContent = SV.rowLabel(r) + '（' + r.reason + '）';
-      row.appendChild(txt);
-      // 開いて直すのか、控えてある本文で書き直すのかを、その場で選べるようにする。
-      var open = document.createElement('button');
-      open.type = 'button';
-      open.className = 'folder-save-verify-act';
-      open.setAttribute('data-save-open', r.name);
-      open.textContent = '開く';
-      open.addEventListener('click', function(ev) { ev.stopPropagation(); openFromFolder(r.name); });
-      row.appendChild(open);
-      if (r.status === 'stale' || r.status === 'missing' || r.status === 'asked') {
-        var again = document.createElement('button');
-        again.type = 'button';
-        again.className = 'folder-save-verify-act';
-        again.setAttribute('data-save-resave', r.name);
-        again.textContent = '保存し直す';
-        again.title = '編集後の本文をこのファイルへ書き直します（錠の問いは待ちません）';
-        again.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          again.disabled = true;
-          resaveVerified(r.name, dir);
-        });
-        row.appendChild(again);
-      }
-      host.appendChild(row);
-    });
-  }
-
   // ── 中身が同じ図の統合と、1 枚だけの削除 ──
   // 指摘.md は毎回「can_init_sequence-編集中 が本体と byte 単位で同一のまま」の
   // 整理を求めるのに、📂一覧には開く・名前を変えるしか無く、実現するには保存
@@ -13680,20 +13352,9 @@ function setupTabs() {
       if (typeof dsl === 'string' && _isUntouchedDoc({ dsl: dsl, diagramType: diagramType || currentDiagramType })) {
         return { name: '', reason: 'untouched' };
       }
-      // 見比べのために開いた元ファイルの錠も、Ctrl+S と同じように効かせる。
-      // ここを素通しすると「元のまま保つ」と答えた図へ自動保存だけが書き続ける。
+      // 一覧から開いたままの本文は書かない (開いたときのまま。元ファイルは既にこの内容)。
       var SL = window.MA.sourceLock;
-      if (SL && doc) {
-        var d;
-        try { d = SL.decide(doc.id, doc.name, _openDocNames(), doc.dsl); }
-        catch (e) { return { name: '', reason: 'no-name' }; }
-        if (!d || d.action === 'ask') return { name: '', reason: 'ask' };   // 返事を待つ間は書かない
-        if (d.action === 'skip') return { name: '', reason: 'unchanged' };  // 開いたときのまま。書かない
-        if (d.name) {   // 控えの名前へ逃がす (逃がさないときは今の名前)
-          return (doc.fresh && d.name === name) ? { name: d.name, dir: _docDir(doc), freshId: doc.id, docId: doc.id }
-            : { name: d.name, dir: _docDir(doc), docId: doc.id };
-        }
-      }
+      if (SL && doc && SL.decide(doc.id, doc.dsl).action === 'skip') return { name: '', reason: 'unchanged' };
       // 書き先のフォルダもタブごと (保存先を替える前に開いたタブは開いたフォルダ)。
       // まだ 1 度も書いていない新しい図は印を添える (既にある別の図へは書かない)。
       // 書いたタブの印も添える (自分で書いた続きは図種の読みが替わっても別名へ回さない)。
@@ -13732,23 +13393,6 @@ function setupTabs() {
       });
     }
 
-    // 返事待ちで書かなかった回は、その場で確認を出す。自動保存の側から聞かないと、
-    // 「打っているのにディスクに何も起きない」が黙って続く (利用者が何度も詰まった形)。
-    if (AS.onFileDeferred) {
-      AS.onFileDeferred(function(info) {
-        if (!info || info.reason !== 'ask') return;
-        var WS = window.MA.workspace;
-        var doc = WS && WS.getActive ? WS.getActive() : null;
-        if (!doc) return;
-        // 打った時点の「返事待ち」が、答えた後に届くことがある (debounce の間に答えた)。
-        // もう答えてあれば聞き直さず、その回の分を書く (答えた直後に同じ窓がもう一度出ていた)。
-        var SLd = window.MA.sourceLock;
-        var st = (SLd && SLd.stateOf) ? SLd.stateOf(doc.id) : { mode: 'ask' };
-        if (!st || st.mode !== 'ask') { try { saveActiveDoc(); } catch (e) {} return; }
-        try { askSourceLock(doc); } catch (e) {}
-        try { renderAutoSaveStatus(); } catch (e) {}
-      });
-    }
   })();
 
   // ── テンプレへの自動保存を止める ──────────────
@@ -24716,67 +24360,6 @@ function writeBackToSource(doc) {
 // 保存先ディレクトリを設定していても「保存」は
 // ダウンロードしか起こさず、フォルダに .puml ができなかった。保存先を設定して
 // いる間は、保存先へ書くのが「保存」である。判定は save-target が唯一の規約。
-// ── 保存が控えへ逸れたときの帯 ──────────────────
-// 「保存を押したのにディスクが変わらない」の正体は、source-lock の既定が
-// 黙って `{名前}-編集中` へ書き先を移していたこと。帯で書いた先を名指しし、
-// [本体に書く] の 1 押しで本体へ入れられるようにする。
-function hideSaveRedirect() {
-  var el = document.getElementById('save-redirect-overlay');
-  if (el) el.hidden = true;
-}
-
-function showSaveRedirect(info, dir) {
-  var SR = window.MA.saveRedirect;
-  var el = document.getElementById('save-redirect-overlay');
-  if (!el) return;
-  var n = (SR && info) ? SR.notice(info.origin, info.written, info.reason, dir) : null;
-  if (!n) { el.hidden = true; return; }
-  el.hidden = false;
-  el.setAttribute('data-redirect', SR.key(n.origin, n.written));
-  var sum = document.getElementById('srd-summary');
-  if (sum) { sum.textContent = n.text; sum.title = n.detail; }
-  var ow = document.getElementById('btn-srd-overwrite');
-  if (ow) {
-    ow.textContent = n.overwriteLabel;
-    ow.title = n.overwriteTitle;
-    ow.disabled = false;
-    ow.onclick = function() { writeRedirectToOrigin(info, dir); };
-  }
-  var keep = document.getElementById('btn-srd-keep');
-  if (keep) {
-    keep.textContent = n.keepLabel;
-    keep.title = n.keepTitle;
-    keep.onclick = function() { hideSaveRedirect(); };
-  }
-}
-
-// [本体に書く]。この図の錠を「上書き」に倒し、今の本文を本体へ書く。
-// あわせて「他のファイルも同じ扱い」の既定を外す —— 黙って逸れたことが
-// 詰まりの原因なので、次からは逸らす前に聞く。
-function writeRedirectToOrigin(info, dir) {
-  var SL = window.MA.sourceLock;
-  var SR = window.MA.saveRedirect;
-  var WS = window.MA.workspace;
-  if (!info || !WS) return;
-  try { if (SL) SL.answer(info.docId, 'overwrite', _openDocNames(), false); } catch (e) {}
-  try { if (SL && SL.setDefault) SL.setDefault(null); } catch (e) {}
-  var out = { id: info.docId, name: info.origin, diagramType: info.diagramType, dsl: info.dsl };
-  var btn = document.getElementById('btn-srd-overwrite');
-  if (btn) { btn.disabled = true; btn.textContent = '書いています…'; }
-  WS.saveToFile(out, dir).then(function(ok) {
-    hideSaveRedirect();
-    if (!ok) {
-      if (window.MA.toast) window.MA.toast.show('⚠ ' + info.origin + '.puml に書けませんでした');
-      return;
-    }
-    if (window.MA.saveDiff) window.MA.saveDiff.mark(out.name, out.dsl);
-    if (window.MA.versionTimeline) window.MA.versionTimeline.push(out.name, out.dsl);
-    try { updateTopSourceLock(); } catch (e) {}
-    var ST = window.MA.saveTarget;
-    if (ST) setSaveStatus(ST.messageFor({ mode: 'file', name: out.name, dir: dir }, true));
-    if (window.MA.toast && SR) window.MA.toast.show(SR.doneText(info.origin));
-  });
-}
 
 // 手で押した保存が書けたら、その中身を
 // 「前回保存版」にして未保存の印 (タブ・上部バー・FILES の行) を同じ時に消し、保存ボタンの隣に
@@ -24852,23 +24435,8 @@ function saveFile() {
   }
   var cfg = null;
   try { cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null; } catch (e) { cfg = null; }
-  // 手で押した「保存」も、開いた元ファイルの錠に従う。
-  // 「元のまま保つ」を選んだあとに保存を押して元が消えたら、選ばせた意味が無い。
-  var SLm = window.MA.sourceLock;
-  // 押した保存が控え (`{名前}-編集中`) へ逸れたことを、
-  // 保存のその場で言うために「開いている図の名前」を控えておく。
-  var redirected = null;
-  if (doc && SLm && cfg && cfg.backend === 'file') {
-    // 手で押した保存は、本文が開いたときのまま (skip) でも元ファイルへ書いてよい
-    // (利用者が自分で押している。decide は skip でも書き先に元の名前を返す)。
-    var dm = SLm.decide(doc.id, doc.name, _openDocNames(), doc.dsl);
-    if (dm.action === 'ask') { try { askSourceLock(doc); } catch (e) {} return; }
-    if (dm.name !== doc.name) {
-      redirected = { docId: doc.id, origin: doc.name, written: dm.name,
-                     reason: 'lock-copy', diagramType: doc.diagramType, dsl: doc.dsl };
-      doc = { id: doc.id, name: dm.name, diagramType: doc.diagramType, dsl: doc.dsl };
-    }
-  }
+  // 手で押した保存は、本文が開いたときのままでもそのファイルへ書く (利用者が自分で押している)。
+  if (doc && window.MA.sourceLock) { try { window.MA.sourceLock.release(doc.id); } catch (e) {} }
 
   var ST = window.MA.saveTarget;
   // 書き先はそのタブのフォルダ。保存先を替えても、前に開いたタブは開いたファイルへ書く。
@@ -24880,9 +24448,6 @@ function saveFile() {
       setSaveStatus(ST.messageFor(target, ok));
       if (ok) {
         _afterManualSave(doc, target, true);
-        // 書いた先が開いている図と違うなら、そのことを最優先で言う。
-        // 状態バーの 1 行だけでは「保存した」と「本体が変わった」の食い違いが読めない。
-        showSaveRedirect(redirected, target.dir);
         // この保存で中身が別名の図と入れ替わっていないか
         runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
       }

@@ -200,13 +200,6 @@ test('手順5 前回保存版から何行消えるかが、保存を押す前に
   const restore = page.locator('#btn-compare-restore');
   await expect(restore).toBeVisible();
   await expect(restore).toHaveAttribute('title', /消えた \d+ 行が戻り/);
-  // 一覧から開いた図には錠がかかっていて、最初の書き戻しの直前に一度だけ問いが出る。
-  // 戻すのはエディタの中身なので、ファイルはそのままにして (書き換えない) 先へ進む。
-  const lock = page.locator('#source-lock-modal');
-  if (await lock.isVisible().catch(() => false)) {
-    await page.locator('#source-lock-keep').click();
-    await page.waitForTimeout(600);
-  }
   await restore.click();
   await page.waitForTimeout(400);
   // 到達条件その5: 戻した直後の画面が、差が 0 になったことをそのまま映す

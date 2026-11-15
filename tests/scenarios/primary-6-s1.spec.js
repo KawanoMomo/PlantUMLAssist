@@ -21,17 +21,6 @@ const MSG = { from: 'SpiDrv', to: 'Hw', label: 'WriteReg(BAUD)' };
 const SCRIPT_OPS = 12;
 const RENDER_MS_MAX = 3000;
 
-// 一覧から開いた図に最初に書き戻すとき「開いたファイルを上書きしますか」を聞く版がある。
-// 聞かれたら「このファイルを書き換える」と答える (聞かない版ではそのまま進む)。答えたら 1 操作と数える。
-async function answerLockIfAsked(page) {
-  const modal = page.locator('#source-lock-modal');
-  const asked = await modal.waitFor({ state: 'visible', timeout: 3000 }).then(() => true, () => false);
-  if (!asked) return 0;
-  await page.locator('#source-lock-overwrite').click();
-  await expect(modal).toBeHidden({ timeout: 10000 });
-  return 1;
-}
-
 test('primary 手順6 直した図の before / after と書き出した SVG を置き、差分行数が一覧と合う', async ({ page }, testInfo) => {
   test.setTimeout(120 * 1000);
   const dir = S.absDirFor(__filename);
@@ -65,7 +54,6 @@ test('primary 手順6 直した図の before / after と書き出した SVG を�
   ops += 5;
   expect(r.diffLines).toBe(1);
   expect(r.renderMs).toBeLessThanOrEqual(RENDER_MS_MAX);
-  ops += await answerLockIfAsked(page);
 
   // 保存 (実キー)。
   await page.locator('#editor').click();

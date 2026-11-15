@@ -128,10 +128,10 @@ test('手順3 タイトル欄を変えてからすぐタブ名を変えて保存
   expect(await S.readDoc(page, DIR, NEW)).toContain('title ' + NEW);
 });
 
-// BLK-junior-20260915-2240: 部品名を統一したあと上書き保存すると出る確認が二択とも
-// 同格に見え、強調はむしろ「元ファイルを保つ」側に付いていた。選び間違えると直した
-// 表記が元ファイルに入らないまま、エラーも出ずに進んでしまう。
-test('手順3 上書き確認は「書き換える」が既定だと分かり、1 クリックで直した表記が入る', async ({ page }) => {
+// TICKET-owner-20261115-1829-prune: 部品名を統一したあと、保存先の図は「開いたファイルを上書きしますか」の
+// 窓を出さず、ほかの図と同じく自動保存でそのファイルに書く (選び間違えて直した表記が入らない道を無くした)。
+// `{名前}-編集中` の控えも作らない。
+test('手順3 保存先から開いた図を直すと、窓を出さずにそのファイルへ直した表記が入る', async ({ page }) => {
   const NAME = 'SPIドライバ構成';
   const BEFORE = ['@startuml', 'title SPIドライバ構成', '[SPI_Driver] --> [IrqCtrl]', '@enduml'].join('\n');
   await S.bootWithSaveDir(page, DIR);
@@ -143,103 +143,13 @@ test('手順3 上書き確認は「書き換える」が既定だと分かり、
 
   // 部品名を統一した (「要素名をまとめて付け替え」の結果と同じ本文) 状態にする。
   await S.typeDsl(page, BEFORE.replace('SPI_Driver', 'Spi_Driver').replace('IrqCtrl', 'IRQCtrl'));
-  await page.waitForSelector('#source-lock-modal');
 
-  // 到達条件その1: 既定は「書き換える」側で、印と文言でそれが分かる。
-  const main = page.locator('#source-lock-overwrite');
-  await expect(main).toContainText('おすすめ');
-  await expect(main).toHaveAttribute('data-default', '1');
-  // 到達条件その2: 「保つ」側には、元ファイルが今の表記に変わらないことが添えてある。
-  await expect(page.locator('#source-lock-keep')).toContainText('変わりません');
-  // 確認が出ている間も本文は打てる (焦点は奪わない)。
-  expect(await page.evaluate(() => document.activeElement && document.activeElement.id))
-    .not.toBe('source-lock-overwrite');
-
-  // 到達条件その3: 主ボタン 1 クリックで、直した表記が元ファイルに入る。
-  await main.click();
-  await expect(page.locator('#source-lock-modal')).toHaveCount(0);
-  await page.waitForTimeout(1200);
+  await expect.poll(async () => (await S.readDoc(page, DIR, NAME)) || '', { timeout: 10000 }).toContain('Spi_Driver');
   const saved = await S.readDoc(page, DIR, NAME);
-  expect(saved).toContain('Spi_Driver');
   expect(saved).toContain('IRQCtrl');
-});
-
-// BLK-junior-20260916-0046: 指摘反映で 10 ファイルを 1 枚ずつ開いて直して保存すると、
-// 保存のたびに上書き確認へ答えることになる。答えは「他のファイルも同じ扱い」で 1 回に
-// 畳まれているが、1 枚ずつ開いて直す手順そのものは残る (10 枚で 20 クリック)。
-// 保存フォルダをまたぐ ⇄ 一括置換なら 1 回で済むので、詰まったその場から入れる。
-test('手順3 上書き確認から、同じ直しを保存フォルダの図へまとめて当てられる', async ({ page }) => {
-  const NAMES = ['一括-gpio_init_sequence', '一括-spi_sequence', '一括-TIMER初期化'];
-  const before = (n) => ['@startuml', 'title ' + n, 'participant SPI_Driver',
-    'participant Hal', 'SPI_Driver -> Hal : Init()', '@enduml'].join('\n');
-
-  await S.bootWithSaveDir(page, DIR);
-  await S.clearDir(page, DIR);
-  for (const n of NAMES) await S.putDoc(page, DIR, n, before(n));
-
-  // 1 枚目を一覧から開いて表記を直す (junior の指摘反映の 1 枚目)。
-  await S.openFolder(page);
-  await S.openFolderItem(page, NAMES[0]);
-  await S.typeDsl(page, before(NAMES[0]).replace(/SPI_Driver/g, 'Spi_Driver'));
-  await page.waitForSelector('#source-lock-modal');
-
-  // 到達条件その1: 二択の下に「まとめて当てる」道があり、何が省けるかが読める。
-  const bulk = page.locator('#source-lock-bulk');
-  await expect(bulk).toBeVisible();
-  await expect(bulk).toContainText('まとめて');
-  await expect(bulk).toContainText('1 枚ずつ開き直さずに済みます');
-
-  // 到達条件その2: 1 クリックで確認は閉じ (この図は書き換える側に倒る)、
-  // ⇄ 一括置換が「全図に適用」で開く。
-  await bulk.click();
   await expect(page.locator('#source-lock-modal')).toHaveCount(0);
-  await page.waitForSelector('#rename-panel.open', { timeout: 5000 });
-  await expect(page.locator('#rename-all-docs')).toBeChecked();
-
-  // 到達条件その3: いま直した組が欄に入っている (打ち直させない)。
-  await expect(page.locator('#rename-from')).toHaveValue('SPI_Driver');
-  await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
-
-  // 到達条件その4: そのまま適用すると、開いていない残りの図まで直る
-  // (1 枚ずつ開き直さない)。
-  await page.waitForTimeout(1000);
-  const apply = page.locator('#btn-rename-apply');
-  await expect(apply).toBeEnabled();
-  await apply.click();
-  await page.waitForTimeout(2500);
-
-  for (const n of NAMES) {
-    const saved = await S.readDoc(page, DIR, n);
-    expect(saved, n + ' が直っていない').toContain('Spi_Driver');
-    expect(saved, n + ' に旧表記が残っている').not.toMatch(/SPI_Driver/);
-  }
-});
-
-test('手順3 「保つ」を選んでも、元ファイルが変わらないことが出て 1 クリックで戻せる', async ({ page }) => {
-  const NAME = 'SPIドライバ構成2';
-  const BEFORE = ['@startuml', 'title SPIドライバ構成2', '[SPI_Driver] --> [IrqCtrl]', '@enduml'].join('\n');
-  await S.bootWithSaveDir(page, DIR);
-  await S.clearDir(page, DIR);
-  await S.putDoc(page, DIR, NAME, BEFORE);
-  await S.openFolder(page);
-  await S.openFolderItem(page, NAME);
-  await page.waitForTimeout(800);
-  await S.typeDsl(page, BEFORE.replace('SPI_Driver', 'Spi_Driver'));
-  await page.waitForSelector('#source-lock-modal');
-
-  await page.locator('#source-lock-keep').click();
-  await page.waitForTimeout(1000);
-  // 到達条件その1: 何が起きたかを言い切る (黙って元の表記のままにしない)。
-  await expect(page.locator('#status-save-result')).toContainText('変更前のまま');
-  // 到達条件その2: 元ファイルはまだ古い表記のまま (これが junior の詰まった状態)。
-  expect(await S.readDoc(page, DIR, NAME)).toContain('SPI_Driver');
-
-  // 到達条件その3: 上部の「元ファイル保護」の札を 1 クリックすると、元ファイルを書き換える方に戻る。
-  const lock = page.locator('#top-source-lock');
-  await expect(lock).toBeVisible();
-  await lock.click();
-  await page.waitForTimeout(1500);
-  expect(await S.readDoc(page, DIR, NAME)).toContain('Spi_Driver');
+  await expect(page.locator('#top-source-lock')).toHaveCount(0);
+  expect(await S.listDir(page, DIR)).toEqual([NAME]);
 });
 
 // BLK-builder-20260923-1849-1 (design 10a): FILES ツリーの節は「開いている図・保存先 = 開く、
@@ -285,8 +195,8 @@ test('手順3 起動すると保存先の一覧が開いていて、読むだけ
 
 // BLK-builder-20260924-1741-2 (design 9a / 10a): 未保存の印はタブ・上部バーの保存ボタン・FILES ツリーの行で
 // 同じ判定・同じ時に出る。以前はタブにだけ ● が出て、ツリーには出ず、上部バーは「保存済み」のままだった。
-// 保存先から開いた図は、最初に書き戻す前に「上書きしますか」と聞く。答えるまでは未保存のまま。
-test('手順3 保存先の図を直すとタブ・上部バー・FILES ツリーに同時に未保存の印が出て、書き換えると揃って消える', async ({ page }) => {
+// 保存先から開いた図も、ほかの図と同じく自動保存が書くまでは未保存のまま。
+test('手順3 保存先の図を直すとタブ・上部バー・FILES ツリーに同時に未保存の印が出て、書き込むと揃って消える', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
   await S.clearDir(page, DIR);
   await S.putDoc(page, DIR, 'spi_state', ['@startuml', '[*] --> Idle', '@enduml'].join('\n'));
@@ -314,15 +224,13 @@ test('手順3 保存先の図を直すとタブ・上部バー・FILES ツリー
   await page.keyboard.press('Control+End');
   await page.keyboard.press('Home');
   await page.keyboard.type('Idle --> Run\n');
-  await expect(page.locator('#source-lock-modal')).toBeVisible({ timeout: 10000 });
   await expect(tabDot).toHaveText('●');
   await expect(save).toHaveAttribute('data-save-state', 'dirty');
   await expect(save).toContainText('● 保存');
   await expect(openMark).toHaveText('●');
   await expect(fileMark).toHaveText('●');
 
-  // 「このファイルを書き換える」で書くと、3 か所の印が揃って消える。
-  await page.locator('#source-lock-overwrite').click();
+  // 自動保存がそのファイルへ書くと (窓は出ない)、3 か所の印が揃って消える。
   await expect(save).toHaveAttribute('data-save-state', 'saved', { timeout: 10000 });
   await expect(save).toHaveText('保存済み');
   await expect(tabDot).toHaveCount(0);

@@ -3,14 +3,13 @@
 // 文字だけで出す。💾 などの絵文字を付けない (9c の After「13:31 に自動保存 · 変更なし」)。
 // 書けなかった回の ⚠ は警告なので残す。
 var W = (typeof window !== 'undefined' && window) || global.window;
-['autosave-status', 'save-target', 'save-redirect'].forEach(function(n) {
+['autosave-status', 'save-target'].forEach(function(n) {
   var f = '../src/core/' + n + '.js';
   try { delete require.cache[require.resolve(f)]; } catch (e) {}
   require(f);
 });
 var AST = W.MA.autosaveStatus;
 var ST = W.MA.saveTarget;
-var SR = W.MA.saveRedirect;
 var EMOJI = /[-]/u;
 var meta = { lastSavedAt: '2026-09-24T13:31:04', lastSavedType: 'plantuml-sequence' };
 
@@ -33,10 +32,9 @@ describe('保存状態の 1 行に絵文字を付けない (design 9c)', functio
     expect(d.text.indexOf('⚠')).toBe(0);
   });
 
-  test('保存直後の 1 行と書き直しの 1 行も文字だけ', function() {
+  test('保存直後の 1 行も文字だけ', function() {
     var f = { mode: 'file', name: 'spi', dir: 'E:/p' };
     expect(ST.messageFor(f, true)).toBe('E:/p/spi.puml に保存しました');
-    expect(EMOJI.test(SR.doneText('spi'))).toBe(false);
     expect(EMOJI.test(ST.saveButton({ backend: 'file', fileDir: 'E:/p' }, { name: 'spi' }).text)).toBe(false);
   });
 });
