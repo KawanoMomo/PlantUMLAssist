@@ -3,17 +3,12 @@ window.MA = window.MA || {};
 
 // version-fulldiff — 1 枚の図の「その版」と「直前の版」を全文で読むための整え方。
 //
-// ◉混入点は「どの版で増えたか」を当たった行だけで
-// 言い切るところまで来たが、原因を直すには前後の文脈 (その participant が
-// どのシーケンスのどこで呼ばれ始めたか等) が要る。今はそこで版を開き、前の版も
-// 開いて目で照合する 2 手が必要で、部品数 × 該当版数ぶん積み上がっていた。
-// 混入点の行から 1 クリックで開く全文差分ビューの中身がここ。
+// 版の前後を全文で並べる差分ビュー (live-diff ほか) の中身がここ。
 //
 // 行の突き合わせそのものは version-diff.js の diffLines (LCS) を借りる
 // (同じ差分を 2 つの実装で出さない)。ここが足すのは、全文を読ませるための
 // 「変わらない行の畳み」と「探していた語が動いた行の名指し」だけ。
-// blame-point.js の lineDelta が袋で数える要約なのに対し、こちらは並びが答え
-// (どこに挿さったかを見に来ているので、行の順は崩せない)。DOM も fetch も触らない。
+// 並びが答え (どこに挿さったかを見に来ているので、行の順は崩せない)。DOM も fetch も触らない。
 window.MA.versionFullDiff = (function() {
 
   function _s(v) { return v == null ? '' : String(v); }
@@ -95,8 +90,8 @@ window.MA.versionFullDiff = (function() {
     return f + ' — ' + _s(prevLabel) + ' → ' + now;
   }
 
-  // 差分の中で、探していた語が居る変更行だけを拾う (混入点から来たので、
-  // 全文のどこを見ればよいかを最初から指しておく)。
+  // 差分の中で、探していた語が居る変更行だけを拾う (全文のどこを見ればよいかを
+  // 最初から指しておく)。
   function termRows(rowList, terms) {
     var ts = (terms || []).map(_s).filter(function(t) { return !!t; });
     if (!ts.length) return [];

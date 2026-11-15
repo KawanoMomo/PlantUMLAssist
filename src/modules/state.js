@@ -2380,8 +2380,7 @@ window.MA.modules.plantumlState = (function() {
       '<button id="st-tr-swap" title="From と To を入れ替える" style="width:100%;font-size:11px;padding:3px 8px;margin-bottom:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⇄ 向きを入れ替え</button>' +
       P.selectFieldHtml('To', 'st-tr-to', toOpts) +
       P.fieldHtml('きっかけ / trigger', 'st-tr-trig', tr.trigger || '', '例: start') +
-      // きっかけの綴りは同じ部品のシーケンス図と
-      // 揃っていなければならない。名前帳から選べば、先輩の図を別に開かずに揃う。
+      // 正式表記のチップ (登録簿に語があるときだけ。役割 method / event には出ない)。
       P.vocabPickerHtml('st-tr-trig-vocab', { roles: ['method', 'event'] }) +
       P.fieldHtml('条件 / guard', 'st-tr-guard', tr.guard || '', '例: retry > 3') +
       P.fieldHtml('実行する処理 / action', 'st-tr-act', tr.action || '', '例: log()') +

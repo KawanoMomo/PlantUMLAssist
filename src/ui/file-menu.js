@@ -148,7 +148,7 @@ window.MA.fileMenuUi = (function() {
   function renameFile(name) {
     var ws = WS();
     var d = findDoc(name);
-    // 開いている図は、タブのダブルクリックと同じ道を通す (レビューの基準・継承元・
+    // 開いている図は、タブのダブルクリックと同じ道を通す (レビューの基準・
     // 前の名前のファイルの付け替えまで同じ 1 本で済ませる)。
     if (d) {
       var tab = document.querySelector('#tab-bar .tab[data-doc-id="' + d.id + '"]');

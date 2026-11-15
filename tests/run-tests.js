@@ -111,7 +111,6 @@ const sourceFiles = [
   'src/core/usecase-source.js',
   'src/core/material-verify.js',
   'src/core/material-readback.js',
-  'src/core/bulk-note.js',
   'src/ui/properties.js',
   'src/ui/reuse-modal.js',
   'src/modules/sequence.js',

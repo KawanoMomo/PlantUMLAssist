@@ -1264,7 +1264,7 @@ window.MA.modules.plantumlActivity = (function() {
       if (k === 'action') {
         html = '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">アクション本文 (改行可)</label>' +
                '<textarea id="act-mod-text" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>' +
-               // 途中に挿し込むときも同じ名前帳から引ける。
+               // 正式表記のチップ (登録簿に語があるときだけ。役割 method には出ない)。
                P.vocabPickerHtml('act-mod-text-vocab', { roles: ['method'], callSuffix: true });
       } else if (k === 'if') {
         html = P.fieldHtml('Condition', 'act-mod-cond', '', '例: 認証成功?') +
@@ -2848,9 +2848,7 @@ window.MA.modules.plantumlActivity = (function() {
         html2 =
           lbl('処理 (Enter で追加 / Shift+Enter で改行)') +
           '<textarea id="ac-tail-text" data-enter="submit" rows="2" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>' +
-          // アクション本文に打つのは先輩のクラス図にある
-          // 実在メソッド名。名前帳を欄の下に出さないと、クラス図タブを別に開いて
-          // 絞り込み、名前を控えてから戻るという往復が図種ごとに要る。
+          // 正式表記のチップ (登録簿に語があるときだけ。役割 method には出ない)。
           P.vocabPickerHtml('ac-tail-text-vocab', { roles: ['method'], callSuffix: true });
       } else if (kind === 'if') {
         html2 =
@@ -3267,8 +3265,7 @@ window.MA.modules.plantumlActivity = (function() {
         '<label for="ac-action-text" style="display:block;font-size:10px;color:var(--text-secondary);">ラベル / Label</label>' +
         '<textarea id="ac-action-text" style="width:100%;min-height:60px;">' + esc(node.text || '') + '</textarea>' +
       '</div>' +
-      // 打ち直すときも同じ名前帳から引ける (綴りを揃える先が
-      // 欄の下にあるので、クラス図タブへ確かめに戻らない)。
+      // 正式表記のチップ (登録簿に語があるときだけ。役割 method には出ない)。
       P.vocabPickerHtml('ac-action-text-vocab', { roles: ['method'], callSuffix: true }) +
       P.primaryButtonHtml('ac-action-update', '更新') +
       _actionColorHtml(node.color || '') +

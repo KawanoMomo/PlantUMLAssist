@@ -20,13 +20,8 @@ async function setDsl(page, text) {
   await page.waitForTimeout(700);
 }
 
-// BLK-owner-20260924-0852-prune: 🕸 参照関係は ▤ 影響を見る に寄せた。書き出しは ▤ の見出しの「書き出す」、
-// 貼るのは保存先を変える所 (パンくずのフォルダ名 → ⚙設定の「保存先ディレクトリ」) の入力欄。
-async function openImpact(page) {
-  await page.locator('#btn-tab-xref').click();
-  await page.waitForSelector('#ri-modal', { state: 'visible' });
-  await page.waitForTimeout(300);
-}
+// 書き出し側 (xref.md) は TICKET-owner-20261115-2140-prune で外した。以前に渡された md を
+// 保存先を変える所 (パンくずのフォルダ名 → ⚙設定の「保存先ディレクトリ」) の入力欄に貼る受け口は残す。
 
 // 保存先を変える所。パンくずのフォルダ名 (FILES の保存先の一番上) を押すと ⚙設定が開く。
 async function openSaveDirSetting(page) {
@@ -76,23 +71,6 @@ test.describe('BLK-primary-20260908-0103-wish 保存先つきの引き継ぎ', (
   });
   test.afterEach(async ({ page }) => {
     await resetSaveDir(page).catch(() => {});
-  });
-
-  test('渡す側: ▤ 影響を見る の「書き出す」の文面に保存先ディレクトリが載る', async ({ page }) => {
-    await gotoApp(page);
-    await setDsl(page, SPI);
-    await setSaveDir(page, '.\\test-results\\xref-handoff');
-
-    await openImpact(page);
-    const dl = page.waitForEvent('download');
-    await page.locator('#ri-export').click();
-    const md = require('fs').readFileSync(await (await dl).path(), 'utf8');
-    expect(md).toContain('## 保存先ディレクトリ');
-    // 往復で壊れないスラッシュ区切りで載る。
-    expect(md).toContain('./test-results/xref-handoff');
-    // 貼る先の案内は、保存先を変える所を指す (畳んだ 🕸 参照関係は指さない)。
-    expect(md).toContain('パンくず');
-    expect(md).not.toContain('🕸');
   });
 
   test('受け取る側: 保存先ディレクトリの欄に xref.md をそのまま貼ると、値だけが入って反映される', async ({ page }) => {
