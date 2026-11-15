@@ -25,7 +25,7 @@ window.MA.modules.plantumlComponent = (function() {
   // interface: () X / () X as I
   var INTERFACE_SHORT_RE = /^\(\)\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?(?:\s+<<\s*([^>]+?)\s*>>)?\s*$/;
 
-  // BLK-migrator-20260923-1409: 波括弧を伴わない要素宣言 (`agent "Published Event" as event`)。
+  // 波括弧を伴わない要素宣言 (`agent "Published Event" as event`)。
   // PlantUML の component 図は component / [X] 以外にもこれらの語で部品を宣言できる。
   // 読めないと部品が要素の一覧から落ち、ホバーの選択枠が 1 つも出なかった
   // (aws-icons-for-plantuml の `examples__Basic Usage.puml`)。
@@ -35,7 +35,7 @@ window.MA.modules.plantumlComponent = (function() {
     '^(?:' + ELEM_KW + ')\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)' + STEREO_OPT + '\\s*$'
   );
 
-  // BLK-migrator-20260923-1409: ライブラリの手続きで部品を宣言する行
+  // ライブラリの手続きで部品を宣言する行
   // (`IoTRule(iotRule, "Action Error Rule", "error if Kinesis fails")`)。1 番目の引数が
   // 部品の名前で、PlantUML はその名前を SVG に残す。読めないと枠が出ない。
   // 関係・配置・表示切替の手続き (Rel / Lay / Show ...) は部品ではないので除く。
@@ -53,7 +53,7 @@ window.MA.modules.plantumlComponent = (function() {
     '^port\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*$'
   );
 
-  // BLK-migrator-20260918-0249: 関係行の両端は `[X]` の角括弧でも書ける
+  // 関係行の両端は `[X]` の角括弧でも書ける
   // (component-04 のように `[X]` 単独の宣言が 1 行も無く、関係行だけで図が成り立つ)。
   // 矢印には置き方の指示 (-up-> / -right->) と双方向 (<-->) も入る。
   // どちらも読めないと行が関係として拾えず、その行にしか出てこない部品が
@@ -239,7 +239,7 @@ window.MA.modules.plantumlComponent = (function() {
       var label2 = '';
       var ci2 = body.indexOf(':');
       if (ci2 >= 0) { label2 = body.slice(ci2 + 1).trim(); body = body.slice(0, ci2); }
-      // BLK-junior-20260907-0943: `"表示名" as Alias` / `Alias as "表示名"` は
+      // `"表示名" as Alias` / `Alias as "表示名"` は
       // PlantUML の宣言そのもので、他の図から取り込んだ行にはこの形が普通に入る。
       // 名前と表示名に分けずに丸ごと名前として扱うと、`interface ""表示名" as I" as C1`
       // という壊れた行が書き出されてしまう。
@@ -376,7 +376,7 @@ window.MA.modules.plantumlComponent = (function() {
   var moveLineDown = window.MA.dslUpdater.moveLineDown;
   var renameWithRefs = window.MA.dslUpdater.renameWithRefs;
 
-  // BLK-junior-20260909-0303: 新規タブのサンプル (WebApp / IAuth) を自分の部品名へ
+  // 新規タブのサンプル (WebApp / IAuth) を自分の部品名へ
   // 付け替えるのに、要素ごとに「選択 → Alias/Label を打ち直す → 変更を反映 →
   // Alias 変更を関連 Relation にも追従」を繰り返していた。edits をまとめて当て、
   // 関連への追従も同時に済ませる。
@@ -595,7 +595,7 @@ window.MA.modules.plantumlComponent = (function() {
     });
   }
 
-  // BLK-junior-20260908-0203-wish: 定石の依存チェック。
+  // 定石の依存チェック。
   // 判断は core/component-deps.js に置き、ここは並べて選ばせるだけ。
   // 候補は「この図に無いもの」しか来ないので、押した数だけ図が埋まる。
   // 候補の出所。実績 (usage) は自分の他の図、定石 (catalog) は一般論、
@@ -614,7 +614,7 @@ window.MA.modules.plantumlComponent = (function() {
     var docs = (ws && ws.list) ? ws.list() : [];
     var activeId = (ws && ws.getActiveId) ? ws.getActiveId() : null;
     var dsl = ctx.getMmdText();
-    // BLK-junior-20260909-0303-wish: 実績は「依存の起点」ごとに変わるので、
+    // 実績は「依存の起点」ごとに変わるので、
     // 選び直したらチェックリストも引き直す。
     var subjEl0 = document.getElementById('co-deps-subject');
     var subject = (subjEl0 && subjEl0.value) || CD.defaultSubject(dsl);
@@ -682,7 +682,7 @@ window.MA.modules.plantumlComponent = (function() {
     });
   }
 
-  // BLK-junior-20260912-2206-wish: 手本になるコンポーネント図が 1 枚も無い部品を、
+  // 手本になるコンポーネント図が 1 枚も無い部品を、
   // 部品名 1 語から起こす。判断は core/component-starter.js に置き、ここは
   // 「この部品の図はまだ無い」の確認と、押したときの引き渡しだけをする。
   function _bindStarter() {
@@ -718,7 +718,7 @@ window.MA.modules.plantumlComponent = (function() {
     });
   }
 
-  // BLK-junior-20260909-0303: 図の全要素の Alias / Label を 1 枚の表で書き換える。
+  // 図の全要素の Alias / Label を 1 枚の表で書き換える。
   // 要素を 1 個ずつ選び直す往復と「関連にも追従」の押下を無くすため、反映は
   // 常に関連 Relation まで追従する。
   function _renameTableHtml(elements) {
@@ -775,7 +775,7 @@ window.MA.modules.plantumlComponent = (function() {
     var components = elements.filter(function(e) { return e.kind === 'component'; });
     var interfaces = elements.filter(function(e) { return e.kind === 'interface'; });
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'co-tail-kind', [
@@ -789,7 +789,7 @@ window.MA.modules.plantumlComponent = (function() {
         '<div id="co-tail-detail" style="margin-top:6px;"></div>' +
       '</div>' +
       _renameTableHtml(elements) +
-      // BLK-junior-20260912-2206-wish: 手本が 1 枚も無い部品は、本体を末尾に追加して
+      // 手本が 1 枚も無い部品は、本体を末尾に追加して
       // から依存チェックの起点を選び直す、という組み立てを毎回手でやることになる。
       // 部品名 1 語で「本体 + 依存」の下書きを別タブに起こす。
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
@@ -803,7 +803,7 @@ window.MA.modules.plantumlComponent = (function() {
           '本体 1 つと、この部品のシーケンス図・状態遷移図に出てくる相手・定石の依存先を入れた' +
           '下書きを別タブで開きます。要らない依存はそのまま消して使えます</div>' +
       '</div>' +
-      // BLK-junior-20260908-0203-wish: ドライバの図で「定石の依存先のうち今の図に
+      // ドライバの図で「定石の依存先のうち今の図に
       // 無いもの」を出す。先輩の他部品の図を 1 枚ずつ開いて見比べる代わり。
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">依存チェック</label>' +
@@ -864,7 +864,7 @@ window.MA.modules.plantumlComponent = (function() {
             { value: 'requires',    label: 'Requires (lollipop )-)' },
           ]) +
           P.selectFieldHtml('始点 (From)', 'co-tail-from', allOpts) +
-          // BLK-owner-20260926-0550-1: To は From と同じ要素を既定にしない (一覧で選ぶ。自分への線は選んだときだけ)。
+          // To は From と同じ要素を既定にしない (一覧で選ぶ。自分への線は選んだときだけ)。
           P.selectFieldHtml('終点 (To)', 'co-tail-to',
             [{ value: '', label: '（一覧で相手を選ぶ）', selected: true }].concat(allOpts)) +
           '<div id="co-tail-rhint" role="status" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px 0;"></div>' +
@@ -882,7 +882,7 @@ window.MA.modules.plantumlComponent = (function() {
       }
       detailEl.innerHTML = html;
       if (kind === 'relation') {
-        // BLK-owner-20260926-0550-1: 確定後も関係の種類 (要求 / requires など) と From を保つ。
+        // 確定後も関係の種類 (要求 / requires など) と From を保つ。
         if (window.MA.tailMemory) {
           window.MA.tailMemory.bindSelect('co-tail-rkind');
           window.MA.tailMemory.bindSelect('co-tail-from');
@@ -972,7 +972,7 @@ window.MA.modules.plantumlComponent = (function() {
     if (element.kind !== 'component' && element.kind !== 'interface') {
       // port / unknown: read-only display
       propsEl.innerHTML =
-        // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+        // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
         '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
           '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
           '<div style="font-size:11px;color:var(--text-secondary);">id: ' + element.id + '</div>' +
@@ -980,7 +980,7 @@ window.MA.modules.plantumlComponent = (function() {
       return;
     }
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
         P.fieldHtml('Alias (id)', 'co-edit-id', element.id) +
@@ -996,7 +996,7 @@ window.MA.modules.plantumlComponent = (function() {
           '<button id="co-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
           '<button id="co-delete" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         '</div>' +
-        // BLK-owner-20260923-2332-2: 選んだ部品を境界の中へ移す / 外へ出す。
+        // 選んだ部品を境界の中へ移す / 外へ出す。
         GP.editFieldHtml('co-edit', parsedData.groups, element.line) +
       '</div>';
     propsEl.innerHTML = html;
@@ -1055,7 +1055,7 @@ window.MA.modules.plantumlComponent = (function() {
     var P = window.MA.properties;
     var RC = window.MA.relationKindCards;
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         RC.headerHtml(relation.line, relation.from, relation.to) +
         RC.cardsHtml('co-rel-card', RC.kindsOf('component'), relation.kind) +
@@ -1202,9 +1202,9 @@ window.MA.modules.plantumlComponent = (function() {
 
   function _renderGroupReadOnly(group, parsedData, propsEl, ctx) {
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        // BLK-owner-20260926-0550-5: 見出しは「境界 · 2–5 行目」、欄名は日本語。
+        // 見出しは「境界 · 2–5 行目」、欄名は日本語。
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead('境界', group.startLine, group.endLine)) + '</label>' +
         '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">名前: ' + window.MA.htmlUtils.escHtml(group.label || '') + '</div>' +
         // design 5d: 表記を後から差し替える (中身と閉じ括弧はそのまま)
@@ -1283,7 +1283,7 @@ window.MA.modules.plantumlComponent = (function() {
 
       // PlantUML emits component/interface as <g class="entity" data-qualified-name="X">
       // (実機 SVG)。test fixture は g.component / g.interface の旧形式も受理する fallback。
-      // BLK-migrator-20260923-1909: package / node / cloud の中の部品は `My Package.First Component`
+      // package / node / cloud の中の部品は `My Package.First Component`
       // の修飾名で描かれる。完全一致しか見ていなかったので、入れ物の中の部品に枠が出なかった。
       var claimed = [];
       function _matchEntity(item) {
@@ -1366,7 +1366,7 @@ window.MA.modules.plantumlComponent = (function() {
       _push(1);
 
       var packages = (parsedData.groups || []).filter(function(g) { return g.kind === 'package'; });
-      // BLK-migrator-20260923-1909: 並び順で当てると、パーサが読めない入れ物 (cloud / database { })
+      // 並び順で当てると、パーサが読めない入れ物 (cloud / database { })
       // が 1 つあるだけで以後の入れ物の枠が隣へずれた。開始行・表示名で当てる。
       var pkgGroups = OB.matchClusters(svgEl, packages);
       var pkgN = 0;
@@ -1413,7 +1413,7 @@ window.MA.modules.plantumlComponent = (function() {
       });
 
       var relations = parsedData.relations || [];
-      // BLK-migrator-20260923-1909: 線は書かれた行で当てる (読めない線があっても以後がずれない)。
+      // 線は書かれた行で当てる (読めない線があっても以後がずれない)。
       var linkGroups = OB.matchLinksByLine(svgEl, relations);
       var relN = 0;
       for (var ri = 0; ri < relations.length; ri++) {
@@ -1424,7 +1424,7 @@ window.MA.modules.plantumlComponent = (function() {
         var lineEl = lg.querySelector('line, path');
         if (!lineEl) continue;
         var bb = null;
-        // BLK-junior-20260908-1703: 同じ部品から出る線は色も太さも同じで、
+        // 同じ部品から出る線は色も太さも同じで、
         // クリックして右パネルの From/To を読むまで相手が分からなかった。
         // 乗せた時点で相手が読めるよう、rect に相手を持たせる。
         var EH = window.MA.edgeHint;
@@ -1438,8 +1438,8 @@ window.MA.modules.plantumlComponent = (function() {
           var hintAttrs = EH.hintAttrs(relations[ri]);
           Object.keys(hintAttrs).forEach(function(k) { relAttrs[k] = hintAttrs[k]; });
         }
-        // BLK-human-20260912-2130: 線・矢じり・ラベルをまとめて 1 つの当たり判定にする
-        // BLK-builder-20260925-0305-1: 中継点で割れた残りの線も同じ関係の 1 つの枠にする。
+        // 線・矢じり・ラベルをまとめて 1 つの当たり判定にする
+        // 中継点で割れた残りの線も同じ関係の 1 つの枠にする。
         var lgParts = (linkGroups.parts && linkGroups.parts[ri]) || [];
         lgParts.forEach(function(pg) { claimed.push(pg); });
         if (!OB.addLinkRects(overlayEl, lgParts.length ? [lg].concat(lgParts) : lg, relAttrs, 8)) {
@@ -1449,10 +1449,10 @@ window.MA.modules.plantumlComponent = (function() {
         }
       }
 
-      // BLK-migrator-20260923-1909: フォームが読めない記法 (artifact / cloud { } / 題 …) にも行を指す枠を置く
+      // フォームが読めない記法 (artifact / cloud { } / 題 …) にも行を指す枠を置く
       OB.addUnclaimed(svgEl, overlayEl, claimed, null, dslText);
 
-      // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
+      // 小さい当たり判定を手前に。共通実装 (src/core)
       OB.raiseSmallestLast(overlayEl);
 
       return {

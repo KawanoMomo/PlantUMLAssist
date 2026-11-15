@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // part-focus — 相乗り図を 1 枚のまま、選んだ部品だけ浮かび上がらせる。
 //
-// BLK-junior-20260915-0506-wish: 先輩の `driver_common_class.puml` は
+// 先輩の `driver_common_class.puml` は
 // SPI/CAN/GPIO/UART/TIMER/ADC/IRQCtrl が 1 枚に相乗りしており、新部品 (SPI) を
 // 起こすとき手本にすべきクラスを自分で読み分けるしかなかった。切り出し
 // (part-slice) は「その部品だけの別の 1 枚」を作るので、相乗り図のどこに自分の

@@ -1,11 +1,11 @@
 'use strict';
 window.MA = window.MA || {};
 
-// side-by-side — 同じファイル名を持つ 2 人のペルソナの図を、左右に並べて読む。
+// side-by-side — 同じファイル名を持つ 2 人の図を、左右に並べて読む。
 //
-// BLK-reviewer-20260912-2206-wish: junior/primary の `gpio_init_sequence.puml` で
+// junior/primary の `gpio_init_sequence.puml` で
 // participant 名 (`Gpio` vs `Gpio_Driver`) と粒度が食い違っているのを見つけたが、
-// GUI にはこの 2 枚を並べて見る手段が無く、reviewer は persona-data の 2 フォルダから
+// GUI にはこの 2 枚を並べて見る手段が無く、reviewer は 作業フォルダ の 2 フォルダから
 // 同名ファイルを自分でテキストとして開いて読み比べるしかなかった。
 //
 // domain-cohort は同じドメイン (系統) の図を突き合わせ、片方にしか無い名前を

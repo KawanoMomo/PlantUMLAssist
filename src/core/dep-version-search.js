@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // dep-version-search — 依存グラフが挙げた「影響が届く図」の版履歴を 1 本の時系列に
 // 並べ、症状の語で絞り込んで「いつ・どの版でこの記述になったか」を名指しする。
 //
-// BLK-primary-20260917-0123-wish: 不具合対応の入口で、◈依存グラフは「今どの図が
+// 不具合対応の入口で、◈依存グラフは「今どの図が
 // 絡むか」(参照先 6 / 参照元 2 / 出現 5 図 / 連鎖 6 図) までは出すが、「いつこの記述に
 // 変わったか」は答えない。primary は spi_init_sequence を開いて版履歴を探したが、
 // 📂一覧・図の設定のどこにも版ごとの中身を並べる場所が無く、影響 6 図を 1 枚ずつ
@@ -69,7 +69,7 @@ window.MA.depVersionSearch = (function() {
   }
 
   // GET /version-search の返り → 図名ごとの版 (新しい順)。◉ 混入点と同じ材料を読む
-  // (BLK-primary-20260924-1232: 版を読む道を 1 本にする。localStorage の変遷は
+  // (版を読む道を 1 本にする。localStorage の変遷は
   // ブラウザを起こし直すと空になり、前の run までに保存フォルダへ積んだ版が見えなかった)。
   // 版番号は古い方から 1、2…。最後の「いまの中身」(current) も 1 つの版として数える。
   //
@@ -211,7 +211,7 @@ window.MA.depVersionSearch = (function() {
     return rows;
   }
 
-  // BLK-primary-20260924-2132-wish: 版履歴を依存グラフの影響一覧に絞らず、保存フォルダの
+  // 版履歴を依存グラフの影響一覧に絞らず、保存フォルダの
   // 全図から語で引くときの的。history (fromSearch の返り) に載る図を全部並べ、影響一覧に
   // 載っている図はその届き方 (hop / via) を持たせる (外の図は hop: null)。
   function folderTargets(history, impact) {

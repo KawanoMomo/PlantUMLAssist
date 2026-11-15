@@ -3,7 +3,7 @@
 // 1 画面の一覧として持つ。各突合の結果を同じ形の行に揃え、カテゴリと図名の
 // 2 通りで数え、指摘.md に貼れる markdown を出すところまでを固定する。
 
-const { loadMA } = require('../tools/audit-runtime');
+const { loadMA } = require('./load-ma');
 const board = require('../src/core/audit-board');
 
 function ok(result) { return { status: 'ok', result: result }; }

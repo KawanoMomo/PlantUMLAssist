@@ -14,7 +14,7 @@ window.MA.sequenceAutonumber = (function() {
     return n;
   }
 
-  // BLK-migrator-20260918-0549: 実物の図は書式指定つきの autonumber を使う
+  // 実物の図は書式指定つきの autonumber を使う
   // (`autonumber 10 5 "<b>[000]"` / `autonumber "<b>[000]"`)。書式を読めないと
   // 「番号なし」と出てしまい、そこで番号を触ると 2 本目の autonumber 行が入って
   // 実物の採番が勝手に変わる。書式もここで読み、書き戻すときはそのまま残す。

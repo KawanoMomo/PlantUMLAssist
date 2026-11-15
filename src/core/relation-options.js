@@ -10,12 +10,12 @@ window.MA.relationOptions = (function() {
 
   // 矢印トークン: 先頭の飾り + 線 (- または .、途中に [#色]) + 末尾の飾り。
   // 例: --> / <|-- / ..> / *-- / o--> / -[#red]> / <|.. / --
-  // BLK-migrator-20260918-0249: 線の途中には置き方の指示 (up/down/left/right、
+  // 線の途中には置き方の指示 (up/down/left/right、
   // 1 文字の u/d/l/r) も書ける (`-up->` `-[#red]right->`)。これを読めないと
   // 方向を付けた行がまるごと関係行でなくなり、選択枠も出なくなる。
   var _DIR = (window.MA.regexParts && window.MA.regexParts.ARROW_DIRECTION)
     || '(?:up|down|left|right|u|d|l|r)';
-  // BLK-migrator-20260929-2003: 線の中の書式 `[…]` は `#色` だけでなく bold・dashed・thickness=N をカンマで並べてよい
+  // 線の中の書式 `[…]` は `#色` だけでなく bold・dashed・thickness=N をカンマで並べてよい
   // (`-[#red,bold]->` `-[hidden]-` `.[dotted].>`)。読む断片と読み書きの関数は regex-parts の 1 か所 (sequence・state と同じ)。
   var _STYLE = '(?:' + ((window.MA.regexParts && window.MA.regexParts.ARROW_STYLE) || '\\[[^\\]\\r\\n]*\\]') + ')?';
   var ARROW_RE = new RegExp(
@@ -236,7 +236,7 @@ window.MA.relationOptions = (function() {
     return formatLine(p);
   }
 
-  // BLK-builder-20260925-0305-1: 線の形 (長さと置き方の指示)。`-down->` は pre 1 / dir down / post 1、
+  // 線の形 (長さと置き方の指示)。`-down->` は pre 1 / dir down / post 1、
   // `->` は pre 1、`-->` は pre 2。図種のパーサは長さ 2・指示なしの矢印しか読まないので、
   // 読むときは readableLine で揃え、書き直すときは applyDecorations で元の形に戻す。
   var SHAPE_RE = new RegExp('^([-.]{1,2})(' + _DIR + ')?([-.]{0,2})$');

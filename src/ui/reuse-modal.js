@@ -18,7 +18,7 @@ window.MA.reuseModal = (function() {
   }
 
   // opts: { diagramType, textareaId }
-  // BLK-primary-20260929-2056-friction: 入力欄が 1 つの textarea でない窓 (クラス図の「⌗ クラス構成をまとめて追加」) からも
+  // 入力欄が 1 つの textarea でない窓 (クラス図の「⌗ クラス構成をまとめて追加」) からも
   // 同じ窓を使う。opts.items (並べる候補) と opts.onPick (選んだ候補を受け取る) を渡すと、textarea の代わりにそれへ渡す。
   // もう図に有るもの (it.exists) は「既にある」と示す。
   function open(opts) {
@@ -69,7 +69,7 @@ window.MA.reuseModal = (function() {
           var i = parseInt(row.querySelector('.reuse-check').getAttribute('data-i'), 10);
           // 出処 (図名 → 部品名) でも絞れる。シーケンス図から起こすときは
           // 「その部品が送る列だけ」に絞って全部選ぶのが 1 手なので、
-          // 本文だけの絞り込みでは足りない (BLK-junior-20260909-0203-wish)。
+          // 本文だけの絞り込みでは足りない。
           var hay = (items[i].text + ' ' + (items[i].from || '')).toLowerCase();
           var hit = !q || hay.indexOf(q) >= 0;
           // 行は inline style で display:flex を持つので、hidden 属性だけでは

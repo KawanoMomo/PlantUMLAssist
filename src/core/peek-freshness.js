@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // peek-freshness — 「他の保存フォルダを覗く」一覧に、その図の SVG が今の puml から
 // 作られたものかを最初から出す。
 //
-// BLK-reviewer-20260909-0603-wish: 自分の保存フォルダの一覧 (📂) は
+// 自分の保存フォルダの一覧 (📂) は
 // svg-freshness の判定を行ごとに出しているが、覗いた他人のフォルダの一覧は
 // ファイル名しか出していなかった。primary/diagram1.puml の中身が書き換わったのに
 // diagram1.svg が旧テンプレのままだった食い違いに気付けたのは、reviewer が毎回

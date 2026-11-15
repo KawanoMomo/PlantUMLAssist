@@ -20,7 +20,7 @@ function _registerModules() {
   }
 }
 
-// BLK-migrator-20260929-1351: どの図種のパーサも、PlantUML のプリプロセッサが展開した行
+// どの図種のパーサも、PlantUML のプリプロセッサが展開した行
 // (src/core/preproc-expand.js。マクロを呼んだ行が生んだ行はその行番号) を読む。展開が手元に無ければ元の読み方。
 function _wrapParseWithExpansion(mod) {
   if (!mod || typeof mod.parse !== 'function' || mod.parse.__puaExpand) return;
@@ -72,11 +72,11 @@ function updateTopFileName() {
   updateTopSaveTarget();
 }
 
-// BLK-junior-20260907-2009: 保存先はサーバ側 (.assist-prefs.json) に覚えられて
+// 保存先はサーバ側 (.assist-prefs.json) に覚えられて
 // いるのに、画面のどこにも出ないので「設定済みであること」に気づけず、図種を
 // 変えるたびに ⚙設定 → ファイル → パス再入力 → OK を習慣で打ち直していた。
 // 上部バーのファイル名の隣に保存先を常時出し、押せば設定へ入れるようにする。
-// BLK-human-20260923-1600 (design 9a): チップではなくパンくずの左半分。
+// チップではなくパンくずの左半分。
 // フォルダ名を押すと保存先を変えられる。絵文字は使わず文字だけで出す。
 function updateTopSaveTarget() {
   var el = document.getElementById('top-save-target');
@@ -92,12 +92,12 @@ function updateTopSaveTarget() {
   el.setAttribute('data-mode', bc.mode);
   if (bc.configured) el.classList.add('configured');
   else el.classList.remove('configured');
-  // BLK-human-20260925-1150: 上部バーのパンくずはそのタブのファイルの場所 (保存先を替える前に開いたタブは開いたフォルダ)。
+  // 上部バーのパンくずはそのタブのファイルの場所 (保存先を替える前に開いたタブは開いたフォルダ)。
   updateTopCrumbs(ST.breadcrumb(_cfgForDoc(doc), doc, '(無題)'), doc);
   updateTopSaveButton();
 }
 
-// design 10a / 9a (BLK-builder-20260924-1715-1): 上部バー左のパンくずのフォルダの段。
+// design 10a / 9a: 上部バー左のパンくずのフォルダの段。
 // 「{保存先} / {部品} / 」を #top-file-name の左に出す。部品はツリーが保存先の図を束ねた
 // 部品のフォルダ (FILES の一覧に無い図・図種の読めない図は保存先だけ)。
 // 段を押すと FILES ツリーでそのフォルダを見せる (保存先を変える入口はツリーの保存先の行)。
@@ -113,7 +113,7 @@ function updateTopCrumbs(bc, doc) {
     part = FT.partFor(String(doc.name), FP.folderEntries());
   }
   var list = TS.crumbs(folder, part);
-  // BLK-human-20260925-1150: 保存先を替える前に開いたタブは、そのファイルのフォルダを段に出し、今の保存先ではないことを添える。
+  // 保存先を替える前に開いたタブは、そのファイルのフォルダを段に出し、今の保存先ではないことを添える。
   var held = !!(folder && doc && _docHeldElsewhere(doc));
   if (held && list[0]) {
     list[0].held = true;
@@ -154,7 +154,7 @@ window.MA.refreshTopCrumbs = function() {
   updateTopCrumbs(ST.breadcrumb(_cfgForDoc(doc), doc, '(無題)'), doc);
 };
 
-// BLK-junior-20260913-0306: 保存だけがボタンを持たず、Ctrl+K で「ファイルを保存」と
+// 保存だけがボタンを持たず、Ctrl+K で「ファイルを保存」と
 // 打つ経路しか無かった。文言は保存先によって変わる (フォルダ運用なら上書き保存)。
 function updateTopSaveButton() {
   var btn = document.getElementById('top-save');
@@ -162,10 +162,10 @@ function updateTopSaveButton() {
   if (!btn || !ST || !ST.saveButton) return;
   var doc = null;
   try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
-  var cfg = _cfgForDoc(doc);   // 書き先はそのタブのフォルダ (BLK-human-20260925-1150)
+  var cfg = _cfgForDoc(doc);   // 書き先はそのタブのフォルダ
   // design 9a: 未保存のときだけ ● とキーを出し、保存済みは淡色の「保存済み」に落とす。
   // 保存の有無は下端の札と同じ判定 (前回保存版といまの中身) を使い、2 つの言い分を作らない。
-  // BLK-builder-20260924-1741-2 (design 9a / 10a): 判定はタブの ●/○ と同じ 1 つ (docSaveStatus)。
+  // 判定はタブの ●/○ と同じ 1 つ (docSaveStatus)。
   // live-diff の行比べで別に判定すると、タブは ● なのに「保存済み」、自動保存の後も「● 保存」が残った。
   var dirty = false;
   try {
@@ -186,7 +186,7 @@ function updateTopSaveButton() {
   btn.appendChild(keyEl);
 }
 
-// ── 開いたファイルの錠 (BLK-junior-20260908-1803-wish) ──────────────────
+// ── 開いたファイルの錠 ──────────────────
 // 見比べのために開いた元ファイルが、名前を変え終える前の自動保存で壊れないように、
 // 開いた瞬間に錠をかけ、最初に書き戻す直前で一度だけ確認する。
 
@@ -197,13 +197,13 @@ function openExistingFile(spec, opts) {
   var WS = window.MA.workspace;
   var already = false;
   try { already = !!(WS.findByName && WS.findByName(WS.sanitizeName(spec.name || ''))); } catch (e) {}
-  // BLK-primary-20260924-0805-design: 保存先ツリーの行の 1 回押しは仮のタブで開く (次の 1 回押しで入れ替わる)。
+  // 保存先ツリーの行の 1 回押しは仮のタブで開く (次の 1 回押しで入れ替わる)。
   var doc = (opts && opts.preview && WS.openPreview) ? WS.openPreview(spec) : WS.openOrActivate(spec);
   if (!already) markOpenedSource(doc);
   return doc;
 }
 
-// BLK-junior-20260909-0203-wish: シーケンス図に書いてある処理順を、
+// シーケンス図に書いてある処理順を、
 // アクティビティ図側で打ち直さずにたたき台として起こす。対象は「いちばん多く
 // メッセージを送っている部品」で、それがその図の主役だから (選ばせない)。
 // 起こしたものはたたき台なので、別タブで開いて元の図はそのままにする。
@@ -238,7 +238,7 @@ function makeActivityFromSequence() {
   return name;
 }
 
-// BLK-junior-20260912-2206-wish: 手本になるコンポーネント図が 1 枚も無い部品を、
+// 手本になるコンポーネント図が 1 枚も無い部品を、
 // 部品名 1 語から起こす。本体 1 つを末尾に追加してから依存チェックの起点を選び直す
 // 組み立てを、押した 1 回にまとめる。
 // 起こしたものはたたき台なので、別タブで開いて今の図はそのままにする。
@@ -277,15 +277,14 @@ function promptComponentDraft() {
   return makeComponentDraft(s);
 }
 
-// 一覧から開いたときの本文 (docId → dsl)。BLK-junior-20260916-0046。
+// 一覧から開いたときの本文 (docId → dsl)。
 var _openedDslById = {};
 
 function markOpenedSource(doc) {
   if (!doc || !window.MA.sourceLock) return;
   // 開いたときの本文も憶える。読むだけの回で確認が割り込まないための材料
-  // (BLK-junior-20260914-0906)。
   try { window.MA.sourceLock.mark(doc.id, doc.name, doc.dsl); } catch (e) {}
-  // BLK-junior-20260916-0046: 開いたときの本文そのもの。確認から一括置換へ渡すとき、
+  // 開いたときの本文そのもの。確認から一括置換へ渡すとき、
   // 「この 1 枚で何を何に直したか」を差分から読むために要る (錠は指紋しか憶えない)。
   // localStorage には置かない (枚数ぶんの本文で膨らむ)。開き直したら諦めて空で出す。
   try { _openedDslById[doc.id] = String(doc.dsl == null ? '' : doc.dsl); } catch (e) {}
@@ -331,7 +330,7 @@ function askSourceLock(doc) {
   if (!SL || !doc || _sourceAskOpenFor === doc.id) return;
   if (document.getElementById('source-lock-modal')) return;
   _sourceAskOpenFor = doc.id;
-  // BLK-human-20260925-1150: どのフォルダのファイルを書き換えるのかも言う。
+  // どのフォルダのファイルを書き換えるのかも言う。
   var t = SL.askText(doc.name, _docDir(doc));
   var used = _openDocNames();
   var wrap = document.createElement('div');
@@ -339,20 +338,20 @@ function askSourceLock(doc) {
   wrap.innerHTML = '<div id="source-lock-panel" role="dialog" aria-modal="true" aria-label="' + t.title + '">'
     + '<h3 style="margin:0 0 8px;">' + t.title + '</h3>'
     + '<p id="source-lock-body" style="margin:0 0 12px;line-height:1.6;">' + t.body + '</p>'
-    // BLK-junior-20260915-2240: 主 (書き換える) を上に、強調して置く。副 (保つ) は
+    // 主 (書き換える) を上に、強調して置く。副 (保つ) は
     // 下に地味に置き、選んだ先がどうなるかを小さく添える。同格に並べない。
     + '<div style="display:flex;flex-direction:column;gap:6px;">'
     + '<button type="button" id="source-lock-overwrite">' + t.overwrite
     + '<span class="source-lock-note">' + (t.overwriteNote || '') + '</span></button>'
     + '<button type="button" id="source-lock-keep">' + t.keep
     + '<span class="source-lock-note">' + (t.keepNote || '') + '</span></button>'
-    // BLK-junior-20260916-0046: 表記統一の反映は同じ直しが何枚にも及ぶ。1 枚ずつ
+    // 表記統一の反映は同じ直しが何枚にも及ぶ。1 枚ずつ
     // 開いて答える道しか見えていないと、枚数だけ同じ操作を繰り返すことになる。
     // 詰まったその場に、保存フォルダをまたぐ一括置換への入口を置く。
     + '<button type="button" id="source-lock-bulk">' + (t.bulk || '')
     + '<span class="source-lock-note">' + (t.bulkNote || '') + '</span></button>'
     + '</div>'
-    // BLK-primary-20260909-0403: 開いたファイルの数だけ聞かれると、タブを切り替える
+    // 開いたファイルの数だけ聞かれると、タブを切り替える
     // たびに割り込まれる。既定で「他のファイルも同じ扱い」にして 1 回で済ませる。
     + '<label id="source-lock-all-label" style="display:flex;gap:6px;align-items:center;margin-top:10px;font-size:12px;">'
     + '<input type="checkbox" id="source-lock-all" checked>' + t.all + '</label>'
@@ -383,7 +382,7 @@ function askSourceLock(doc) {
     close();
     var also = all ? '（開いている他のファイルも同じ扱いにします）' : '';
     // 選んだ結果を必ず言い切る。keep のときは「元ファイルは変わらない」ことと
-    // 戻せる入口まで言う (BLK-junior-20260915-2240: 静かに元の表記に戻ったように見える)。
+    // 戻せる入口まで言う (静かに元の表記に戻ったように見える)。
     var said = SL.answeredText
       ? SL.answeredText(choice, doc.name, res.name)
       : { text: '✎ ' + res.name + '.puml を書き換えます', undo: '' };
@@ -447,7 +446,7 @@ function updateTopRenderStatus(phase, ms) {
   else topRenderStatusEl.classList.remove('error');
 }
 var mmdText = '';
-// BLK-owner-20260924-2232-1: エディタに今入っている図 (タブ) の id。元に戻す履歴の引き分けに使う。
+// エディタに今入っている図 (タブ) の id。元に戻す履歴の引き分けに使う。
 var _historyDocId = null;
 var currentDiagramType = 'plantuml-sequence';
 var currentModule = null;
@@ -459,7 +458,7 @@ var syncRail = function() {};
 // キャンバス上のズーム帯を現在の倍率・図種に合わせ直す。setupZoomHud が実体を入れる。
 var syncZoomHud = function() {};
 // 状態バーの 💾 を引き直す。setupAutoSaveStatus が実体を入れる
-// (BLK-primary-20260914-2206: 保存が届いた先は図を替えても言い続ける)。
+// (保存が届いた先は図を替えても言い続ける)。
 var renderAutoSaveStatus = function() {};
 // design 5a: エディタの見た目と「図クリック→該当行へ移動」の指定。設定モーダルの
 // 「保存」と起動時の applyEditorPrefs が唯一の書き手で、選択のたびにここを読む
@@ -475,7 +474,7 @@ function currentIndentId() {
 // design 5a: 描画に失敗したとき、直前の図を残してエラーを重ねるか。
 var currentErrorOverlay = true;
 var syncStateTable = function() {};
-// BLK-junior-20260916-0526-wish: 入れ子ツリー。どの階層を大きく見ているかを
+// 入れ子ツリー。どの階層を大きく見ているかを
 // ここで持ち、焦点がある間は /render にその階層だけの DSL を送る。
 var syncStateTree = function() {};
 var stateTreeFocusId = '';
@@ -523,7 +522,7 @@ function init() {
   topFileNameEl = document.getElementById('top-file-name');
   topRenderStatusEl = document.getElementById('top-render-status');
   updateTopRenderStatus('idle');
-  // BLK-builder-20260907-2237-2 (design 1a): モードを変えたくなるのは状態表示を見た
+  // モードを変えたくなるのは状態表示を見た
   // ときなので、その表示自体を設定の「レンダリング」タブへの入口にする。
   if (topRenderStatusEl) {
     topRenderStatusEl.addEventListener('click', function() {
@@ -603,7 +602,7 @@ function init() {
     function doRestore() {
       var cfg = as.getConfig();
       if (!cfg.enabled) return;
-      // BLK-primary-20260914-2106: 保存フォルダに、開いているタブと同じ名前の図が
+      // 保存フォルダに、開いているタブと同じ名前の図が
       // あるなら、そのタブの中身はその図そのものでなければならない。ここで図種の
       // 下書き (plantuml-sequence 等の鍵) を当てると、diagram1 のタブに別の図の
       // 下書きが入り、そのまま保存すると diagram1.puml がその下書きで潰れる。
@@ -644,7 +643,7 @@ function init() {
         // will not re-run but scheduleRefresh below uses the new mmdText.
       }
     }
-    // BLK-junior-20260907-2009: server から保存先を引き継いだ直後にも上部バーを
+    // server から保存先を引き継いだ直後にも上部バーを
     // 引き直す。ここを通さないと「覚えられているのに画面に出ない」が残る。
     function doRestoreAndSync() { doRestore(); updateTopSaveTarget(); }
     var p = as.init();
@@ -655,7 +654,7 @@ function init() {
     }
   })();
 
-  // BLK-human-20260923-1600 (design 9a): 上部バーの Import ▾。入れる・出すを対で並べる。
+  // 上部バーの Import ▾。入れる・出すを対で並べる。
   // 中身は既にある入口 (.puml を開く / クリップボード / 保存フォルダの一覧) を叩くだけで、
   // 新しい読み込み経路は作らない。
   (function setupImportMenu() {
@@ -703,7 +702,7 @@ function init() {
       var btn = document.getElementById('btn-config');
       if (btn) btn.click();
     });
-    // 保存先の隣の [💾 保存] (BLK-junior-20260913-0306)。押す先は Ctrl+K の
+    // 保存先の隣の [💾 保存]。押す先は Ctrl+K の
     // 「ファイルを保存」と同じ 1 本 (#btn-save) にして、経路を 2 つに分けない。
     var save = document.getElementById('top-save');
     if (save) save.addEventListener('click', function() {
@@ -720,7 +719,7 @@ function init() {
     clearJumpBand();   // 本文を打つと行がずれるので、図で選んだ行の帯は下ろす
     updateLineNumbers();
     // タブの本文 (workspace)・自動保存・差分の印・指摘の引き直しは scheduleRefresh の
-    // syncEditedText が、フォームや窓からの書き換えと同じ 1 本の経路で行う (BLK-owner-20260925-0312-1)。
+    // syncEditedText が、フォームや窓からの書き換えと同じ 1 本の経路で行う。
     scheduleRefresh();
   });
 
@@ -728,10 +727,10 @@ function init() {
     if (lineNumbersEl) lineNumbersEl.scrollTop = editorEl.scrollTop;
     // design 5c: 挿入先マーカーはエディタの座標で置くので、追随させる。
     if (window.MA.insertMarker) window.MA.insertMarker.sync();
-    syncJumpBand();   // BLK-owner-20260930-0111-1: 図で選んだ行の帯も追随させる
+    syncJumpBand();   // 図で選んだ行の帯も追随させる
   });
 
-  // ── BLK-primary-20260908-1603: 選ぶ前の対応表示 (peek) ──
+  // ── 選ぶ前の対応表示 (peek) ──
   // 遷移ラベルを直すとき、いちばん手間なのは「どの矢印が DSL の何行目か」を
   // 目で探す段階だった。overlay の rect は data-line を持っているので、
   // DSL 側のキャレット行と、行番号にマウスが乗った行を、そのまま図形に映す。
@@ -774,7 +773,7 @@ function init() {
     text.setAttribute('x', x1 + 4);
     text.setAttribute('y', y - 3);
     text.setAttribute('class', 'hover-label');
-    // BLK-primary-20260907-0356: ガイド線にも「DSL の何行目に入るか」を出す。
+    // ガイド線にも「DSL の何行目に入るか」を出す。
     // 解決できなかった場合 (labelText 無し) は従来どおりの汎用文言。
     text.textContent = labelText || '+ ここに挿入';
     hoverEl.appendChild(text);
@@ -787,7 +786,7 @@ function init() {
 
   // ガイド線のラベル。挿入先の DSL 行番号を module に計算させる (module が
   // insertTargetLine を持たない場合は汎用文言に落ちる)。
-  // BLK-human-20260915-1204: プレビューの当たり判定が決めた「帯の内側 / 外側」。
+  // プレビューの当たり判定が決めた「帯の内側 / 外側」。
   // 押した点が帯の矩形の中か、その下のライフライン線かは DSL の行番号には現れない。
   function _zoneHintOf(res) {
     return (res && res.zone) ? { zone: res.zone, bandLine: res.bandLine } : null;
@@ -795,7 +794,7 @@ function init() {
 
   function _insertGuideLabel(res) {
     if (!res || !currentModule) return null;
-    // BLK-human-20260912-0901: 帯 (activate/deactivate) の内側 / 外側までガイドに出す。
+    // 帯 (activate/deactivate) の内側 / 外側までガイドに出す。
     // module に describeInsertGuide があれば、現在の DSL を渡してそちらに任せる。
     if (typeof currentModule.describeInsertGuide === 'function') {
       var label = currentModule.describeInsertGuide(res.line, res.position, mmdText, _zoneHintOf(res));
@@ -807,7 +806,7 @@ function init() {
     return '+ DSL ' + target + ' 行目に挿入';
   }
 
-  // BLK-human-20260915-1204 差し戻し: 実マウスでは帯の周りを押すと overlay の
+  // 差し戻し: 実マウスでは帯の周りを押すと overlay の
   // ライフラインの当たり矩形 (data-type="lifeline") に当たり、ライフライン選択に吸われて
   // 挿入ピッカーが開かなかった。帯の矩形の中 / 帯より下のライフライン線を押したときは、
   // ライフライン選択より先に「帯の内側 / 外側」の挿入として解決する。
@@ -840,7 +839,7 @@ function init() {
     return res;
   }
 
-  // BLK-junior-20260918-0149: 帯・帯下のライフラインを押すと挿入ピッカーは開くが、
+  // 帯・帯下のライフラインを押すと挿入ピッカーは開くが、
   // 図の上には何の跡も残らない (選択は意図的に外す) ので、押した場所が効いたのか、
   // どちらの側に入るのかが図を見ても分からなかった。押して決まった帯の内側 / 外側を
   // そのまま図の上に塗り、ピッカーを閉じるまで残す。
@@ -923,7 +922,7 @@ function init() {
   }, false);
 
   // ── 矢印に乗せたときの相手表示 ──
-  // BLK-junior-20260908-1703: 同じ部品から出る点線が 2 本あると色も太さも同じで、
+  // 同じ部品から出る点線が 2 本あると色も太さも同じで、
   // 1 本クリックしては右パネルの From/To を読み、違えばもう 1 本、という当て物に
   // なっていた。overlay の rect が持つ data-hint を、乗せた位置に出すだけ。
   // 選択も再描画もしないので、目的の線が分かってからクリックすれば 1 回で当たる。
@@ -963,7 +962,7 @@ function init() {
     overlayElForHover.addEventListener('click', hideEdgeHint);
   }
 
-  // BLK-human-20260912-2130: 1 つの要素・関係の当たり判定は複数の rect に分かれる
+  // 1 つの要素・関係の当たり判定は複数の rect に分かれる
   // (関係なら「線と矢じりとラベルを囲う箱」+「ラベルごとの小さい箱」)。CSS の :hover は
   // マウスの下の 1 枚しか光らせないので、ラベルに乗せるとラベルの分だけが枠になり、
   // 「どこまで押せば同じものを選べるか」が枠から読めない。同じ data-type / data-id を
@@ -997,10 +996,10 @@ function init() {
       _clearHoverPeers();
       _hoverPeerKey = key;
       // data-id は利用者が付けた名前なので、セレクタに埋めず属性を直接見比べる。
-      // BLK-migrator-20260923-2012: まとめて光らせるのは、指した rect と重なる仲間だけ
+      // まとめて光らせるのは、指した rect と重なる仲間だけ
       // (関係の箱とその中のラベルの箱)。シーケンスの参加者の頭と足のように、同じ要素を
       // 離れた所にもう一度描いた rect は別の当たり判定なので、指していない側は光らせない。
-      // BLK-migrator-20260926-2118: 折れた矢印は区間ごとの枠が端で重なって続くので、重なりをたどった全部を光らせる。
+      // 折れた矢印は区間ごとの枠が端で重なって続くので、重なりをたどった全部を光らせる。
       var peers = Array.prototype.filter.call(
         overlayElForHover.querySelectorAll('rect.selectable[data-type]'),
         function(r) { return r.getAttribute('data-type') === type && r.getAttribute('data-id') === id; });
@@ -1016,7 +1015,7 @@ function init() {
         lit = peers;
       }
       lit = lit.filter(function(r) { return peers.indexOf(r) >= 0; });
-      // BLK-migrator-20260929-1611: 楔を持つ note は紙の枠の代わりに楔込みの枠を光らせる (当たりは変えない)。
+      // 楔を持つ note は紙の枠の代わりに楔込みの枠を光らせる (当たりは変えない)。
       var OBh = window.MA.overlayBuilder;
       if (OBh && OBh.litRects) lit = OBh.litRects(overlayElForHover, lit);
       lit.forEach(function(r) { r.classList.add('hit-hover'); });
@@ -1024,7 +1023,7 @@ function init() {
     overlayElForHover.addEventListener('mouseleave', _clearHoverPeers);
   }
 
-  // BLK-human-20260928-2255-1: 図の中に挿入先の目印 (メッセージ) がまだ無いとき (＋ で開いた白紙など) は、
+  // 図の中に挿入先の目印 (メッセージ) がまだ無いとき (＋ で開いた白紙など) は、
   // 図の末尾に入れる。ガイド線だけ出て押しても何も開かない、を無くす。
   function _tailInsertRes() {
     if (!currentModule || typeof currentModule.resolveTailInsert !== 'function') return null;
@@ -1056,7 +1055,7 @@ function init() {
         return;
       }
       var target = e.target;
-      // BLK-human-20260915-1204: 帯の中 / 帯の下のライフライン線は挿入先として枠を出す。
+      // 帯の中 / 帯の下のライフライン線は挿入先として枠を出す。
       var bandRes = _bandInsertAt(e);
       if (bandRes) {
         drawHoverGuide(bandRes.clickY, bandRes.rectX, bandRes.rectWidth, _insertGuideLabel(bandRes));
@@ -1129,7 +1128,7 @@ function init() {
         setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; },
         onUpdate: function() { scheduleRefresh(); },
       };
-      // BLK-primary-20260907-0356: insertPicker を持つ module は、まず「何を挿入するか」
+      // insertPicker を持つ module は、まず「何を挿入するか」
       // (メッセージ/note/alt/loop/activate/その他) のメニューを出す。
       // 持たない module は従来どおり単一種別のフォームを直接開く。
       if (moduleHas('insertPicker') && typeof currentModule.showInsertPicker === 'function') {
@@ -1297,7 +1296,7 @@ function init() {
       var newIndex = computeDropIndex(e.clientX);
       if (newIndex !== null && currentModule) {
         var seqMod = window.MA.modules && window.MA.modules.plantumlSequence;
-        var genP = _generatedOf({ type: 'participant', id: dragState.id });   // BLK-owner-20260929-2131-1
+        var genP = _generatedOf({ type: 'participant', id: dragState.id });   //
         if (genP) { _refuseGenerated(genP); seqMod = null; }
         if (seqMod && seqMod.moveParticipant) {
           // Bug 4: newIndex === 現在位置の no-op で履歴だけ積まれると
@@ -1338,14 +1337,14 @@ function init() {
         e.stopImmediatePropagation();
       }
     }, true);
-    // BLK-human-20260916-0901: 「⌗ 囲む…」の終点待ちの間は、押したメッセージを選択ではなく終点に使う。
+    // 「⌗ 囲む…」の終点待ちの間は、押したメッセージを選択ではなく終点に使う。
     overlayEl.addEventListener('click', function(e) {
       if (currentModule && typeof currentModule.handleOverlayPick === 'function'
         && currentModule.handleOverlayPick(e.target)) {
         e.stopImmediatePropagation();
       }
     }, true);
-    // BLK-human-20260915-1204 差し戻し: 帯の中 / 帯の下のライフライン線を実マウスで押したら、
+    // 差し戻し: 帯の中 / 帯の下のライフライン線を実マウスで押したら、
     // ライフライン選択ではなく「帯の内側 / 外側」で挿入ピッカーを開く (capture で router より先に取る)。
     overlayEl.addEventListener('click', function(e) {
       if (Date.now() - justDraggedAt < DRAG_CLICK_SUPPRESS_MS) return;
@@ -1499,7 +1498,7 @@ function init() {
     return sel.length === 1 ? sel[0] : null;
   }
 
-  // BLK-owner-20260930-0111-1 (design 5b): ↑↓ の候補に入らない部品 (シーケンス図の参加者) を図で押して Delete を
+  // ↑↓ の候補に入らない部品 (シーケンス図の参加者) を図で押して Delete を
   // 押したら、右パネルの「✕ 削除」と同じことをする (宣言の行が無い参加者の断り・元に戻すトーストもボタンの側が持つ)。
   function _kbdDeleteViaPanel() {
     var one = _kbdSingleSelected();
@@ -1540,7 +1539,7 @@ function init() {
     return null;
   }
 
-  // BLK-owner-20260929-2131-1: 繰り返し・手続きが作った部品 (src/core/generated-part.js) は、キーでも消さない・
+  // 繰り返し・手続きが作った部品 (src/core/generated-part.js) は、キーでも消さない・
   // 矢印を替えない・挿入しない・複製しない・並べ替えない。下の各ルーターより先に (window の capture で) 断る。
   window.addEventListener('keydown', function(e) {
     if (e.isComposing || e.keyCode === 229 || e.shiftKey) return;
@@ -1549,7 +1548,7 @@ function init() {
       || ((e.ctrlKey || e.metaKey) && !e.altKey && (k || '').toLowerCase() === 'd')
       || (e.altKey && !e.ctrlKey && !e.metaKey && (k === 'ArrowUp' || k === 'ArrowDown'));
     if (!edits || _kbdInTypingTarget() || _kbdModalOpen()) return;
-    // 参加者のように ↑↓ の候補に入らない部品も、図で押して選んでいれば断る (BLK-owner-20260930-0111-1)
+    // 参加者のように ↑↓ の候補に入らない部品も、図で押して選んでいれば断る
     var cur = _kbdSelectedItem() || _kbdSingleSelected();
     var gen = cur ? _generatedOf(cur) : null;
     if (!gen) return;
@@ -1682,7 +1681,7 @@ function init() {
     //    **複製後の再パース結果に対して行番号から引き直す** (UI-013 の指摘どおり)。
     // 🔴 Ctrl+D 経路には renderProps() の setMmdText(:1312 の逐語コメント
     //    "Re-parse synchronously so any setSelected() that fires right ...") のような
-    //    同期再パースが無く、currentParsed は scheduleRefresh() の非同期 tick まで古いままである。
+    //    同期再パースが無く、currentParsed は scheduleRefresh() の非同期の描き直しまで古いままである。
     //    そのため _kbdSelectables() を使う前にここで同期再パースする (同 :1317-1319 と同じ形)。
     if (currentModule && typeof currentModule.parse === 'function') {
       try { currentParsed = currentModule.parse(mmdText); } catch (err) { /* leave stale */ }
@@ -1702,7 +1701,7 @@ function init() {
     scheduleRefresh();
   });
 
-  // BLK-builder-20260907-1346-3 (design 5b): 図形を選んでいるときの Alt+↑ / Alt+↓ で、
+  // 図形を選んでいるときの Alt+↑ / Alt+↓ で、
   // 同じ親の中の前後の兄弟と入れ替える。DSL エディタ側の同じキー (FEAT-116) は
   // テキスト欄にカーソルがあるときだけ効くので、_kbdInTypingTarget() の除外で棲み分く。
   // 入れ替えの純関数は src/core/selection-reorder.js が持ち、親の境界 (else / endif /
@@ -1743,7 +1742,7 @@ function init() {
     scheduleRefresh();
   });
 
-  // BLK-builder-20260907-1346-3 (design 5b): Ctrl+Enter で右ペインの「末尾に追加」を開く。
+  // Ctrl+Enter で右ペインの「末尾に追加」を開く。
   // 行き先はコマンドパレットの「図に足す」(openTailForm) と同じ、無選択時の右ペインに出る
   // 種類 select (#{prefix}-tail-kind) である。ADD_KINDS / openTailForm は別スコープなので、
   // ここは図種の prefix を持たずに DOM から引く (種別は各 module の既定のまま)。
@@ -1787,7 +1786,7 @@ function init() {
       if (!btn) return;
       var t = btn.getAttribute('data-type');
       // 同じ図種の押し直しは何もしない。ただし右パネルが別の図種の追加フォームに
-      // なっているときは、押した図種の追加フォームへ戻す (BLK-owner-20260924-2232-2)。
+      // なっているときは、押した図種の追加フォームへ戻す。
       if (!t) return;
       if (t === sel.value && (!currentModule || currentModule.type === t || !modules[t])) return;
       sel.value = t;
@@ -1820,7 +1819,7 @@ function init() {
   // 以前に自分で既定から外した人にだけ、パネルの下端に既定へ戻す 1 行が出る。
   (function setupToolMenu() {
     var btn = document.getElementById('btn-tab-tools');
-    // 静かなタブ列で「ツール ▾」の代わりに出る小さな入口 (BLK-primary-20260908-1803)
+    // 静かなタブ列で「ツール ▾」の代わりに出る小さな入口
     var mini = document.getElementById('btn-tab-tools-mini');
     var menu = document.getElementById('tool-menu');
     var bar = document.getElementById('tab-bar');
@@ -1874,7 +1873,7 @@ function init() {
     // 「−」や 0 は数が無い印なので付けない。
     function badges() {
       var out = {};
-      // 件数の読み方は下端と同じ (「± 変更 2/10」は 2)。BLK-owner-20260924-1712-prune
+      // 件数の読み方は下端と同じ (「± 変更 2/10」は 2)。
       var SC = window.MA.statusCounters;
       foldable().forEach(function(b) {
         var t = b.textContent || '';
@@ -1895,7 +1894,7 @@ function init() {
     }
 
     function open() {
-      // BLK-builder-20260924-1815-3 (design 9b / 9a): 既定 (畳む・ツール ▾ は右端) の人には
+      // 既定 (畳む・ツール ▾ は右端) の人には
       // 切り替えを出さない。既定から外れている人にだけ、既定へ戻す 1 行を出す。
       var foot = tm.footToggles(isFolded(), isQuiet()).map(function(t) {
         return '<button type="button" class="tool-menu-item" id="' + t.id + '">'
@@ -2022,7 +2021,7 @@ function init() {
       if (cat) { selectCat(cat); return; }
       var item = e.target && e.target.closest ? e.target.closest('.tool-menu-item') : null;
       if (!item) return;
-      // BLK-builder-20260924-1815-3: 下端の 1 行は既定へ戻すだけ (既定から外す道はパネルに置かない)。
+      // 下端の 1 行は既定へ戻すだけ (既定から外す道はパネルに置かない)。
       // 既定と同じ値 ('1') を書いて戻す (次に開いても既定 = 畳む・ツール ▾ は右端)。
       if (item.id === 'tool-menu-fold') {
         applyQuiet(true);
@@ -2039,10 +2038,10 @@ function init() {
         return;
       }
       var targetId = item.getAttribute('data-target');
-      // BLK-owner-20260918-0529-prune: 入口がモーダルの中にしか無いものは、先にその
+      // 入口がモーダルの中にしか無いものは、先にその
       // 画面を開いてからボタンを鳴らす (メニューを開いた時点ではまだ DOM に無い)。
       var openerId = item.getAttribute('data-opener');
-      // BLK-owner-20260924-1332-prune: 絞り込み欄の語 (「表記揺れ」等) は開く画面に渡す。
+      // 絞り込み欄の語 (「表記揺れ」等) は開く画面に渡す。
       // ▦ 突合ボードはその語でカテゴリを絞って開く (閉じると欄が空になるので先に読む)。
       var filterEl = menu.querySelector('#tool-menu-filter');
       var toolQuery = filterEl ? filterEl.value : '';
@@ -2492,7 +2491,7 @@ function init() {
       });
     }
 
-    // ── 描画エンジン (BLK-human-20260909-2200) ────────────────────────────
+    // ── 描画エンジン ────────────────────────────
     // 配布物に plantuml.jar も Java も同梱しない。「どこにあるか」「入っているか」を
     // 設定のレンダリングタブに常時出し、足りなければこの場で入れられるようにする。
     // 判定と文言は src/core/app-bridge.js、ここは結線だけ。
@@ -2507,7 +2506,7 @@ function init() {
         jarEl.textContent = jar.text;
         jarEl.style.color = jar.ok ? 'var(--text-secondary)' : 'var(--accent-red)';
       }
-      // BLK-human-20260925-1500: 「使用中 / 推奨」の版。違えば「取得し直す」、並行領域を描けない古い版ならその 1 行。
+      // 「使用中 / 推奨」の版。違えば「取得し直す」、並行領域を描けない古い版ならその 1 行。
       var verRow = document.getElementById('cfg-jar-version-row');
       var verEl = document.getElementById('cfg-jar-version');
       var warnEl = document.getElementById('cfg-jar-version-warn');
@@ -2523,7 +2522,7 @@ function init() {
         warnEl.textContent = jar.versionWarn || '';
         warnEl.hidden = !jar.versionWarn;
       }
-      // BLK-owner-20260925-1932-2: 取得の入口は 1 つ (jar が無ければ「公式から取得」、あれば版の行の「取得し直す」)。
+      // 取得の入口は 1 つ (jar が無ければ「公式から取得」、あれば版の行の「取得し直す」)。
       var entries = AB.fetchEntries ? AB.fetchEntries(env) : { fetch: true, refetch: !!(jar.differs && jar.canFetch) };
       if (refetchBtn) refetchBtn.hidden = !entries.refetch;
       var pathEl = document.getElementById('cfg-jar-path');
@@ -2553,7 +2552,7 @@ function init() {
       if (pickBtn) pickBtn.textContent = AB.isApp(env) ? 'jar を選ぶ' : 'このパスを使う';
     }
 
-    // BLK-human-20260915-1201: 取得中 / 完了 / 失敗を同じ 1 行で言い、失敗のときだけ
+    // 取得中 / 完了 / 失敗を同じ 1 行で言い、失敗のときだけ
     // 「もう一度取得」を出す。文言と出し分けは appBridge.engineProgress が決める。
     function setEngineProgress(prog) {
       var el = document.getElementById('cfg-engine-note');
@@ -2573,7 +2572,7 @@ function init() {
       if (pickBtn) pickBtn.disabled = !!prog.busy;
     }
 
-    // BLK-human-20260915-1201: jar が入った瞬間に、警告を出したままの図を描き直す。
+    // jar が入った瞬間に、警告を出したままの図を描き直す。
     // ここを呼ばないと「設定は済んでいるのに画面は jar が無いと言い続ける」状態が
     // 残り、利用者はアプリを起動し直すしかなくなる。
     function refreshPreviewAfterEngineReady() {
@@ -2611,7 +2610,7 @@ function init() {
       if (pickBtn) pickBtn.addEventListener('click', doPick);
       var fetchBtn = document.getElementById('cfg-jar-fetch');
       if (fetchBtn) fetchBtn.addEventListener('click', doFetch);
-      // BLK-human-20260925-1500: 使用中の版が推奨版と違うときの「取得し直す」(推奨版を取って差し替える)。
+      // 使用中の版が推奨版と違うときの「取得し直す」(推奨版を取って差し替える)。
       var refetchBtn = document.getElementById('cfg-jar-refetch');
       if (refetchBtn) refetchBtn.addEventListener('click', doFetch);
       // 失敗したときの再試行の入口。取得が使えない機械ではパス指定に落ちる。
@@ -2769,7 +2768,7 @@ function init() {
 
     btn.addEventListener('click', open);
 
-    // BLK-owner-20260924-0852-prune: 旧 🕸 参照関係の「保存先を貼る」はここに移した。保存先を変える所
+    // 旧 🕸 参照関係の「保存先を貼る」はここに移した。保存先を変える所
     // (パンくずのフォルダ名 / FILES の保存先の一番上 → この欄) が、渡された xref.md 全文でも
     // パス 1 行でも受け、値だけを拾って入れる (受け取った側が打ち直さない)。
     var dirPasteEl = document.getElementById('cfg-file-dir');
@@ -2789,12 +2788,12 @@ function init() {
         msg0.textContent = '貼った文面から' + SDH0.LABEL + 'の値だけを入れました: ' + picked;
       }
     });
-    // BLK-builder-20260907-2237-2 (design 1a): 上部バーからモードの select を外した
+    // 上部バーからモードの select を外した
     // 代わりに、状態表示から設定の「レンダリング」タブへ直接開ける口を出す。
     // タブ指定で開けるようにしておくと、他の入口も同じ経路を使える。
-    // BLK-human-20260916-0902: 設定 → 情報 に版を出す。server が git tag から返す。
+    // 設定 → 情報 に版を出す。server が git tag から返す。
     var _versionLine = '';
-    // BLK-human-20260917-0900: 「更新を確認」。押したとき (と、利用者が入れたときだけ起動時) に 1 回確かめる。
+    // 「更新を確認」。押したとき (と、利用者が入れたときだけ起動時) に 1 回確かめる。
     // 新版があれば版・変更点・インストーラへのリンクを出す。落とさない・実行しない。
     (function wireUpdateCheck() {
       var UC = window.MA.updateCheck;
@@ -2902,7 +2901,7 @@ function init() {
       if (window.MA.saveDirHandoff && fileDirEl && /保存先ディレクトリ|`/.test(fileDir)) {
         fileDir = window.MA.saveDirHandoff.fromText(fileDir) || fileDir;
       }
-      // BLK-primary-20260908-0103: バックスラッシュ区切りの絶対パスは往復で
+      // バックスラッシュ区切りの絶対パスは往復で
       // 壊れることがあり、壊れた値のまま保存されると 📂一覧が黙って空になる。
       // 保存する前にここで直せる崩れは直し (\ → /)、直せない崩れは保存しない。
       var dirMsgEl = document.getElementById('cfg-file-dir-msg');
@@ -2920,7 +2919,7 @@ function init() {
       }
       if (window.MA.autoSave) {
         var prevCfg = window.MA.autoSave.getConfig() || {};
-        // BLK-human-20260925-1150: 開いているタブは前の保存先のファイルを指し続ける。
+        // 開いているタブは前の保存先のファイルを指し続ける。
         _holdOpenDocsBeforeTargetChange(prevCfg, backend, fileDir);
         window.MA.autoSave.setConfig({
           enabled: enabled,
@@ -2931,7 +2930,7 @@ function init() {
         });
         // 保存先を変えたらすぐ上部バーに映す (次に開くまで古い表示を残さない)。
         updateTopSaveTarget();
-        // BLK-builder-20260924-2152-2-red: 保存先の一覧 (FILES の部品フォルダ・上部バーの部品の段が読む)
+        // 保存先の一覧 (FILES の部品フォルダ・上部バーの部品の段が読む)
         // も新しいフォルダで読み直す。読み直さないと前のフォルダの図 (diagram1 など) が残り、
         // 新しい保存先の下に前のフォルダの部品 (DIAGRAM1) が並び、パンくずにもその段が出た。
         if (prevCfg.fileDir !== fileDir || prevCfg.backend !== backend) {
@@ -2976,7 +2975,7 @@ function init() {
         try { localStorage.setItem(EDITOR_PREFS_KEY, JSON.stringify(prefs2)); } catch (e) {}
         applyEditorPrefs(prefs2);
       }
-      // BLK-human-20260915-1201: 初回起動で jar を入れた回は、まだ「jar がない」と
+      // 初回起動で jar を入れた回は、まだ「jar がない」と
       // 言ったままの図が残っている。保存した時点で描き直し、再起動を要らなくする。
       var AB2 = window.MA.appBridge;
       var banner = document.getElementById('render-error-overlay');
@@ -3031,7 +3030,7 @@ function init() {
     var hud = window.MA.zoomHud;
     if (!host || !hud) return;
 
-    // BLK-owner-20260923-2332-1: 帯はキャンバス (#preview-container) の右上に置く。状態遷移図では
+    // 帯はキャンバス (#preview-container) の右上に置く。状態遷移図では
     // キャンバスの上に状態遷移表・入れ子ツリーの見出しが出るので、固定の top: 40px のままだと
     // 帯がその見出し (「CSV で書き出し」) に重なって押せない。見出しの下 = キャンバスの上端に下ろす。
     function placeHud() {
@@ -3097,7 +3096,7 @@ function init() {
       table.triggers.forEach(function(t) { html += '<th>' + esc(t) + '</th>'; });
       html += '</tr></thead><tbody>';
       table.rows.forEach(function(row) {
-        // BLK-human-20260923-2001: 入れ子の子は親の下に字下げして出し、親の行を畳めば隠れる。
+        // 入れ子の子は親の下に字下げして出し、親の行を畳めば隠れる。
         var anc = ST.ancestorsOf(row.stateId, currentParsed);
         for (var ai = 0; ai < anc.length; ai++) if (sttCollapsed[anc[ai]]) return;
         var twisty = row.hasChildren
@@ -3184,7 +3183,7 @@ function init() {
     syncStateTable();
   })();
 
-  // 入れ子ツリー (BLK-junior-20260916-0526-wish)
+  // 入れ子ツリー
   // 子状態を足した後、入れ子の中身を確かめるのに 1 枚の図を拡大するしか
   // なかった。ここは木で階層を出し、行を押すとその階層だけを図に描く。
   // 木の組み立てと焦点の DSL は state-tree.js の純関数。
@@ -3308,7 +3307,7 @@ function init() {
     syncStateTree();
   })();
 
-  // BLK-primary-20260907-0703: 右パネルの「Properties / 図の設定」タブ。
+  // 右パネルの「Properties / 図の設定」タブ。
   var tabProps = document.getElementById('props-tab-props');
   var tabSettings = document.getElementById('props-tab-settings');
   if (tabProps && tabSettings) {
@@ -3329,11 +3328,11 @@ function init() {
   document.getElementById('exp-png').addEventListener('click', function() { exportMenu.classList.remove('open'); exportPNG(false); });
   document.getElementById('exp-png-transparent').addEventListener('click', function() { exportMenu.classList.remove('open'); exportPNG(true); });
   document.getElementById('exp-clipboard').addEventListener('click', function() { exportMenu.classList.remove('open'); exportClipboard(); });
-  // BLK-primary-20260907-0443: 開いている全タブを 2 クリックで SVG 保存する。
+  // 開いている全タブを 2 クリックで SVG 保存する。
   document.getElementById('exp-svg-all').addEventListener('click', function() { exportMenu.classList.remove('open'); exportAllSVG(); });
-  // BLK-primary-20260914-2006-wish: 対象をタブから切り離して名前で選ぶ入口。
+  // 対象をタブから切り離して名前で選ぶ入口。
   document.getElementById('exp-docset').addEventListener('click', function() { exportMenu.classList.remove('open'); openDocSetModal(); });
-  // BLK-owner-20260918-0329-prune: 「zip にして渡す」入口を Export ▾ の「渡す」に集める。
+  // 「zip にして渡す」入口を Export ▾ の「渡す」に集める。
   // 処理はタブ列から外した実体のボタン側に残し、ここはその click を鳴らすだけ
   // (Ctrl+K と同じ経路を通すので、名前も挙動も 1 つのまま)。
   ['exp-delivery:btn-tab-delivery', 'exp-handoff:btn-tab-handoff'].forEach(function(pair) {
@@ -3457,7 +3456,7 @@ function init() {
     var hit = null;
     if (KB.matches('render', e)) hit = 'render';
     else if (KB.matches('save', e)) hit = 'save';
-    // 一括置換 (BLK-primary-20260909-0303)。既定でタブ列から畳まれているツールなので、
+    // 一括置換。既定でタブ列から畳まれているツールなので、
     // メニューを辿らず / Ctrl+K でコマンド名を打たずに開ける道を 1 本用意する。
     else if (KB.matches('bulk-rename', e)) hit = 'bulk-rename';
     if (!hit) return;
@@ -3465,7 +3464,7 @@ function init() {
     var ae0 = document.activeElement;
     var inField0 = ae0 && ae0 !== editorEl
       && (ae0.tagName === 'INPUT' || ae0.tagName === 'TEXTAREA' || ae0.tagName === 'SELECT' || ae0.isContentEditable);
-    // BLK-primary-20260924-0637-friction: Ctrl+S (保存) と Ctrl+H (一括置換) は、どの入力欄に
+    // Ctrl+S (保存) と Ctrl+H (一括置換) は、どの入力欄に
     // カーソルがあっても効かせる (Ctrl+K / Ctrl+P と同じ。VS Code の Ctrl+H も入力欄を選ばない)。
     // FILES の絞り込み欄に焦点があると開かず、Ctrl+K で名前を打つ迂回 (2 → 11 打鍵) になっていた。
     // 再描画 (Ctrl+R) だけは従来どおり、フォーム入力中は奪わない。
@@ -3562,14 +3561,14 @@ function init() {
     var t = this.value;
     var mod = modules[t];
     if (!mod) return;
-    // BLK-builder-20260924-1202-2: 今の図種を選び直しただけなら、本文を入れ替えない
+    // 今の図種を選び直しただけなら、本文を入れ替えない
     // (本文から図種をそろえた後に同じ図種を選ぶと、見本や下書きで本文が潰れる)。
     if (t === currentDiagramType && currentModule === mod) {
       syncRail();
       syncZoomHud();
       return;
     }
-    // BLK-owner-20260924-2232-2: 図種はそのままで右パネルだけが別の図種 (本文や描画の
+    // 図種はそのままで右パネルだけが別の図種 (本文や描画の
     // 当て推量) になっているときに同じ図種を選び直したら、本文は入れ替えずに、利用者が
     // 選んだ図種の追加フォームに戻す。本文に決め手の語が出れば従来どおり本文に従う。
     if (t === currentDiagramType) {
@@ -3583,7 +3582,7 @@ function init() {
       scheduleRefresh();
       return;
     }
-    // BLK-owner-20260925-0312-2: 図種を選ぶ操作 (レール・図種欄・Ctrl+1〜6・コマンド) は、
+    // 図種を選ぶ操作 (レール・図種欄・Ctrl+1〜6・コマンド) は、
     // 本文が空か見本のままのタブにだけ効く。利用者の行があるタブの本文は替えず、押した図種の
     // 新しいタブを開く (draw.io・VS Code と同じく、図種やテンプレートの選択は新しいファイルを作る)。
     // 替えると、タブ名とファイル名はそのままで本文だけが見本になり、Ctrl+S で保存済みの図を潰していた。
@@ -3610,14 +3609,14 @@ function init() {
     if (window.MA.workspace) {
       try { wsDoc = window.MA.workspace.updateActive({ dsl: mmdText, diagramType: t }); } catch (e) {}
     }
-    // BLK-junior-20260909-0703: 切り替える前の図が白紙・見本のままだったかを
+    // 切り替える前の図が白紙・見本のままだったかを
     // 見てから差し替える (白紙のタブで図種を選び直しただけの人に見本を出さない)。
     var prevType = currentDiagramType;
     var prevTemplate = currentModule && currentModule.template ? currentModule.template() : '';
     currentDiagramType = t;
     window.MA.history.pushHistory();
     currentModule = mod;  // explicit user choice overrides auto-detection
-    // BLK-owner-20260925-0312-2: 図種別の控え (autoSave の図種ごとの最後の本文) は入れない。
+    // 図種別の控え (autoSave の図種ごとの最後の本文) は入れない。
     // タブごとに図を持つので、控えは別のタブの図の写しであり、白紙のタブに入れると同じ図が
     // 別の名前でもう 1 枚できる。ここに来るのは白紙・見本のタブだけなので、切り替え先の白紙にする。
     var savedForType = null;
@@ -3633,7 +3632,7 @@ function init() {
       try { window.MA.workspace.updateActive({ dsl: mmdText, diagramType: t }); } catch (e) {}
     }
     // 見本・図種別の下書きを入れたのは利用者の編集ではない。次の描画で自動保存に載せない
-    // (前の図のファイル名へ見本を書かない。BLK-owner-20260925-0312-1)。
+    // (前の図のファイル名へ見本を書かない。)。
     markTextSynced();
     if (typeof renderTabs === 'function') renderTabs();
     // Reparse with the new module BEFORE clearSelection() so that the
@@ -3654,7 +3653,7 @@ function init() {
     getMmdText: function() { return mmdText; },
     setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; scheduleRefresh(); },
     onUpdate: function() { updateUndoRedoButtons(); },
-    // BLK-owner-20260924-2232-1: 履歴は図 (タブ) ごと。エディタに入っている図の id で引き分ける。
+    // 履歴は図 (タブ) ごと。エディタに入っている図の id で引き分ける。
     getKey: function() {
       if (_historyDocId) return _historyDocId;
       try { return window.MA.workspace ? window.MA.workspace.getActiveId() : ''; } catch (e) { return ''; }
@@ -3713,12 +3712,7 @@ function init() {
   setupMaterialBoard();
   setupReqTrace();
   setupHandoverBanner();
-  setupAuditTimeline();
   setupAuditBoard();
-  setupDesignCheck();
-  setupSaveGuard();
-  setupSaveCheck();
-  setupSaveClash();
   setupSaveSwap();
   setupOverlayOriginSync();
   setupVersionTimeline();
@@ -3778,7 +3772,7 @@ function init() {
       return Math.floor(sec / 3600) + '時間前';
     }
     var _autoSavePending = null;
-    // BLK-owner-20260925-1132-2: 直近の記録をどのタブの図の回かで分けて持つ (札は今のタブの図の回を言う)。
+    // 直近の記録をどのタブの図の回かで分けて持つ (札は今のタブの図の回を言う)。
     var _asSeen = null;
     var _asByDoc = {};
     function update() {
@@ -3791,7 +3785,7 @@ function init() {
       if (!meta || !AST) { span.textContent = ''; return; }
       var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
       var last = window.MA.autoSave.getLastWrite ? window.MA.autoSave.getLastWrite() : null;
-      // BLK-owner-20260925-1132-2: 札は今のタブのファイルを指す (前のタブで書いた記録を名乗らない)。
+      // 札は今のタブのファイルを指す (前のタブで書いた記録を名乗らない)。
       // 新しい記録はその時のタブの図の回 (書くのは今のタブ。切り替えの前に flush する)。
       if (last && (!_asSeen || _asSeen.at !== last.at || _asSeen.fileName !== last.fileName || _asSeen.where !== last.where || _asSeen.reason !== last.reason)) {
         _asSeen = last;
@@ -3833,7 +3827,7 @@ function init() {
   try { document.documentElement.setAttribute('data-app-ready', '1'); } catch (e) {}
 }
 
-// BLK-junior-20260907-2303: 行番号から要素を選ぶ。プレビュー上の座標は
+// 行番号から要素を選ぶ。プレビュー上の座標は
 // 遷移を 1 本足すだけで動くが、行番号は再レイアウトで動かない。
 // Ctrl+K のジャンプと構造タブの行クリックがここを共有する。
 function selectElementAtLine(line) {
@@ -3848,7 +3842,7 @@ function selectElementAtLine(line) {
   return true;
 }
 
-// ── Command palette (BLK-builder-20260907-0803-1 / design 1a) ───────────────
+// ── Command palette (design 1a) ───────────────
 // design「リデザイン案」1a は「ツールバーのボタンを目で探す」代わりに
 // Ctrl+K で名前を打ってコマンドを実行する経路を求める。コマンドの中身は
 // 既存のツールバー要素を click / change するだけにしてある。挙動を 1 つの
@@ -3893,7 +3887,7 @@ function initCommandPalette() {
   function commands() {
     var list = [
       { id: 'open', title: 'ファイルを開く / Open', hint: 'File', keywords: ['open', 'file', 'ひらく'], run: function() { clickById('btn-open'); } },
-      // BLK-builder-20260908-0807-2-red: 「保存」の一語で名指しできるのはこれ。
+      // 「保存」の一語で名指しできるのはこれ。
       // 「保存フォルダの図を一覧」「前回保存からの差分」「SVG として保存」にも
       // その 2 文字は入っているので、完全一致のキーワードで本命を先頭に出す。
       { id: 'save', title: 'ファイルを保存 / Save', hint: 'File', keywords: ['保存', 'save', 'file', 'ほぞん'], run: function() { clickById('btn-save'); } },
@@ -3901,16 +3895,16 @@ function initCommandPalette() {
       { id: 'eventsync', title: 'イベント整合を開く / Event sync', hint: 'Review', keywords: ['event', 'sync', 'method', 'いべんと', 'せいごう', 'めそっど'], run: function() { clickById('status-eventsync'); } },
       { id: 'family-audit', title: '系統チェックを開く / Family audit', hint: 'Tabs', keywords: ['family', 'audit', 'けいとう', 'とつごう'], button: 'btn-tab-family', run: function() { clickById('btn-tab-family'); } },
       { id: 'trace-coverage', title: 'トレースカバレッジを開く / Trace coverage', hint: 'Tabs', keywords: ['trace', 'coverage', 'とれーす', 'もれ', 'せんい', 'label', 'らべる', 'めっせーじ'], button: 'btn-tab-trace', run: function() { clickById('btn-tab-trace'); } },
-      // BLK-primary-20260907-0923: タブバーの道具はどれもパレットに無く、design 1a で
+      // タブバーの道具はどれもパレットに無く、design 1a で
       // ペインが狭くなった後は潰れたラベルを目で数えて押すしか経路が無かった。
-      // BLK-primary-20260908-0923-design (7b): タブ列から「ツール ▾」も消えるので、
+      // タブ列から「ツール ▾」も消えるので、
       // 6 分類のメニュー自体を引く経路をここに置く (メニューは画面左上に開く)。
       { id: 'tab-tools', title: 'ツールを分類から選ぶ / Tools', hint: 'Tabs', keywords: ['tool', 'menu', 'つーる', 'どうぐ', 'ぶんるい', 'めにゅー'], run: function() { setTimeout(function() { clickById('btn-tab-tools'); }, 0); } },
       { id: 'seq-to-activity', title: 'シーケンス図からアクティビティ図を起こす / Sequence to activity', hint: 'Tabs', keywords: ['activity', 'sequence', 'draft', 'あくてぃびてぃ', 'しーけんす', 'おこす', 'したがき'], run: function() { makeActivityFromSequence(); } },
       { id: 'component-draft', title: '定石構成からコンポーネント図を起こす / Component draft', hint: 'Tabs', keywords: ['component', 'draft', 'こんぽーねんと', 'じょうせき', 'おこす', 'したがき'], run: function() { promptComponentDraft(); } },
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], button: 'btn-tab-new', run: function() { clickById('btn-tab-new'); } },
-      // BLK-primary-20260925-0232-design: 保存先の行の右クリック「別のフォルダを保存先にする…」と同じ窓。
-      // BLK-owner-20260925-1132-1: 右クリックの入口と同じ名前にする (前の名前「保存先を変える」は検索語に残す)。
+      // 保存先の行の右クリック「別のフォルダを保存先にする…」と同じ窓。
+      // 右クリックの入口と同じ名前にする (前の名前「保存先を変える」は検索語に残す)。
       { id: 'change-target', title: '別のフォルダを保存先にする… / Change save folder', hint: 'Files', keywords: ['保存先を変える', 'べつのフォルダ', '別のフォルダ', '保存先', 'ほぞんさき', 'かえる', '変える', '自動保存', 'じどうほぞん', 'save', 'folder', 'autosave', 'target'], run: function() { setTimeout(openChangeTarget, 0); } },
       { id: 'tab-folder', title: 'FILES: 保存先を開く / Files: save folder', hint: 'Files', keywords: ['folder', 'files', 'tree', 'list', 'いちらん', 'ふぉるだ', 'ほぞんさき'], button: 'btn-tab-folder', run: function() { _ensureFolderListOpen(); } },
       { id: 'change-ticket', title: '変更チケットを開く / Change tickets', hint: 'Tabs', keywords: ['ticket', 'change', 'impact', 'ちけっと', 'へんこう', 'つづき', 'しようへんこう'], run: function() { toggleTicketBoard(true); } },
@@ -3921,22 +3915,22 @@ function initCommandPalette() {
       { id: 'tab-blame', title: '部品名の混入点を探す / Blame point', hint: 'Tabs', keywords: ['blame', 'origin', 'version', 'こんにゅう', 'いつから', 'かこばん', 'ふぐあい'], button: 'btn-tab-blame', run: function() { clickById('btn-tab-blame'); } },
       { id: 'tab-pattern', title: '同じ観点で全図を棚卸し / Pattern check', hint: 'Tabs', keywords: ['pattern', 'check', 'かんてん', 'いっかつ', 'してき', 'たなおろし'], button: 'btn-tab-pattern', run: function() { clickById('btn-tab-pattern'); } },
       { id: 'tab-submit', title: '提出前チェックを開く / Submit check', hint: 'Tabs', keywords: ['submit', 'check', 'ていしゅつ', 'かくにん', '略語'], button: 'btn-tab-submit', run: function() { clickById('btn-tab-submit'); } },
-      // BLK-owner-20260924-1212-prune: 旧 🕸 参照関係の行はここに置かない。▤ 影響を見る の 1 行
+      // 旧 🕸 参照関係の行はここに置かない。▤ 影響を見る の 1 行
       // (id 'name-search') の語に「参照関係」「図をまたいで辿る」を入れてある。
-      // BLK-owner-20260924-1332-prune: 旧 🔍 名前突合の行はここに置かない。▦ 突合ボードの 1 行
+      // 旧 🔍 名前突合の行はここに置かない。▦ 突合ボードの 1 行
       // (id 'tab-cross') の語に「名前突合」「表記揺れ」「name audit」を入れ、その語で引いたときは
       // ボードを「名前/表記揺れ」で絞って開く。
-      // BLK-owner-20260925-0235-prune: チェックリストと zip の書き出しは同じ窓。行も 1 つにし、旧名は引く語に残す。
+      // チェックリストと zip の書き出しは同じ窓。行も 1 つにし、旧名は引く語に残す。
       { id: 'handover-board', title: '引き継ぎ（チェックリストと zip）', hint: 'Handover', keywords: ['handover', '引き継ぎ', 'ひきつぎ', 'checklist', 'チェックリスト', '新人', '置換済み', 'note', 'svg', '渡してよい図を数える', '引き継ぎチェックリスト', 'handoff', 'package', 'zip', 'ぱっけーじ', '引き継ぎパッケージを作る', 'Handoff package', '引き継ぎパッケージ', '対象確認', '渡す', '引き継ぎ zip'], button: 'btn-tab-handover', run: function() { openHandoverBoard(); } },
       { id: 'tab-delivery', title: '納品パッケージを作る / Delivery package', hint: 'Tabs', keywords: ['delivery', 'package', 'zip', 'のうひん', 'ぱっけーじ', '提出'], button: 'btn-tab-delivery', run: function() { clickById('btn-tab-delivery'); } },
       { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], button: 'btn-tab-lines', run: function() { clickById('btn-tab-lines'); } },
-      // BLK-owner-20260923-1509-prune: 並べる面は 1 つに統合した。パレットの項目は
+      // 並べる面は 1 つに統合した。パレットの項目は
       // 「誰と並べるか」で 3 つに分かれ、どれも旧称 (並べて見る / 先輩 / 変更前後) で引ける。
       { id: 'tab-compare', title: '並べて比較 (別タブの図) / Compare', hint: 'Compare', keywords: ['compare', 'side', 'ならべて', 'みくらべ', 'べつたぶ'], run: function() { openCompareTarget('tabs'); } },
-      // BLK-owner-20260924-1712-prune: 「この図を前回保存版と比べる」行は 1 つ。旧 command:livediff (前回保存版との比較) と
+      // 「この図を前回保存版と比べる」行は 1 つ。旧 command:livediff (前回保存版との比較) と
       // この行は同じ枠を同じ「± 差分」で開いていた。消した方の名前は語に残し、分類は ± 差分の一覧と同じ「レビュー」にする。
       { id: 'compare-before', title: '前回保存版と比較 / Compare with last save', hint: 'Compare', group: 'review', keywords: ['並べて比較 (この図の前回保存版)', '前回保存版との比較', 'Compare with last save', '差分', '前回保存', 'レビュー', 'diff', 'compare', 'before', 'after', 'last', 'save', 'ならべて', 'ひかく', 'ぜんかいほぞん', 'ぜんかい', 'ほぞん', 'へんこうぜんご', 'さぶん', 'みくらべ'], run: function() { openCompareTarget('before'); } },
-      // BLK-owner-20260924-2337-prune: 部品を起こす・テンプレート・骨格・セット複製の 4 行を 1 行にした。何から起こすかは窓の上端で選ぶ。
+      // 部品を起こす・テンプレート・骨格・セット複製の 4 行を 1 行にした。何から起こすかは窓の上端で選ぶ。
       // 旧名はこの行を引く語に残す (別の行として並べない)。
       { id: 'tab-template', title: '既存の図や雛形から新しい図を起こす… / New from…', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい', 'テンプレートから作る', 'テンプレート', '部品を起こす', '6 図種まとめて', 'part', 'starter', 'new', 'ぶひん', 'おこす', 'したがき', '6', 'ろく', 'ずしゅ', '骨格から作る', '骨格', 'skeleton', 'こっかく', 'ひな形', 'セット複製', '系統ごと複製する', '系統ごと複製', 'set', 'clone', 'family', 'せっと'], button: 'btn-tab-template', run: function() { clickById('btn-tab-template'); } },
       { id: 'tab-diff', title: '前回保存からの差分 / Diff', hint: 'Tabs', keywords: ['diff', 'change', 'さぶん', 'へんこう'], button: 'btn-tab-diff', run: function() { clickById('btn-tab-diff'); } },
@@ -3946,37 +3940,35 @@ function initCommandPalette() {
       // 「メニューにはあるがパレットに無かった」道具。題はメニューの言い換えに揃える。
       { id: 'tab-draft', title: '一時控えにする / Draft', hint: 'Tabs', keywords: ['draft', 'ひかえ', 'いちじ'], button: 'btn-tab-draft', run: function() { clickById('btn-tab-draft'); } },
       { id: 'tab-apply', title: '複数クラスに一括適用 / Bulk apply', hint: 'Tabs', keywords: ['apply', 'bulk', 'いっかつ', 'てきよう'], button: 'btn-tab-apply', run: function() { clickById('btn-tab-apply'); } },
-      // BLK-human-20260923-1600 (design 9a): 「⇔ 先輩」を「並べて比較」に改名したので、
+      // 「⇔ 先輩」を「並べて比較」に改名したので、
       // Ctrl+K も新しい名前で引ける。旧称 (先輩) でも当たるように語を残す。
       // 10a: 入口は FILES ツリーの「読むだけ」節にあるので題もそちらに読み替えるが、
       // 走らせるのは master 側の openCompareTarget('folder') (相手を選ぶ所まで一息で開く)。
-      // BLK-owner-20260925-0416-prune: 保存先の一覧の参照タブ列を外したので、旧名「参照」「先輩のフォルダ」もこの行で引き、
+      // 保存先の一覧の参照タブ列を外したので、旧名「参照」「先輩のフォルダ」もこの行で引き、
       // FILES「読むだけ」節も開く (隣のフォルダを読む入口は節 1 か所)。
       { id: 'tab-senior', title: 'FILES: 読むだけの図と並べて比較 / Files: compare', hint: 'Files', keywords: ['compare', 'files', 'readonly', 'senior', 'side', 'ならべて', 'ひかく', 'よむだけ', 'あいて', 'せんぱい', 'ふぉるだ', '参照', 'さんしょう', '参照フォルダ', '参照タブ', '先輩のフォルダ', 'せんぱいのふぉるだ'], button: 'btn-tab-senior', run: function() { revealReadonlySection(); openCompareTarget('folder'); } },
       // design 9a: 手元の .puml を開く入口は上部バーの Import ▾ へ移した。
       { id: 'import-clipboard', title: 'クリップボードの DSL から開く / Open from clipboard', hint: 'File', keywords: ['clipboard', 'paste', 'import', 'くりっぷ', 'はりつけ', 'ひらく'], run: function() { clickById('imp-clipboard'); } },
-      // BLK-junior-20260924-0704-wish: 部品 1 つの 6 図種を先輩・自分の 2 列で並べる 🧩 部品ビュー。
+      // 部品 1 つの 6 図種を先輩・自分の 2 列で並べる 🧩 部品ビュー。
       // 入口が「読むだけ」節の奥にしか無く、junior は「部品パック」「部品ごと」「6 図種まとめて」の
       // 語で探して辿り着けなかった。開くと、いま開いている図の部品が選ばれた状態で出る。
-      // BLK-owner-20260924-1212-prune: 行名に立場の語 (先輩) を出さない。旧名で打っても当たるよう語には残す。
+      // 行名に立場の語 (先輩) を出さない。旧名で打っても当たるよう語には残す。
       { id: 'part-board', title: '部品ビュー (部品ごとの 6 図種を比較相手と並べる) / Part view', hint: 'Files', keywords: ['先輩', 'せんぱい', 'part', 'board', 'pack', 'view', '部品パック', '部品ごと', '部品ビュー', '6 図種まとめて', '6図種まとめて', '6 図種', 'ぶひん', 'ぱっく', 'ごと', 'まとめて', 'ずしゅ'], run: function() {
         var PB = window.MA.partBoard;
         var WS = window.MA.workspace;
         var active = WS ? WS.getActive() : null;
         openPartBoard({ part: (PB && active) ? PB.partOf(active.name) : '' });
       } },
-      // BLK-owner-20260924-1836-prune: 名前は FILES「読むだけ」のフォルダの右クリックの行と同じ。旧名は検索の語に残す。
+      // 名前は FILES「読むだけ」のフォルダの右クリックの行と同じ。旧名は検索の語に残す。
       { id: 'tab-peek', title: 'このフォルダの図を調べる… / Files: inspect a read-only folder', hint: 'Files', keywords: ['peek', 'files', 'readonly', 'folder', 'よむだけ', 'ほかの', 'ふぉるだ', '他フォルダを覗く', '他の保存フォルダを覗く', '読むだけのフォルダを足す', '覗く', 'のぞく', 'しらべる'], button: 'btn-tab-peek', run: function() { clickById('btn-tab-peek'); } },
       { id: 'tab-drivermap', title: '系統マップを開く / Driver map', hint: 'Tabs', keywords: ['driver', 'map', 'けいとう', 'まっぷ'], button: 'btn-tab-drivermap', run: function() { clickById('btn-tab-drivermap'); } },
-      { id: 'tab-design', title: '仕様突合 (design) / Design spec check', hint: 'Tabs', keywords: ['design', 'spec', 'gap', 'しよう', 'とつごう', 'せっけい'], button: 'btn-tab-design', run: function() { clickById('btn-tab-design'); } },
       { id: 'tab-cross', title: '突合ボード / Cross-check board', hint: 'Tabs', keywords: ['cross', 'board', 'audit', 'とつごう', 'ぼーど', '名前突合', '表記揺れ', '表記ゆれ', 'name audit', 'name', 'なまえ', 'ゆれ', 'つきあわせ', '宣言なし', 'メソッド突合'], button: 'btn-tab-cross', run: function() {
         var cpIn = document.getElementById('cp-input');
         openAuditBoardFor(cpIn ? cpIn.value : '');
       } },
-      { id: 'tab-audit-timeline', title: '監査履歴を開く / Audit timeline', hint: 'Tabs', keywords: ['audit', 'timeline', 'かんさ', 'りれき'], button: 'btn-tab-audit-timeline', run: function() { clickById('btn-tab-audit-timeline'); } },
       { id: 'tab-review', title: '基準の図と突き合わせる / Review desk', hint: 'Tabs', keywords: ['review', 'desk', 'きじゅん', 'つきあわせ'], button: 'btn-tab-review', run: function() { clickById('btn-tab-review'); } },
       { id: 'tab-inbox', title: '図をまたぐ指摘箱 / Pin inbox', hint: 'Tabs', keywords: ['inbox', 'pin', 'してきばこ'], button: 'btn-tab-inbox', run: function() { clickById('btn-tab-inbox'); } },
-      // 🔖 手動指摘のタブは 📥 指摘箱に畳んだ (BLK-owner-20260923-1409-prune)。
+      // 🔖 手動指摘のタブは 📥 指摘箱に畳んだ。
       // 名前で引いた人を、出典「手で書いた」で絞った指摘箱へ連れていく。
       { id: 'tab-findings', title: '手で書いた指摘 / Manual findings', hint: 'Tabs', keywords: ['findings', 'manual', 'してき', 'だいちょう'], button: 'btn-tab-inbox', run: function() {
         _inboxSetSource('manual');
@@ -3984,7 +3976,7 @@ function initCommandPalette() {
         if (panel && panel.classList.contains('open')) { renderInboxPanel(); renderInboxBadge(); return; }
         clickById('btn-tab-inbox');
       } },
-      // BLK-owner-20260924-1212-prune: この図の履歴 を開く行は「この図の履歴を見る」1 行。旧名「変遷」は語に落とす。
+      // この図の履歴 を開く行は「この図の履歴を見る」1 行。旧名「変遷」は語に落とす。
       { id: 'tab-versions', title: 'この図の履歴を見る / Version history', hint: 'Tabs', keywords: ['version', 'timeline', 'history', 'へんせん', 'りれき', '変遷', 'この図の変遷', '履歴', '保存した版'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
       { id: 'tab-lineage', title: 'この図の継承元を見る / Lineage', hint: 'Tabs', keywords: ['lineage', 'parent', 'けいしょう', 'もと', 'とりこみ'], button: 'btn-tab-lineage', run: function() { clickById('btn-tab-lineage'); } },
       { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', keywords: ['board', 'summary', 'へんこう', 'さまり', '提出前レビュー', '変更前後', 'へんこうぜんご', 'ていしゅつ', 'before-after', 'review'], button: 'btn-tab-board', run: function() {
@@ -3993,15 +3985,15 @@ function initCommandPalette() {
         if (/提出|ていしゅつ|変更前後|へんこうぜんご|before.?after/i.test(q)) openChangeBoardAt('delivery', true);
         else clickById('btn-tab-board');
       } },
-      // BLK-owner-20260918-0529-prune: 「見比べる」5 つのうち、下端ステータスと
+      // 「見比べる」5 つのうち、下端ステータスと
       // 納品パネルの中にしか入口が無かった 2 つ。今まで通りの呼び名 (比較 / 前回保存版 /
       // 変更前後) でも、メニューの言い換え (…と見比べる) でも引けるようにする。
-      // BLK-owner-20260924-1712-prune: 旧 livediff の行は 'compare-before' (前回保存版と比較) に畳んだ。
-      // BLK-primary-20260924-1332-wish: 🔍 提出前レビューの行は置かない。▤ 変更サマリの 1 行 (id 'tab-board') の語に
+      // 旧 livediff の行は 'compare-before' (前回保存版と比較) に畳んだ。
+      // 🔍 提出前レビューの行は置かない。▤ 変更サマリの 1 行 (id 'tab-board') の語に
       // 「提出前レビュー」「変更前後」を入れ、その語で引いたときは 変更前 = 前回提出・🖼 SVGで見る で開く。
-      // BLK-primary-20260918-0249-wish: 会議で見せる 3〜5 枚を選んで並べる
+      // 会議で見せる 3〜5 枚を選んで並べる
       { id: 'meeting-set', title: '会議セットで並べる / Meeting set', hint: 'Board', keywords: ['meeting', 'kaigi', 'かいぎ', 'せっと', 'set'], button: 'cb-meeting', run: function() { toggleChangeBoard(true); clickById('cb-meeting'); } },
-      // 顧客の前で開く画面 (BLK-primary-20260913-0306-wish)。ボードを開いていなければ開いてから切り替える。
+      // 顧客の前で開く画面。ボードを開いていなければ開いてから切り替える。
       { id: 'board-svg', title: '変更前後を図で見せる / Show before-after as SVG', hint: 'Tabs', keywords: ['svg', 'customer', 'こきゃく', 'みせる', 'ずでみる'], button: 'cb-svg', run: function() {
         var modal = document.getElementById('cb-modal');
         if (!modal || modal.style.display !== 'flex') clickById('btn-tab-board');
@@ -4020,17 +4012,17 @@ function initCommandPalette() {
       { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
       { id: 'export-all', title: '全図を SVG で保存（zip）', hint: 'Export', keywords: ['export', 'svg', 'zip', 'all', '開いている図すべて'], run: function() { openDocSetModal('open'); } },
       { id: 'call-graph', title: '呼び出しグラフ（このメソッドを呼んでいる図を辿る）', hint: 'Review', keywords: ['call', 'graph', 'callers', '呼び出し', 'よびだし', 'グラフ', '突合', 'method', 'メソッド'], run: function() { openCallGraph(); } },
-      // BLK-owner-20260918-0429-prune: ツール ▾ →「確かめる」にも載せたので button を持つ。
+      // ツール ▾ →「確かめる」にも載せたので button を持つ。
       // パレット側の分類・言い換えはメニューに合わせて自動で揃う。
-      // BLK-primary-20260917-0523-wish: 仕様変更の影響範囲は「名前 → 使っている図」で引く。
-      // BLK-owner-20260923-1949-prune: 名前は残し、開くのは ⇄ 一括置換の ▤ 影響を見る 1 つ
+      // 仕様変更の影響範囲は「名前 → 使っている図」で引く。
+      // 名前は残し、開くのは ⇄ 一括置換の ▤ 影響を見る 1 つ
       // (その名前が入った状態で開く)。
-      // BLK-owner-20260924-1212-prune: ▤ 影響を見る を開く行はこの 1 行だけ (画面の名前で出す)。
+      // ▤ 影響を見る を開く行はこの 1 行だけ (画面の名前で出す)。
       // 旧名 (名前で図を探す / 依存グラフ / 参照関係 / 部品名で図をまたいで辿る) は語に落とし、
       // どれを打ってもこの行が出る。ツール ▾ の案内行 (→ ▤ 影響を見る) はパレットに写さない
       // (button を持たせないので、メニューの言い換えで題が差し替わらない)。
       { id: 'name-search', title: '影響を見る（部品名の参照元・参照先・出てくる行）', hint: '', group: 'find',
-        // BLK-primary-20260924-0021-wish: 「使っている図」「使われている」「参照」「どこで使う」でも引ける
+        // 「使っている図」「使われている」「参照」「どこで使う」でも引ける
         // (IntelliJ の Find Usages に当たる語)。図やエディタで部品名を選んでいれば、その名前を入れて開く。
         keywords: ['search', 'name', 'method', 'xref', 'impact', 'usages', 'find usages', 'references', 'where used',
           'dependency', 'graph', 'refs', 'reference', 'cross', 'project',
@@ -4039,7 +4031,7 @@ function initCommandPalette() {
           '名前で図を探す', '依存グラフ', '依存', 'いぞん', '連鎖', '参照関係', 'かんけい', '部品名で図をまたいで辿る',
           'またいで', '図をまたぐ', '影響を見る'],
         run: function() { openImpactScreen(_nameSearchSeed()); } },
-      // BLK-primary-20260918-0549-friction: 資料セットの行の中にしか無かった 2 つを
+      // 資料セットの行の中にしか無かった 2 つを
       // Ctrl+K からも引けるようにする (入口は増やさず、同じ操作を同じ名前で呼ぶ)。
       { id: 'docset-before-after', title: '資料セットの変更前後をまとめて見る / Doc set before-after', hint: 'Deliver', keywords: ['docset', 'set', 'before', 'after', 'review', 'しりょう', 'せっと', 'へんこうぜんご', 'まとめて', 'みくらべ'], run: function() { runDocSetCommand(openDocSetBeforeAfter); } },
       { id: 'docset-layout', title: '資料の体裁… / Doc layout', hint: 'Deliver', keywords: ['docset', 'layout', 'sheet', 'しりょう', 'ていさい', 'みだし', 'ならび'], run: function() { runDocSetCommand(openDocLayout); } },
@@ -4061,7 +4053,7 @@ function initCommandPalette() {
         run: function() { selectValue('diagram-type', d.value); },
       });
     });
-    // BLK-junior-20260915-2346: 直前に開いた図は、📂 一覧を開いて名前を目で探さなくても
+    // 直前に開いた図は、📂 一覧を開いて名前を目で探さなくても
     // ここから直接戻れる。新しい順に並べるので、出戻り先はたいてい先頭にいる。
     var RFC = window.MA.recentFiles;
     if (RFC) {
@@ -4135,7 +4127,7 @@ function initCommandPalette() {
     ] },
     'plantuml-state': { prefix: 'st', kinds: [
       { value: 'state', label: '状態' },
-      // BLK-owner-20260925-0312-3: 子状態は種別「状態」+ 追加する位置「{親} の中」。検索語は残し、同じフォームへ連れていく。
+      // 子状態は種別「状態」+ 追加する位置「{親} の中」。検索語は残し、同じフォームへ連れていく。
       { value: 'child', label: '子状態 (状態の中に入れる)', kind: 'state', place: 'inside' },
       { value: 'composite', label: '複合状態' },
       { value: 'transition', label: '遷移' },
@@ -4174,7 +4166,7 @@ function initCommandPalette() {
     var typeEl = document.getElementById('diagram-type');
     var spec = ADD_KINDS[typeEl ? typeEl.value : ''];
     if (!spec) return [];
-    // BLK-junior-20260916-0526: 用語 (子状態・複合状態) を知らない人は、
+    // 用語 (子状態・複合状態) を知らない人は、
     // 正しい語を打てないので入口に届かない。「入れ子」「中に入れる」のような
     // 知っている言葉からも同じ入口に来られるようにする。
     var AKV = window.MA.addKindVocab;
@@ -4186,7 +4178,7 @@ function initCommandPalette() {
         group: 'add',
         title: k.label,
         hint: '追加',
-        // BLK-owner-20260924-2259-prune: 追加フォームを 1 つにし確定ボタンを「+ 追加」にそろえたので、
+        // 追加フォームを 1 つにし確定ボタンを「+ 追加」にそろえたので、
         // 旧名 (末尾に追加 / この位置に挿入 / Action 追加 …) で覚えた人もここから同じ入口に来られるようにする。
         keywords: ['add', 'ついか', k.value, k.label, '末尾に追加', 'この位置に挿入', 'ここに挿入', 'insert',
           k.value + ' 追加', k.value.charAt(0).toUpperCase() + k.value.slice(1) + ' 追加'].concat(plain),
@@ -4297,7 +4289,7 @@ function initCommandPalette() {
     render();
   }
 
-  // BLK-human-20260923-1701 (design 10b): Ctrl+P は同じ検索欄を「ファイル名」に絞って開く。
+  // Ctrl+P は同じ検索欄を「ファイル名」に絞って開く。
   // opts.files は保存先の図の名前 (FILES ツリーの右クリックと同じ「開く」の道で開く)。
   function fileCommands(files) {
     return (files || []).map(function(name) {
@@ -4408,7 +4400,7 @@ function updateUndoRedoButtons() {
   if (btnRedo) btnRedo.disabled = !hist.canRedo();
 }
 
-// BLK-primary-20260908-1603: DSL 行 ⇄ SVG 図形の「選ぶ前の対応表示」。
+// DSL 行 ⇄ SVG 図形の「選ぶ前の対応表示」。
 // キャレット行を既定の peek にし、行番号にマウスが乗っている間はその行を優先する
 // (マウスを外せばキャレット行に戻る)。選択 (selected) には触らない。
 var _peekHoverLine = null;
@@ -4510,7 +4502,7 @@ function initPaneResizers() {
   attach(document.getElementById('resizer-left'), editorPane, 'left');
   attach(document.getElementById('resizer-right'), propsPane, 'right');
 
-  // BLK-human-20260915-1203: 右に並ぶ読み専用の枠 (参照ペイン・先輩の図) も、
+  // 右に並ぶ読み専用の枠 (参照ペイン・先輩の図) も、
   // 境目をドラッグして幅を変えられ、その幅を覚える。丸めは side-pane が持つ。
   attachSidePaneResizer('resizer-compare', 'compare-pane', COMPARE_PANE_KEY);
   attachSidePaneResizer('resizer-senior', 'senior-pane', window.MA.seniorPane
@@ -4591,7 +4583,7 @@ function setZoom(z) {
   syncOpenEmptyHint();
 }
 
-// BLK-builder-20260924-1415-4 (design 7a / 9a): 空の画面の入口は図のすぐ下に置く。
+// 空の画面の入口は図のすぐ下に置く。
 // 図の拡大は transform なので流れの高さが変わらない。見た目の高さの分だけ下げて重ねない。
 function syncOpenEmptyHint() {
   var h = document.getElementById('open-empty-hint');
@@ -4600,7 +4592,7 @@ function syncOpenEmptyHint() {
   h.style.marginTop = FO.emptyHintGap(previewSvgEl.offsetHeight, zoom) + 'px';
 }
 
-// BLK-migrator-20260923-1909: 当たり判定の層 (#overlay-layer / #hover-layer) は
+// 当たり判定の層 (#overlay-layer / #hover-layer) は
 // #preview-container の中の絶対配置で、図 (#preview-svg) が余白 16px の位置に
 // あると決め打ちしていた。保存のたびに出る帯 (突合・衝突・入れ替わり・逸れ) は
 // 図の上に流れで入って図を下へ押すので、帯が出ている間は枠が帯の高さだけ上に
@@ -4620,7 +4612,7 @@ function syncOverlayOrigin() {
   });
 }
 
-// BLK-builder-20260926-1010-1: 右上に浮くズーム帯 (#zoom-hud) のボタンが図の上端に重なり、header の文字や
+// 右上に浮くズーム帯 (#zoom-hud) のボタンが図の上端に重なり、header の文字や
 // 右端の参加者・部品の頭にホバーしても枠が出ず押せなかった。図の上端 (スクロール 0 の位置) が帯の下端より
 // 上に来るときだけ、その差ぶん図を下げる。保存の帯・エラーの帯が図を帯より下へ押しているときは下げない。
 function syncFigureBelowHud(host) {
@@ -4719,7 +4711,7 @@ function _wsFileDir() {
   } catch (e) { return './autosave'; }
 }
 
-// ── タブの書き先のフォルダ (BLK-human-20260925-1150) ─────────────────────────
+// ── タブの書き先のフォルダ ─────────────────────────
 // 保存先を別のフォルダに替えると、開いているタブの書き先まで新しいフォルダへ付け替わり、
 // 元のファイルは直らず、新しいフォルダに同じ名前の別の図があればそれを上書きしていた。
 // タブは開いたときのファイルを指し続ける (VS Code・IntelliJ と同じ)。保存先を替える直前に
@@ -4772,7 +4764,7 @@ function _reviewStore() {
   try { return window.localStorage || null; } catch (e) { return null; }
 }
 
-// ── 一時控えの印 (BLK-junior-20260907-2009-wish) ────────────────────────────
+// ── 一時控えの印 ────────────────────────────
 // やり直しの練習で作る控えが保存フォルダに溜まり、📂 一覧で成果物と同じ並びに
 // 混ざっていた。印を付けた図は一覧で畳み、成果物だけが並ぶようにする。
 // 印は保存フォルダごとに localStorage に持つ (判定は draft-mark が唯一の規約)。
@@ -4831,7 +4823,7 @@ function syncDraftButton() {
     : 'この図に一時控え(下書き / やり直し途中)の印を付けて、保存先の一覧から畳む';
 }
 
-// BLK-junior-20260908-1803: 「この名前のファイルに書いてよいか」を答える門。
+// 「この名前のファイルに書いてよいか」を答える門。
 // テンプレ宣言を知っている側 (一覧を持つ setupTabs の中) が起動時に差し込む。
 // 書き先を持つ経路が 2 つある (auto-save.js のディスク写しと、ここの saveActiveDoc)
 // ので、判断は 1 か所に置いて両方から引く。
@@ -4841,7 +4833,7 @@ function _blockedFileWrite(name) {
   try { return _fileWriteBlock(String(name)) || null; } catch (e) { return null; }
 }
 
-// BLK-primary-20260914-2106: まだ見本 (または白紙) のままのタブを、保存フォルダへ
+// まだ見本 (または白紙) のままのタブを、保存フォルダへ
 // 自動で書き戻さないための門。起動すると既定のタブ `diagram1` が図種の見本で作られ、
 // 画面のバッジ (整合・⇄ イベント・指摘・書き出し一覧) は数を出すために saveActiveDoc()
 // を通る。その結果、利用者が 1 文字も打っていないのに見本が `diagram1.puml` として
@@ -4860,7 +4852,7 @@ function _isUntouchedDoc(doc) {
   try { return BD.isUntouched(doc.dsl, tpl, doc.diagramType); } catch (e) { return false; }
 }
 
-// design 10a (BLK-builder-20260924-1735-3): FILES ツリーの部品フォルダの「＋ 未作成 2 図種（UC・ACT）」から、
+// design 10a: FILES ツリーの部品フォルダの「＋ 未作成 2 図種（UC・ACT）」から、
 // その部品のまだ無い図種をその場で作る。名前とひな形は ➕ 部品を起こす と同じ (part-starter の plan)。
 // 部品名は打ち直させない。保存先に同じ名前があれば `_2` を付ける (上書きしない)。
 // part: ツリーの部品名 ('spi')、kinds: file-tree の図種 ('usecase' …)、existing: 保存先の図の名前。
@@ -4899,7 +4891,7 @@ function createPartKinds(part, kinds, existing) {
 }
 window.createPartKinds = createPartKinds;
 
-// BLK-primary-20260913-0206: 一括置換・改名の後始末が、開いているタブを丸ごと
+// 一括置換・改名の後始末が、開いているタブを丸ごと
 // 保存フォルダへ書き戻していた。そこには (a) 今回の置換が 1 文字も当たっていない図、
 // (b) テンプレ宣言で書き込みを止めてある図、(c) 錠に「元のまま保つ」と答えた図が
 // 混ざる。どれもタブが持っている本文で元ファイルを潰すので、見比べのために開いた
@@ -4911,8 +4903,8 @@ window.createPartKinds = createPartKinds;
 // 戻り値は書いたかどうか。
 function writeDocToFolder(doc, fileDir) {
   if (!doc || !window.MA.workspace) return false;
-  if (_sourcePathOf(doc.id)) return false;  // 手元から開いたファイルは元の場所にだけ書く (BLK-human-20260917-0901)
-  // まだ見本のままのタブは書かない (BLK-primary-20260914-2106)。
+  if (_sourcePathOf(doc.id)) return false;  // 手元から開いたファイルは元の場所にだけ書く
+  // まだ見本のままのタブは書かない。
   if (_isUntouchedDoc(doc)) { _noteSaveVerify(doc, 'untouched'); return false; }
   if (_blockedFileWrite(doc.name)) {
     if (window.MA.autoSave && window.MA.autoSave.noteFileBlocked) {
@@ -4951,7 +4943,7 @@ function writeChangedToFolder(changed) {
 }
 
 // アクティブなタブの現在の編集内容を workspace に書き戻す。
-// BLK-primary-20260914-1406-wish: 保存を試すたびに「何を・どの道で書いたか」を控える。
+// 保存を試すたびに「何を・どの道で書いたか」を控える。
 // 引き継ぐ前に、ここの控えとディスクを突き合わせて効いた図と効かなかった図を名指しする。
 function _noteSaveVerify(doc, outcome) {
   var SV = window.MA.saveVerify;
@@ -4962,7 +4954,7 @@ function _noteSaveVerify(doc, outcome) {
 function saveActiveDoc() {
   if (!window.MA.workspace) return null;
   var doc = window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType });
-  // BLK-human-20260917-0901: 手元から開いたファイルは保存先フォルダへ複製しない
+  // 手元から開いたファイルは保存先フォルダへ複製しない
   // (書き戻しは手で押す保存が元のファイルへ行う)。
   if (doc && _sourcePathOf(doc.id)) {
     try { renderDiffBadge(); } catch (e) {}
@@ -4977,7 +4969,7 @@ function saveActiveDoc() {
       if (window.MA.autoSave && window.MA.autoSave.noteFileBlocked) {
         window.MA.autoSave.noteFileBlocked(doc.name, blocked);
       }
-      // BLK-primary-20260914-1406-wish: 書かなかった道もここで控える。
+      // 書かなかった道もここで控える。
       // 控えないと、画面には「保存した」しか残らない。
       _noteSaveVerify(doc, 'blocked');
       renderDiffBadge();
@@ -4986,7 +4978,7 @@ function saveActiveDoc() {
     }
     if (doc && cfg && cfg.backend !== 'file') _noteSaveVerify(doc, 'download');
     // まだ見本・白紙のままのタブは、自動の書き戻しではディスクへ書かない
-    // (BLK-primary-20260914-2106: 起動しただけで既存の図が見本で潰れる)。
+    // (起動しただけで既存の図が見本で潰れる)。
     if (doc && cfg && cfg.backend === 'file' && _isUntouchedDoc(doc)) {
       _noteSaveVerify(doc, 'untouched');
       renderDiffBadge();
@@ -4994,7 +4986,7 @@ function saveActiveDoc() {
       return doc;
     }
     if (doc && cfg && cfg.backend === 'file') {
-      // BLK-junior-20260908-1803-wish: 開いたままのファイルへ最初に書き戻す前に
+      // 開いたままのファイルへ最初に書き戻す前に
       // 一度だけ聞く。答えるまでは書かない (見比べ中の元ファイルを守る)。
       var SL = window.MA.sourceLock;
       var d = SL ? SL.decide(doc.id, doc.name, _openDocNames(), doc.dsl) : { action: 'write', name: doc.name };
@@ -5005,7 +4997,7 @@ function saveActiveDoc() {
         try { renderLiveDiffChip(); } catch (e) {}
         return doc;
       }
-      // BLK-junior-20260914-0906: 一覧から開いて眺めるだけの回。本文は開いたときの
+      // 一覧から開いて眺めるだけの回。本文は開いたときの
       // ままなので、元ファイルは既にこの内容で、書く必要も守るものも無い。聞かない。
       if (d.action === 'skip') {
         try { updateTopSourceLock(); } catch (e) {}
@@ -5017,21 +5009,21 @@ function saveActiveDoc() {
       // 既定が当たって書き先が変わることがあるので、上部バーの錠表示も合わせ直す。
       try { updateTopSourceLock(); } catch (e) {}
       if (d.name !== doc.name) doc = { id: doc.id, name: d.name, diagramType: doc.diagramType, dsl: doc.dsl };
-      // BLK-human-20260925-1150: 書き先はそのタブのフォルダ (保存先を替える前に開いたタブは開いたフォルダ)。
+      // 書き先はそのタブのフォルダ (保存先を替える前に開いたタブは開いたフォルダ)。
       window.MA.workspace.saveToFile(_withSourceEol(doc), _docDir(doc));
       // 保存先が Git なら、変更 (M / A) の数え直しを予約する (design 10c)。
       try { if (window.MA.gitUi) window.MA.gitUi.refreshSoon(); } catch (e) {}
-      // 届いた先を状態バーにも揃える (BLK-primary-20260914-2206)。
+      // 届いた先を状態バーにも揃える。
       if (window.MA.autoSave && window.MA.autoSave.noteFileWritten) {
         window.MA.autoSave.noteFileWritten(doc.name, doc.diagramType);
       }
       // 書きに行った。効いたかどうかはディスクと突き合わせるまで分からないので、
-      // 「何を書くつもりだったか」だけを控える (BLK-primary-20260914-1406-wish)。
+      // 「何を書くつもりだったか」だけを控える。
       _noteSaveVerify(doc, 'written');
       try { _fwNoteSaved(doc.name); } catch (e) {}
-      // 保存した時点を差分の基準にする (BLK-reviewer-20260907-0803)。
+      // 保存した時点を差分の基準にする。
       if (window.MA.saveDiff) window.MA.saveDiff.mark(doc.name, doc.dsl);
-      // 保存のたびに版を積む (BLK-reviewer-20260908-0723-wish)。基準 1 点だけでは
+      // 保存のたびに版を積む。基準 1 点だけでは
       // A → B → A の往復が見えないので、通しで並べられるよう履歴に残す。
       if (window.MA.versionTimeline) window.MA.versionTimeline.push(doc.name, doc.dsl);
     }
@@ -5048,12 +5040,10 @@ function applyActiveDoc() {
   if (!window.MA.workspace) return;
   var doc = window.MA.workspace.getActive();
   if (!doc) return;
-  // BLK-migrator-20260917-2349-b: 保存時チェックの帯は保存した図のもの。別の図に移っても残ると
+  // 保存時チェックの帯は保存した図のもの。別の図に移っても残ると
   // 図の上端を覆い、そこにある要素へホバー・クリックが届かない。
-  hideSaveCheckIfOtherDoc(doc.id);
   hideSaveSwapIfOtherDoc(doc.id);
-  hideSaveClashIfOtherDoc(doc.id);
-  _svgKindFix = null;  // SVG に合わせた図種は前の図のもの (BLK-migrator-20260924-0637)
+  _svgKindFix = null;  // SVG に合わせた図種は前の図のもの
   var mod = modules[doc.diagramType] || modules[currentDiagramType];
   if (mod) {
     currentModule = mod;
@@ -5069,7 +5059,7 @@ function applyActiveDoc() {
   suppressSync = true;
   editorEl.value = mmdText;
   suppressSync = false;
-  markTextSynced();  // タブの中身を出しただけ。書き直さない (BLK-owner-20260925-0312-1)
+  markTextSynced();  // タブの中身を出しただけ。書き直さない
   try { currentParsed = currentModule.parse(mmdText); } catch (e) { /* leave stale */ }
   if (window.MA.selection) window.MA.selection.clearSelection();
   updateLineNumbers();
@@ -5081,9 +5071,9 @@ function applyActiveDoc() {
   try { renderReviewBadge(); } catch (e) {}
   // 継承元も図ごとに違う。開いた時点で「継承元が更新されています」と言えるよう引き直す。
   try { renderLineageBadge(); } catch (e) {}
-  // 保存が届いた先も図ごとに違う (BLK-primary-20260914-2206)。
+  // 保存が届いた先も図ごとに違う。
   try { renderAutoSaveStatus(); } catch (e) {}
-  // 開いたファイルの未対応記法と、起動直後の入口 (BLK-human-20260917-0901)。
+  // 開いたファイルの未対応記法と、起動直後の入口。
   try { renderUnsupportedPanel(); } catch (e) {}
   try { renderOpenEmptyHint(); } catch (e) {}
 }
@@ -5094,12 +5084,12 @@ function switchToDoc(id) {
   saveActiveDoc();
   if (window.MA.autoSave) { try { window.MA.autoSave.flush(); } catch (e) {} }
   if (!window.MA.workspace.setActive(id)) return;
-  // BLK-owner-20260924-2232-1: ここで履歴を積むと、前のタブの本文が次のタブの履歴に入り、
+  // ここで履歴を積むと、前のタブの本文が次のタブの履歴に入り、
   // Ctrl+Z で別のタブの本文が出ていた。履歴はタブごとに持つので、切り替えでは積まない。
   applyActiveDoc();
 }
 
-// BLK-owner-20260925-0312-2: 利用者の行があるタブで図種を選んだら、そのタブは替えずに
+// 利用者の行があるタブで図種を選んだら、そのタブは替えずに
 // 押した図種の新しいタブへ移る。同じ図種の白紙・見本のままのタブが既にあればそこへ移る
 // (押すたびにタブを増やさない)。新しいタブは見本入り (中身のある図から図種を替えた人への
 // 手がかり)。見本のままのタブはディスクへ書かないので、行を足すか Ctrl+S を押すまでファイルは増えない。
@@ -5142,20 +5132,20 @@ function promptRenameDoc(docId, message, suggest) {
   if (window.MA.reviewDesk) {
     try { window.MA.reviewDesk.renameBaseline(doc.name, next); } catch (e) {}
   }
-  // 図の名前が変わっても継承元の関係は付いていく (BLK-junior-20260908-1603-wish)。
+  // 図の名前が変わっても継承元の関係は付いていく。
   if (window.MA.lineage) {
     try { window.MA.lineage.rename(doc.name, WS.sanitizeName(next)); } catch (e) {}
   }
   var before = doc.name;
   var renamed = WS.rename(doc.id, next);
-  // 図名欄で名前を変え終えたら、開いた元ファイルの錠は用済み (BLK-junior-20260908-1803-wish)。
+  // 図名欄で名前を変え終えたら、開いた元ファイルの錠は用済み。
   if (window.MA.sourceLock) { try { window.MA.sourceLock.release(doc.id); } catch (e) {} }
   if (window.MA.autoSave && window.MA.autoSave.resetFileBlocked) {
     try { window.MA.autoSave.resetFileBlocked('conflict:' + before); } catch (e) {}
   }
-  // 前の名前のファイルは残さず付け替える (BLK-junior-20260915-0307)。
+  // 前の名前のファイルは残さず付け替える。
   // 開いているタブの本文は、active なら editor の内容が正 (まだ保存前の編集が入る)。
-  // BLK-owner-20260929-1111-1: まだ 1 度も書いていない新しい図には前の名前のファイルが無い
+  // まだ 1 度も書いていない新しい図には前の名前のファイルが無い
   // (同じ名前のファイルは別の図)。付け替えの後始末はしない。
   var isActive = doc.id === WS.getActiveId();
   if (renamed && renamed.name && renamed.name !== before && !doc.fresh) {
@@ -5165,7 +5155,7 @@ function promptRenameDoc(docId, message, suggest) {
     });
   }
   renderTabs();
-  // BLK-junior-20260925-1732-friction: 図の設定の「図名 / File name」欄も新しい名前に揃える
+  // 図の設定の「図名 / File name」欄も新しい名前に揃える
   // (前の名前のまま残ると、その欄を触ったときに前の名前へ戻してしまう)。
   try { renderDiagramSettings(true); } catch (e) {}
   try { updateTopSourceLock(); } catch (e) {}
@@ -5175,7 +5165,7 @@ function promptRenameDoc(docId, message, suggest) {
   return renamed;
 }
 
-// BLK-owner-20260929-1111-1: 「＋ 新しい図」のタブを開く。名前 diagramN は開いているタブに加えて
+// 「＋ 新しい図」のタブを開く。名前 diagramN は開いているタブに加えて
 // 保存先にある .puml の名前とも重ならないものにし (diagram2.puml が在れば diagram3)、
 // 1 度書けるまで「新しい図」の印を付ける (印のある図は既にある別のファイルを書き換えない)。
 function openNewDocTab(diagramType, dsl) {
@@ -5233,7 +5223,7 @@ function renderTabs() {
     el.setAttribute('data-doc-name', doc.name);
     el.title = doc.name + ' (' + doc.diagramType.replace('plantuml-', '')
       + ') — ダブルクリックで名前変更 / 右クリックで変更前後を見る';
-    // BLK-primary-20260909-0303-wish: 会議で「この図、変わった?」と聞かれた所から
+    // 会議で「この図、変わった?」と聞かれた所から
     // 1 手で入れる入口。開く先は差分タブだが、そのまま見比べへ切り替えられる。
     el.addEventListener('contextmenu', function(ev) {
       ev.preventDefault();
@@ -5253,7 +5243,7 @@ function renderTabs() {
     }
     var label = document.createElement('span');
     label.className = 'tab-label';
-    // design 7a / 7b / 10a (BLK-builder-20260924-1636-1): タブは保存されるファイル名 ({name}.puml) で出す。
+    // design 7a / 7b / 10a: タブは保存されるファイル名 ({name}.puml) で出す。
     // 上部バーと同じ規則。data-doc-name・名前変更は拡張子なしの図名のまま。
     label.textContent = window.MA.topStatus && window.MA.topStatus.fileName
       ? window.MA.topStatus.fileName(doc.name) : doc.name;
@@ -5301,18 +5291,14 @@ function renderTabs() {
   // 申し送りは開いた時点で見えていないと口頭説明の代わりにならない。
   // 復元で開いた場合も出したいので、タブを組み立て直すたびに引き直す。
   try { renderHandoverBanner(); } catch (e) {}
-  // 依頼バッジ (BLK-reviewer-20260914-2006)。指摘.md は reviewer が run ごとに
-  // 書き替えるので、タブを組み立て直す機会に読み直す (控えは版で数えるので、
-  // 同じ版を何度読んでも継続 tick 数は伸びない)。
-  try { renderRequestBadge(); refreshRequestBadge(); } catch (e) {}
-  // 統一バッジ (BLK-primary-20260914-1006-friction)。旧称が残っているかは図の中身で
+  // 統一バッジ。旧称が残っているかは図の中身で
   // 決まるので、タブを組み立て直す機会に数え直す。
   try { renderRenameBadge(); refreshRenameBadge(); } catch (e) {}
   // FILES ツリー (design 10a) の「開いている図」もタブと同じ機会に合わせる。
   try { if (window.MA.filesPanel) window.MA.filesPanel.refresh(); } catch (e) {}
   // 「この図の履歴」は開いている図で変わる (design 10c)。
   try { if (window.MA.gitUi) window.MA.gitUi.onActiveChanged(); } catch (e) {}
-  // design 10a (BLK-builder-20260924-2325-2): 選ばれているタブを「＋」「ツール ▾」の下に潜らせない。
+  // design 10a: 選ばれているタブを「＋」「ツール ▾」の下に潜らせない。
   try { revealActiveTab(bar); } catch (e) {}
 }
 
@@ -5344,9 +5330,9 @@ function revealActiveTab(bar) {
 }
 
 // ── 前回保存時点との差分 ──────────────────────────────
-// BLK-reviewer-20260907-0803: 何か変わったかを知るのに控えとの全文 diff を毎回
+// 何か変わったかを知るのに控えとの全文 diff を毎回
 // 取っていた。保存した時点の DSL を基準に持てば、バッジを見るだけで
-// 「読む必要がある図」が分かる。変更 0 件ならその tick は図を開かなくてよい。
+// 「読む必要がある図」が分かる。変更 0 件ならその回 は図を開かなくてよい。
 
 // エディタの未確定分を含めた現在の全図。
 function _diffDocs() {
@@ -5358,7 +5344,7 @@ function _diffDocs() {
   });
 }
 
-// BLK-builder-20260924-1741-2 (design 9a / 10a): 未保存の印の判定を 1 つにする。
+// 未保存の印の判定を 1 つにする。
 // タブの ●/○・上部バーの保存ボタン・FILES ツリーの行は、どれも前回保存時点の基準 (save-diff) と
 // いまの本文 (開いている図はエディタの未確定分を含む) を照らしたこの値だけを読む。
 // 'same' = 前回保存と同じ / 'changed' = 変わった (●) / 'new' = まだ保存していない (○)
@@ -5419,13 +5405,13 @@ function renderDiffBadge() {
   if (!btn || !SD) return null;
   var docs = _diffDocs();
   syncTabDirtyMarks(docs);
-  // BLK-builder-20260924-1741-2 (design 9a / 10a): 上部バーの保存ボタンと FILES ツリーの印も
+  // 上部バーの保存ボタンと FILES ツリーの印も
   // タブの印と同じ機会 (打つたび・保存のたび) に合わせ直す。
   try { updateTopSaveButton(); } catch (e) {}
   try { if (window.MA.filesPanel && window.MA.filesPanel.syncMarks) window.MA.filesPanel.syncMarks(); } catch (e) {}
   var sum = SD.summary(docs);
   btn.textContent = SD.badgeText(sum);
-  // BLK-builder-20260908-1123-4: 件数の描き直しで className を丸ごと入れ替えると、
+  // 件数の描き直しで className を丸ごと入れ替えると、
   // 「タブ列から畳む」で付けた tool-folded が消えて、畳んだはずのボタンが戻ってくる。
   // 状態を表す 1 クラスだけを付け外しする (以下の件数ボタンも同じ)。
   btn.classList.toggle('has-change', !!sum.hasChange);
@@ -5435,7 +5421,7 @@ function renderDiffBadge() {
   return sum;
 }
 
-// ── 前回保存版といまの中身 (BLK-reviewer-20260915-2346-wish) ────────────────
+// ── 前回保存版といまの中身 ────────────────
 // ± 差分 は「どの図が変わったか」までで、開いている図の中身がどう変わるかは
 // 出ていない。reviewer が 77 行 → 4 行の内容消失を掘り起こせたのは手で diff を
 // 打ったからで、書いた本人の画面には保存を押すまで何の数字も出ていなかった。
@@ -5451,7 +5437,7 @@ function _liveDiffPair() {
            now: mmdText, has: !!(b && typeof b.dsl === 'string') };
 }
 
-// 下端の件数表示を 1 種類の形に揃える (design 9c / BLK-human-20260923-1602)。
+// 下端の件数表示を 1 種類の形に揃える (design 9c)。
 // 札ごとに文字色・枠を変える代わりに「● 名前 N」だけを出し、色を持つのは点だけにする。
 // 0 件 (と、まだ数えていない) 項目は出さない。title は呼ぶ側が従来どおり付ける。
 function applyStatusBadge(el, name, count, tone) {
@@ -5534,7 +5520,7 @@ function openLiveDiff() {
   renderVersionDiff();
 }
 
-// BLK-owner-20260923-1307-prune: 下端の札は「前回保存版と今を並べる」ための入口で、
+// 下端の札は「前回保存版と今を並べる」ための入口で、
 // ⇔ 並べて見る の ± 差分タブと目的が同じだった。札は残し、押したときに開く画面を
 // ⇔ 並べて見る に寄せる (並べる画面の実体を増やさない)。全文で並べる・戻すは
 // そのタブの中でできる。
@@ -5551,7 +5537,7 @@ function setupLiveDiff() {
 }
 
 // 「変更前 = 前回保存 (09/23 21:51)」。± 差分の窓・比較の枠の見出しも、変更サマリボードの
-// 「変更前 =」と同じ語で基準を言う (BLK-owner-20260924-1712-prune)。
+// 「変更前 =」と同じ語で基準を言う。
 function _savedHeadLabel(at) {
   var BL = window.MA.changeBaseline;
   if (BL) return BL.headLabel('saved', at);
@@ -5571,7 +5557,7 @@ function setupDiffPanel() {
     var docs = _diffDocs();
     var sum = SD.summary(docs);
     var html = '<div class="diff-head">' + esc(SD.badgeText(sum));
-    // BLK-owner-20260924-1712-prune: 「基準」ではなく変更サマリボードの「変更前 =」と同じ語で言う。
+    // 「基準」ではなく変更サマリボードの「変更前 =」と同じ語で言う。
     if (sum.markedAt) html += ' ・ ' + esc(_savedHeadLabel(sum.markedAt));
     html += '</div>';
     docs.forEach(function(d) {
@@ -5586,7 +5572,7 @@ function setupDiffPanel() {
         + '<span>' + esc(d.name) + '</span><span>' + esc(mark) + '</span></div>';
     });
     html += '<div class="diff-actions">'
-      // BLK-primary-20260909-0303-wish: 会議中はここから参照ペインへ入り、
+      // 会議中はここから参照ペインへ入り、
       // 以降は「この図の前後」と「他の図と見比べ」をタブで行き来する。
       + '<button type="button" id="diff-open-pane">ペインで見る (見比べと切替)</button>'
       + '<button type="button" id="diff-open-board">変更サマリボード</button>'
@@ -5642,7 +5628,7 @@ function setupDiffPanel() {
   try { renderLiveDiffChip(); } catch (e) {}
 }
 
-// ── レビュー机 (BLK-junior-20260907-1403-wish) ──────────────────────────
+// ── レビュー机 ──────────────────────────
 // 「先輩の図と同じ型のまま作る」業務では、型からのずれも、図種特有の間違い
 // (choice を足したのに元の直接遷移が残る等) も、書いた本人からは見えない。
 // 基準にした図を図ごとに覚えておき、打つたびに突き合わせて指摘を出す。
@@ -5784,27 +5770,27 @@ function setupReviewPanel() {
 }
 
 // ── 変更サマリボード ──────────────────────────────────
-// BLK-primary-20260907-0923-wish: レビュー会議で今日直した所を見せるのに、
+// レビュー会議で今日直した所を見せるのに、
 // 「± 差分」で名前を確かめ、タブを開き、「⇔ 並べて見る」で 2 枚ずつ突き合わせる、を
 // 図の枚数だけ繰り返していた。変わった図の変更前後を全件 1 画面に積んで出せば、
 // 上から順にスクロールして見せるだけで済む。
 
 var _cbFull = false;    // 全文を出すか (既定は差分行とその前後だけ)
 var _cbSame = false;    // 変わっていない図も並べるか
-var _cbFixOnly = false; // 「要修正」の印が付いた行だけに絞るか (BLK-primary-20260908-1103-wish)
-var _cbMapPending = false; // 対応表を未対応の指摘だけに絞るか (BLK-primary-20260908-1703-wish)
-// BLK-primary-20260913-0306-wish: 顧客に見せる画面。DSL を出さず、描いた図の
+var _cbFixOnly = false; // 「要修正」の印が付いた行だけに絞るか
+var _cbMapPending = false; // 対応表を未対応の指摘だけに絞るか
+// 顧客に見せる画面。DSL を出さず、描いた図の
 // 変更前後を並べる。描いた結果は鍵 (図・側・中身) で憶えておく — 顧客の前で
 // 切り替えるたびに描き直すと、そのたびに数秒の空白が出る。
 var _cbSvg = false;
-// BLK-primary-20260918-0249-wish: 会議で見せる図はその場で 3〜5 枚選ぶ。選んだ図だけを
+// 会議で見せる図はその場で 3〜5 枚選ぶ。選んだ図だけを
 // 選んだ順に並べ (変わっていない図も並べる)、1 枚ずつ 変更前 / 変更後 / 差分 をタブで切り替える。
 var _msOn = false;
 var _msSide = {};       // 図ごとに今どのタブを出しているか ('before' / 'after' / 'diff')
 var _cbSvgCache = {};
 var _cbSvgSeq = 0;      // 描いている最中にボードが描き直されたら古い結果を捨てる
 
-// ── 指摘と変更の対応表 (BLK-primary-20260908-1703-wish) ──────────────────
+// ── 指摘と変更の対応表 ──────────────────
 // ボードは「今回どの図が変わったか」を出すが、「この差分はどの指摘への対応か」は
 // 会議直前に記憶で突き合わせるしかなかった。指摘 1 件ごとに、対応した図をその場で
 // 1 クリック結び、「指摘 → 差分 / 対応なし」の一覧を会議前に自動で作る。
@@ -5825,7 +5811,7 @@ function _cbFindingTable(board) {
   return FL.buildTable({ findings: _cbFindings(), board: board });
 }
 
-// BLK-primary-20260912-2103-wish: ボードに保存フォルダの図も入れるか。
+// ボードに保存フォルダの図も入れるか。
 // 既定は入。会議で見せるのは「今日この保存フォルダで更新された分」であって、
 // たまたまタブを開いたままの図ではない。
 var _cbFolder = true;
@@ -5848,7 +5834,7 @@ function _cbFolderSince() {
   } catch (e) { return ''; }
 }
 
-// ── 変更前 = (BLK-primary-20260924-1332-wish) ─────────────────────────────
+// ── 変更前 = ─────────────────────────────
 // ボードの「変更前」を 今日 0 時 / 前回の会議 / 前回提出 から選ぶ。判定は change-baseline。
 // 前回の会議は、会議セットで並べた日時を保存フォルダ (_meetings.json) に控えて使う
 // (ブラウザを起こし直しても残る)。その時点の中身は保存フォルダの版の控えから選ぶ。
@@ -5933,7 +5919,7 @@ function _cbRecordMeeting() {
 
 // 1 枚の図の、時点 cut の中身。保存フォルダの版の控え (_versions) から選び、控えにも今のファイルにも
 // その時点の中身が無ければ、保存先が Git の作業木のときはその時点より前の最後のコミットから引く
-// (BLK-primary-20260925-0637-wish)。どこにも無ければ null (その時点ではまだ無かった図)。
+// どこにも無ければ null (その時点ではまだ無かった図)。
 //   cur … 保存フォルダの今のファイル { dsl, mtime } (無ければ null)
 function _cbFetchContentAt(dir, name, cut, cur) {
   var BL = window.MA.changeBaseline;
@@ -5998,7 +5984,7 @@ function _cbLoadBaseAt(names) {
   }, function() { _cbBaseLoading = false; return false; });
 }
 
-// ── 会議セットの開いていない図の変更前 (BLK-primary-20260925-0637-wish) ─────────
+// ── 会議セットの開いていない図の変更前 ─────────
 // 変更前 = 前回保存 は、開いた図に ± 差分が控えた中身。保存先から開かずに選んだ図にはその控えが無く、
 // これまでは今の中身を変更前にして「同じ」図を 2 つ並べていた。控えの無い開いていない図は、
 // 今日 0 時より前の最後の版 (版の控え、Git ならコミット) を変更前にする。その図の列見出しは「今日 0 時」と言う。
@@ -6050,7 +6036,7 @@ function _changeBoardModel() {
     var since = kind === 'saved' ? _cbFolderSince() : _cbBaseAt();
     docs = docs.concat(CB.folderExtras(_fiFileDocs, docs, { since: since }));
   }
-  // BLK-primary-20260924-2232-friction: 会議セットに保存先から選んだ図 (開いておらず今日も更新していない図) も並べる。
+  // 会議セットに保存先から選んだ図 (開いておらず今日も更新していない図) も並べる。
   var MSp = window.MA.meetingSet;
   var picked = {};
   if (_msActive() && MSp.folderPicks && _fiFolderMode()) {
@@ -6066,7 +6052,7 @@ function _changeBoardModel() {
     _cbLoadBaseAt(names).then(function(changed) { if (changed) renderChangeBoard(); });
   }
   var baselineOf = _cbBaselineFn();
-  // BLK-primary-20260925-0637-wish: 会議セットの開いていない図 (保存先から選んだ図・今日更新された
+  // 会議セットの開いていない図 (保存先から選んだ図・今日更新された
   // 保存フォルダの図) は、前回保存の控えが無ければ今日 0 時より前の最後の版を変更前にする。
   // 今の中身を変更前にして同じ図を 2 つ並べることはしない (版が無ければ「この基準より前の版がありません」)。
   var baseRaw = baselineOf;
@@ -6118,7 +6104,7 @@ function _cbSummaryText(board) {
   var CB = window.MA.changeBoard;
   if (!CB) return '';
   var head = CB.summaryText(board);
-  // BLK-owner-20260924-1712-prune: 何と比べたか (と、その日時) は見出しの「変更前 =」の選択が 1 回だけ言う。
+  // 何と比べたか (と、その日時) は見出しの「変更前 =」の選択が 1 回だけ言う。
   // ここに「基準 …」「変更前 = …」を重ねない。読み込み中だけ一言添える。
   if (_cbBaseLoading) head += ' ・ 変更前を読んでいます…';
   // 申し送り・レビュー結果は基準の取り直しでは消えないので、差分が 0 枚でも件数を出す。
@@ -6126,7 +6112,7 @@ function _cbSummaryText(board) {
   if (hnSum) head += ' ・ ' + hnSum;
   var rvSum = window.MA.reviewVerdicts ? window.MA.reviewVerdicts.summaryText() : '';
   if (rvSum) head += ' ・ ' + rvSum;
-  // 渡した申し送りチェックリストの返信状況 (BLK-primary-20260908-1803-wish)。
+  // 渡した申し送りチェックリストの返信状況。
   var hcSum = _hcSummaryLine();
   if (hcSum) head += ' ・ ' + hcSum;
   return head;
@@ -6260,7 +6246,7 @@ function _wireChangeBoardLinks(body) {
   }
 }
 
-// BLK-primary-20260913-0306-wish: 顧客に見せる 1 枚ぶん。描く前は「描いています」を
+// 顧客に見せる 1 枚ぶん。描く前は「描いています」を
 // 置いておき、描けた順に差し替える (先に枠を出しておかないと、顧客の前で画面が飛ぶ)。
 function _cbShowPanesHtml(entry) {
   var SBA = window.MA.showBeforeAfter;
@@ -6280,7 +6266,7 @@ function _cbShowPanesHtml(entry) {
       + ' data-side="' + esc(p.side) + '">' + inner + '</div>'
       + '</div>';
   });
-  // BLK-primary-20260924-1332-wish: 旧 🔍 提出前レビューの「増えた文字 / 消えた文字 / 図形の数」を
+  // 旧 🔍 提出前レビューの「増えた文字 / 消えた文字 / 図形の数」を
   // 図の下に 1 行ずつ出す (両側を描き終えたら _cbDrawShowPanes が埋める)。
   html += '<div class="cb-svg-diff" data-doc="' + esc(entry.name) + '"></div>';
   return html + '</div>';
@@ -6396,13 +6382,13 @@ function _cbDrawShowPanes(board) {
 // 1 枚ぶんの行差分 (行の印・指摘との対応・申し送りを含む)。ボードの既定の見せ方であり、
 // 会議セットの「差分」タブの中身でもあるので 1 か所に置く。
 // 各図の「変更前 (…)」。基準を選んでいるときは、その基準と時点を言う
-// (BLK-primary-20260924-1332-wish)。今日 0 時は今までどおり保存差分の基準の時刻。
-// BLK-owner-20260924-1712-prune: 列見出しも見出しの選択と同じ語 (「変更前 (前回保存 09/23 21:51)」)。
+// 今日 0 時は今までどおり保存差分の基準の時刻。
+// 列見出しも見出しの選択と同じ語 (「変更前 (前回保存 09/23 21:51)」)。
 function _cbBeforeLabel(e) {
   var BL = window.MA.changeBaseline;
   var k = _cbBaseKind();
   if (!BL) return '変更前';
-  // 前回保存の控えが無い開いていない図は、今日 0 時の版と比べている (BLK-primary-20260925-0637-wish)。
+  // 前回保存の控えが無い開いていない図は、今日 0 時の版と比べている。
   if (k === 'saved' && e && _msPickVia[e.name] && _msActive()) {
     return BL.columnLabel('today', BL.todayStart(new Date()), e.status);
   }
@@ -6422,7 +6408,7 @@ function _cbDiffBodyHtml(e, mapTable) {
       html += '<tr class="cb-gap"><td colspan="5">⋯ 同じ行 ' + r.count + ' 行 ⋯</td></tr>';
       return;
     }
-    // 会議で出た「この行は OK」「ここは直して」をその行に付ける (BLK-primary-20260908-0823-wish)。
+    // 会議で出た「この行は OK」「ここは直して」をその行に付ける。
     var vKey = RV ? RV.rowKey(r) : '';
     var v = vKey ? RV.verdictOf(e.name, vKey) : '';
     html += '<tr class="cb-' + r.kind + '"' + (v ? ' data-verdict="' + esc(v) + '"' : '') + '>'
@@ -6433,7 +6419,7 @@ function _cbDiffBodyHtml(e, mapTable) {
       + '<td class="cb-verdict">' + _cbVerdictButtonsHtml(e.name, vKey, v) + '</td></tr>';
   });
   html += '</tbody></table>';
-  // この差分がどの指摘への対応かをその場で結ぶ (BLK-primary-20260908-1703-wish)。
+  // この差分がどの指摘への対応かをその場で結ぶ。
   html += _cbLinkRowHtml(e.name, mapTable);
   // なぜ直したかを 1 行だけ添える。次にこの図を開いた人に帯で出る。
   var note = window.MA.handoverNotes ? window.MA.handoverNotes.get(e.name) : null;
@@ -6447,7 +6433,7 @@ function _cbDiffBodyHtml(e, mapTable) {
   return html;
 }
 
-// ── 会議セット (BLK-primary-20260918-0249-wish) ──────────────────────────
+// ── 会議セット ──────────────────────────
 // 見出しの [会議に入れる] で、今その場で見せたい図を選ぶ。選んだ図は 🎦 会議セットを
 // 押した時点でボードの中身になる (変わっていない図も、選べば並ぶ)。
 function _cbPickButtonHtml(name) {
@@ -6498,14 +6484,14 @@ function _cbSideTabsHtml(e, mapTable) {
   }
   var dsl = (side === 'before') ? e.before : e.after;
   if (!String(dsl == null ? '' : dsl)) {
-    // BLK-primary-20260925-0637-wish: 基準より前の版が本当に無いときだけ、その旨を言う。
+    // 基準より前の版が本当に無いときだけ、その旨を言う。
     return html + '<div class="cb-side-empty">'
       + (side === 'before' ? _cbNoBaseText(e) + '。変更後 (今) の全行が今回増えた行です。'
                            : 'この図の中身が空です。')
       + '</div>';
   }
   // 変わった行と、行の中で変わった文字に色を付ける (± 差分と同じ色。増えた・変わったは緑、消えたは赤)。
-  // 会議では「どこが違うか」を指し示しながら読む (BLK-primary-20260925-0637-wish)。
+  // 会議では「どこが違うか」を指し示しながら読む。
   var CB = window.MA.changeBoard;
   var mark = (CB && CB.sideMarks) ? CB.sideMarks(e.allRows, side) : {};
   var out = '';
@@ -6546,7 +6532,7 @@ function renderMeetingDocOptions() {
   var docs = _renameDocs();
   var keep = sel.value;
   var html = '';
-  // BLK-primary-20260924-2232-friction: 開いているタブの図に加えて保存先の図も並べる
+  // 開いているタブの図に加えて保存先の図も並べる
   // (図を開き直さずに、名前を選んで ＋追加 の 2 操作で 1 枚ずつ会議セットに入れられる)。
   var MS = window.MA.meetingSet;
   var opts = (MS && MS.docOptions)
@@ -6596,7 +6582,7 @@ function setupMeetingSet() {
   var btn = document.getElementById('cb-meeting');
   if (btn) btn.addEventListener('click', function() {
     _msOn = !_msOn;
-    // BLK-primary-20260924-1332-wish: 会議セットで並べた日時を控える (次の会議の「変更前 = 前回の会議」)。
+    // 会議セットで並べた日時を控える (次の会議の「変更前 = 前回の会議」)。
     if (_msActive()) _cbRecordMeeting();
     renderChangeBoard();
     var body = document.getElementById('cb-body');
@@ -6705,11 +6691,11 @@ function _renderChangeBoardBody() {
   // その指摘に対応した図が変わった事実は変わらない。
   var mapTable = _cbFindingTable(board);
   // 顧客に見せる画面では、社内の対応表・印・申し送りは出さない
-  // (BLK-primary-20260913-0306-wish)。出すのは描いた図だけ。
+  // 出すのは描いた図だけ。
   var mapHtml = _cbSvg ? '' : _cbMapHtml(mapTable);
 
   // 引き継ぎでは「今すぐ手を付ける行」だけを渡したいので、印の付いた行だけに
-  // 絞れる (BLK-primary-20260908-1103-wish)。絞り込み中は差分の前後行・省略行は出さない。
+  // 絞れる。絞り込み中は差分の前後行・省略行は出さない。
   var filtered = null;
   if (_cbFixOnly && RV) {
     filtered = CB.filterVerdict(board, {
@@ -6761,7 +6747,7 @@ function _renderChangeBoardBody() {
       + '<div class="cb-entry-head"><span>' + esc(e.name) + (t ? ' (' + esc(t) + ')' : '') + '</span>'
       + org
       + '<span class="cb-count">' + esc((_cbMeeting && _cbPending[e.name]) ? '変更前を読んでいます…' : _cbCountText(e)) + '</span>'
-      // BLK-primary-20260925-0637-wish: 会議で変更前が引けない図は、図の見出しでそう言う
+      // 会議で変更前が引けない図は、図の見出しでそう言う
       // (黙って同じ図を 2 つ並べない / 「新規」とだけ言わない)。
       + ((_cbMeeting && e.status === 'new' && !_cbPending[e.name])
           ? '<span class="cb-nobase">' + esc(_cbNoBaseText(e)) + '</span>' : '')
@@ -6802,7 +6788,6 @@ function _renderChangeBoardBody() {
         toggleChangeBoard(false);
         var id = entry.getAttribute('data-doc-id');
         // 開いていない保存フォルダの図は、まず開いてから見せる
-        // (BLK-primary-20260912-2103-wish)。
         if (String(id).indexOf('file:') === 0) openFromFolderByName(entry.getAttribute('data-doc-name'));
         else switchToDoc(id);
       });
@@ -6873,7 +6858,7 @@ function renderHandoverBanner() {
   var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
   var note = (HN && doc) ? HN.get(doc.name) : null;
   // 会議で「要修正」を付けた行が残っていれば、申し送りが無くても帯を出す
-  // (次に開いた人が上から潰していけるように。BLK-primary-20260908-0823-wish)。
+  // (次に開いた人が上から潰していけるように。)。
   var fix = (RV && doc) ? RV.bannerText(doc.name) : '';
   if ((!note && !fix) || (doc && _hnDismissed[doc.name])) { bar.style.display = 'none'; return null; }
   var textEl = document.getElementById('hn-banner-text');
@@ -6918,7 +6903,7 @@ function setupHandoverBanner() {
 }
 
 function _cbCountText(e) {
-  // 絞り込み中は「この図で何行渡すのか」が増減より大事 (BLK-primary-20260908-1103-wish)。
+  // 絞り込み中は「この図で何行渡すのか」が増減より大事。
   if (e.matched) return '要修正 ' + e.matched + ' 行';
   if (e.status === 'same') return '変更なし';
   if (e.status === 'new') return '新規 +' + e.added;
@@ -6926,7 +6911,7 @@ function _cbCountText(e) {
 }
 
 // ── 申し送りチェックリスト ──────────────────────────────────────────────
-// BLK-primary-20260908-1803-wish: 申し送りは差分がある間しか書けず、渡した後に
+// 申し送りは差分がある間しか書けず、渡した後に
 // 新人が読んだかも分からなかった。引き継ぎを作る時点で申し送りを項目として固定し、
 // 新人が zip の index.html で返した JSON を読み込んで未読・要フォローを見る。
 // 判定は src/core/handover-checklist.js の職掌。ここは画面と入出力だけ。
@@ -6944,7 +6929,7 @@ function renderChecklistState() {
   var el = document.getElementById('cb-checklist-state');
   if (!HC || !el) return null;
   var cur = HC.current();
-  // BLK-primary-20260915-2346-wish: 「渡した」で終わらせない。新人が index.html の
+  // 「渡した」で終わらせない。新人が index.html の
   // 見る順をどこまで辿ったかが返ってきていれば、申し送りの件数より先に出す。
   var route = HC.routeLine(cur.route);
   if (!cur.summary.total) {
@@ -7040,7 +7025,7 @@ function setupHandoverChecklist() {
   }
 }
 
-// 図モードの切替を 1 か所にまとめる (BLK-primary-20260918-0549-friction)。
+// 図モードの切替を 1 か所にまとめる。
 // _cbSvg を直接書くと、ボタンの見た目だけが古いまま残る。
 function setChangeBoardSvg(on) {
   _cbSvg = !!on;
@@ -7054,7 +7039,7 @@ function setChangeBoardSvg(on) {
   renderChangeBoard();
 }
 
-// 基準と見せ方を決めてボードを開く (BLK-primary-20260924-1332-wish)。
+// 基準と見せ方を決めてボードを開く。
 // base が選べない (控えが無い) ときは 今日 0 時 のまま開き、選択肢にその理由が出る。
 function openChangeBoardAt(base, svg) {
   var BL = window.MA.changeBaseline;
@@ -7070,7 +7055,7 @@ function toggleChangeBoard(open) {
   var want = (open == null) ? (modal.style.display === 'none' || !modal.style.display) : !!open;
   if (!want) { modal.style.display = 'none'; return; }
   modal.style.display = 'flex';
-  // BLK-primary-20260912-2103-wish: フォルダの図もボードに載せるので、開くたびに
+  // フォルダの図もボードに載せるので、開くたびに
   // 一覧を取り直す (会議直前に別の経路で書き出した図を落とさないため)。
   var scan = document.getElementById('cb-scan-folder');
   if (scan) {
@@ -7081,7 +7066,7 @@ function toggleChangeBoard(open) {
       ? '今日この保存フォルダで更新されたファイルも並べる (いつもの 14 枚に限らない)'
       : '保存先がフォルダのときだけ使えます (設定 → 自動保存)';
   }
-  // BLK-primary-20260924-2232-friction: 会議セットの候補に保存先の図も出すので、ボードに
+  // 会議セットの候補に保存先の図も出すので、ボードに
   // フォルダの図を並べない設定でも一覧は読む。
   if (_cbFolderOn()) {
     loadFolderImpact(true).then(function() { renderChangeBoard(); renderMeetingDocOptions(); }, function() {});
@@ -7113,12 +7098,12 @@ function setupChangeBoard() {
     if (ev.key === 'Escape' && modal.style.display === 'flex') toggleChangeBoard(false);
   });
 
-  // 顧客に見せる画面への切替 (BLK-primary-20260913-0306-wish)。
+  // 顧客に見せる画面への切替。
   // ボードを開いたまま 1 回押すだけで、DSL の行差分が描いた図の変更前後に変わる。
   var svgBtn = document.getElementById('cb-svg');
   if (svgBtn) svgBtn.addEventListener('click', function() { setChangeBoardSvg(!_cbSvg); });
 
-  // BLK-primary-20260924-1332-wish: 変更前 = 今日 0 時 / 前回の会議 / 前回提出。
+  // 変更前 = 今日 0 時 / 前回の会議 / 前回提出。
   var baseSel = document.getElementById('cb-base');
   if (baseSel) baseSel.addEventListener('change', function() {
     _cbBase = baseSel.value;
@@ -7143,13 +7128,12 @@ function setupChangeBoard() {
   });
 
   // 会議メモ。会議が終わった瞬間の中身をそのまま持ち出せるようにする
-  // (BLK-primary-20260908-0923-wish)。
   var minutes = document.getElementById('cb-minutes');
   if (minutes) minutes.addEventListener('click', function() { writeMeetingNotes(false); });
   var minutesCopy = document.getElementById('cb-minutes-copy');
   if (minutesCopy) minutesCopy.addEventListener('click', function() { writeMeetingNotes(true); });
 
-  // 指摘と変更の対応表 (BLK-primary-20260908-1703-wish)。
+  // 指摘と変更の対応表。
   var mapPending = document.getElementById('cb-map-pending');
   if (mapPending) mapPending.addEventListener('change', function() {
     _cbMapPending = mapPending.checked;
@@ -7200,7 +7184,7 @@ function buildMeetingNotes() {
     at: at,
   });
   // 議事録にも対応表を付ける。会議で最初に聞かれるのが「どの指摘への対応か」なので、
-  // 別のファイルを開かせない (BLK-primary-20260908-1703-wish)。
+  // 別のファイルを開かせない。
   var FL = window.MA.findingLink;
   if (res && FL) {
     var table = _cbFindingTable(board);
@@ -7233,21 +7217,14 @@ function writeMeetingNotes(copy) {
   return res;
 }
 
-// ── 監査履歴 (BLK-reviewer-20260907-2303-wish) ──────────────────────────
-// 監査ツールは run ごとに育つので、DSL が 1 行も変わっていなくてもカテゴリ別の
-// 件数は動く。「メソッド 5 → 0」を見て直ったと思うと、実は粒度へ移っただけ、
-// ということが起きる。監査を回すたびに記録を積み、欠陥の実体ごとに
-// 「どの run でどのカテゴリに分類されていたか」を 1 行に並べて、
-// 解消 (もう出ない) と再分類 (出るが別カテゴリ) を分けて出す。
-// 判断は audit-timeline が持ち、ここは監査を回して並べるだけ。
-
+// ── 開いている図に掛ける監査の一式 (突合ボードが使う) ──────────────────────
 function _atDocs() {
   if (!window.MA.workspace) return [];
   saveActiveDoc();
   return window.MA.workspace.list();
 }
 
-// いま開いている図に、CLI と同じ監査一式を掛ける。モジュールが無い監査は
+// いま開いている図に、監査の一式を掛ける。モジュールが無い監査は
 // 「見ていない」として結果に載せない (0 件と区別する)。
 function _atRunAudits() {
   var docs = _atDocs();
@@ -7267,125 +7244,7 @@ function _atRunAudits() {
   return { audits: out, docs: docs.length };
 }
 
-// ── 指摘の台帳 (BLK-reviewer-20260914-1306-wish) ────────────────────────
-// 帯が答えるのは「いまどのカテゴリか」だけで、指摘 1 件が「いつから出ていて
-// どのファイルの何行目か、いつ消えたか」は持たない。そのため反映確認は毎回
-// audit.js --summary-json を叩き直し、run ログを遡って突き合わせる作業だった。
-// ここは同じ記録から台帳を組み、帯の上に置く。判断は finding-ledger が持つ。
-var _flLast = null;
-
-function _flView() {
-  var FL = window.MA.findingLedger;
-  var TL = window.MA.auditTimeline;
-  if (!FL || !TL) return null;
-  var docs = [];
-  try { docs = _atDocs(); } catch (e) { docs = []; }
-  _flLast = FL.build({ snapshots: TL.load(), docs: docs });
-  return _flLast;
-}
-
-function _flHtml(view) {
-  var FL = window.MA.findingLedger;
-  var esc = window.MA.htmlUtils.escHtml;
-  if (!FL || !view) return '';
-  var html = '<div class="fl-head">指摘の台帳<span class="fl-sum" id="at-ledger-summary">'
-    + esc(FL.summaryLine(view)) + '</span></div>';
-  if (!view.rows.length) {
-    return html + '<div class="fl-empty">記録した run に、クラス / メソッド / イベントの指摘はありません。</div>';
-  }
-  html += '<table class="fl-table"><thead><tr><th>指摘</th><th>対象ファイル:行</th>'
-    + '<th>初出</th><th>解消</th><th>継続</th><th title="tick ごとの出欠 (● 出た / ○ 出ない)">出欠</th>'
-    + '</tr></thead><tbody>';
-  view.rows.forEach(function(r) {
-    html += '<tr data-fl-open="' + (r.open ? '1' : '0') + '" data-fl-entity="' + esc(r.entity) + '">'
-      + '<td class="fl-title">' + esc(r.title) + '</td>'
-      + '<td class="fl-where">' + esc(FL.whereText(r)) + '</td>'
-      + '<td>' + esc(r.since) + '</td>'
-      + '<td class="fl-state">' + (r.open ? '未解消' : esc(r.resolvedAt || '')) + '</td>'
-      + '<td>' + r.ticks + ' tick</td>'
-      + '<td class="fl-spark">' + esc(r.spark) + '</td></tr>';
-  });
-  return html + '</tbody></table>';
-}
-
-function copyFindingLedger() {
-  var FL = window.MA.findingLedger;
-  var st = document.getElementById('at-summary');
-  if (!FL) return null;
-  var view = _flLast || _flView();
-  var text = FL.markdown(view, '指摘の台帳');
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(function() {
-      if (st) st.textContent = '台帳を指摘.md 用にコピーしました (' + view.rows.length + ' 件)';
-    }, function() {
-      if (st) st.textContent = 'コピーできません';
-    });
-  } else if (st) {
-    st.textContent = 'コピーできません';
-  }
-  return text;
-}
-
-function renderAuditTimeline() {
-  var body = document.getElementById('at-body');
-  var sumEl = document.getElementById('at-summary');
-  var TL = window.MA.auditTimeline;
-  if (!body || !TL) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  var t = TL.build(TL.load());
-
-  if (sumEl) sumEl.textContent = TL.summaryLine(t);
-
-  if (t.runs.length === 0) {
-    body.innerHTML = '<div class="at-empty">まだ記録がありません。「いまの監査を記録」を押すと、'
-      + 'この時点の指摘を 1 列として積みます。2 回目から、解消したものと分類が変わっただけのものを分けて出します。</div>';
-    return;
-  }
-
-  var html = '';
-  if (t.newCategories.length) {
-    html += '<div class="at-note">監査カテゴリが増えた → ' + esc(t.newCategories.join('・'))
-      + ' (図が変わっていなくても件数はここで動きます)</div>';
-  }
-  if (t.goneCategories.length) {
-    html += '<div class="at-note">監査カテゴリが減った → ' + esc(t.goneCategories.join('・')) + '</div>';
-  }
-
-  // 台帳を先に出す。反映確認はここだけ見れば終わる。
-  html += '<div id="at-ledger">' + _flHtml(_flView()) + '</div>';
-  html += '<div id="at-band-head">カテゴリの帯 (同じ欠陥が run ごとにどこへ分類されたか)</div>';
-
-  html += '<table class="at-table"><thead><tr><th class="at-th-item">欠陥</th>';
-  t.runs.forEach(function(r) {
-    html += '<th title="' + esc(r.at) + '">' + esc(r.label) + '<span class="at-th-count">'
-      + r.count + ' 件</span></th>';
-  });
-  html += '<th class="at-th-status">いまの扱い</th></tr></thead><tbody>';
-
-  if (t.rows.length === 0) {
-    html += '<tr><td colspan="' + (t.runs.length + 2) + '" class="at-empty">記録した run に指摘はありません。</td></tr>';
-  }
-  t.rows.forEach(function(row) {
-    html += '<tr data-at-status="' + esc(row.status) + '">'
-      + '<td class="at-item" title="' + esc(row.entity) + '">' + esc(row.title) + '</td>';
-    row.cells.forEach(function(c) {
-      html += '<td class="at-cell">' + (c ? '<span class="at-cat">' + esc(c.text) + '</span>' : '<span class="at-none">—</span>') + '</td>';
-    });
-    html += '<td class="at-status"><span class="at-chip">' + esc(row.status) + '</span>'
-      + (row.moves ? '<span class="at-moves">移動 ' + row.moves + ' 回</span>' : '') + '</td></tr>';
-  });
-  html += '</tbody></table>';
-  body.innerHTML = html;
-}
-
-function toggleAuditTimeline(open) {
-  var modal = document.getElementById('at-modal');
-  if (!modal) return;
-  if (open) renderAuditTimeline();
-  modal.style.display = open ? 'flex' : 'none';
-}
-
-// ── 突合ダッシュボード (BLK-reviewer-20260908-1403-wish) ────────────────────
+// ── 突合ダッシュボード ────────────────────
 // 突合そのものは既にある (名前突合・整合・系統・トレース・SVG・手動指摘)。
 // ただし出口がモーダルごとに分かれているので、13 枚を 1 プロジェクトとして
 // 横断で見るには node で audit.js を叩き、その場のスクリプトで並べ直すしかない。
@@ -7398,7 +7257,7 @@ var _abBoard = null;     // 直近に組んだ一覧 (コピーで作り直さ�
 var _abSvgScan = null;   // 一覧が読んだ SVG の追いつき。開いていなければ null
 var _abMethodRes = null; // 直近のメソッド突合の結果 (対象外にしたものを 1 行で出すため)
 
-// BLK-primary-20260907-1303 / BLK-owner-20260924-1332-prune: メソッド突合で何を対象外にしたか
+// メソッド突合で何を対象外にしたか
 // (応答ラベルの Tick / Reset …) を黙って捨てない。旧 🔍 名前突合の画面にあった 1 行をボードへ移す。
 function _abExcludedHtml(esc) {
   var MAUD = window.MA.methodAudit;
@@ -7416,7 +7275,7 @@ function _abBuild() {
   var run = _atRunAudits();
   var findings = null;
   try { findings = _mfRows(); } catch (e) { findings = null; }
-  // methodDetail: 🔍 名前突合を畳んだので、メソッド突合の全件もこの画面で見る (BLK-owner-20260924-1332-prune)。
+  // methodDetail: 🔍 名前突合を畳んだので、メソッド突合の全件もこの画面で見る。
   _abBoard = AB.build({ audits: run.audits, svg: _abSvgScan, findings: findings, methodDetail: true });
   var m = run.audits && run.audits.method;
   _abMethodRes = (m && m.status === 'ok') ? m.result : null;
@@ -7563,7 +7422,7 @@ function copyAuditBoard() {
   return text;
 }
 
-// BLK-owner-20260924-1332-prune: 旧 🔍 名前突合の入口 (ツール ▾ の絞り込み・Ctrl+K で「表記揺れ」
+// 旧 🔍 名前突合の入口 (ツール ▾ の絞り込み・Ctrl+K で「表記揺れ」
 // 「名前突合」と引いた回) は、別の画面を持たずにこのボードをそのカテゴリで絞って開く。
 // 語が当たらなければ絞らずに開く (前回の絞り込みを持ち越さない)。
 var _toolMenuQuery = '';
@@ -7632,177 +7491,7 @@ function setupAuditBoard() {
   });
 }
 
-// ── 仕様突合 (BLK-primary-20260915-2240-wish) ─────────────────────────────
-// design/ の仕様項目と、いま開いている GUI の現在値を並べる。primary の手順 11 は
-// 「.dc.html を grep → タブを目で数える → 自分で比べて言語化」の 3 手だったが、
-// 不一致を「設定差」と「仕様後退」に機械で振り分けるのでここを開くだけで済む。
-// 判定は design-check.js が持ち、ここは測って描くだけ。
-var _dcRows = [];
-var _dcOnlyDiff = false;
-// BLK-primary-20260915-2240-friction: 出典 (.dc.html) での絞り込み。'' はすべて。
-var _dcSpec = '';
-
-function _dcReadSetting(key) {
-  try { return localStorage.getItem(key); } catch (e) { return null; }
-}
-
-function runDesignCheck() {
-  var DC = window.MA.designCheck;
-  if (!DC) { _dcRows = []; return _dcRows; }
-  _dcRows = DC.sortRows(DC.run(document, _dcReadSetting));
-  return _dcRows;
-}
-
-var DC_VERDICT_LABEL = { ok: '一致', setting: '設定差', gap: '仕様後退' };
-
-function renderDesignCheck() {
-  var DC = window.MA.designCheck;
-  var body = document.getElementById('dc-body');
-  var sum = document.getElementById('dc-summary');
-  if (!DC || !body) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  var rows = _dcRows.filter(function(r) {
-    if (_dcOnlyDiff && r.verdict === 'ok') return false;
-    if (_dcSpec && r.spec !== _dcSpec) return false;
-    return true;
-  });
-  if (sum) {
-    sum.textContent = DC.summaryText(_dcRows);
-    sum.classList.toggle('dc-has-gap', DC.summary(_dcRows).gap > 0);
-  }
-  // 突合項目の無い仕様ファイルは、この画面では何も分からないファイル。
-  // 手で grep する手が残っているのはそこだけ、と読めるように出す。
-  var cov = document.getElementById('dc-coverage');
-  if (cov && DC.coverageText) {
-    cov.textContent = DC.coverageText(_dcRows);
-    var hole = (DC.coverage(_dcRows) || []).some(function(c) { return !c.total; });
-    cov.classList.toggle('dc-has-hole', hole);
-  }
-  if (!rows.length) {
-    var empty = '突き合わせる仕様項目がありません';
-    if (_dcSpec && _dcOnlyDiff) empty = 'この出典に不一致はありません (すべて仕様どおり)';
-    else if (_dcSpec) empty = 'この出典には突合項目がありません (まだ .dc.html を手で読む必要があります)';
-    else if (_dcOnlyDiff) empty = '不一致はありません (すべて仕様どおり)';
-    body.innerHTML = '<div class="ab-empty">' + empty + '</div>';
-    return;
-  }
-  var html = '<table class="dc-table"><thead><tr>'
-    + '<th>案</th><th>仕様項目</th><th>期待</th><th>現在値</th><th>判定</th><th>理由</th>'
-    + '</tr></thead><tbody>';
-  rows.forEach(function(r) {
-    // 設定差は「既定に戻す」で、仕様後退は「BLK 用にコピー」で次の 1 手に繋がる。
-    var act = '';
-    if (r.verdict === 'setting' && (r.settingKeys || []).length) {
-      act = '<div class="dc-act"><button type="button" class="dc-reset" data-key="'
-        + esc(r.settingKeys.join(',')) + '">この設定を既定に戻す</button></div>';
-    } else if (r.verdict === 'gap') {
-      act = '<div class="dc-act"><button type="button" class="dc-draft" data-id="'
-        + esc(r.id) + '">BLK 用にコピー</button></div>';
-    }
-    html += '<tr class="dc-row" data-verdict="' + esc(r.verdict) + '">'
-      + '<td class="dc-plan">' + esc(r.plan) + '</td>'
-      + '<td>' + esc(r.title)
-      + '<div class="dc-reason">出典: ' + esc(r.spec) + '</div>'
-      + '<div class="dc-scope">' + esc(r.scopeText || '') + '</div></td>'
-      + '<td>' + esc(r.expect) + '</td>'
-      + '<td class="dc-actual">' + esc(r.actual) + '</td>'
-      + '<td class="dc-verdict">' + esc(DC_VERDICT_LABEL[r.verdict] || r.verdict) + '</td>'
-      + '<td class="dc-reason">' + esc(r.reason) + act + '</td>'
-      + '</tr>';
-  });
-  body.innerHTML = html + '</tbody></table>';
-}
-
-// 出典 (.dc.html) の絞り込み。並びは design/README.md の「対象の仕様」の順のまま。
-// 件数を添えるので、開いた時点で「項目 0 件のファイル = まだ手で読む必要がある」が分かる。
-function renderDesignCheckSpecFilter() {
-  var DC = window.MA.designCheck;
-  var sel = document.getElementById('dc-spec');
-  if (!sel || !DC || !DC.coverage) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  var html = '<option value="">すべての出典 (' + _dcRows.length + ' 項目)</option>';
-  DC.coverage(_dcRows).forEach(function(c) {
-    html += '<option value="' + esc(c.spec) + '">' + esc(c.spec) + ' (' + c.total + ')</option>';
-  });
-  sel.innerHTML = html;
-  sel.value = _dcSpec;
-}
-
-function toggleDesignCheck(open) {
-  var modal = document.getElementById('dc-modal');
-  if (!modal) return;
-  if (open) { runDesignCheck(); renderDesignCheckSpecFilter(); renderDesignCheck(); }
-  modal.style.display = open ? 'flex' : 'none';
-}
-
-// 仕様後退だけを BLK 本文の形にまとめる (手順 11 の成果物は BLK なので)。
-function designCheckDraft(id) {
-  var DC = window.MA.designCheck;
-  if (!DC) return '';
-  var rows = _dcRows.filter(function(r) {
-    return r.verdict === 'gap' && (!id || r.id === id);
-  });
-  return rows.map(DC.blockerDraft).join('\n\n');
-}
-
-function setupDesignCheck() {
-  var btn = document.getElementById('btn-tab-design');
-  var modal = document.getElementById('dc-modal');
-  if (!btn || !modal || !window.MA.designCheck) return;
-  btn.addEventListener('click', function() { toggleDesignCheck(true); });
-  var close = document.getElementById('dc-close');
-  if (close) close.addEventListener('click', function() { toggleDesignCheck(false); });
-  var recheck = document.getElementById('dc-recheck');
-  if (recheck) {
-    recheck.addEventListener('click', function() {
-      runDesignCheck(); renderDesignCheckSpecFilter(); renderDesignCheck();
-    });
-  }
-  var only = document.getElementById('dc-only-diff');
-  if (only) only.addEventListener('change', function() { _dcOnlyDiff = this.checked; renderDesignCheck(); });
-  var spec = document.getElementById('dc-spec');
-  if (spec) spec.addEventListener('change', function() { _dcSpec = this.value; renderDesignCheck(); });
-  var copy = document.getElementById('dc-copy');
-  if (copy) copy.addEventListener('click', function() { copyDesignCheckDraft(''); });
-  var body = document.getElementById('dc-body');
-  if (body) {
-    body.addEventListener('click', function(ev) {
-      var t = ev.target;
-      if (!t || !t.classList) return;
-      if (t.classList.contains('dc-draft')) { copyDesignCheckDraft(t.getAttribute('data-id')); return; }
-      if (t.classList.contains('dc-reset')) { resetDesignSetting(t.getAttribute('data-key')); }
-    });
-  }
-  modal.addEventListener('click', function(ev) {
-    if (ev.target === modal) toggleDesignCheck(false);
-  });
-}
-
-function copyDesignCheckDraft(id) {
-  var text = designCheckDraft(id || '');
-  var btn = document.getElementById('dc-copy');
-  if (!text) { if (btn) btn.textContent = '仕様後退はありません'; return; }
-  try {
-    navigator.clipboard.writeText(text);
-    if (btn) {
-      btn.textContent = 'コピーしました';
-      setTimeout(function() { btn.textContent = '仕様後退を BLK 用にコピー'; }, 1800);
-    }
-  } catch (e) { /* コピーできなくても表は読める */ }
-}
-
-// 設定差の行から、その設定だけを既定に戻す。戻したら測り直して同じ画面で結果を見せる
-// (戻したのに直らなければ、それは設定差ではなく仕様後退だと分かる)。
-function resetDesignSetting(key) {
-  if (!key) return;
-  try {
-    String(key).split(',').forEach(function(k) { if (k) localStorage.removeItem(k); });
-  } catch (e) { return; }
-  // 既定に戻した設定を画面へ反映するには読み直しが要る (設定は起動時に 1 回読む)。
-  location.reload();
-}
-
-// ── 整合ダッシュボード: 図ごと (BLK-reviewer-20260915-0606-wish) ───────────
+// ── 整合ダッシュボード: 図ごと ───────────
 // 上の突合ダッシュボードは「指摘 1 件 = 1 行」なので、「この図はいま全体として
 // どうなっているか」(指摘・📌・SVG・表記の要決定・前回控えとの差分) は、
 // 📥 指摘箱・📂 一覧・突合ダッシュボードを開き直して頭の中で突き合わせるしかない。
@@ -7876,9 +7565,9 @@ function renderStatusDashboard() {
   });
 }
 
-// ── 指摘を出典ごとに畳む (BLK-reviewer-20260915-2240-wish) ─────────────────
+// ── 指摘を出典ごとに畳む ─────────────────
 // 「指摘ごと」は audit の突合結果だけ、「図ごと」は図の今の状態だけを見せる。
-// reviewer が毎 tick やっていた残りの仕事は、その 2 つに 📌 と /verify-svg を
+// reviewer が毎回 やっていた残りの仕事は、その 2 つに 📌 と /verify-svg を
 // 並べて「この行とあの行は同じ指摘の別表現か、本当に別物か」を決めることだった。
 // ここは指摘 ID を鍵に 1 行へ畳み、その 1 行に「どの出口の、どの根拠から来たか」を
 // 並べる (畳み方は CLI と共通の src/core/finding-origins.js)。
@@ -7992,7 +7681,7 @@ function setAuditBoardView(view) {
   else renderAuditBoard();
 }
 
-// ── 変遷履歴 (BLK-reviewer-20260908-0723-wish) ─────────────────────────────
+// ── 変遷履歴 ─────────────────────────────
 // save-diff は「前回保存した 1 点」しか持たないので、A → B → A と書き換えが
 // 往復しても毎回「変わりました」としか出ず、往復そのものが見えなかった。
 // ここでは図ごとに積んだ版を新しい順に並べ、前の版に戻った版へ印を付ける。
@@ -8032,7 +7721,7 @@ function renderVersionTimeline() {
 
   var onlyEl = document.getElementById('vt-only-revisit');
   var only = !!(onlyEl && onlyEl.checked);
-  // BLK-owner-20260923-2312-prune: 保存先がフォルダなら、行は保存した版 (server の控え)。
+  // 保存先がフォルダなら、行は保存した版 (server の控え)。
   // 版がまだ 1 つも無い図と、フォルダに保存していないときは、このブラウザで積んだ変遷を出す。
   var api = _versionsApi;
   var gen = ++_vtSavedGen;
@@ -8077,7 +7766,7 @@ function _renderVtSavedRows(body, sum, name, saved, nowLines, only, api) {
       fn();
     };
   }
-  // BLK-primary-20260916-0100: 空洞化を直す側は、同じ見た目の一覧から「どれに戻せば直るか」を
+  // 空洞化を直す側は、同じ見た目の一覧から「どれに戻せば直るか」を
   // 当てられない。行数で分かるので、戻す先を名指しして先頭に出す。減っていなければそう言う。
   var notice = VH.shrinkNotice ? VH.shrinkNotice(name, rows, nowLines) : null;
   if (notice) {
@@ -8269,7 +7958,7 @@ function setupVersionTimeline() {
   renderVersionBadge();
 }
 
-// ── 継承元 (BLK-junior-20260908-1603-wish) ─────────────────────────────────
+// ── 継承元 ─────────────────────────────────
 // 「この図はどの図の後継か」を画面が覚えていないので、毎周「先輩の同種図を探す →
 // 開く → 記憶と見比べる」を手でやっていた。継承元を 1 回登録すれば、以後は
 // 開いたときにボタンが「+3 -1」と言い、モーダルの「継承元を開く」1 クリックで
@@ -8341,7 +8030,7 @@ function _lgFillParentOptions(child) {
   var esc = window.MA.htmlUtils.escHtml;
   var rec = LG ? LG.get(child) : null;
   var cur = rec ? rec.parent : '';
-  // BLK-junior-20260914-1406: 部品名の付け方を先輩と揃えていると、先輩の図も自分の図も
+  // 部品名の付け方を先輩と揃えていると、先輩の図も自分の図も
   // 同じ名前になる。継承元にできるかどうかはフォルダと名前の対で決まるので、
   // 探しているフォルダが自分の保存先と違うなら、同名の図も候補に残す。
   var other = LG ? !LG.samePath(_lgDir(), _wsFileDir()) : false;
@@ -8464,7 +8153,6 @@ function openLineageParent() {
     var detected = WS.detectType(text);
     // 先輩の図が自分の図と同名のとき、そのままの名前で開くと自分のタブが
     // 継承元の中身で塗り潰される。別フォルダの同名図はフォルダ名を冠して開く
-    // (BLK-junior-20260914-1406)。
     var name = rec.parent;
     if (rec.parent === child && !LG.samePath(dir, _wsFileDir())) {
       var PF = window.MA.peekFolder;
@@ -8481,7 +8169,7 @@ function openLineageParent() {
   }, function() {});
 }
 
-// BLK-junior-20260908-1703-wish: 差分の行数まで出ても、増えた行が画面のどれかは
+// 差分の行数まで出ても、増えた行が画面のどれかは
 // 自分で探すしかなかった。増減行が名指している相手を鍵にして、いまの図の同じ
 // 相手を指す図形を overlay 上で色付けし、当たらなかった行は図の上の帯に並べる。
 function markLineageDiff() {
@@ -8585,7 +8273,7 @@ function setupLineage() {
           if (note) note.textContent = parent + ' を読めませんでした。保存してから登録してください';
           return;
         }
-        // 同名でもフォルダが違えば別の図。自分自身だけを断る (BLK-junior-20260914-1406)。
+        // 同名でもフォルダが違えば別の図。自分自身だけを断る。
         if (!LG.set(child, parent, text, { dir: dir, selfDir: _wsFileDir() })) {
           if (note) note.textContent = '自分自身は継承元にできません'
             + '（先輩の同名の図を選ぶときは、上のフォルダを先輩の保存先に変えてください）';
@@ -8635,61 +8323,20 @@ function setupLineage() {
   renderLineageBadge();
 }
 
-function setupAuditTimeline() {
-  var btn = document.getElementById('btn-tab-audit-timeline');
-  var modal = document.getElementById('at-modal');
-  var TL = window.MA.auditTimeline;
-  if (!btn || !modal || !TL) return;
-  btn.addEventListener('click', function() { toggleAuditTimeline(true); });
-
-  var closeBtn = document.getElementById('at-close');
-  if (closeBtn) closeBtn.addEventListener('click', function() { toggleAuditTimeline(false); });
-  modal.addEventListener('click', function(ev) {
-    if (ev.target === modal) toggleAuditTimeline(false);
-  });
-  document.addEventListener('keydown', function(ev) {
-    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleAuditTimeline(false);
-  });
-
-  var rec = document.getElementById('at-record');
-  if (rec) {
-    rec.addEventListener('click', function() {
-      var r = _atRunAudits();
-      var label = document.getElementById('at-label');
-      var name = label && label.value ? label.value.trim() : '';
-      var snap = TL.snapshot(r.audits, { label: name, docs: r.docs });
-      TL.save(TL.push(TL.load(), snap));
-      if (label) label.value = '';
-      renderAuditTimeline();
-    });
-  }
-  var cp = document.getElementById('at-copy');
-  if (cp) cp.addEventListener('click', function() { copyFindingLedger(); });
-
-  var clr = document.getElementById('at-clear');
-  if (clr) {
-    clr.addEventListener('click', function() {
-      if (!confirm('記録した監査履歴を全部消します。よろしいですか。')) return;
-      TL.clear();
-      renderAuditTimeline();
-    });
-  }
-}
-
 // ── 他フォルダの閲覧 ───────────────────────────────────────────────────────
-// BLK-junior-20260908-0723: 先輩の図を読むためだけに、設定ダイアログで保存先を
+// 先輩の図を読むためだけに、設定ダイアログで保存先を
 // フルパスで打ち替え、読んだ後また打ち戻していた (往復 60 字超)。戻し忘れると
 // 自分の図が他人のフォルダに紛れ込む。読むだけなら保存先は動かさなくていい。
 // 隣のフォルダを一覧から選び、その場で図を出す。設定には一切書かない。
 var _peekDirs = [];
 var _peekDir = null;
-// BLK-junior-20260916-0546: 📂 一覧から持ち越した絞り込みの名前。
+// 📂 一覧から持ち越した絞り込みの名前。
 var _peekQuery = '';
 var _peekNames = [];
 var _peekName = null;
 var _peekDsl = '';        // 今出している 1 枚の本文 (テンプレートの材料)
 
-// BLK-reviewer-20260909-0403-wish: フォルダを 1 つ選んで 1 枚ずつ読む形だと、
+// フォルダを 1 つ選んで 1 枚ずつ読む形だと、
 // 「同じドメインの図が他のフォルダにもあるか」はファイル名を推測して開いて
 // 確かめるしかなかった (GPIO の突合は 4 枚を個別に開いてテキスト比較)。
 // ドメイン名でフォルダを横断して束ね、同じ図種の組の差分をその場で色分けする。
@@ -8698,17 +8345,17 @@ var _cohortGroups = [];      // 表示中のドメイン (既定は業務デー�
 var _cohortAllGroups = [];   // [{ domain, folders, entries }] — 本文はまだ読んでいない
 var _cohortDomain = null;
 var _cohortResult = null;    // 選んだドメインの compare 結果
-// BLK-reviewer-20260909-0503-wish: plantuml-*.puml / diagram1.puml のような
+// plantuml-*.puml / diagram1.puml のような
 // アプリ同梱テンプレ・既定サンプルは各自が独立に複製しただけなので、フォルダを
 // またいで同名で並ぶ。突合に混ぜると本物の食い違い (GPIO) と同じ列に出て、
 // 毎回 puml の中身を読んで選り分けることになる。既定で外し、押せば戻せる。
 var _cohortShowTemplates = false;
 
-// BLK-reviewer-20260917-0423-wish: 同じ組の同じ差分 (部品名/ラベルが違うだけの内部揺れ) が
-// 毎 tick そのまま出続け、reviewer は同じ diff を最初から読み直して同じ結論を出し直していた。
+// 同じ組の同じ差分 (部品名/ラベルが違うだけの内部揺れ) が
+// 毎回 そのまま出続け、reviewer は同じ diff を最初から読み直して同じ結論を出し直していた。
 // domain-verdict の宣言は図の中に書く印なので、自分の図にしか書けない。reviewer は
 // junior×primary のどちらの図も持たないので、その組については置き場が無かった。
-// 確認済みの組は台帳 (persona-data/_cohort-ack.json) に置き、突合の画面からは畳む。
+// 確認済みの組は台帳 (作業フォルダ/_cohort-ack.json) に置き、突合の画面からは畳む。
 // 差分が変わった組は台帳があっても畳まない (確認済みの印が新しい食い違いを隠さない)。
 var _cohortAckDir = null;
 var _cohortAckMsg = '';
@@ -8755,25 +8402,25 @@ function _cohortAckRow(domain, p) {
   };
 }
 
-// BLK-reviewer-20260909-0603-wish: 覗いたフォルダの一覧はファイル名しか出しておらず、
+// 覗いたフォルダの一覧はファイル名しか出しておらず、
 // 「その図の SVG が今の puml から作られたものか」は GUI からは分からなかった
 // (毎回 CLI で /verify-svg を叩いて確かめていた)。一覧と同じ呼び出しで判定の材料も
 // 取り、行に印を出す。
 var _peekScan = null;      // svg-freshness の scan 結果 (覗いているフォルダぶん)
-// BLK-junior-20260912-2206: 覗いているフォルダの一覧 entry (図種つき)。
+// 覗いているフォルダの一覧 entry (図種つき)。
 // 名前だけの一覧では、語尾から図種を推測しながら 30 枚を上から読むことになる。
 var _peekEntries = [];
 var _peekVerifying = false;
-// BLK-junior-20260914-1306-wish: 「先輩の図の変更を自分の図に取り込む」ときに要るのは
+// 「先輩の図の変更を自分の図に取り込む」ときに要るのは
 // 「先輩の 1 枚が前回保存からどこを変えたか」。無いと複合図を丸ごと開いて目で差分を
 // 探すことになり、変わっていない図まで開いて見比べる往復が残る。
 var _peekChanges = null;       // peek-changes の report (覗いているフォルダぶん)
 var _peekChangedOnly = false;  // 変更のある図だけに絞っているか
-// BLK-junior-20260914-1806-wish: 題材 1 つぶんの「6 図種の対応要否」。
+// 題材 1 つぶんの「6 図種の対応要否」。
 // 自分のフォルダの一覧 (控えを読むので本文つき) と、覗いているフォルダの一覧で作る。
 var _kmMine = [];
 var _kmSubject = '';
-// BLK-junior-20260914-1906-wish: 題材の選択肢に混ざらない値。部品をまたいだ表の合図。
+// 題材の選択肢に混ざらない値。部品をまたいだ表の合図。
 var KM_ALL = '*';
 
 function _peekEls() {
@@ -8969,7 +8616,7 @@ function renderCohortCompare() {
       + (p.diff.matched ? '  ✓ 揃っている' : '  ✗ ' + p.diff.gaps + ' 件が片方にしかない');
     box.appendChild(t);
     _cohortChips(box, '部品名', p.diff.names, p.a.folder, p.b.folder);
-    // BLK-reviewer-20260914-1706-wish: 「片方だけ」の 2 列は、どの名前がどの名前の
+    // 「片方だけ」の 2 列は、どの名前がどの名前の
     // 別表記なのかを読む側が結び直すことになる。対応表にして揺れている行だけを残す。
     _cohortPairTable(box, p.diff.names, p.a.folder, p.b.folder);
     _cohortChips(box, '矢印ラベル', p.diff.labels, p.a.folder, p.b.folder);
@@ -8979,7 +8626,7 @@ function renderCohortCompare() {
   });
 }
 
-// BLK-reviewer-20260914-1706-wish: 部品名の対応表。IRQCtrl ⇔ Irq_Ctrl のような
+// 部品名の対応表。IRQCtrl ⇔ Irq_Ctrl のような
 // 表記揺れを、grep と目の結び直しではなく 1 つの表で出す。既定は揺れている行だけ。
 // 一致している行は数えて畳む (読む目的は揺れている行で、一致が先頭に並ぶと探し直しになる)。
 function _cohortPairTable(box, part, aFolder, bFolder) {
@@ -9030,7 +8677,7 @@ function _cohortPairTable(box, part, aFolder, bFolder) {
 }
 
 // ── 判断 (統一する / 別物と明示する) ──
-// BLK-primary-20260909-0503-wish: 突合で差分は見えても、見た後にできることが
+// 突合で差分は見えても、見た後にできることが
 // 無かった。統一するなら綴りを手で打ち替え、別物とするなら title を手で書き足す
 // しかなく、決めたこと自体はどこにも残らないので次の突合で同じ食い違いがまた出る。
 // 組の片方が自分の保存フォルダのときだけ、その 1 枚に書き戻す 2 つのボタンを出す。
@@ -9325,7 +8972,7 @@ function _syncCohortTemplateBtn() {
   el.cohortTemplates.textContent = _cohortShowTemplates ? 'テンプレも表示中' : 'テンプレも表示';
 }
 
-// ── 同名ファイルを左右に並べる (BLK-reviewer-20260912-2206-wish) ──
+// ── 同名ファイルを左右に並べる ──
 // reviewer は junior/primary の同じファイル名の図を突き合わせる。ドメイン突合は
 // 「どの名前が食い違うか」をチップで出すが、どの行のどの語かは本文を自分で
 // 開き直さないと分からず、2 フォルダから同名ファイルをテキストとして開いて
@@ -9473,7 +9120,7 @@ function renderSbsFiles() {
 }
 
 // ── 複合図から部品を切り出して並べる ──
-// BLK-junior-20260914-1006-wish: 先輩の該当図が GPIO 単独ではなく複合図
+// 先輩の該当図が GPIO 単独ではなく複合図
 // (driver_common_class.puml = 共通基底 + 6 ドライバ) にしかないとき、並べて見る
 // 機能はファイル名で対をなすためこの組は自動で並ばず、複合図を開いて
 // Gpio_Driver を目で探すことになっていた。開いた図が複合図なら部品を並べ、
@@ -9481,7 +9128,7 @@ function renderSbsFiles() {
 var _partSel = '';
 
 // ── 相乗り図を 1 枚のまま部品で絞る ──
-// BLK-junior-20260915-0506-wish: 先輩の 1 枚に 8 部品が相乗りしていると、手本に
+// 先輩の 1 枚に 8 部品が相乗りしていると、手本に
 // すべきクラスを全文精読で読み分けるしかなかった。切り出し (上の部品チップ) は
 // 「その部品だけの別の 1 枚」を作るので、相乗り図のどこに自分の部品が居るかは
 // 失われる。ここは絵をそのままにして、関係しない所の色だけを落とす。
@@ -9634,7 +9281,7 @@ function renderPartChips() {
   });
 }
 
-// BLK-junior-20260914-1006: 自分の図と先輩の図はファイル名が対をなさないので、
+// 自分の図と先輩の図はファイル名が対をなさないので、
 // 「先輩のどの図を見ればいいのか」を覗き一覧から目で当てていた (複合図を開いて
 // 中に Gpio_Driver があるかを確かめる)。今開いている自分の図の部品名で
 // 覗いているフォルダの本文を引き、載っている図を名指しして、押せばそのまま
@@ -9816,7 +9463,7 @@ function renderSbs() {
   sum.textContent = _sbsMsg || v.summary;
   el.sbs.appendChild(sum);
 
-  // BLK-junior-20260913-0306-wish (追記): 指摘.md にこの図の名前が挙がっているか。
+  // 指摘.md にこの図の名前が挙がっているか。
   // 挙がっていなければ「指摘はありません」と言い切る (確かめるために指摘.md を
   // 全文読み直す工程を消す)。図に残る判断の注記 (domain-verdict) も添える。
   var noteText = _noteDocStatusText();
@@ -9936,7 +9583,7 @@ function applySbsAlign(mine, from, to, btn) {
     });
 }
 
-// ── 指摘.md の 1 件から並べて見る (BLK-junior-20260913-0306-wish) ──
+// ── 指摘.md の 1 件から並べて見る ──
 // junior は reviewer の指摘.md を GUI の外でテキストとして読み、そこに書かれた
 // 図名を目で拾い、覗き機能で自分と先輩のフォルダから同じ名前を探し当ててから
 // ようやく見比べていた。指摘 1 件を押せば、その図の組が並んだ状態で出る所まで
@@ -9948,11 +9595,11 @@ var _noteKey = null;       // 選んでいる指摘の id
 var _noteMsg = '';         // 押した結果 (組が無かったときの理由など)
 var _notePlans = [];       // findingActions.plans の戻り (指摘 1 件 = 当てる操作 1 つ)
 var _noteBusy = '';        // 当てている最中の指摘 id
-// BLK-primary-20260914-1706-wish: 「前提」「突合サマリ」「◯◯への依頼」は直す図を持たない
+// 「前提」「突合サマリ」「◯◯への依頼」は直す図を持たない
 // 前置きで、一覧に混ざると 1 件ずつ「本物か前置きか」を読んで決めることになる。
 // 既定では一覧の外に出し、件数を言って、押せば出し直せるようにする (消しはしない)。
 var _noteShowPreamble = false;
-// BLK-junior-20260914-1106-wish: 指摘 1 件 = 対象の図種・版 1 つ。
+// 指摘 1 件 = 対象の図種・版 1 つ。
 var _noteNames = [];       // 覗ける全フォルダにある図名 (版ぞろいを引くため)
 var _noteIndex = null;     // reviewNote.index の戻り (図名 → それを持つフォルダ)
 var _noteTargets = {};     // { 指摘 id: findingVariant.choose の戻り }
@@ -10010,93 +9657,7 @@ function _noteLoad(force) {
   return _noteLoading;
 }
 
-// ── 依頼バッジ (BLK-reviewer-20260914-2006) ────────────────────────────────
-// 指摘.md に書かれた依頼は、直す側 (primary) の画面には何も出ていなかった。
-// 継続 tick 数は `npm run requests` で読めるが、それは書いた側 (reviewer) の CLI で、
-// 直す側は業務を始める前に指摘.md を GUI の外で開いて読むしかない。読み忘れた回は
-// そのまま 1 tick 放置になる。未解消の件数と最長継続 tick 数を下端に常時出し、
-// 「今日は未着手の依頼があるか」を確かめる動作そのものを無くす。
-// 数え方は CLI と同じ request-ledger。1 tick = 指摘.md の 1 版 (本文の指紋)。
-var _rqRows = [];
-var _rqSum = null;
-var _rqTick = '';       // 最後に控えに足した tick (同じ版で数え直さない)
-var _rqBusy = false;
-var _rqWired = false;
-
-function _rqStore(dir, next) {
-  var RB = window.MA.requestBadge;
-  if (!RB) return null;
-  var key = RB.storageKey(dir);
-  try {
-    if (next === undefined) return localStorage.getItem(key);
-    localStorage.setItem(key, JSON.stringify(next));
-  } catch (e) {}
-  return null;
-}
-
-// 指摘.md と保存フォルダの指紋を取り、控えに 1 tick 足して行を作り直す。
-function refreshRequestBadge(force) {
-  var RL = window.MA.requestLedger;
-  var RB = window.MA.requestBadge;
-  var RN = window.MA.reviewNote;
-  var WS = window.MA.workspace;
-  if (!RL || !RB || !RN || !WS) return Promise.resolve(false);
-  if (_rqBusy) return Promise.resolve(false);
-  _rqBusy = true;
-  var dir = _wsFileDir();
-  return Promise.all([
-    fetch('/peek-notes?dir=' + encodeURIComponent(dir))
-      .then(function(r) { return r.ok ? r.json() : null; })
-      .catch(function() { return null; }),
-    WS.listFileEntries(dir).catch(function() { return []; }),
-  ]).then(function(both) {
-    var note = RN.pickNote((both[0] || {}).notes);
-    if (!note) { _rqRows = []; _rqSum = null; renderRequestBadge(); return false; }
-    var tick = RB.tickLabel(note.text);
-    // 図の指紋。本文までは取りに行かず、一覧が返す hash をそのまま指紋に使う
-    // (依頼が名指しした図が前の版から動いたか、だけが要る)。
-    var docs = {};
-    (both[1] || []).forEach(function(e) {
-      if (e && e.name) docs[e.name] = String(e.hash || e.mtime || '');
-    });
-    var state = RL.update(RL.readState(_rqStore(dir)), {
-      label: tick, at: new Date().toISOString(), markdown: note.text, docs: docs,
-    });
-    _rqStore(dir, state);
-    _rqTick = tick;
-    _rqRows = RL.rows(state);
-    _rqSum = RB.summarize(_rqRows);
-    renderRequestBadge();
-    return true;
-  }).catch(function() {
-    return false;
-  }).then(function(v) { _rqBusy = false; return v; });
-}
-
-function renderRequestBadge() {
-  var RB = window.MA.requestBadge;
-  var btn = document.getElementById('status-requests');
-  if (!RB || !btn) return;
-  btn.classList.toggle('has-open', RB.isActive(_rqSum));
-  btn.setAttribute('data-tone', RB.tone(_rqSum));
-  applyStatusBadge(btn, '継続依頼', _rqSum ? _rqSum.open : null,
-    RB.tone(_rqSum) === 'stalled' ? 'bad' : 'warn');
-  btn.setAttribute('data-open', _rqSum ? String(_rqSum.open) : '');
-  btn.setAttribute('data-worst', _rqSum ? String(_rqSum.worst) : '');
-  btn.title = RB.titleText(_rqRows, _rqSum);
-  if (_rqWired) return;
-  _rqWired = true;
-  // 押したら指摘.md の一覧まで連れて行く (件数を見てから中身を読むまでが 1 手)。
-  // タブ列の 👀 は畳まれていることがあるので、ボタンではなく画面を直に開く。
-  btn.addEventListener('click', function() {
-    try {
-      openPeekFolder();
-      setNoteMode(true);
-    } catch (e) {}
-  });
-}
-
-// ── 部品名の統一バッジ (BLK-primary-20260914-1006-friction) ────────────────
+// ── 部品名の統一バッジ ────────────────
 // 「今日の統一は済んでいるか」を確かめるだけの回でも、⇄ 一括置換を開き、置換前・
 // 置換後を打ち、ヒット 0 件を見る空打ちが要っていた (clicks=4 / keys=16)。
 // 過去に当てた組の残存件数を下端で常時数え、残り 0 なら「統一 済」と言い切る。
@@ -10239,7 +9800,7 @@ function setNoteMode(on) {
   });
 }
 
-// ── 指摘が指す図種・版 (BLK-junior-20260914-1106-wish) ──
+// ── 指摘が指す図種・版 ──
 // 指摘.md は「対象は本番用か資料用か」まで書くのに、開く側は図種単位でしか
 // 見分けず、同じ枠に並ぶ (資料用) を目で読み比べて選んでいた。指摘文に書いて
 // あるものを読み、対象の 1 枚を決めて、📂一覧のその行を光らせる。
@@ -10329,7 +9890,7 @@ function selectNoteFinding(id) {
   });
 }
 
-// ── 指摘 1 件を [適用] で当てる (BLK-primary-20260914-1006-wish) ──
+// ── 指摘 1 件を [適用] で当てる ──
 // 指摘.md の 1 件から図の組が並ぶ所までは来たが、そこから先の「これは ⇄一括置換 か、
 // 再出力か、別ドメイン宣言か」は primary が毎回指摘文を読んで決め、対応する画面を
 // 探して開いていた。手段は指摘文に書いてあるので、翻訳は findingActions に任せ、
@@ -10422,7 +9983,7 @@ function _noteApplyRename(plan) {
           var n = dsl == null ? 0 : BR.countIn(dsl, plan.from);
           if (!n) return null;
           var next = BR.replaceIn(dsl, plan.from, plan.to);
-          // 書く前を基準に置く (BLK-primary-20260914-1206)。
+          // 書く前を基準に置く。
           if (window.MA.saveDiff) { try { window.MA.saveDiff.markIfAbsent(f.name, dsl); } catch (e) {} }
           return WS.saveToFile({ name: f.name, dsl: next }, f.dir)
             .then(function(ok) {
@@ -10505,7 +10066,7 @@ function _noteSaveDocs(changed) {
 }
 
 // メソッド追加: 「遷移ラベルに対応するメソッドが無い」指摘を、⇄突合の画面を
-// 開かずにその場で当てる (BLK-primary-20260914-1106-wish)。足す先のクラスと
+// 開かずにその場で当てる。足す先のクラスと
 // メソッド名は eventSync の突合が出すので、ここは読む → 当てる → 保存だけ。
 function _noteApplyAddMethod(plan) {
   var ES = window.MA.eventSync;
@@ -10567,7 +10128,7 @@ function _noteApplyAddClass(plan) {
 }
 
 // 意図を明記: 「クラス図に足すか、意図的省略を明記するか」の後者を当てる
-// (BLK-primary-20260915-0007-friction)。足す先は addclass と同じ「宣言の一番多い
+// 足す先は addclass と同じ「宣言の一番多い
 // クラス図」。note の宛先が宣言されていなければ書かず、先に [クラス追加] を当てる
 // よう理由を返す (宣言の無い相手に note を向けると描画ごと落ちる)。
 function _noteApplyNoteIntent(plan) {
@@ -10626,7 +10187,7 @@ function applyNoteFinding(id, useAlt) {
 }
 
 // ── 指摘の表記揺れ語を、開いている図に自動で突き合わせる ──
-// BLK-junior-20260917-0023-wish: junior は指摘.md の「表記揺れ」欄の組 (IRQCtrl⇔Irq_Ctrl 等) を
+// junior は指摘.md の「表記揺れ」欄の組 (IRQCtrl⇔Irq_Ctrl 等) を
 // 目で覚え、開いた図の全行を上から読んで該当語を探していた。行数の多い図ほどその
 // スキャンが長く、組が増えるたびに図全体を読み直すことになる。突合そのものは
 // vocabMatch が持つ (ここは描画と行送りだけ)。
@@ -10707,7 +10268,7 @@ function renderVocabBand(host) {
 }
 
 // ── 表記揺れの「統一先」を先輩フォルダの実績から言い切る ──
-// BLK-junior-20260917-0123-wish: 突合は該当語の位置までは出すが、組の左右どちらが
+// 突合は該当語の位置までは出すが、組の左右どちらが
 // 正式表記かは出さない。指摘.md 本文にも書かれていないので、junior は先輩フォルダの
 // 複数ファイルを grep して先輩の実際の綴りを探していた。組が複数図種にまたがると、
 // その grep を図種ごとにやり直すことになる。判定そのものは vocabCanon が持つ
@@ -10841,7 +10402,7 @@ function renderNotePanel() {
   sum.textContent = _noteMsg || (RN ? RN.summaryText(_noteRows, _noteShowPreamble) : '');
   el.note.appendChild(sum);
 
-  // 表記揺れの自動突合 (BLK-junior-20260917-0023-wish)。指摘の語彙は既に読んで
+  // 表記揺れの自動突合。指摘の語彙は既に読んで
   // あるので、開いている図に効いているかどうかは機械が言える。該当が無いときも
   // 「該当なし」と出す (無いことを確かめるために全行を目で追わせない)。
   renderVocabBand(el.note);
@@ -10906,7 +10467,7 @@ function renderNotePanel() {
     b.addEventListener('click', function() { selectNoteFinding(r.id); });
     el.note.appendChild(b);
 
-    // 対象の図種・版 1 行 (BLK-junior-20260914-1106-wish)。押す前に「どの版が
+    // 対象の図種・版 1 行。押す前に「どの版が
     // 開くのか」が読める。同じ図の版が複数あるのに指摘が版を書いていなければ、
     // 本番用を選んだことと、ほかの版があることをその場で言う。
     var FV = window.MA.findingVariant;
@@ -10957,7 +10518,7 @@ function renderNotePanel() {
     });
     row.appendChild(apply);
 
-    // 二択で来た指摘の、もう一方の手を隣に置く (BLK-primary-20260915-0007-friction)。
+    // 二択で来た指摘の、もう一方の手を隣に置く。
     // どちらを選ぶかは図を書いている側の判断なので、本手を置き換えず並べる。
     if (plan.alt) {
       row.setAttribute('data-note-alt', plan.alt.kind);
@@ -10979,7 +10540,7 @@ function renderNotePanel() {
   });
 }
 
-// ── 覗いた図をテンプレートにする (BLK-junior-20260909-0503-wish) ──
+// ── 覗いた図をテンプレートにする ──
 // 読むだけで見た図は、そのまま「テンプレートから新規作成」の材料にできる。
 // 覚えて打ち直す工程が無くなるので、写し違いが起きる余地がない。
 function _peekSeed() {
@@ -10998,7 +10559,7 @@ function renderPeekTemplateBtn() {
   renderPeekCompareBtn();
 }
 
-// ── 覗いた図を手本として右に並べる (BLK-junior-20260909-0603-wish) ──
+// ── 覗いた図を手本として右に並べる ──
 // 覗く画面は全面のモーダルなので、開いている間は自分の書きかけが見えない。
 // 「テンプレートとして開く」は白紙から起こす用で、書きかけの図には使えない
 // (今のタブを捨てて新しいタブを作る)。ここは書きかけをそのままに、手本だけを
@@ -11061,7 +10622,7 @@ function closePeekFolder() {
   setNoteMode(false);
 }
 
-// BLK-owner-20260924-1836-prune: 覗く窓の左にあったフォルダの一覧は外した。フォルダは FILES「読むだけ」の
+// 覗く窓の左にあったフォルダの一覧は外した。フォルダは FILES「読むだけ」の
 // ツリーで選び (右クリック「このフォルダの図を調べる…」)、窓の見出しには今見ているフォルダの名前だけを出す。
 // 名前を押すと窓を閉じてツリーのその行へ移る (別のフォルダはそこで選ぶ)。左の列は「ドメインで揃える」
 // 「同名で並べる」の間だけ、その一覧 (ドメイン・同名の組) の置き場として使う。
@@ -11116,7 +10677,7 @@ function revealReadonlyDirInTree(dir) {
   });
 }
 
-// BLK-owner-20260925-0416-prune: FILES「読むだけ」節を開いて見出しへ移る (保存先の一覧の案内・Ctrl+K「参照」から)。
+// FILES「読むだけ」節を開いて見出しへ移る (保存先の一覧の案内・Ctrl+K「参照」から)。
 // 隣のフォルダを読む入口はこの節 1 か所。節を開くたびに隣のフォルダを取り直す (起動後に増えたフォルダも並ぶ)。
 function revealReadonlySection() {
   var FP = window.MA.filesPanel;
@@ -11181,7 +10742,7 @@ function renderPeekFiles() {
   });
 }
 
-// ── 覗き一覧の図種 (BLK-junior-20260912-2206) ──────────────────────────────
+// ── 覗き一覧の図種 ──────────────────────────────
 // 自分の 📂 一覧と同じ印を覗き一覧にも出す。junior は先輩のフォルダに
 // 「コンポーネント図があるか」を見に行くのに、名前だけの一覧を 30 行読んで
 // 語尾から図種を推測していた。0 枚の図種も要約に出すので、
@@ -11208,7 +10769,7 @@ function appendPeekKindSummary(host) {
   host.appendChild(line);
 }
 
-// BLK-junior-20260914-1706-wish: 覗いた相手にその図種が 1 枚も無かったとき、
+// 覗いた相手にその図種が 1 枚も無かったとき、
 // 「対応不要（手本なし）」を今開いている自分の図の中に控える。控えないと、この確認は
 // 本人の記憶にしか残らず、次に同じ図を担当するたびに 👀他フォルダからやり直しになる。
 function appendPeekVerdictOffer(host) {
@@ -11231,7 +10792,7 @@ function appendPeekVerdictOffer(host) {
     var settled = PS ? PS.find(_peekSettled, dirName, kind) : null;
     if (settled && n === 0) settledKinds.push(kind);
     if (n > 0 && !had && !settled) return;      // 取り込む変更があるうちは聞かない
-    // BLK-junior-20260916-2314-wish: フォルダで確定済みの組は、どの図を開いていても聞き直さない
+    // フォルダで確定済みの組は、どの図を開いていても聞き直さない
     // (下の 1 行にまとめる)。相手に図が増えたときだけ、要確認として出す。
     if (settled && !had && n === 0) return;
     if (settled && !had && n > 0) {
@@ -11303,7 +10864,7 @@ function appendPeekVerdictOffer(host) {
   }
 }
 
-// BLK-junior-20260916-2314-wish: 「手本なしで確定」の一覧は保存フォルダの持ち物 (GET/POST /peek-settled)。
+// 「手本なしで確定」の一覧は保存フォルダの持ち物 (GET/POST /peek-settled)。
 // 図 1 枚の @peek 行と違い、周が替わって別の図を開いても残る。
 var _peekSettled = [];
 var _peekSettledDir = null;
@@ -11412,7 +10973,7 @@ function appendPeekSvgSection(host) {
   host.appendChild(btn);
 }
 
-// ── 前回保存からの差分 (BLK-junior-20260914-1306-wish) ─────────────────────
+// ── 前回保存からの差分 ─────────────────────
 // 先輩の図を自分の図に取り込む場面では、要るのは「どの図が変わったか」と
 // 「何が増えて何が消えたか」だけ。今までは複合図 (driver_common_class 等) を
 // 丸ごと開いて目で差分を探し、変わっていない図まで開いて見比べていた。
@@ -11496,7 +11057,7 @@ function renderPeekChangeDetail(name) {
 }
 
 // ── 前回保存版と今回保存版を 1 画面に並べる ──
-// BLK-reviewer-20260917-0123-wish: 手順 5 (意図しない変更の混入確認) と手順 6
+// 手順 5 (意図しない変更の混入確認) と手順 6
 // (SVG のレイアウト崩れ確認) は、前回 run の控えを自分で複製し、テキスト差分と
 // audit.js --since-files を打つところから始まっていた。控えの本文は一覧の応答
 // (prev=1) で既に手元にあるので、要るのは並べて出すことだけ。判定は
@@ -11700,7 +11261,7 @@ function verifyPeekSvg() {
     });
 }
 
-// BLK-owner-20260918-0049-prune: 題材 × 図種の表は 🧩 部品ビューの進捗帯に寄せた。
+// 題材 × 図種の表は 🧩 部品ビューの進捗帯に寄せた。
 // 自分の一覧 (_kmMine) は部品ビューと参照タブが使う。
 // 自分のフォルダの一覧。控え (@peek 行) を読むので本文も一緒に取る。
 function loadKindMatrixMine() {
@@ -11713,11 +11274,11 @@ function loadKindMatrixMine() {
     }).catch(function() { _kmMine = []; return _kmMine; });
 }
 
-// ── 部品ビュー (BLK-junior-20260915-0606-wish) ─────────────────────────────
+// ── 部品ビュー ─────────────────────────────
 // 図 (ファイル) ごとにタブを開く作りだと、1 部品の 6 図種を見比べるのは毎回タブの
 // 往復になる。先輩のクラス図でメソッド名を確かめてから自分の活動図に打ち直す、という
 // 手順は「タブ切替 → フィルタ → 控え書き → タブ切替 → 打ち直す」に広がっていた
-// (BLK-junior-20260915-0606)。ここは部品を 1 つ選ぶと、その部品の 6 図種が
+// ここは部品を 1 つ選ぶと、その部品の 6 図種が
 // 先輩・自分の 2 列で同時に出る。自分の欄はその場で直して保存でき、先輩の欄の名前は
 // 押すと自分の欄に入るので、控え書き自体が要らなくなる。
 var _pbOn = false;
@@ -11891,7 +11452,7 @@ function renderPartBoard() {
     return;
   }
 
-  // 部品カード (BLK-junior-20260915-2346-wish)。6 図種を 1 まとまりとして、
+  // 部品カード。6 図種を 1 まとまりとして、
   // 「6 枚中何枚済んだか」と「どの図がまだ先輩に合っていないか」を先に出す。
   // 本文 6 行を読み比べないと言えなかったことを、部品を選んだ時点で 1 行にする。
   var card = _pcCard();
@@ -11971,7 +11532,7 @@ function _pcStrip(card) {
   return box;
 }
 
-// BLK-owner-20260918-0049-prune: 📂 一覧の棚卸しと 👀 他フォルダの対応要否の表をここに統合。
+// 📂 一覧の棚卸しと 👀 他フォルダの対応要否の表をここに統合。
 // まだ無い図種を名指しし、先輩にも無い図種は「対応不要（手本なし）」として分けて出す
 // (無いものを全部赤くすると、作らなくてよい図まで着手先に見える)。
 function _pcTodo() {
@@ -12014,7 +11575,7 @@ function _pcTodo() {
 }
 
 // 📂 一覧の導線から来たとき: 👀 他フォルダを開き、部品ビューに切り替える。
-// BLK-junior-20260924-0704-wish: 「並べて比較」の言い切りの行から来たときは、
+// 「並べて比較」の言い切りの行から来たときは、
 // 比較相手のフォルダと、いま開いている図の部品をそのまま引き継ぐ
 // (部品ビューを開いてからフォルダと部品を選び直させない)。
 function openPartBoard(opts) {
@@ -12059,7 +11620,7 @@ function _pbRow(r, who) {
   refHead.textContent = r.ref.missing ? who + ': 手本なし'
     : who + ' / ' + r.ref.name + (r.ref.shared ? '（相乗り図）' : '');
   refCol.appendChild(refHead);
-  // BLK-junior-20260924-0704-wish: 部品名の図が無く共通の図を手本にした欄は、
+  // 部品名の図が無く共通の図を手本にした欄は、
   // どの図のどの部分を絞ったかを 1 行で書く (全文だと思って読み違えない)。
   if (r.ref.shared && PB.sharedNote) {
     var src = document.createElement('div');
@@ -12260,10 +11821,10 @@ function stepPeekFile(delta) {
 }
 
 // 覗ける行き先の一覧。覗く画面を開かないまま指摘.md を読む画面 (📂一覧) のために、
-// 一度だけ取りに行く (BLK-junior-20260914-1206-wish)。
+// 一度だけ取りに行く。
 // force: 手元の控えがあっても取り直す。保存先の一覧は起動時に開いて (design 10a)
 // ここを先に呼ぶので、後から隣に増えたフォルダを「並べて比較」が知らないままになる。
-// BLK-owner-20260925-0416-prune: 「読むだけ」節の並び = 保存先の隣のフォルダ + 以前「＋参照」で足したフォルダ。
+// 「読むだけ」節の並び = 保存先の隣のフォルダ + 以前「＋参照」で足したフォルダ。
 // 参照タブ列を外しても、利用者が足したフォルダ (localStorage の控え) は並びに残す (隣でなくなっても消えない)。
 function _peekDirsUrl(dir) {
   var RF = window.MA.refFolders;
@@ -12288,7 +11849,7 @@ function openPeekFolder(opts) {
   var el = _peekEls();
   var PF = window.MA.peekFolder;
   if (!el.modal || !PF) return Promise.resolve(false);
-  // BLK-junior-20260916-0546: 📂 一覧で打っていた名前を引き継ぐ。
+  // 📂 一覧で打っていた名前を引き継ぐ。
   // 探している図の名前をもう一度打たせない。
   _peekQuery = (opts && opts.query != null) ? String(opts.query) : '';
   el.modal.style.display = 'flex';
@@ -12298,7 +11859,7 @@ function openPeekFolder(opts) {
     .then(function(r) { return r.ok ? r.json() : null; })
     .then(function(data) {
       _peekDirs = PF.choices(data);
-      // BLK-owner-20260924-1836-prune: フォルダは窓の中では選ばない。右クリックしたフォルダ →
+      // フォルダは窓の中では選ばない。右クリックしたフォルダ →
       // 右の枠に並べている相手 → 前に覗いていたフォルダ → 先頭 の順で 1 つに決めて開く。
       var st = _seniorState();
       var paneOpen = !(_seniorEls().pane || {}).hidden;
@@ -12315,7 +11876,7 @@ function openPeekFolder(opts) {
     });
 }
 
-// ── 先輩の図の枠 (BLK-junior-20260914-1406-wish) ────────────────────────────
+// ── 先輩の図の枠 ────────────────────────────
 // 先輩の変更を自分の図へ取り込む手順は、先輩を見る ↔ 自分を直す の往復になる。
 // 👀 他フォルダはモーダルなので、自分の図を書く間は閉じることになり、
 // 開くまでにツールの折りたたみを通って 5 クリックかかっていた。ここは
@@ -12325,12 +11886,12 @@ function openPeekFolder(opts) {
 var _seniorNames = [];   // 先輩フォルダのファイル名一覧
 var _seniorName = '';    // いま右に出している先輩の図
 var _seniorPick = null;  // 直近の相手選び (候補の表示に使う)
-// BLK-junior-20260914-2206-wish: 先輩のクラス図は全ドライバ共通の 1 枚で、
+// 先輩のクラス図は全ドライバ共通の 1 枚で、
 // 部品名では引けない。相手が共通図のときは中身を部品名で絞って出す。
 var _seniorText = '';      // いま出している先輩の図の本文 (絞り直しに使う)
 var _seniorSliceKey = '';  // 抜き出す部品名 (自分の図の名前から起こし、打ち替えられる)
 var _seniorSliceOn = true; // 部品だけ / 共通図の全体
-// BLK-junior-20260915-0007-wish: 先輩が 1 枚も持たない図種 (アクティビティ図) では
+// 先輩が 1 枚も持たない図種 (アクティビティ図) では
 // 4 段のどれにも当たらず「ありません」で手本が絶える。自分の他部品で作り終えた
 // 同じ図種を見本として代わりに出す。どれを見本にするかは peer-sample が持つ。
 var _peerNames = [];     // 自分の保存フォルダのファイル名一覧 (見本の候補元)
@@ -12356,7 +11917,7 @@ function _seniorEls() {
   };
 }
 
-// BLK-junior-20260915-2240-wish: 先輩がこの図種を 1 枚も持っていないとき、
+// 先輩がこの図種を 1 枚も持っていないとき、
 // 手順1「手本を見て直す」が成立せず、junior は要素構成と依存の粒度を決め打ちする
 // しかなかった。先輩の他図種に実際に書かれている名前だけから仮の手本を組む口を、
 // 相手が見つからなかったときにだけ出す (見つかったときは本物の手本がある)。
@@ -12423,7 +11984,7 @@ function _seniorSave(over) {
   var SP = window.MA.seniorPane;
   if (!SP) return null;
   var cur = SP.load();
-  // BLK-owner-20260924-2135-prune: 比較中のフォルダが替わったら、参照ペインの相手フォルダも追う。
+  // 比較中のフォルダが替わったら、参照ペインの相手フォルダも追う。
   if (over && over.dir !== undefined && over.dir !== cur.dir) {
     window.setTimeout(function() { try { syncCrossRefDir(false); } catch (e) {} }, 0);
   }
@@ -12446,7 +12007,7 @@ function renderSeniorModeRow() {
   if (el.modeOnce) el.modeOnce.setAttribute('aria-pressed', mode === 'once' ? 'true' : 'false');
 }
 
-// BLK-owner-20260923-1509-prune: 「2 つを左右に置いて見比べる」入口は 5 つあった。
+// 「2 つを左右に置いて見比べる」入口は 5 つあった。
 // 面をこの枠 1 つにし、選ぶのは「誰と並べるか」だけにする。相手の一覧と、
 // その相手に切り替えるとき鳴らす既存の入口は compare-entry が持つ。
 var _compareTarget = '';
@@ -12587,9 +12148,9 @@ function _withPeerSample(pick) {
   var WS = window.MA.workspace;
   _peerEnsureNames();
   if (!PS || !WS || (pick && pick.name)) return pick;
-  // BLK-junior-20260923-2012: 相手にその図種はあるが、この部品の図が無い (共通図も無い)
+  // 相手にその図種はあるが、この部品の図が無い (共通図も無い)
   // ときは見本を出さない。自分の見本図が相手の枠に出ると、相手の図と読み違える。
-  // 見本は相手がその図種を 1 枚も持たないときの代役 (BLK-junior-20260915-0007-wish)。
+  // 見本は相手がその図種を 1 枚も持たないときの代役。
   if (pick && pick.sameKind) return pick;
   var active = WS.getActive();
   var s = PS.pickSample({ name: active ? active.name : '', dir: _peerDir },
@@ -12645,7 +12206,7 @@ function showSeniorFile(name) {
 }
 
 // 枠に出す本文を組み立てて描く。相手が共通図なら、部品名に当たる所だけを抜き出す
-// (BLK-junior-20260914-2206-wish: 共通図をそのまま出すと、自分の部品がどこかを
+// (共通図をそのまま出すと、自分の部品がどこかを
 // 目で探すことになり「先輩の粒度に合わせる」手順が共通図を読む作業に戻る)。
 function renderSeniorBody() {
   var el = _seniorEls();
@@ -12720,7 +12281,7 @@ function renderSeniorStatus() {
   btn.setAttribute('data-count', String(n));
   btn.setAttribute('aria-pressed', open ? 'true' : 'false');
   btn.className = open ? 'on' : '';
-  // BLK-builder-20260924-1716-4 (design 9c / 10a): 相手が決まっていない (0 件) ときは出さない。
+  // 相手が決まっていない (0 件) ときは出さない。
   // 出すときは他の件数表示と同じ「● 名前」の 1 種類の形 (枠なし、色は点だけ)。
   // 入口は FILES ツリーの「読むだけ」の ⇔ が持つ。
   var SB = window.MA.statusBadges;
@@ -12741,7 +12302,7 @@ function renderSeniorStatus() {
   btn.appendChild(document.createTextNode(shown.replace(/^●/, '')));
 }
 
-// 枠を閉じていても相手は決めておく (下端に出すのがこの BLK の的なので、
+// 枠を閉じていても相手は決めておく (下端に出すのがこの直しの的なので、
 // 開いてからでないと分からない、では入口が 1 クリックにならない)。
 // フォルダをまだ 1 度も決めていないときは何も読まない (行き先一覧をここで
 // 取ると、まだ出来ていないフォルダの並びを掴んだまま覚えることになる)。
@@ -12773,7 +12334,7 @@ function _seniorRefreshPick() {
   renderSeniorStatus();
 }
 
-// BLK-junior-20260924-0704-wish: 相手の図が無いと言い切った行 (見本に差し替えた行も)
+// 相手の図が無いと言い切った行 (見本に差し替えた行も)
 // から、同じ部品の 🧩 部品ビューへ 1 押しで行ける案内を 1 つだけ添える。
 // 図種ごとに「並べて比較 → 無ければ他フォルダを探す」を繰り返す代わりに、
 // 部品の 6 図種のどれが相手にあって、どれが欠けているかをまとめて見られる。
@@ -12836,7 +12397,7 @@ function syncSeniorCounterpart() {
   else renderSeniorBody();
 }
 
-// ── FILES「読むだけ」節 (design 10a、BLK-builder-20260924-1749-3) ─────────────
+// ── FILES「読むだけ」節 (design 10a) ─────────────
 // 隣の保存フォルダを 1 行ずつ出し、右の枠に並べている相手には「比較中」を付ける。
 // 並べる・相手を替えるの実体は並べて比較の枠 (senior-pane) の道をそのまま通る。
 function renderReadonlyTree() {
@@ -12851,7 +12412,7 @@ function refreshReadonlyTree(force) {
   return _ensurePeekDirs(!!force).then(function() { renderReadonlyTree(); return true; });
 }
 
-// ── 別のフォルダを保存先にする (BLK-primary-20260925-0232-design、design 10a / 10b) ─────────
+// ── 別のフォルダを保存先にする (design 10a / 10b) ─────────
 // ツリーからは別のフォルダを保存先にできず、⚙ 設定 → 自動保存 → ファイル → パス → 設定を保存 の 5 手だった。
 // 保存先の行・「保存先」見出しの右クリックと Ctrl+K「保存先を変える」から同じ 1 つの窓を開く。
 // 窓は「読むだけ」節と同じ一覧 (隣のフォルダ) とパスの欄。書く値は ⚙ 設定の保存先の欄と同じ (autoSave の fileDir)。
@@ -12867,7 +12428,7 @@ function changeSaveTarget(dir) {
   var AS = window.MA.autoSave;
   if (!AS) return Promise.resolve({ ok: false, reason: '自動保存が使えません' });
   var prev = AS.getConfig() || {};
-  // BLK-human-20260925-1150: 開いているタブは前の保存先のファイルを指し続ける (書き先を新しいフォルダへ付け替えない)。
+  // 開いているタブは前の保存先のファイルを指し続ける (書き先を新しいフォルダへ付け替えない)。
   _holdOpenDocsBeforeTargetChange(prev, 'file', v);
   AS.setConfig({ backend: 'file', fileDir: v });
   var inp = document.getElementById('cfg-file-dir');
@@ -13028,7 +12589,7 @@ function toggleSeniorPane(open) {
   var el = _seniorEls();
   if (!el.pane) return Promise.resolve(false);
   el.pane.hidden = !open;
-  // 幅と取っ手は枠の出し入れと一緒に動かす (BLK-human-20260915-1203)。
+  // 幅と取っ手は枠の出し入れと一緒に動かす。
   applySidePaneWidth('senior-pane', 'resizer-senior',
     window.MA.seniorPane && window.MA.seniorPane.STORE_KEY);
   if (open) showSeniorFirstNote();
@@ -13097,7 +12658,7 @@ function setupSeniorPane() {
   var close = document.getElementById('senior-close');
   if (close) close.addEventListener('click', function() { toggleSeniorPane(false); });
   if (el.dir) el.dir.addEventListener('change', function() { selectSeniorDir(this.value); });
-  // 部品名を打てば、共通図のその所だけが浮かぶ (この BLK の的)。
+  // 部品名を打てば、共通図のその所だけが浮かぶ (この直しの的)。
   if (el.sliceKey) {
     el.sliceKey.addEventListener('input', function() {
       _seniorSliceKey = this.value.trim();
@@ -13117,7 +12678,7 @@ function setupSeniorPane() {
   renderSeniorModeRow();
   renderCompareTargetRow();
   // 下端の札。札の名前はそのままで、押すと同じ 1 つの面がその相手で開く
-  // (BLK-owner-20260923-1509-prune)。どの札がどの相手かは compare-entry が持つ。
+  // どの札がどの相手かは compare-entry が持つ。
   var CE = window.MA.compareEntry;
   var status = document.getElementById('status-senior');
   if (status) status.addEventListener('click', function() {
@@ -13131,7 +12692,7 @@ function setupSeniorPane() {
   else _seniorPrime();
 }
 
-// ── Git のコミットを比較相手にする (BLK-human-20260923-1702, design 10c) ─────
+// ── Git のコミットを比較相手にする (design 10c) ─────
 // 保存先が Git のとき、FILES ツリーの「この図の履歴」の「比較」や「比較する相手を選ぶ」で
 // 選んだコミット時点の図を、読むだけのフォルダと同じ右の枠 (#senior-pane) に並べる。
 // 見出しの相手名を押すと相手選びがその場で開き、◀ ▶ で 1 コミットずつ送れる。
@@ -13156,7 +12717,7 @@ function _seniorGitCommit() {
   if (!_seniorGit.hash) return { hash: '', short: '作業中', message: '今の編集内容' };
   var i = GP.indexOf(_seniorGit.commits, _seniorGit.hash);
   if (i >= 0) return _seniorGit.commits[i];
-  // 控えの行 (BLK-owner-20260924-2157-prune) は ◀ ▶ で送るコミットの並びに無い。押した行そのものを使う。
+  // 控えの行 は ◀ ▶ で送るコミットの並びに無い。押した行そのものを使う。
   if (_seniorGit.row && _seniorGit.row.hash === _seniorGit.hash) return _seniorGit.row;
   return { hash: _seniorGit.hash, short: _seniorGit.hash.slice(0, 7), message: '' };
 }
@@ -13183,7 +12744,7 @@ function clearSeniorGit() {
   syncGitDiagramDiff();
 }
 
-// BLK-builder-20260924-1823-2 (design 10c): 「コミットを送ると、図の上の差分の色付けも
+// 「コミットを送ると、図の上の差分の色付けも
 // そのコミットとの差に変わります」。コミットと比較している間だけ、左のプレビューの図には
 // そのコミットに無い文字 (増えた・変わった) に緑、右の枠のコミット時点の図には作業中に無い
 // 文字 (消えた・変わった) に赤の印を付ける。比べるのは描かれている文字 (svg-text-diff)。
@@ -13260,7 +12821,7 @@ function renderSeniorGit() {
       : ('作業中の ' + (name || '図') + '（未コミット）');
   }
   if (el.dsl) el.dsl.textContent = '読み込み中…';
-  // BLK-owner-20260924-2157-prune: GIT 節の履歴に混ぜた控えの行は、server の _versions から読む。
+  // GIT 節の履歴に混ぜた控えの行は、server の _versions から読む。
   var load = !c.hash
     ? Promise.resolve(mmdText)
     : c.version
@@ -13328,7 +12889,7 @@ function stepSeniorGit(dir) {
   return renderSeniorGit();
 }
 
-// BLK-builder-20260924-1836-2 (design 10c): 見出しの「差分だけ / 並べて比較」。押している方だけ地色
+// 見出しの「差分だけ / 並べて比較」。押している方だけ地色
 // (据え置く / 1 回だけ と同じ形)。差分だけ = 作業中と違う行だけ、並べて比較 = 本文の全部と図。
 function _paintSeniorGitView() {
   var g = _seniorGitEls();
@@ -13348,7 +12909,7 @@ function setupSeniorGit() {
   var g = _seniorGitEls();
   if (g.prev) g.prev.addEventListener('click', function() { stepSeniorGit(-1); });
   if (g.next) g.next.addEventListener('click', function() { stepSeniorGit(1); });
-  // design 10c (BLK-builder-20260924-1836-2): 「差分だけ / 並べて比較」の 2 択。押した方にする (裏返さない)。
+  // design 10c: 「差分だけ / 並べて比較」の 2 択。押した方にする (裏返さない)。
   if (g.diffOnly) g.diffOnly.addEventListener('click', function() { setSeniorGitView(true); });
   if (g.sbs) g.sbs.addEventListener('click', function() { setSeniorGitView(false); });
   // 相手の名前を押すと、相手選びがその場で開く (git-ui が持つ)。
@@ -13369,7 +12930,7 @@ function setupSeniorGit() {
     openFolderCompare: function() { return openCompareTarget('folder'); },
     refreshDiff: function() { if (_seniorGit && _seniorGit.text) renderSeniorGitDsl(); },
     diagramDiff: syncGitDiagramDiff,
-    // BLK-owner-20260924-2157-prune: GIT 節の「この図の履歴」に控え (server の _versions) も混ぜる。
+    // GIT 節の「この図の履歴」に控え (server の _versions) も混ぜる。
     versions: function(name) { return _versionsApi ? _versionsApi.load(name) : Promise.resolve([]); },
     lineCount: function(name) { return _versionsApi ? _versionsApi.lineCount(name) : Promise.resolve(null); },
     restoreVersion: function(name, stamp) { return _versionsApi ? _versionsApi.restore(name, stamp) : null; },
@@ -13397,7 +12958,7 @@ function setupPeekFolder() {
   if (el.sbsToggle) {
     el.sbsToggle.addEventListener('click', function() { setSbsMode(!_sbsOn); });
   }
-  // BLK-junior-20260915-0606-wish: 部品ビュー。
+  // 部品ビュー。
   var boardToggle = document.getElementById('peek-board-toggle');
   if (boardToggle) {
     boardToggle.addEventListener('click', function() { setPartBoardMode(!_pbOn); });
@@ -13428,7 +12989,7 @@ function setupPeekFolder() {
 // setupTabs の中の一覧を外から開く口 (design 10a)。
 var _ensureFolderListOpen = function() {};
 var _openFolderListAtBoot = function() {};
-// BLK-owner-20260924-0637-1: 保存先の一覧 (旧 📂 一覧の点検の部品ごと) を中央の枠に開く。
+// 保存先の一覧 (旧 📂 一覧の点検の部品ごと) を中央の枠に開く。
 // FILES ツリーの「保存先」節はファイルの行と札だけにし、一覧はここからだけ開く。
 var _openFolderListView = function() {};
 
@@ -13440,14 +13001,14 @@ function setupTabs() {
   if (btnNew) {
     btnNew.addEventListener('click', function() {
       saveActiveDoc();
-      // BLK-junior-20260909-0703: 新規タブは白紙で作る。手本を持っている人には
+      // 新規タブは白紙で作る。手本を持っている人には
       // 雛形のサンプル (Class なら User / IAuth) は打ち始める前に全消去する
       // 一手間にしかならない。見本が要る人には無選択時の右ペインに
       // 「まとめて追加」「白紙から: ひな形」があり、そちらから入れられる。
       var BD = window.MA.blankDoc;
       openNewDocTab(currentDiagramType, BD ? BD.blankDsl(currentDiagramType) : '@startuml\n@enduml');
       applyActiveDoc();
-      // 新規タブも作った時点でフォルダに現れる (BLK-primary-20260907-0823)。
+      // 新規タブも作った時点でフォルダに現れる。
       saveActiveDoc();
     });
   }
@@ -13456,14 +13017,14 @@ function setupTabs() {
   var btnFolder = document.getElementById('btn-tab-folder');
   if (!panel || !btnFolder) return;
 
-  // BLK-owner-20260924-0637-1: 一覧を中央の枠に開いている間 (is-list) は、閉じると枠だけを下げて
+  // 一覧を中央の枠に開いている間 (is-list) は、閉じると枠だけを下げて
   // ツリーの「保存先」節は開いたままにする (図を 1 枚開くたびに節まで畳まない)。
   function closePanel() {
     if (panel.classList.contains('is-list')) { panel.classList.remove('is-list'); return; }
     panel.classList.remove('open');
   }
 
-  // BLK-owner-20260925-0416-prune: 一覧の頭にあった参照タブ列 (「{保存先}(保存先)」タブ・「＋参照」) は、
+  // 一覧の頭にあった参照タブ列 (「{保存先}(保存先)」タブ・「＋参照」) は、
   // FILES ツリーの「読むだけ」節と同じこと (隣のフォルダの図を保存先を動かさずに右の枠に並べる) を
   // 別の登録簿でしていた。隣のフォルダを読むのは「読むだけ」節 1 か所にし、ここには行き先の案内だけを置く。
   // 部品 × 図種の 済/未 は 🧩 部品ビュー (読むだけのフォルダの右クリック「このフォルダの図を調べる…」)。
@@ -13481,43 +13042,38 @@ function setupTabs() {
     host.appendChild(b);
   }
 
-  // BLK-primary-20260907-1703: 一覧に印を付けて、まとめてタブで開く。
+  // 一覧に印を付けて、まとめてタブで開く。
   // 印はパネルを開いている間だけ持つ (次に開いたときは白紙から選ぶ)。
   var folderPicked = [];
   var folderNames = [];
-  // BLK-reviewer-20260916-0326-wish: 他 persona との部品名突合の結果。
-  // 押されるまで null (照合していないことと、照合して 0 件を読み分ける)。
-  var nameClashRes = null;
-  var nameClashMine = {};
-  var nameClashBusy = false;
-  // BLK-junior-20260908-1103: 名前での絞り込み。一覧は 20 枚超の行が縦に並び、
+  // 名前での絞り込み。一覧は 20 枚超の行が縦に並び、
   // 行ごとに印・役割・差分のボタンが付くので、目的の 1 枚を一発で押し分けにくい。
   var folderQuery = '';
   var folderFocusFilter = false;   // 一覧を開いた直後だけ絞り込み欄にカーソルを置く
-  // BLK-reviewer-20260907-1803-wish: 図名 → new/changed/unchanged。
+  // 図名 → new/changed/unchanged。
   // 「変更のある図だけ選ぶ」と行ごとの [差分] がここを見る。
   var folderStatus = {};
-  // BLK-reviewer-20260916-0426-wish: 図名 → {hash, runs, since}。前回控えから
+  // 図名 → {hash, runs, since}。前回控えから
   // 1 バイトも変わっていない図に「変化なし」の印を出すための控え。
   var stampStore = {};
   // 図名 → 行に出す印 (印の付かない図は入らない)。
   var stampMarks = {};
   // 「変化なし」の付いた図を畳んで、読む図だけを残す絞り込み。
   var stampHide = false;
-  // BLK-junior-20260907-2009-wish: 一時控えの印が付いた図名。畳んでいる間は
+  // 一時控えの印が付いた図名。畳んでいる間は
   // folderNames に入れない (「全部選ぶ」や「変更図だけ選ぶ」が控えを掴まない)。
   var draftNames = [];
-  // BLK-primary-20260908-1703: 「揃っているべき一式」として登録した図名と、
+  // 「揃っているべき一式」として登録した図名と、
   // 今の一覧との突合結果。手順 1 の「14 枚あるか」を目で数えずに済ませる。
   var targetNames = [];
   var targetScan = null;
-  // BLK-junior-20260908-2003-wish: 棚卸しで見ている部品。null は「まだ選んでいない」で、
+  // 棚卸しで見ている部品。null は「まだ選んでいない」で、
   // このときだけ今開いている図の部品を自動で選ぶ。'' は「選択を外した」であり、
   // 自動選択で埋め直さない (外したのに別の部品が出ると、見ている棚卸しを取り違える)。
-  // BLK-junior-20260908-2003: 図名 → 上書き前に控えてある版の数と、本体がもう
+  // 図名 → 上書き前に控えてある版の数と、本体がもう
   // 無いのに版だけ残っている図。server が一覧と同じ呼び出しで返す。
   var versionCounts = {};
-  // 図名 → いまの本文の行数 (BLK-primary-20260916-0100)。
+  // 図名 → いまの本文の行数。
   var versionNowLines = {};
 
   // いま保存されている中身の行数。開いているタブがあればそちらを優先する
@@ -13545,11 +13101,11 @@ function setupTabs() {
       }, function() { return null; });
   }
   var goneVersions = [];
-  // BLK-junior-20260908-2003: 図名 → 図種。「自分の状態遷移図が無い」を、
+  // 図名 → 図種。「自分の状態遷移図が無い」を、
   // 22 枚を 1 枚ずつ開いて確かめるのではなく一覧の時点で言うため。
   var kindByName = {};
   var kindEntries = [];
-  // BLK-junior-20260914-1206-wish: 指摘.md を一覧の側から読んだ結果。
+  // 指摘.md を一覧の側から読んだ結果。
   // noteBoard は「どの図をどの指摘が指しているか」、noteBoardStatus はその 1 枚の判定。
   // 本文は対象の図だけ取り寄せる (対象外と言うために全部読むのでは往復が画面に移るだけ)。
   var noteBoard = null;
@@ -13559,12 +13115,12 @@ function setupTabs() {
   var noteBoardDir = '';
   var noteBoardBusy = false;
   var noteBoardSig = null;
-  // BLK-junior-20260912-2103-wish: 図名 → 保存したときの図種 (server の _kinds.json)。
+  // 図名 → 保存したときの図種 (server の _kinds.json)。
   // 本文からの判定 (kindByName) と違い、保存した側が知っている図種なので、
   // 「別図種と紛らわしい書き方」をしていても開くときに図種が入れ替わらない。
   var savedKindByName = {};
   var savedKindsLoaded = false;
-  // BLK-reviewer-20260914-1406-wish: 図名 → 本文 (名乗りと食い違って見えた図だけ)。
+  // 図名 → 本文 (名乗りと食い違って見えた図だけ)。
   // 一覧の entry.kind は server の判定で、`actor` を持つユースケース図はシーケンスに
   // 倒れる (saved-kind.js と同じ事情)。それをそのまま「食い違い」と出すと、正しい
   // ユースケース図が毎回赤くなって印が効かなくなる。疑いの出た図だけ本文を取り寄せ、
@@ -13572,7 +13128,7 @@ function setupTabs() {
   var kindBodyByName = {};
   var kindBodyBusy = false;
   var kindBodySig = null;
-  // BLK-reviewer-20260908-0103: 図名 → SVG が puml に追いついているか。
+  // 図名 → SVG が puml に追いついているか。
   // `ls -l` で puml と svg を 1 枚ずつ突き合わせる代わりに、一覧が答える。
   var svgStatus = {};
   var svgContent = {};
@@ -13580,58 +13136,58 @@ function setupTabs() {
   var svgBasis = {};
   // 図名 → 行に並べる 3 つの値 (puml 変更 / SVG 書き出し / labels 一致) と印の有無。
   var svgCompare = {};
-  // BLK-reviewer-20260914-0906-wish: {name}.svg に刻まれた元 puml の sha1 が、
+  // {name}.svg に刻まれた元 puml の sha1 が、
   // 同じフォルダの別の図のものだったとき、その相手を名指しするための判定。
   var svgCross = null;
-  // BLK-reviewer-20260914-1106-wish: 部品 (クラス) ごとに図を束ねた突合の結果。
+  // 部品 (クラス) ごとに図を束ねた突合の結果。
   var partCross = null;
   // 図名 → SVG の書き出し時刻 (ISO8601)。puml の保存時刻と並べて行に出す。
   var svgMtimes = {};
   var svgScan = null;
   // 作り直した結果の 1 行。一覧を開き直すまで残す (押した結果が消えない)。
   var svgRenderNote = '';
-  // BLK-reviewer-20260908-1103-wish: 描き直して比べた結果の 1 行。
+  // 描き直して比べた結果の 1 行。
   var svgVerifyNote = '';
-  // BLK-reviewer-20260908-1203-wish: 食い違った図の中身。図名 → svgDiffSummary.compare の結果。
+  // 食い違った図の中身。図名 → svgDiffSummary.compare の結果。
   // 「ずれ」と分かった直後に材料が手に入るので、その場で持っておく
   // (もう一度描き直さないと中身が言えない、では手順が 1 つ増える)。
   var svgVerifyDiffs = {};
-  // BLK-reviewer-20260908-0203-wish: 図名 → {role, status}。実データ / テンプレの宣言と、
+  // 図名 → {role, status}。実データ / テンプレの宣言と、
   // テンプレの中身が宣言時から変わっていないか。22 枚を毎回同列に扱わなくて済むように。
   var fileRoles = {};        // 保存フォルダの _roles.json の中身
   var roleStatus = {};       // 一覧に配る早見表
   var roleScan = null;
   var roleEntries = [];      // 役割を決めた瞬間の指紋を取るための一覧
   var roleNote = '';
-  // BLK-junior-20260908-0630-wish: 図名 → 指摘の反映状態 (未反映 / 反映済み)。
+  // 図名 → 指摘の反映状態 (未反映 / 反映済み)。
   // 「元図」と「元図(レビュー反映)」を別名で並べる代わりに、1 枚のバッジで見分ける。
   var reviewStatus = {};
-  // BLK-reviewer-20260908-0923-wish: 図名 → 直近 N 分以内に更新されたか。
-  // 他のペルソナが同じ tick の中で書き込み続けている図を、読む前に見分ける。
+  // 図名 → 直近 N 分以内に更新されたか。
+  // 他の人が同じ時間帯に書き込み続けている図を、読む前に見分ける。
   var writeStatus = {};
   var writeAge = {};
   var writeScan = null;
-  // BLK-primary-20260914-1306-wish: 中身が byte 単位で同じ図の束。
+  // 中身が byte 単位で同じ図の束。
   // 「-編集中」が本体と同一のまま積み上がっても、一覧には開く・名前を変えるしか
   // 無かったので、片付けるには保存フォルダを直接触るしかなかった。
   var dupeGroups = [];
-  // BLK-reviewer-20260914-1506-wish: 本体 / 編集中の下書き / 書き出した SVG のうち
+  // 本体 / 編集中の下書き / 書き出した SVG のうち
   // どれが取り残されているか。dupe-merge が「同じ中身」を扱うのに対し、こちらは
   // 中身が違うときの向き (直したのに本体へ入っていない / 本体だけ直した) を出す。
   var syncScan = null;
   // 反映状況の節で差分を開いている図の名前 (もう一度押すと畳む)。
   var syncOpen = '';
   var syncDiffCache = {};
-  // BLK-reviewer-20260914-1806-wish: 下書き ↔ 本体の差し替え待ちキュー。
+  // 下書き ↔ 本体の差し替え待ちキュー。
   var swapQueue = null;
   // キューのまとめ (手順7 で primary に渡す文面) を開いているか。
   var swapReportOpen = false;
-  // BLK-junior-20260914-1306: 本文を開いている「宛先の書かれていない指摘」の id。
+  // 本文を開いている「宛先の書かれていない指摘」の id。
   var unaddrOpen = '';
   // 行の 🗑 を 1 回押した名前 (2 回目で消す)。描き直すと白紙に戻る。
   var deleteArmed = '';
 
-  // BLK-junior-20260912-2103-wish: フォルダから開くときの図種。
+  // フォルダから開くときの図種。
   // 控え (保存したときの図種) > 本文からの判定 > 今の図種。
   function _folderOpenType(name, text) {
     var SK = window.MA.savedKind;
@@ -13668,7 +13224,7 @@ function setupTabs() {
   function openManyFromFolder(names) {
     var FS = window.MA.folderSelect;
     var dir = _wsFileDir();
-    // BLK-junior-20260907-1803: これから読み直す図を先に書き戻すと、保存の確認に
+    // これから読み直す図を先に書き戻すと、保存の確認に
     // ならない (必ず一致する)。開く対象に入っていない図だけ書き戻す。
     var act = window.MA.workspace.getActive();
     if (!(act && names.indexOf(act.name) >= 0)) saveActiveDoc();
@@ -13684,7 +13240,7 @@ function setupTabs() {
         if (text != null) {
           // ディスクにある中身が、その図の「前回保存版」そのもの。ここで基準を
           // 置かないと一覧から開いた図は比べる相手を持たず、前回保存版との増減を
-          // 出せない (BLK-reviewer-20260915-2346-wish)。
+          // 出せない。
           if (window.MA.saveDiff) { try { window.MA.saveDiff.mark(name, text); } catch (e) {} }
           openExistingFile({
             name: name,
@@ -13698,7 +13254,7 @@ function setupTabs() {
     if (FS) step();
   }
 
-  // BLK-junior-20260915-2346: 開いた図を憶えておく置き場。localStorage が使えない
+  // 開いた図を憶えておく置き場。localStorage が使えない
   // 環境でも一覧は今までどおり出る (履歴だけが空になる)。
   var RECENT_KEY = 'plantuml-recent-files';
   function recentList() {
@@ -13722,7 +13278,7 @@ function setupTabs() {
   openFromFolderByName = function(name) { openFromFolder(name); };
   refreshFolderPanelNow = function() { if (panel.classList.contains('open')) renderFolderPanel(); };
 
-  // BLK-owner-20260926-0550-3: 自動保存・Ctrl+S で新しく書いた図が、FILES ツリーの保存先に読み込み直すまで
+  // 自動保存・Ctrl+S で新しく書いた図が、FILES ツリーの保存先に読み込み直すまで
   // 出なかった (外で消えた図の行も残った)。保存先の一覧は開いた時に 1 回読むだけだったため。
   // 書いた・消した知らせ (workspace の pua:folder-changed) と、ウィンドウにフォーカスが戻った時・FILES を
   // 開き直した時に、ディスクの顔ぶれと並べている顔ぶれを比べ、違えば一覧を読み直す
@@ -13799,10 +13355,10 @@ function setupTabs() {
     var el = document.getElementById(id);
     if (el) el.addEventListener('click', function() { _folderSyncSoon(50); });
   });
-  // BLK-builder-20260924-2152-2-red: 保存先を変えたときは畳んでいても読み直す (FILES の部品フォルダと
+  // 保存先を変えたときは畳んでいても読み直す (FILES の部品フォルダと
   // 上部バーの部品の段はこの一覧を読むので、閉じたままだと前のフォルダの図が残る)。
   reloadFolderListNow = function() { renderFolderPanel(); };
-  // BLK-junior-20260915-0007: 資料化の根拠から一覧へ渡るとき、名前を打ち直させない。
+  // 資料化の根拠から一覧へ渡るとき、名前を打ち直させない。
   // 一覧は開くたびに絞り込みを白紙に戻すので、外から入れる口をここに置く。
   filterFolderPanelNow = function(q) {
     folderQuery = String(q == null ? '' : q);
@@ -13811,7 +13367,7 @@ function setupTabs() {
     applyFolderFilter();
   };
 
-  // BLK-junior-20260907-1803: 開いているタブと同じ名前を一覧から押したときに
+  // 開いているタブと同じ名前を一覧から押したときに
   // 画面が何も動かないと、「保存できている」のか「一覧が効いていない」のかが
   // 分からない。同じ名前なら (1) 編集中の本文をそのファイルへ書き戻さずに読み、
   // (2) 読んだ結果を必ず言葉で返す。書き戻してから読むと、保存の確認そのものが
@@ -13832,7 +13388,6 @@ function setupTabs() {
         : { kind: text == null ? 'missing' : 'opened', changed: text != null, message: '' };
       if (text != null) {
         // ディスクにある中身が、その図の「前回保存版」そのもの
-        // (BLK-reviewer-20260915-2346-wish)。
         if (window.MA.saveDiff) { try { window.MA.saveDiff.mark(name, text); } catch (e) {} }
         openExistingFile({
           name: name,
@@ -13858,7 +13413,7 @@ function setupTabs() {
     });
   }
 
-  // BLK-junior-20260907-2009-wish: 上部バーの「🗂 一時控え」。
+  // 上部バーの「🗂 一時控え」。
   var btnDraft = document.getElementById('btn-tab-draft');
   if (btnDraft) {
     btnDraft.addEventListener('click', function() {
@@ -13891,14 +13446,14 @@ function setupTabs() {
     // 起動時に既定で開いた一覧は、隣のフォルダ (参照タブ・読むだけの行き先) を
     // 起動した時点の姿で控えている。人が初めて押して開くときに 1 度だけ取り直す
     // (既定で開く前は、この最初の 1 押しが取りに行く時点だった)。
-    // BLK-releaser-20260930-1020-1: 控えを空にするだけだと、起動時に読み終えた指摘.md の判定
+    // 控えを空にするだけだと、起動時に読み終えた指摘.md の判定
     // (noteBoardScan は同じ保存先では読み直さない) が自分のフォルダ名を失い、宛先の書かれて
     // いない指摘を全部「宛先不明」と言っていた。空にせず取り直し、届いたら一覧を描き直す。
     if (focus && _peekDirsFromBoot) {
       _peekDirsFromBoot = false;
       _ensurePeekDirs(true).then(function() { try { refreshFolderPanelNow(); } catch (e) {} });
     }
-    // BLK-junior-20260907-1803: 一覧を開くだけでは保存フォルダへ書き出さない。
+    // 一覧を開くだけでは保存フォルダへ書き出さない。
     // ここで書き出すと、保存できたかを一覧から確かめようとするたびに編集中の本文で
     // ファイルが上書きされ、「開き直したら必ず一致する」ので確認にならなかった。
     // タブの控え (workspace) だけ今の本文にそろえる。
@@ -13934,7 +13489,7 @@ function setupTabs() {
   _openFolderListView = function() {
     if (!panel.classList.contains('open')) _rememberTargetSec(true);
     panel.classList.add('is-list');
-    // BLK-primary-20260929-0551: Ctrl+K の行・Import ▾ の項目を押して開くと、その同じクリックが
+    // Ctrl+K の行・Import ▾ の項目を押して開くと、その同じクリックが
     // document まで上がって「枠の外を押した」と読まれ、開いた瞬間に閉じていた。
     // 開いたクリックが上がりきるまで (同じ処理の中) は外側クリックとして数えない。
     _listOpening = true;
@@ -13955,10 +13510,10 @@ function setupTabs() {
     if (saved === null ? def : saved === '1') { openFolderList(false); _peekDirsFromBoot = true; }
   };
 
-  // BLK-reviewer-20260907-1403: 図ごとに「前回見た版から変わったか」を出す。
+  // 図ごとに「前回見た版から変わったか」を出す。
   // 変更が無い日に 17 枚を全部読み直さなくても、バッジの付いた図だけ読めばよくなる。
   // 提出物庫への入口。棚卸しの判定も庫を見るので、一覧を描く前に 1 回読む
-  // (BLK-junior-20260908-2203-wish)。読めたら描き直す。
+  // 読めたら描き直す。
   function appendVaultEntry(host) {
     var V = window.MA.vault;
     if (!V) return;
@@ -13981,7 +13536,7 @@ function setupTabs() {
     state.id = 'folder-vault-state';
     state.textContent = V.summaryText(_vaultRows, '');
     bar.appendChild(state);
-    // 変更チケットへの入口 (BLK-primary-20260909-0603-wish)。仕様変更の続きは
+    // 変更チケットへの入口。仕様変更の続きは
     // 「どの図を開くか」から始まるので、フォルダ一覧と同じ場所に置く。
     if (window.MA.changeTicket) {
       var ct = document.createElement('button');
@@ -14046,11 +13601,11 @@ function setupTabs() {
     window.MA.workspace.listFolder(dir).then(function(res) {
       if (myGen !== _folderRenderGen) return;
       var entries = (res && res.entries) || [];
-      // BLK-owner-20260926-0550-3: 並べた顔ぶれを控える (書いた後・フォーカスが戻った時にディスクと比べる)。
+      // 並べた顔ぶれを控える (書いた後・フォーカスが戻った時にディスクと比べる)。
       _folderShown = { dir: dir, sig: window.MA.fileTree ? window.MA.fileTree.nameSig(entries) : '' };
       panel.textContent = '';
       appendListHead(panel);
-      // BLK-human-20260917-0901: 保存フォルダの外にある手元の .puml を開く入口を一覧の頭に置く。
+      // 保存フォルダの外にある手元の .puml を開く入口を一覧の頭に置く。
       var openHead = document.createElement('button');
       openHead.type = 'button';
       openHead.className = 'folder-open-file';
@@ -14060,7 +13615,7 @@ function setupTabs() {
       openHead.addEventListener('click', function() { closePanel(); openFile(); });
       panel.appendChild(openHead);
       appendReadonlyHint(panel);
-      // BLK-primary-20260908-0103: 保存先の綴りを 1 文字誤っただけでも一覧は
+      // 保存先の綴りを 1 文字誤っただけでも一覧は
       // 「図がありません」としか言わず、間違いに気づけないまま作業が止まっていた。
       // 実在しない保存先は「無い」と名指しで言い、直す場所まで書く。
       if (res && res.exists === false) {
@@ -14083,7 +13638,7 @@ function setupTabs() {
         empty.textContent = '保存フォルダに図がありません';
         panel.appendChild(empty);
         // 作業ファイルが 1 枚も無くても提出物庫には残っている。ここで黙ると、
-        // 「前の周の図が消えた」に見えるのが BLK-junior-20260908-2203-wish の詰まり。
+        // 「前の周の図が消えた」に見えるのが の詰まり。
         appendVaultEntry(panel);
         appendInventorySection(panel);
         return;
@@ -14107,31 +13662,31 @@ function setupTabs() {
 
       // SVG の追いつきは、図の中身とは別に一覧の時点で分かる。
       var SF = window.MA.svgFreshness;
-      // BLK-reviewer-20260908-1103-wish: 印の無い svg でも、上書きせずに描き直して
+      // 印の無い svg でも、上書きせずに描き直して
       // 比べた控えがあれば内容で言い切れる。server が一覧と一緒に返す。
       svgScan = SF ? SF.scan(entries, (res && res.verified) || {}) : null;
       // 突合ダッシュボードの「出力物」はここで読んだ結果を使う (一覧を開くまでは見ていない)。
       _abSvgScan = svgScan;
       svgStatus = SF ? SF.statusMap(svgScan) : {};
-      // BLK-reviewer-20260908-1103: mtime とは別に、内容 (svg に刻んだ元 puml の sha1) での判定。
+      // mtime とは別に、内容 (svg に刻んだ元 puml の sha1) での判定。
       svgContent = SF && SF.contentMap ? SF.contentMap(svgScan) : {};
       svgBasis = SF && SF.basisMap ? SF.basisMap(svgScan) : {};
-      // BLK-reviewer-20260908-2003-wish: 行に「puml 変更 / SVG 書き出し / labels 一致」を
+      // 行に「puml 変更 / SVG 書き出し / labels 一致」を
       // 並べ、印を持たない図に「未刻印」を出すための 1 行ぶんの値。
       var SCR = window.MA.svgCompareRow;
       svgCompare = SCR ? SCR.map(entries, (res && res.verified) || {}) : {};
-      // BLK-reviewer-20260914-0906-wish: 「今の puml の絵ではない」の先の
+      // 「今の puml の絵ではない」の先の
       // 「では どの図の絵なのか」。印を同じフォルダの他の図の sha1 と突き合わせる。
       var SX = window.MA.svgCross;
       svgCross = SX ? SX.scan(entries) : null;
       _svgCrossLatest = svgCross;
-      // BLK-reviewer-20260914-1106-wish: 同じ部品を持つ状態遷移図・シーケンス図・
+      // 同じ部品を持つ状態遷移図・シーケンス図・
       // クラス図を束ね、遷移ラベル / メッセージ名がクラスのメソッドに無ければ
       // 名指しする。判定は method-audit と同じ規則で、見る範囲だけが
       // 「開いている図」から「保存フォルダの全部」に広がる。
       var PC = window.MA.partCross;
       partCross = PC ? PC.scan(entries) : null;
-      // BLK-reviewer-20260908-2003-wish: puml の保存時刻と SVG の書き出し時刻を
+      // puml の保存時刻と SVG の書き出し時刻を
       // 同じ行に並べる。片方しか出ていない間は「いつ書き出した SVG か」を
       // ls -l で見に行くことになっていた。
       svgMtimes = SF && SF.svgMtimeMap ? SF.svgMtimeMap(svgScan) : {};
@@ -14141,18 +13696,18 @@ function setupTabs() {
       var RS = window.MA.reviewState;
       reviewStatus = RS ? RS.statusMap(entries) : {};
 
-      // BLK-primary-20260914-1306-wish: 束ねる判定は一覧が既に持っている hash だけで
+      // 束ねる判定は一覧が既に持っている hash だけで
       // 済む (本文を取り直さないので、一覧を開いた時点で言い切れる)。
       var DPM = window.MA.dupeMerge;
       dupeGroups = DPM ? DPM.scan(entries) : [];
 
-      // BLK-reviewer-20260914-1506-wish: 対になる成果物の反映漏れ。判定に要るのは
+      // 対になる成果物の反映漏れ。判定に要るのは
       // 一覧が既に持っている mtime・hash・svg の刻印だけなので、本文を取り直さない
       // (取り寄せるのは [差分] を押した 1 枚ぶんだけ)。
       var SS = window.MA.syncState;
       syncScan = SS ? SS.scan(entries, (res && res.verified) || {}) : null;
 
-      // BLK-reviewer-20260914-1806-wish: 下書きと本体の差し替え待ちキュー。
+      // 下書きと本体の差し替え待ちキュー。
       // sync-state は「反映漏れのある図」だけを名指しするので、中身が揃って
       // もう消してよい下書きは一覧から消える。キューはそれも載せて
       // 「下書きが何枚・うち何枚が反映待ちで何枚が削除予定か」を全部言う。
@@ -14161,13 +13716,13 @@ function setupTabs() {
 
       // 「今読んでいる版が、読み始めた瞬間のものか」は中身では分からない。
       // server が返した「今」と各図の更新時刻の差だけで判定する。
-      // BLK-junior-20260908-2003: 上書きで消えた中身の控え。一覧の時点で
+      // 上書きで消えた中身の控え。一覧の時点で
       // 「この図には前の版がある」「本体は消えたが版は残っている」を出す。
       versionCounts = {};
       versionNowLines = {};
       entries.forEach(function(e) {
         if (e && e.name && typeof e.versions === 'number') versionCounts[e.name] = e.versions;
-        // BLK-primary-20260916-0100: 「いま何行か」は空洞化を見分ける物差し。
+        // 「いま何行か」は空洞化を見分ける物差し。
         // 版の一覧を開くたびに本文を読み直さずに済むよう、一覧の時点で控える。
         if (e && e.name && typeof e.lines === 'number') versionNowLines[e.name] = e.lines;
       });
@@ -14182,7 +13737,7 @@ function setupTabs() {
       savedKindByName = (res && res.kinds && typeof res.kinds === 'object') ? res.kinds : {};
       savedKindsLoaded = true;
 
-      // BLK-junior-20260914-1206-wish: 指摘の判定は図の本文から出しているので、
+      // 指摘の判定は図の本文から出しているので、
       // 図が 1 枚でも書き換われば取り直す。一覧は描くたびに読み直されるので、
       // 「読み直した」ではなく「中身が変わった」で取り直す (毎回だと描画が回り続ける)。
       var noteSig = entries.map(function(e) {
@@ -14236,7 +13791,6 @@ function setupTabs() {
         appendSwapQueueSection(panel, dir);
         appendKindSummary(panel);
         appendKindMismatchSummary(panel);
-        appendNameClashSummary(panel);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
         appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
         appendGoneVersionsSection(panel);
@@ -14249,7 +13803,7 @@ function setupTabs() {
       var seen = RW.load(store, dir);
       var first = !RW.hasSeen(store, dir);
       var rows = RW.diff(seen, entries);
-      // BLK-reviewer-20260916-0426-wish: 「前回控えから 1 バイトも変わっていない」図に
+      // 「前回控えから 1 バイトも変わっていない」図に
       // 印を付ける。印が無い状態は「変わっていない」と「まだ確かめていない」の
       // どちらにも読めるので、言い切れる方にだけ印を出す。
       var CS = window.MA.changeStamp;
@@ -14271,7 +13825,7 @@ function setupTabs() {
       head.textContent = first ? '前回見た版の控えがありません（全部を新規として出しています）' : RW.summary(sp.items);
       panel.appendChild(head);
       // 読む枚数は「印の付いていない図」の枚数。audit をフルで打ち直さずに
-      // 今日どれだけ読むかがここで決まる (BLK-reviewer-20260916-0426-wish)。
+      // 今日どれだけ読むかがここで決まる。
       if (CS && !first) {
         var stampHead = document.createElement('div');
         stampHead.className = 'folder-summary folder-stamp-summary';
@@ -14304,7 +13858,6 @@ function setupTabs() {
       }
       appendKindSummary(panel);
       appendKindMismatchSummary(panel);
-      appendNameClashSummary(panel);
       sp.items.forEach(function(r) { panel.appendChild(rowOf(r)); });
       appendDraftSection(sp.drafts, rowOf);
       appendGoneVersionsSection(panel);
@@ -14330,14 +13883,13 @@ function setupTabs() {
         // 「N 回続けて控えを取って中身が同じだった」を指す。
         if (CS) CS.save(store, dir, CS.advance(stampStore, rows, new Date().toISOString()));
         // 指紋だけでなく本文も控える。次に開いたとき、変更図の旧DSL を
-        // 取り直さずに並べて出せる (BLK-reviewer-20260907-1803-wish)。
+        // 取り直さずに並べて出せる。
         mark.disabled = true;
         mark.textContent = '控えを取っています…';
         saveSeenBodies(dir, folderNames).then(function() { renderFolderPanel(); },
                                               function() { renderFolderPanel(); });
       });
       panel.appendChild(mark);
-      appendCarrySection(dir, sp.items);
       syncFolderPickUi();
       applyFolderFilter();
       focusFolderFilter();
@@ -14374,7 +13926,7 @@ function setupTabs() {
 
   // 一時控えは成果物の下にまとめ、既定では畳む。畳んだ枚数は必ず言葉で出す
   // (一覧に出ていないことを「保存できていない」と読み違えないため)。
-  // BLK-builder-20260923-1849-3: FILES ツリーの「保存先」節 (幅 208px) では、ファイルの行を入口
+  // FILES ツリーの「保存先」節 (幅 208px) では、ファイルの行を入口
   // (ファイルを開く・保存先タブ・絞り込み) のすぐ下へ上げる。棚 (選ぶバー・対象 set・提出物庫・SVG の鮮度…) はその下。
   // 行は約 35 個の棚の後ろに積まれ、節を開いた位置から約 2,300px 下にあった。要素・id は動かすだけで作り直さない。
   function raiseRowsInTree() {
@@ -14414,7 +13966,7 @@ function setupTabs() {
     });
     bar.appendChild(b);
     panel.appendChild(bar);
-    // BLK-builder-20260924-2255-2 (design 10a「一時控えは「控え」」): FILES ツリーはこの一覧の行を読んで組む。
+    // FILES ツリーはこの一覧の行を読んで組む。
     // 畳んだ控えの行を作らないと、控えにした図がツリーから消え、部品の枚数・未作成の略号・下端の「N 図」から
     // 外れていた。畳んでいる間も行は作り、見えない入れ物 (.folder-draft-body) に入れる。一覧では見えず、
     // 絞り込みの数 (applyFolderFilter) と「全部選ぶ」(setFolderNames) にも入らない。
@@ -14456,17 +14008,17 @@ function setupTabs() {
 
   // 印を付ける欄と、名前を押して 1 枚だけ開く従来のボタンを 1 行に並べる。
   // 名前を押したときの動きは変えない (1 枚だけ開くのが今までどおり最短)。
-  // BLK-reviewer-20260908-0103: SVG が puml に追いついているかの要約と、
+  // SVG が puml に追いついているかの要約と、
   // 追いついていない図だけを 1 押しで作り直すボタン。
   // 22 枚全部を毎回描き直すのではなく、古い枚数だけを描き直す。
-  // BLK-reviewer-20260908-0923-wish: 他のペルソナが今も書き込み中かもしれない図。
+  // 他の人が今も書き込み中かもしれない図。
   // 読み始めた版と読み終えた版が混ざると、古い版と新しい版が混ざった指摘になる。
   // 「直近 N 分以内に更新された図」を名指しし、後回しにする / 取り直すの
   // どちらかをその場で選べるようにする。
-  // BLK-reviewer-20260914-1106-wish: 状態遷移図の遷移ラベルとクラス図のメソッドの
+  // 状態遷移図の遷移ラベルとクラス図のメソッドの
   // 対応は、これまで tools/audit.js を実行して JSON を読み解くしかなかった。
   // 部品ごとに 3 枚を束ねた行を一覧の頭に置き、宣言の無い名前を赤字で名指しする。
-  // ── この周の保存が効いたか (BLK-primary-20260914-1406-wish) ──────────────
+  // ── この周の保存が効いたか ──────────────
   // 今の画面は「保存操作をした」ことしか言わず、錠の問いに答えていない・テンプレ
   // 宣言で止めている・保存先がダウンロードのまま、のどれかで黙って書かれない道が
   // いくつもある。新人に引き継ぐ前に、保存先ファイルの中身と突き合わせて
@@ -14596,7 +14148,7 @@ function setupTabs() {
     });
   }
 
-  // ── 中身が同じ図の統合と、1 枚だけの削除 (BLK-primary-20260914-1306-wish) ──
+  // ── 中身が同じ図の統合と、1 枚だけの削除 ──
   // 指摘.md は毎回「can_init_sequence-編集中 が本体と byte 単位で同一のまま」の
   // 整理を求めるのに、📂一覧には開く・名前を変えるしか無く、実現するには保存
   // フォルダを直接触るしかなかった (体験の規律で禁止)。ここで「統合」を 1 押しに
@@ -14687,7 +14239,7 @@ function setupTabs() {
     }
   }
 
-  // BLK-reviewer-20260914-1506-wish: 「本体 / 編集中 / SVG」の反映状況。
+  // 「本体 / 編集中 / SVG」の反映状況。
   // 直した内容が下書きにしか入っていない事故は、手で diff を取るまで誰も気付けなかった。
   // 一覧の時点で向きまで言い、差分はその場で開く (1 操作で突合が終わる)。
   function appendSyncSection(host, dir) {
@@ -14792,7 +14344,7 @@ function setupTabs() {
     });
   }
 
-  // BLK-reviewer-20260914-1806-wish: 差し替え待ちキュー。
+  // 差し替え待ちキュー。
   // 反映漏れの節 (appendSyncSection) が出すのは「食い違っている図」だけなので、
   // 下書きの全体像 —— 何枚あって、どれが本体待ちで、どれがもう消してよいか —— は
   // `-編集中` を ls して目で拾うしかなかった。ここはその台帳を 1 つの節にまとめ、
@@ -15111,7 +14663,7 @@ function setupTabs() {
     sum.textContent = SF.summary(svgScan);
     panel.appendChild(sum);
 
-    // BLK-reviewer-20260908-1103: mtime の 1 行だけでは「見た目が読めるか」は言えない。
+    // mtime の 1 行だけでは「見た目が読めるか」は言えない。
     // svg に刻んだ元 puml の sha1 と今の puml を突き合わせた結果を、その下に 1 行で出す。
     if (SF.contentSummary) {
       var csum = document.createElement('div');
@@ -15122,11 +14674,11 @@ function setupTabs() {
       panel.appendChild(csum);
     }
 
-    // BLK-reviewer-20260908-0103 (1403 追記): 上の 1 行が「印の突合」で出た答えなのか
+    // 上の 1 行が「印の突合」で出た答えなのか
     // 「描き直してのバイト比較」で出た答えなのかが画面に無く、同じ判定を自分で
     // やろうとすると、印の付かない /render の応答とバイト比較して全件ずれに見える。
     // 何を見た答えかをその場に書く (server.py を読みに行かせない)。
-    // BLK-reviewer-20260908-2003-wish: 上の 2 行は「mtime で古いか」「内容が一致するか」を
+    // 上の 2 行は「mtime で古いか」「内容が一致するか」を
     // 別々に言う。reviewer が手順4.10・6 で毎回作っていたのは、この 2 つを図ごとに
     // 突き合わせた「labels が一致しているか」の一覧なので、その集計をそのまま 1 行にする。
     var SCR = window.MA.svgCompareRow;
@@ -15146,7 +14698,7 @@ function setupTabs() {
       panel.appendChild(lsum);
     }
 
-    // BLK-reviewer-20260914-0906-wish: 出力先がクロスした図は、上の 3 行では
+    // 出力先がクロスした図は、上の 3 行では
     // どれも「内容ずれ」にしか見えない。相手を名指しした 1 行をその下に出す。
     var SX2 = window.MA.svgCross;
     if (SX2 && svgCross && svgCross.rows.length) {
@@ -15167,7 +14719,7 @@ function setupTabs() {
       panel.appendChild(bnote);
     }
 
-    // BLK-reviewer-20260908-0823-wish: 件数だけだと「どの図か」を 22 行の中から
+    // 件数だけだと「どの図か」を 22 行の中から
     // 目で探すことになり、SVG の書き出し漏れに気付くのが偶然に戻る。
     // 無い図・古い図の名前をここに並べ、押せばその図を開けるようにする。
     var short = SF.shortfall ? SF.shortfall(svgScan) : [];
@@ -15191,7 +14743,7 @@ function setupTabs() {
         });
         row.appendChild(link);
       });
-      // BLK-primary-20260908-1203: 下の「古い SVG を作り直す」は古い・無い・内容ずれを
+      // 下の「古い SVG を作り直す」は古い・無い・内容ずれを
       // まとめて作り直すので、この行に名指しされた図だけを狙えない。行の末尾に
       // 「この N 枚だけ作り直す」を置き、reviewer に指摘された分だけを 1 押しで直せるようにする。
       if (SF.groupRenderLabel) {
@@ -15211,7 +14763,7 @@ function setupTabs() {
       panel.appendChild(row);
     });
 
-    // BLK-reviewer-20260908-2003-wish: 印の無い図の名前。要約の「未確認 N 枚」だけでは
+    // 印の無い図の名前。要約の「未確認 N 枚」だけでは
     // どの 1 枚かが分からず、毎回 audit.js を挟んで突き止めていた (実データ 22 枚中 1 枚)。
     // 行末の押しでその図だけを、上書きせずに描き直して確かめる。
     var un = SF.unstamped ? SF.unstamped(svgScan) : null;
@@ -15256,7 +14808,7 @@ function setupTabs() {
     btn.type = 'button';
     btn.className = 'folder-svg-render';
     // 集計行と同じ枚数を言っているかを外から見られるようにする
-    // (BLK-primary-20260908-1303: この 2 つが違う基準で数えていた)。
+    // (この 2 つが違う基準で数えていた)。
     btn.id = 'folder-svg-render';
     btn.textContent = SF.renderLabel(svgScan);
     btn.title = '保存フォルダの puml から SVG を描き直す。puml には触らないので、'
@@ -15275,7 +14827,7 @@ function setupTabs() {
     });
     panel.appendChild(btn);
 
-    // BLK-reviewer-20260908-1103: 印の無い svg は、mtime が揃っていても中身までは言えない。
+    // 印の無い svg は、mtime が揃っていても中身までは言えない。
     // 1 押しで作り直せば印が付き、以後はこの一覧だけで内容の一致を言い切れる
     // (22 枚を curl + diff で確かめ直す手順が要らなくなる)。
     if (SF.proofLabel) {
@@ -15295,7 +14847,7 @@ function setupTabs() {
       panel.appendChild(pbtn);
     }
 
-    // BLK-reviewer-20260908-1103-wish: 作り直しは「今そう見える」に揃えるだけで、
+    // 作り直しは「今そう見える」に揃えるだけで、
     // 保存されていた絵が正しかったかは分からなくなる。こちらは上書きせずに
     // 裏で 1 回描き直してバイト比較し、結果だけを控える。実データ 22 枚を
     // curl と diff で 1 枚ずつ確かめ直す手順が、この 1 押しに置き換わる。
@@ -15323,7 +14875,7 @@ function setupTabs() {
       panel.appendChild(vbtn);
     }
 
-    // BLK-reviewer-20260908-1203: 印だけで「内容ずれ」と分かった図は、確かめ直して
+    // 印だけで「内容ずれ」と分かった図は、確かめ直して
     // いないので中身の材料が手元に無い。ここを押せば、その図だけをもう一度
     // (上書きせずに) 突き合わせて、何が食い違うのかまで出す。
     if (SF.diffLabel) {
@@ -15346,7 +14898,7 @@ function setupTabs() {
     appendSvgDiffSection(panel);
   }
 
-  // BLK-reviewer-20260908-1203-wish: 「内容ずれ」と分かった図の、食い違いの中身。
+  // 「内容ずれ」と分かった図の、食い違いの中身。
   // ここが無かった頃は、ずれた 7 枚を 1 枚ずつ開いて旧 participant 名や欠けた遷移を
   // grep で突き止めていた (1 枚あたり 10 行前後)。欠落と残存を図ごとに並べ、
   // primary へ渡す指摘文をその場でコピーできるようにする。
@@ -15389,7 +14941,7 @@ function setupTabs() {
         row.textContent = s;
         box.appendChild(row);
       });
-      // BLK-reviewer-20260908-1303: 文字に現れない差 (図形の数・並び順) も並べる。
+      // 文字に現れない差 (図形の数・並び順) も並べる。
       // 「文字の上での違い無し」だけを見せると、レイアウトだけの差と誤読される。
       (diff.structural || []).forEach(function(r) {
         var row = document.createElement('div');
@@ -15443,7 +14995,7 @@ function setupTabs() {
       if (queue.length === 0) {
         var parts = [];
         if (counts.match) parts.push('一致 ' + counts.match + ' 枚');
-        // BLK-reviewer-20260908-0103 (1903 追記): 体裁だけの差を「食い違い」に
+        // 体裁だけの差を「食い違い」に
         // 混ぜると、作り直す必要の無い図が件数を膨らませる。別の数として言う。
         if (counts['differ-format']) parts.push('体裁差のみ ' + counts['differ-format'] + ' 枚');
         if (counts['differ-content']) parts.push('食い違い ' + counts['differ-content'] + ' 枚');
@@ -15471,10 +15023,10 @@ function setupTabs() {
           var st = r.status || 'error';
           if (counts[st] === undefined) counts[st] = 0;
           counts[st]++;
-          // BLK-reviewer-20260908-1203-wish: 食い違った図は、その場で中身まで言う。
+          // 食い違った図は、その場で中身まで言う。
           // 材料 (今の puml と svg に書かれている文字) は server が添えてくる。
           if (st === 'differ-content' && SD && typeof r.pumlText === 'string') {
-            // BLK-reviewer-20260908-1303: 保存中の SVG と描き直した SVG を直に
+            // 保存中の SVG と描き直した SVG を直に
             // 比べる材料も渡す。渡さないと「文字の上で差なし」を「差なし」と
             // 言ってしまう (render は決定的なので、バイトが違う以上 差はある)。
             svgVerifyDiffs[name] = SD.compare(r.pumlText, r.svgLabels, {
@@ -15526,7 +15078,7 @@ function setupTabs() {
     step();
   }
 
-  // BLK-reviewer-20260908-0203-wish: 実データ / テンプレの内訳と、汚染したテンプレの名指し。
+  // 実データ / テンプレの内訳と、汚染したテンプレの名指し。
   // 「新規指摘が実データの変更かテンプレの汚染か」を、一覧を開いた時点で答える。
   function appendRoleSection(panel, dir) {
     var FR = window.MA.fileRole;
@@ -15622,7 +15174,7 @@ function setupTabs() {
     });
   }
 
-  // ── 自動保存の書き先を「図の名前」にする (BLK-primary-20260913-0306) ─────
+  // ── 自動保存の書き先を「図の名前」にする ─────
   // 自動保存は図種 (plantuml-sequence 等) を鍵にディスクへ写していたため、
   // driver_common_class を打てば plantuml-class.puml が、diagram1 を打てば
   // plantuml-sequence.puml が、開いてもいないのに同じ中身へ書き換わっていた。
@@ -15631,7 +15183,7 @@ function setupTabs() {
   (function setupAutosaveFileName() {
     var AS = window.MA.autoSave;
     if (!AS || !AS.setFileNameResolver) return;
-    // BLK-primary-20260914-2206: 書かなかったときは **訳も返す**。訳が無いと
+    // 書かなかったときは **訳も返す**。訳が無いと
     // 状態バーは「書けなかった」と「書く必要が無かった」を区別できず、💾 が
     // 「たった今」と出たまま保存フォルダの .puml は何時間でも変わらない。
     AS.setFileNameResolver(function(diagramType, dsl) {
@@ -15641,8 +15193,8 @@ function setupTabs() {
       var name = (doc && doc.name) || '';
       if (!name) return { name: '', reason: 'no-name' };
       if (WS.isValidName && !WS.isValidName(name)) return { name: '', reason: 'no-name' };
-      // BLK-owner-20260925-0312-2: ＋ で開いただけのタブ・図種を選んだだけのタブ (見本・白紙のまま) は
-      // ディスクへ書かない (手で押す保存と同じ門。saveActiveDoc の BLK-primary-20260914-2106)。
+      // ＋ で開いただけのタブ・図種を選んだだけのタブ (見本・白紙のまま) は
+      // ディスクへ書かない (手で押す保存と同じ門。saveActiveDoc の)。
       // 書くと空の .puml が保存フォルダに並び、次に図種が替わると `{名前}_{図種}.puml` が別に増える。
       if (typeof dsl === 'string' && _isUntouchedDoc({ dsl: dsl, diagramType: diagramType || currentDiagramType })) {
         return { name: '', reason: 'untouched' };
@@ -15661,14 +15213,14 @@ function setupTabs() {
             : { name: d.name, dir: _docDir(doc), docId: doc.id };
         }
       }
-      // BLK-human-20260925-1150: 書き先のフォルダもタブごと (保存先を替える前に開いたタブは開いたフォルダ)。
-      // BLK-owner-20260929-1111-1: まだ 1 度も書いていない新しい図は印を添える (既にある別の図へは書かない)。
-      // BLK-owner-20260930-0311-1: 書いたタブの印も添える (自分で書いた続きは図種の読みが替わっても別名へ回さない)。
+      // 書き先のフォルダもタブごと (保存先を替える前に開いたタブは開いたフォルダ)。
+      // まだ 1 度も書いていない新しい図は印を添える (既にある別の図へは書かない)。
+      // 書いたタブの印も添える (自分で書いた続きは図種の読みが替わっても別名へ回さない)。
       return doc.fresh ? { name: name, dir: _docDir(doc), freshId: doc.id, docId: doc.id }
         : { name: name, dir: _docDir(doc), docId: doc.id };
     });
 
-    // BLK-owner-20260929-1111-1: 新しい図の名前が保存先の別の図と重なった。書かずに名前を選ばせる。
+    // 新しい図の名前が保存先の別の図と重なった。書かずに名前を選ばせる。
     if (AS.onFileConflict) {
       AS.onFileConflict(function(info) {
         var WS = window.MA.workspace;
@@ -15700,7 +15252,7 @@ function setupTabs() {
     }
 
     // 返事待ちで書かなかった回は、その場で確認を出す。自動保存の側から聞かないと、
-    // 「打っているのにディスクに何も起きない」が黙って続く (ペルソナが 5 周詰まった形)。
+    // 「打っているのにディスクに何も起きない」が黙って続く (利用者が何度も詰まった形)。
     if (AS.onFileDeferred) {
       AS.onFileDeferred(function(info) {
         if (!info || info.reason !== 'ask') return;
@@ -15718,7 +15270,7 @@ function setupTabs() {
     }
   })();
 
-  // ── テンプレへの自動保存を止める (BLK-junior-20260908-1803) ──────────────
+  // ── テンプレへの自動保存を止める ──────────────
   // 見比べのために Open で開いたテンプレ (前周の完了物) へ、図名を変えるまでの間に
   // 自動保存が書き込み、編集途中の内容でテンプレが壊れる事故があった。
   // 汚染を後から赤く出す (テンプレ宣言) 仕組みは既にあるので、その宣言をそのまま
@@ -15747,7 +15299,7 @@ function setupTabs() {
       });
     }
 
-    // BLK-junior-20260908-2003: 図種が変わる保存は server が `{名前}_{図種}` へ回す。
+    // 図種が変わる保存は server が `{名前}_{図種}` へ回す。
     // 画面の図名をその先に合わせないと、次の保存も回り続け、図名と実ファイルが
     // ずれたまま「どこに保存されたか分からない」になる。
     if (AS.onFileRenamed) {
@@ -15803,7 +15355,7 @@ function setupTabs() {
     row.appendChild(box);
     if (window.MA.fileRole) row.appendChild(folderRoleButton(name));
     row.appendChild(b);
-    // BLK-reviewer-20260914-1406-wish: 名乗り (ファイル名の図種) と本文の図種が
+    // 名乗り (ファイル名の図種) と本文の図種が
     // 食い違う図だけに付く印。複製・貼り間違いを、全文を読む前にこの行で出す。
     // 行の末尾ではなく名前のすぐ隣に置く — 末尾はボタンが並んで押し出される。
     var km = folderKindMismatchBadge(name);
@@ -15818,11 +15370,11 @@ function setupTabs() {
     }
     if (window.MA.targetSet) row.appendChild(folderTargetButton(name));
     row.appendChild(folderDraftButton(name));
-    // BLK-junior-20260914-1106-wish: 同じ図種の枠に版が並ぶようになったので、
+    // 同じ図種の枠に版が並ぶようになったので、
     // 版は行の上で 1 文字で分かるようにする (名前の末尾を読み比べない)。
     var vr = folderVariantBadge(name);
     if (vr) row.appendChild(vr);
-    // BLK-junior-20260914-1206-wish: 指摘.md から見たこの図の立場。
+    // 指摘.md から見たこの図の立場。
     // 対象外なら開かずに次へ進める (自分と先輩の両方を開いて突き合わせない)。
     var nb = folderNoteBadge(name);
     if (nb) row.appendChild(nb);
@@ -15832,18 +15384,11 @@ function setupTabs() {
       row.setAttribute('data-note-hit', hit);
       if (hit === 'target') row.classList.add('folder-note-target');
     }
-    // BLK-reviewer-20260916-0326-wish: 他 persona の図と部品名が割れている印。
-    var cb = folderClashBadge(name);
-    if (cb) {
-      row.appendChild(cb);
-      row.classList.add('folder-clash-row');
-      row.setAttribute('data-clash-verdict', cb.getAttribute('data-clash-severity'));
-    }
     var kb = folderKindBadge(name);
     if (kb) row.appendChild(kb);
-    // BLK-owner-20260924-0637-1: 本文から読んだ図種を行に持たせる。FILES ツリーは名前に図種が無い図も
+    // 本文から読んだ図種を行に持たせる。FILES ツリーは名前に図種が無い図も
     // これで部品の側に数える (1 枚ずつ「0 / 6・未作成 6 図種」と出さない)。
-    // BLK-builder-20260924-1719-3: 保存したときの図種の控え (_kinds.json) があればそれを先に使う
+    // 保存したときの図種の控え (_kinds.json) があればそれを先に使う
     // (行のバッジと同じ順)。actor で始まるユースケース図は本文判定だとシーケンスに倒れ、
     // ツリーの部品フォルダで UC が「未作成」と読めていた。
     var ckSaved = window.MA.savedKind ? window.MA.savedKind.pick(savedKindByName, name) : '';
@@ -15851,13 +15396,13 @@ function setupTabs() {
     if (ck) b.setAttribute('data-content-kind', ck);
     var vb = folderVersionButton(name);
     if (vb) row.appendChild(vb);
-    // BLK-primary-20260914-1306-wish: 中身が同じ図の印と、1 枚だけ消すボタン。
+    // 中身が同じ図の印と、1 枚だけ消すボタン。
     var db = folderDupeBadge(name);
     if (db) row.appendChild(db);
-    // BLK-reviewer-20260914-1506-wish: 本体に入っていない下書きの印。
+    // 本体に入っていない下書きの印。
     var sb = folderSyncBadge(name);
     if (sb) row.appendChild(sb);
-    // BLK-reviewer-20260914-1806-wish: 本体 / 差し替え待ち / 削除予定。
+    // 本体 / 差し替え待ち / 削除予定。
     var qb = folderSwapBadge(name);
     if (qb) row.appendChild(qb);
     var xb = folderDeleteButton(name);
@@ -15865,7 +15410,7 @@ function setupTabs() {
     return row;
   }
 
-  // BLK-junior-20260908-2003: この保存先に何の図種が何枚あるか。0 枚の図種も出す。
+  // この保存先に何の図種が何枚あるか。0 枚の図種も出す。
   // 「前の周に作ったはずの状態遷移図が見当たらない」を、一覧を目で舐めるのではなく
   // この 1 行で終わらせる (無いなら無いと分かるのが手順 1 の答えになる)。
   function appendKindSummary(host) {
@@ -15879,7 +15424,7 @@ function setupTabs() {
     host.appendChild(line);
   }
 
-  // BLK-reviewer-20260914-1406-wish: ファイルが名乗っている図種 (plantuml-usecase) と、
+  // ファイルが名乗っている図種 (plantuml-usecase) と、
   // 本文が実際に描く図種の食い違い。中身が別の図で塗り潰される事故は、これまで
   // 31 枚の DSL を 1 枚ずつ読むまで誰にも見えなかった。
   // 1 枚分の材料。本文を取り寄せてある図は本文で判定する
@@ -15976,7 +15521,7 @@ function setupTabs() {
     var DK = window.MA.diagramKind;
     var SK = window.MA.savedKind;
     if (!DK) return null;
-    // BLK-junior-20260912-2103-wish: 控えがあれば、それをこのまま開く図種として出す。
+    // 控えがあれば、それをこのまま開く図種として出す。
     // 控えの無い図だけ、今までどおり本文からの判定を出す。
     var saved = SK ? SK.pick(savedKindByName, name) : '';
     var badge = saved && SK ? SK.badge(saved) : null;
@@ -16000,7 +15545,7 @@ function setupTabs() {
     return el;
   }
 
-  // BLK-junior-20260908-2003: 同じ名前に別の図を保存すると前の中身は消える。
+  // 同じ名前に別の図を保存すると前の中身は消える。
   // server は上書きの直前に控えを取るので、その版を一覧から開けるようにする。
   // 版が無い図にはボタンを出さない (押しても何も無い行を増やさない)。
   function folderVersionButton(name) {
@@ -16016,7 +15561,7 @@ function setupTabs() {
     b.title = 'この図の履歴を開く (この名前で上書きされる前の中身。図種を変えて保存し直した前の図もここに残っています)';
     b.addEventListener('click', function(ev) {
       ev.stopPropagation();
-      // BLK-owner-20260924-2157-prune: 保存先が Git なら「この図の履歴」は FILES の GIT 節の 1 つ
+      // 保存先が Git なら「この図の履歴」は FILES の GIT 節の 1 つ
       // (コミットと控えが同じ一覧に並ぶ)。その図を開いてから GIT 節の履歴へ移り、窓は開かない。
       var gu = window.MA.gitUi;
       var fm = window.MA.fileMenuUi;
@@ -16024,7 +15569,7 @@ function setupTabs() {
         fm.runFile('history', name);
         return;
       }
-      // BLK-owner-20260923-2312-prune: 版の一覧は一覧の中に開かず、「この図の履歴」1 つに寄せる。
+      // 版の一覧は一覧の中に開かず、「この図の履歴」1 つに寄せる。
       toggleVersionTimeline(true, name);
     });
     return b;
@@ -16066,7 +15611,7 @@ function setupTabs() {
     });
   }
 
-  // 版を今の図に流し込む (BLK-primary-20260913-0306-friction)。
+  // 版を今の図に流し込む。
   // 開いていない図なら先に開いてから当てる — 当てる先がタブとして見えていないと、
   // 「戻した」のがどの図なのかが画面のどこにも出ない。
   // 当てるのは _applyLineEditText なので、undo 1 手で戻せて保存フォルダにも書かれる
@@ -16110,7 +15655,7 @@ function setupTabs() {
     });
   }
 
-  // 版を今の図の右に並べる (BLK-owner-20260923-2312-prune)。版は刻印付きの別タブとして
+  // 版を今の図の右に並べる。版は刻印付きの別タブとして
   // 開き (今の図を過去の中身で塗り潰さない)、今の図に戻ってから並べて比較の参照に据える。
   function compareVersion(name, stamp) {
     var VH = window.MA.versionHistory;
@@ -16209,7 +15754,7 @@ function setupTabs() {
     return b;
   }
 
-  // BLK-reviewer-20260914-2106-wish: 印 (@pua-source-sha1) が食い違った 1 枚に付く [可視差分]。
+  // 印 (@pua-source-sha1) が食い違った 1 枚に付く [可視差分]。
   // 印だけでは「コメント行を足しただけの見かけ上の stale」と「実質的な内容変更」が
   // 同じ「内容ずれ」に見える。旧 SVG と描き直した SVG を並べて切り分ける画面をここから開く。
   function folderSvgVisualButton(name) {
@@ -16254,7 +15799,7 @@ function setupTabs() {
     return b;
   }
 
-  // BLK-junior-20260908-0630-wish: 「未反映だけ選ぶ」。指摘が残っている図だけに
+  // 「未反映だけ選ぶ」。指摘が残っている図だけに
   // 印を付けるので、手順 9 の「一覧から名前を読み比べて探し直す」が 1 押しになる。
   function pendingNames() {
     var RS = window.MA.reviewState;
@@ -16279,7 +15824,7 @@ function setupTabs() {
     return b;
   }
 
-  // BLK-primary-20260908-1703: 一覧を開いた瞬間に「対象 14 枚のうち何枚あるか /
+  // 一覧を開いた瞬間に「対象 14 枚のうち何枚あるか /
   // どれが足りないか」を見出しで言う。未登録のときも黙らず、登録の入口を出す
   // (「まだ数えていない」と「揃っている」を取り違えないため)。
   function appendTargetSection(host, dir) {
@@ -16329,7 +15874,7 @@ function setupTabs() {
     host.appendChild(bar);
   }
 
-  // BLK-owner-20260918-0049-prune: 部品 × 6 図種の済/未は 🧩 部品ビューに寄せた
+  // 部品 × 6 図種の済/未は 🧩 部品ビューに寄せた
   // (📂 一覧・👀 他フォルダ・🧩 部品ビューの 3 か所で同じ表を読ませない)。
   // ここに残すのは、そこへ 1 押しで行く導線だけ。
   function appendInventorySection(host) {
@@ -16368,7 +15913,7 @@ function setupTabs() {
   }
 
   // 一覧の頭に出す 1 行。0 件でも黙らない (「指摘が無い」と「数えていない」は別物)。
-  // BLK-junior-20260914-1206-wish: 指摘.md を一覧の側から読み、図 1 枚ずつに
+  // 指摘.md を一覧の側から読み、図 1 枚ずつに
   // 対象外 / ⚠未確認 / ✅対応済み を付ける。手順 1〜2 は「対象外の行は開かず次へ」で
   // 済み、指摘の無い図ごとに自分と先輩の両方を開いて突き合わせる往復が消える。
   function appendNoteSection(host, dir) {
@@ -16389,7 +15934,7 @@ function setupTabs() {
     noteBoardScan(dir);
   }
 
-  // BLK-junior-20260914-1306: 図名も図種も書かれていない指摘は、どの図にも割り当てられない。
+  // 図名も図種も書かれていない指摘は、どの図にも割り当てられない。
   // 件数だけを言われても「自分宛か」は指摘.md を GUI の外で開いて全文を読むまで分からず、
   // 一覧のバッジで手順 1 が終わる周でも、この数件だけテキストファイルを読む用が残っていた。
   // 宛先を機械で言えるところまで言い、本文はその場で開けるようにする。
@@ -16465,7 +16010,7 @@ function setupTabs() {
     el.setAttribute('data-note-status', st.key);
     el.textContent = st.mark;
     el.title = st.title;
-    // BLK-junior-20260924-1632-wish: FILES ツリーの札はこの行を読んで出す (判定する所を 2 つにしない)。
+    // FILES ツリーの札はこの行を読んで出す (判定する所を 2 つにしない)。
     // まだ確かめられない最初の 1 件の見出しと、その件が指す本文の語、その件数を持たせる。
     if (st.head) el.setAttribute('data-note-head', st.head);
     if (st.term) el.setAttribute('data-note-term', st.term);
@@ -16473,7 +16018,7 @@ function setupTabs() {
     return el;
   }
 
-  // BLK-junior-20260924-1632-wish: FILES ツリーの札を押したとき。指摘が指す図を開き (保存先の一覧の行を
+  // FILES ツリーの札を押したとき。指摘が指す図を開き (保存先の一覧の行を
   // 押したときと同じ開き方)、開けたら指摘の語をエディタで選んで見せる。語が無ければ開くだけ。
   window.MA.openNoteFinding = function(name, term) {
     var q = (window.CSS && window.CSS.escape) ? window.CSS.escape(String(name)) : String(name);
@@ -16581,62 +16126,12 @@ function setupTabs() {
     });
     return Promise.all(jobs).then(function() {
       var ok = RD.save(_reviewStore(), dir, bodies);
-      // 本文と一緒に「そのとき出ていた指摘一覧」と「監査の構え」も控える。
-      // 次の review で図が 1 行も変わっていなければ、この一覧をそのまま
-      // 今回の指摘として複製できる (BLK-reviewer-20260907-2203-wish)。
-      var RC = window.MA.reviewCarry;
-      if (RC) {
-        RC.save(_reviewStore(), dir, RC.makeRecord(
-          RC.collectPins(window.MA.reviewPins, bodies),
-          RC.signature(window.MA),
-          new Date().toISOString()
-        ));
-      }
       return ok;
     });
   }
 
-  // 無変更確定 (BLK-reviewer-20260907-2203-wish)。
-  // 「変更図 0 枚」を確かめた直後に、前回の指摘一覧をそのまま今回の指摘にする。
-  // 図が無変更でも監査ツール側が変わっていれば新しい指摘が出るので、そのときは
-  // 複製せずに再突合を促す。
-  function appendCarrySection(dir, rows) {
-    var RC = window.MA.reviewCarry;
-    if (!RC) return;
-    var store = _reviewStore();
-    var prev = RC.load(store, dir);
-    var p = RC.plan(prev, { rows: rows, signature: RC.signature(window.MA) });
-
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'folder-carry';
-    btn.setAttribute('data-carry-ok', p.ok ? '1' : '0');
-    btn.setAttribute('data-carry-reason', p.reason);
-    btn.setAttribute('data-carry-count', String(p.count));
-    btn.textContent = '前回の指摘をそのまま今回の指摘にする（' + p.count + ' 件）';
-    btn.title = '前回 review 時点から図が 1 行も変わっていないとき、前回の指摘一覧を複製して'
-      + '「' + RC.NOTE + '」を 1 行付けて確定する';
-    btn.disabled = !p.ok;
-    btn.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      var rec = RC.carry(prev, new Date().toISOString(), RC.signature(window.MA));
-      if (!rec) return;
-      RC.save(store, dir, rec);
-      if (window.MA.toast) window.MA.toast.show('無変更として確定しました（' + RC.statusText(rec) + '）');
-      renderFolderPanel();
-    });
-    panel.appendChild(btn);
-
-    var note = document.createElement('div');
-    note.className = 'folder-carry-note' + (p.recheck ? ' recheck' : '');
-    note.setAttribute('data-carry-reason', p.reason);
-    note.textContent = (prev && prev.carriedFrom && p.ok ? '確定済み: ' + RC.statusText(prev) + ' / ' : '')
-      + p.message;
-    panel.appendChild(note);
-  }
-
   // 名前で絞り込む欄。数文字打てば候補がその 1 枚になり、Enter でそのまま開ける。
-  // BLK-junior-20260915-2346: 一覧の上端に「最近開いた図」を置く。同じ図への出戻りは
+  // 一覧の上端に「最近開いた図」を置く。同じ図への出戻りは
   // 20 枚超の行から名前を目で探すのではなく、ここを 1 回押せば済む。
   // 履歴が空のとき (その run で初めて一覧を開いたとき) は行ごと出さないので、
   // 普段の一覧は今までのまま。
@@ -16688,7 +16183,7 @@ function setupTabs() {
       applyFolderFilter();
     });
     input.addEventListener('keydown', function(ev) {
-      // 空の欄での Esc は一覧を閉じる側へ通す (中央の枠に開いた一覧、BLK-owner-20260924-0637-1)。
+      // 空の欄での Esc は一覧を閉じる側へ通す (中央の枠に開いた一覧)。
       if (ev.key === 'Escape') {
         if (!input.value) return;
         ev.stopPropagation(); input.value = ''; folderQuery = ''; applyFolderFilter(); return;
@@ -16700,7 +16195,7 @@ function setupTabs() {
       if (only) openFromFolder(only);
     });
     bar.appendChild(input);
-    // BLK-reviewer-20260916-0426-wish: 「変化なし」の付いた図を畳む。
+    // 「変化なし」の付いた図を畳む。
     // 印が付いた図は前回の指摘をそのまま転記するので、読む図だけが残る。
     var hide = document.createElement('label');
     hide.className = 'folder-stamp-hide';
@@ -16723,7 +16218,7 @@ function setupTabs() {
     state.className = 'folder-filter-state';
     state.id = 'folder-filter-state';
     bar.appendChild(state);
-    // BLK-junior-20260916-0546: 一覧は保存先フォルダだけを見せている。
+    // 一覧は保存先フォルダだけを見せている。
     // 先輩の図をここで探していた人は「無い」で止まるか、保存先ごと切り替えて
     // 上書き事故の危险を背負うしかなかった。読むだけの入口をこの場に置き、
     // 打った名前をそのまま持ち越す (保存先は動かない)。
@@ -16731,7 +16226,7 @@ function setupTabs() {
     peek.type = 'button';
     peek.className = 'folder-peek-open';
     peek.id = 'folder-peek-open';
-    // BLK-owner-20260924-1836-prune: 入口の名前は FILES「読むだけ」の目の印と同じ (何をするかで呼ぶ)。
+    // 入口の名前は FILES「読むだけ」の目の印と同じ (何をするかで呼ぶ)。
     peek.textContent = '読むだけのフォルダの図を調べる…';
     peek.title = '保存先を変えずに、他の人のフォルダの図を読むだけ見る。'
       + '絞り込んでいる名前はあちらへそのまま渡る';
@@ -16802,7 +16297,7 @@ function setupTabs() {
       if (on && stampHide && stampMarks[name]) on = false;
       host.style.display = on ? '' : 'none';
       if (on) shown++;
-      // BLK-junior-20260916-2314: 打った名前と丸ごと同じ図は「完全一致」の印を付けて先頭に出す
+      // 打った名前と丸ごと同じ図は「完全一致」の印を付けて先頭に出す
       // (同じ接頭辞の「…(資料用)」より上。部分一致の行は消さずに下に残す)。
       if (host.getAttribute('data-ff-order') == null) host.setAttribute('data-ff-order', String(i));
       var ex = on && FF.exactMatch && FF.exactMatch(name, folderQuery);
@@ -16842,26 +16337,15 @@ function setupTabs() {
     // 一覧は長いと縦にスクロールする。開くボタンを末尾に置くと 14 枚のときに
     // 画面の外へ出るので、印を付ける行の上に固定して常に見えるようにする。
     bar.appendChild(folderOpenButton());
-    // BLK-primary-20260914-1806-wish: 印を付けた図を、開かずにそのまま zip にする。
+    // 印を付けた図を、開かずにそのまま zip にする。
     // 「開く」の隣に置く —— どちらも「印を付けた図をどうするか」のボタンで、
     // 資料を作る場面では開かずに出せることがここで分かる必要がある。
     bar.appendChild(folderExportButton());
-    // BLK-reviewer-20260916-0326-wish: 他 persona の図と部品名を突き合わせる。
-    // 「印を付けた図をどうするか」の隣ではなく最後に置く —— 対象は印ではなく
-    // フォルダ全体で、押すと一覧の各行に「誰と衝突しているか」の印が付く。
-    bar.appendChild(folderClashButton());
-    // BLK-reviewer-20260917-0323-wish: 突合の入口をもう 1 つ。突合対象が
+    // 突合の入口をもう 1 つ。突合対象が
     // 「フォルダの 24 枚」ではなく「メソッド 1 個」のときはここから入る。
     bar.appendChild(folderCallGraphButton());
     return bar;
   }
-
-  // ── 他 persona との部品名衝突 (BLK-reviewer-20260916-0326-wish) ──────────
-  // 表記揺れはグループ単位でしか出ないので、Clock_Ctrl ⇔ ClockCtrl が自分の中
-  // だけの揺れなのか相手の図とぶつかっているのかは、グループの図を 1 枚ずつ
-  // 開いて誰のフォルダかを見るまで分からなかった (前回の run はそれを取り違えた)。
-  // 一覧の行に「誰と衝突しているか」を出し、突合対象をコマンドで組み立てて
-  // 全文を読み直す手順ごと無くす。
 
   // 呼び出し関係を辿る画面へ。印にも枚数にも紐づかない「メソッド 1 個から引く」入口。
   function folderCallGraphButton() {
@@ -16876,105 +16360,6 @@ function setupTabs() {
       openCallGraph();
     });
     return b;
-  }
-
-  function folderClashButton() {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-clash-run';
-    b.id = 'folder-clash-run';
-    b.textContent = '他personaと突合';
-    b.title = '隣の persona のフォルダの図まで読んで、部品名の表記が割れている図に印を付けます';
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      runNameClash();
-    });
-    return b;
-  }
-
-  // 全 persona のフォルダの本文を読んで突き合わせる。押されるまで読まない
-  // (フォルダ数 × 枚数の読み込みを、見る気になっていない段階で走らせない)。
-  function runNameClash() {
-    var NC = window.MA.nameClash;
-    var WS = window.MA.workspace;
-    if (!NC || !WS || nameClashBusy) return Promise.resolve(null);
-    nameClashBusy = true;
-    renderFolderPanel();
-    var dirs = _peekDirs.slice();
-    if (!dirs.length) dirs = [{ path: _wsFileDir(), name: _noteMineFolder() || '自分', current: true }];
-    return Promise.all(dirs.map(function(d) {
-      return WS.listFiles(d.path).then(function(names) {
-        return Promise.all((names || []).filter(function(n) { return n; }).map(function(n) {
-          return WS.loadFile(n, d.path).then(function(text) {
-            return { name: d.name + '/' + n, persona: d.name, _file: n, _dir: d.path,
-                     _current: !!d.current, dsl: typeof text === 'string' ? text : '' };
-          }).catch(function() { return null; });
-        }));
-      }).catch(function() { return []; });
-    })).then(function(sets) {
-      var docs = [];
-      sets.forEach(function(rows) {
-        (rows || []).forEach(function(r) { if (r) docs.push(r); });
-      });
-      nameClashRes = NC.audit(docs);
-      // 一覧の行はこのフォルダのファイル名なので、自分の図だけ名前で引けるようにする。
-      nameClashMine = {};
-      docs.forEach(function(d) {
-        if (d._current) nameClashMine[d._file] = nameClashRes.byDoc[d.name];
-      });
-      nameClashBusy = false;
-      renderFolderPanel();
-      return nameClashRes;
-    }, function() {
-      nameClashBusy = false;
-      nameClashRes = null;
-      renderFolderPanel();
-      return null;
-    });
-  }
-
-  function folderClashBadge(name) {
-    var NC = window.MA.nameClash;
-    if (!NC || !nameClashRes) return null;
-    var b = NC.badge(nameClashMine[name]);
-    if (!b) return null;
-    var el = document.createElement('span');
-    el.className = 'folder-clash folder-clash-' + b.severity;
-    el.setAttribute('data-clash', name);
-    el.setAttribute('data-clash-severity', b.severity);
-    el.textContent = b.mark + ' ' + b.label;
-    el.title = b.title;
-    return el;
-  }
-
-  // 一覧の下の 1 行。何枚を照合しての結果かを必ず書く (照合していないだけの
-  // 0 件と読み分けられないと、結局 audit を回し直すことになる)。
-  function appendNameClashSummary(host) {
-    var NC = window.MA.nameClash;
-    if (!NC) return;
-    var line = document.createElement('div');
-    line.id = 'folder-name-clash';
-    line.className = 'folder-name-clash ' + NC.summaryClass(nameClashRes);
-    line.textContent = nameClashBusy
-      ? '他の persona のフォルダを読んでいます…'
-      : NC.summaryLine(nameClashRes);
-    line.title = '「他personaと突合」を押すと、隣のフォルダの図まで読んで部品名を突き合わせます';
-    host.appendChild(line);
-
-    // 衝突している組は、相手側の綴りと図の名前まで出す。ここで名指ししないと
-    // 「どの図が相手側か」を確かめるために結局 1 枚ずつ開くことになる。
-    var lines = NC.crossLines(nameClashRes);
-    if (!lines.length) return;
-    var box = document.createElement('div');
-    box.id = 'folder-clash-lines';
-    box.className = 'folder-clash-lines';
-    lines.forEach(function(t) {
-      var row = document.createElement('div');
-      row.className = t.charAt(0) === ' ' ? 'fc-line fc-where' : 'fc-line fc-group';
-      row.textContent = t.trim();
-      box.appendChild(row);
-    });
-    host.appendChild(box);
   }
 
   function folderExportButton() {
@@ -17079,7 +16464,7 @@ function setupTabs() {
       open.textContent = FS.openLabel(folderPicked, folderNames, _openDocNames());
       open.disabled = FS.toOpen(folderPicked, folderNames, _openDocNames()).length === 0;
     }
-    // BLK-primary-20260914-1806-wish: 書き出しは「開いていない図」も対象なので、
+    // 書き出しは「開いていない図」も対象なので、
     // 枚数は印そのものの数 (開く側と違い、開いているタブを引かない)。
     var exp = panel.querySelector('.folder-export-svg');
     var FE = window.MA.folderExport;
@@ -17090,7 +16475,7 @@ function setupTabs() {
     }
   }
 
-  // 資料セット (BLK-primary-20260914-2006-wish) が「今の対象」を読む口。
+  // 資料セット が「今の対象」を読む口。
   // 印が付いていればその図、付いていなければ一覧の全部 (= 保存フォルダの全図)。
   // 一覧を開いていなくても登録できるように、名前だけを返す。
   _dsFolderTarget = function() {
@@ -17111,7 +16496,7 @@ function setupTabs() {
       badge.title = bdg.title;
       b.appendChild(badge);
     }
-    // BLK-reviewer-20260916-0426-wish: 前回控えから 1 バイトも変わっていない図の印。
+    // 前回控えから 1 バイトも変わっていない図の印。
     // ＋ / ● と同じ位置に置く —— 行を上から舐めるとき、印の有無が 1 列で読める。
     var sm = stampMarks[name];
     if (sm) {
@@ -17140,12 +16525,12 @@ function setupTabs() {
       rb.title = RS.badgeTitle(rc);
       b.appendChild(rb);
     }
-    // BLK-reviewer-20260908-1103: 印は内容での判定を優先する。mtime が古くても
+    // 印は内容での判定を優先する。mtime が古くても
     // 中身が今の puml と一致している図は読める図なので、印を付けない
     // (逆に、内容がずれている図は mtime に関わらず名指しする)。
     var SF = window.MA.svgFreshness;
     var content = svgContent[name];
-    // BLK-reviewer-20260908-2003-wish: 印の無い図 (unverified) もここに出す。
+    // 印の無い図 (unverified) もここに出す。
     // 出ていない間、その 1 枚がどれかは行からは分からず、audit.js を回して
     // 突き止めるしかなかった。「未刻印」は作り直しの催促ではなく、
     // 「この一覧では言えない 1 枚」の名指しとして出す。
@@ -17158,7 +16543,7 @@ function setupTabs() {
       contentBadge.title = cb.title;
       b.appendChild(contentBadge);
     }
-    // BLK-reviewer-20260915-0406-wish: 内容で一致が取れた図からは印が全部消えるので、
+    // 内容で一致が取れた図からは印が全部消えるので、
     // 「mtime も新しい図」と「mtime は古いが中身は追いついている図」が同じ無印になる。
     // reviewer は指摘.md を書く前にその区別を付けるため、9 枚を render API で
     // 描き直してバイト比較していた。第三の印として行に出す (作り直しの催促ではない)。
@@ -17180,7 +16565,7 @@ function setupTabs() {
       svgBadge.title = sb.title;
       b.appendChild(svgBadge);
     }
-    // BLK-reviewer-20260908-0923-wish: 読み始める前に、その 1 枚が今も
+    // 読み始める前に、その 1 枚が今も
     // 書き換えられている最中かどうかが行の上で分かるようにする。
     var WA = window.MA.writeActivity;
     if (WA && writeStatus[name] && writeStatus[name] !== 'settled') {
@@ -17201,7 +16586,7 @@ function setupTabs() {
       t.title = 'puml の最終保存時刻';
       b.appendChild(t);
     }
-    // BLK-reviewer-20260908-2003-wish: puml の保存時刻の隣に SVG の書き出し時刻。
+    // puml の保存時刻の隣に SVG の書き出し時刻。
     // 「puml は直っているが SVG だけ古い」を、行を見るだけで言えるようにする。
     var RW = window.MA.reviewWatch;
     if (RW && RW.formatMtime) {
@@ -17213,7 +16598,7 @@ function setupTabs() {
       st.title = svgAt ? 'SVG を書き出した時刻' : 'この図の SVG が保存フォルダにありません';
       b.appendChild(st);
     }
-    // BLK-reviewer-20260908-2003-wish (2303/0203 追記): 2 つの時刻の隣に、その SVG の
+    // 2 つの時刻の隣に、その SVG の
     // 文字が今の puml と一致しているか。時刻だけでは「保存し直しただけ」と「中身が
     // 追いついていない」が同じ「古い」に見えるので、突合の答えを行に置く。
     var cmp = svgCompare[name];
@@ -17229,9 +16614,9 @@ function setupTabs() {
       lb.title = SCR2 && SCR2.rowTitle ? SCR2.rowTitle(cmp) : cmp.title;
       b.appendChild(lb);
     }
-    // BLK-reviewer-20260914-0906-wish: その svg が「どの図の絵か」。
+    // その svg が「どの図の絵か」。
     // 相手が分かる図にだけ出す (分からない図は上の「内容ずれ」のまま)。
-    // BLK-reviewer-20260914-1106-wish: この図の遷移ラベル / メッセージ名で
+    // この図の遷移ラベル / メッセージ名で
     // クラスに宣言が無いもの。上の束ねた行と同じ答えを行の側にも置く
     // (一覧を絞り込んで読んでいるときに、束ねた行が視界の外へ出るため)。
     var PC3 = window.MA.partCross;
@@ -17257,7 +16642,7 @@ function setupTabs() {
       b.appendChild(xb);
     }
     if (bdg && bdg.title) b.title = bdg.title + (mtime ? '（最終保存 ' + mtime + '）' : '');
-    // BLK-primary-20260924-0805-design (design 10a): 1 回押しは仮のタブで開き (見て回るだけならタブが積もらない)、
+    // 1 回押しは仮のタブで開き (見て回るだけならタブが積もらない)、
     // ダブルクリックで固定のタブにする。
     b.addEventListener('click', function() { openFromFolder(name, { preview: true }); });
     b.addEventListener('dblclick', function() { pinDocByName(name); });
@@ -17266,12 +16651,12 @@ function setupTabs() {
 
   document.addEventListener('click', function(ev) {
     if (!panel.classList.contains('open')) return;
-    if (_listOpening) return;   // 一覧を開いたクリックそのもの (BLK-primary-20260929-0551)
+    if (_listOpening) return;   // 一覧を開いたクリックそのもの
     if (panel.contains(ev.target) || ev.target === btnFolder) return;
     // design 10a: 一覧はレール右のツリーの中にある。ツリーの他の節を押した
     // だけで畳むと、「開いている図」を 1 つ選ぶたびに保存先を開き直すことになる。
     if (ev.target && ev.target.closest && ev.target.closest('#files-panel')) return;
-    // BLK-reviewer-20260914-2106-wish: 可視差分は一覧の行から開く。ここで一覧まで
+    // 可視差分は一覧の行から開く。ここで一覧まで
     // 閉じると、2 枚目を確かめるたびに一覧を開き直すことになる (確かめる図は複数ある)。
     var vm = document.getElementById('svg-visual-modal');
     // 閉じるを押した時点でモーダルは既に display:none なので、表示中かどうかは見ない
@@ -17281,7 +16666,7 @@ function setupTabs() {
   });
 }
 
-// ── 変更図の差分ビュー (BLK-reviewer-20260907-1803-wish) ──────────────────
+// ── 変更図の差分ビュー ──────────────────
 // 一覧の [差分] から開く。前回「見たことにする」で控えた本文を旧版として、
 // 保存フォルダの今の本文と左右に並べる。変わっていない行は畳んでおく
 // (無変更の行を読み直す作業そのものを無くすのがこの画面の目的)。
@@ -17291,17 +16676,17 @@ var _rdName = '';
 // パネル側で実体を差し込む (パネルを作る前に押される画面は無い)。
 var openFromFolderByName = function() {};
 // 資料化のように、パネルの外で保存フォルダを書き換える操作から一覧を描き直すための口
-// (BLK-junior-20260908-2303-wish)。パネルを開いていなければ何もしない。
+// パネルを開いていなければ何もしない。
 var refreshFolderPanelNow = function() {};
-// 保存先を変えた直後に、開閉に関わらず一覧を新しいフォルダで読み直す口 (BLK-builder-20260924-2152-2-red)。
+// 保存先を変えた直後に、開閉に関わらず一覧を新しいフォルダで読み直す口。
 var reloadFolderListNow = function() {};
-// 保存先の一覧に並べた顔ぶれがディスクと違えば読み直す口 (BLK-owner-20260926-0550-3)。
+// 保存先の一覧に並べた顔ぶれがディスクと違えば読み直す口。
 var syncFolderListNow = function() { return Promise.resolve(false); };
 // 保存先の版 (server の _versions) を読む・開く・並べる・戻す道具。「この図の履歴」が使う
-// (BLK-owner-20260923-2312-prune)。保存先の一覧の結線 (setupTabs) で入る。
+// 保存先の一覧の結線 (setupTabs) で入る。
 var _versionsApi = null;
 var filterFolderPanelNow = function() {};
-// BLK-junior-20260915-2346: 直前に開いた図の名前 (新しい順)。Ctrl+K からも
+// 直前に開いた図の名前 (新しい順)。Ctrl+K からも
 // 一覧を開かずに同じ図へ戻れるように、パネルの外へ読み口だけ出す。
 var recentOpenedNames = function() { return []; };
 
@@ -17318,7 +16703,7 @@ function closeReviewDiff() {
   if (m) m.style.display = 'none';
 }
 
-// ── 可視差分プレビュー (BLK-reviewer-20260914-2106-wish) ────────
+// ── 可視差分プレビュー ────────
 // 一覧の行の [可視差分] から開く。保存中の SVG と、今の puml を描き直した SVG を
 // 左右に並べ、追加・削除・移動したものだけを光らせる。
 // stale (印の不一致) が出たとき、それがコメント行の追加などによる
@@ -17602,7 +16987,7 @@ function _renameDocs() {
   return window.MA.workspace ? window.MA.workspace.list() : [];
 }
 
-// BLK-primary-20260907-1903-wish: 置換の前に影響範囲を読む。ヒット数だけでは
+// 置換の前に影響範囲を読む。ヒット数だけでは
 // 「この名前を変えると何が壊れるか」が分からず、置換してから全タブを開いて
 // 見比べる往復が要った。図種 × 関係の内訳を置換前に出して、その往復を無くす。
 function renderRenameImpact(docs, from) {
@@ -17648,7 +17033,7 @@ function renderRenameImpact(docs, from) {
     roles.textContent = r.summary;
     item.appendChild(line);
     item.appendChild(roles);
-    // BLK-primary-20260907-2003-wish: 内訳だけでは「この図のどの記述が対象か」が
+    // 内訳だけでは「この図のどの記述が対象か」が
     // 分からず、結局タブを開いて目で探すことになる。出現行そのものを並べ、
     // 押したらその図のその行へキャレットを運ぶ。
     (r.lines || []).forEach(function(h) {
@@ -17675,7 +17060,7 @@ function renderRenameImpact(docs, from) {
   box.appendChild(rows);
 }
 
-// BLK-primary-20260909-0103-wish: 影響プレビューは行を 1 つの役割に決めるので、
+// 影響プレビューは行を 1 つの役割に決めるので、
 // 「遷移の端点」と「遷移のイベント名」が同じ 1 本になる。壊れ方が違うのに同じ
 // 数字では、置換後に開いて確かめる図を絞れない。出現 1 個ずつを意味で呼び分け、
 // 役割ごとに参照元の図を並べ、押せばその行へ運ぶ。
@@ -17779,7 +17164,7 @@ function jumpToDocLine(docId, line) {
   _traceScrollToLine(line);
 }
 
-// BLK-primary-20260907-2003-wish: 「戻り値型を void から StatusType に変える」
+// 「戻り値型を void から StatusType に変える」
 // のような仕様変更は、綴りが変わらないので一括置換では当てられない。宣言行が
 // 見つかったときだけ、戻り値・引数を 1 回で全図に当てる欄を出す。
 function renderSignatureApply(docs, from) {
@@ -17906,7 +17291,7 @@ function applySignatureChange(name, spec) {
   updateLineNumbers();
   scheduleRefresh();
   renderTabs();
-  // 保存フォルダ運用時は、置換が当たった図だけを書き出す (BLK-primary-20260913-0206)。
+  // 保存フォルダ運用時は、置換が当たった図だけを書き出す。
   writeChangedToFolder(res.changed);
   if (window.MA.toast) {
     try { window.MA.toast.show(res.updated + ' 行 / ' + res.changed.length + ' 枚に適用しました'); } catch (e) {}
@@ -17916,7 +17301,7 @@ function applySignatureChange(name, spec) {
 }
 
 // ── 開いていない図も含めた影響範囲 ─────────────────────────────────────────
-// BLK-primary-20260908-0723-wish: ヒット数が今開いているタブ分しか出ないので、
+// ヒット数が今開いているタブ分しか出ないので、
 // 「仕様変更が全図に及んだか」を確かめるには残りを 1 枚ずつ開き直すしかなかった。
 // 保存フォルダを先に全部数え、ヒットした図・しなかった図を一覧で出す。
 // 置換もこの一覧の的 (テンプレを除く) にそのまま当てるので、開き直す手順が要らない。
@@ -17953,7 +17338,7 @@ function loadFolderImpact(force) {
     var names = ((info && info.entries) || []).map(function(e) {
       return e && typeof e === 'object' ? e.name : e;
     }).filter(function(n) { return n; });
-    // BLK-primary-20260912-2103-wish: 変更サマリボードが「基準より後に更新された
+    // 変更サマリボードが「基準より後に更新された
     // ファイル」を選ぶのに mtime が要る。一覧と同じ応答に載っているので拾っておく。
     var mtimes = {};
     ((info && info.entries) || []).forEach(function(e) {
@@ -17992,7 +17377,7 @@ function _fiRows() {
   return FI.merge(open, _fiFileDocs, _fiRoles);
 }
 
-// ── 改名履歴タイムライン (BLK-primary-20260908-2103-wish) ────────────────────
+// ── 改名履歴タイムライン ────────────────────
 // 影響プレビューは「今」のヒット数しか出さないので、ヒット 0 件が「置換済みだから 0」
 // なのか「元から無いから 0」なのかを区別できず、旧称が残っていないかを確かめるには
 // 図を 1 枚ずつ開いて中身を読むしかなかった。置換したときの記録を残し、部品名で
@@ -18012,7 +17397,7 @@ function _recordRename(from, to, docs) {
   } catch (e) { /* 履歴が残せなくても置換自体は通す */ }
 }
 
-// 置換を当てる直前の本文を、当たった図だけ控える (BLK-primary-20260908-2203-wish)。
+// 置換を当てる直前の本文を、当たった図だけ控える。
 // docs は置換前の [{ id, name, dsl }]、changed は置換で変わった [{ id, dsl }]。
 function _captureBeforeRename(from, to, docs, changed) {
   var BS = window.MA.beforeSnapshot;
@@ -18028,7 +17413,7 @@ function _captureBeforeRename(from, to, docs, changed) {
   } catch (e) { /* 控えが残せなくても置換自体は通す */ }
 }
 
-// ── 保存フォルダへの書き込み履歴 (BLK-primary-20260914-1206-wish) ───────────
+// ── 保存フォルダへの書き込み履歴 ───────────
 // ⇄ 一括置換・🔖 指摘から選ぶの [適用] はタブを開かずに保存フォルダへ書き戻すので、
 // 「その図を開いていたセッション」の中でしか残らない変更前の控え (before-snapshot)
 // では後から前後を出せない。書き込み操作 1 回ぶんを、当たった図の前後の本文ごと
@@ -18045,7 +17430,7 @@ function _recordWrite(kind, meta, pairs) {
   } catch (e) { return null; }   // 控えが残せなくても書き込み自体は通す
 }
 
-// ── 過去の置換の組 (BLK-primary-20260914-1106-friction) ─────────────────────
+// ── 過去の置換の組 ─────────────────────
 // ヒット件数は置換前・置換後を打ち終えてからしか出ないので、同じ組を当て直す
 // 運用では「もう残っていないこと」を確かめるためだけに毎回打ち直していた。
 // パネルを開いた時点で、過去の組と今の残存件数を並べる。残っている組を押せば
@@ -18054,7 +17439,7 @@ function _renameRedoDocs() {
   return _fiEnabled() ? _fiRows() : _renameDocs();
 }
 
-// 組はフォルダ側にも置く (BLK-primary-20260914-1306-friction)。localStorage の
+// 組はフォルダ側にも置く。localStorage の
 // 改名履歴は「当たった置換」しか残さず、ブラウザが変われば消える。同じ組を
 // 週をまたいで当て直す運用では、それだと毎回 from/to を打ち直すことになる。
 var _rpRows = [];
@@ -18111,7 +17496,7 @@ function loadRenamePairs(force) {
 // 打った組を覚える。当たらなかった組 (hits 0) も残すのは、「もう残っていない」
 // と分かったこと自体が、次の run で打ち直さずに済む知識だから。
 // applied は [置換] で当たった回だけ true。開いた時に欄へ入れる「前回の組」は
-// 当てた組に限る (BLK-primary-20260914-1106-friction) ので、打っただけの組と分けて残す。
+// 当てた組に限る ので、打っただけの組と分けて残す。
 function rememberRenamePair(from, to, hits, applied) {
   var RP = window.MA.renamePairs;
   if (!RP || !RP.shouldRemember(from, to)) return Promise.resolve(null);
@@ -18352,13 +17737,13 @@ function _fiFolderApply(from) {
   return out;
 }
 
-// ── 置換の影響ボード (BLK-primary-20260908-1303-wish) ────────────────────────
+// ── 置換の影響ボード ────────────────────────
 // ⇄ 一括置換はヒット件数しか出さないので、「想定外の行に当たっていないか」は
 // 適用してからでないと分からず、当たっていれば巻き戻すやり直しが要る。
 // 適用する前に、ヒットした図の該当行が置換でどう変わるかを ▤ 変更サマリボードと
 // 同じ見た目 (行番号 + 変更前 / 変更後) で並べる。ここでは何も書き換えない。
 var _riFull = false;
-// BLK-primary-20260917-0223: 影響ボードに並べる 変更前 / 変更後 (仮適用) の図。
+// 影響ボードに並べる 変更前 / 変更後 (仮適用) の図。
 // 同じ本文は 1 度しか描かない (会議中に同じ図を描き直して待たせない)。
 var _riSvgCache = {};
 var _riSvgSeq = 0;
@@ -18380,7 +17765,7 @@ function _renameImpactDocs(from) {
   if (FI && _fiEnabled() && from) {
     var openNames = {};
     docs.forEach(function(d) { openNames[d.name] = true; });
-    // BLK-primary-20260917-0023: 当たった図だけを渡すと「残りは触らなくてよい」が
+    // 当たった図だけを渡すと「残りは触らなくてよい」が
     // board から言えない。的になる図 (テンプレ以外) は当たらなかったものも渡し、
     // 変更あり / なしの仕分けは impact() に任せる。
     FI.merge([], _fiFileDocs, _fiRoles).filter(function(r) {
@@ -18392,7 +17777,7 @@ function _renameImpactDocs(from) {
   return docs;
 }
 
-// BLK-primary-20260917-0023: 行のどこが当たっているかを色で示す。全文を出したとき
+// 行のどこが当たっているかを色で示す。全文を出したとき
 // (ri-full) は当たっていない行も並ぶので、目で探す工程が残らないようにする。
 function _riMark(text, needle, esc) {
   var s = text == null ? '' : String(text);
@@ -18419,14 +17804,14 @@ function renderRenameImpactBoard() {
   var esc = window.MA.htmlUtils.escHtml;
   var from = (document.getElementById('rename-from') || {}).value || '';
   var to = (document.getElementById('rename-to') || {}).value || '';
-  // BLK-owner-20260923-1949-prune: 置換後が空なら下段は「出現箇所の一覧」(名前で図を探す)。
+  // 置換後が空なら下段は「出現箇所の一覧」(名前で図を探す)。
   // 見ている名前は下段の名前欄 (開いたときは置換前、空なら上段の依存グラフで選んでいる名前)。
   var occ = !to;
   var occEl = document.getElementById('ri-occ');
   if (occEl) occEl.hidden = !occ;
   body.hidden = occ;
   if (occ) {
-    // BLK-owner-20260924-0852-prune: 名前欄が空なら何も引かない (下段は図をまたぐ部品名の一覧)。
+    // 名前欄が空なら何も引かない (下段は図をまたぐ部品名の一覧)。
     from = ((document.getElementById('ns-q') || {}).value || '').trim();
   }
   var res = br.impact(_renameImpactDocs(from), from, to);
@@ -18436,7 +17821,7 @@ function renderRenameImpactBoard() {
       ? '部品名を選ぶと、その名前が出てくる図と行が並びます'
       : br.impactText(res, from, to);
   }
-  // BLK-primary-20260917-0023: 仕分けの 1 行 (何枚中何枚に変更あり)。
+  // 仕分けの 1 行 (何枚中何枚に変更あり)。
   var rosterEl = document.getElementById('ri-roster');
   if (rosterEl) {
     rosterEl.textContent = br.rosterText(res);
@@ -18457,7 +17842,7 @@ function renderRenameImpactBoard() {
   }
   _riSetTabMarks((res.entries || []).map(function(e) { return e.name; }));
 
-  // BLK-primary-20260917-0023: 当たらなかった図も「変更なし」として並べる。
+  // 当たらなかった図も「変更なし」として並べる。
   // 影響範囲の確認は、触らなくてよい図を言い切れてはじめて終わる。
   var noneHtml = '<div class="ri-none" id="ri-none" data-none="' + res.none.length + '">'
     + '<div class="ri-none-head">' + esc('変更なし ' + res.none.length + ' 枚') + '</div>'
@@ -18607,14 +17992,14 @@ function toggleRenameImpact(open, seedName) {
   // note 欄は開け閉めのたびに畳む (前に打った文面が次の名前に混ざらない)。
   var noteBox = document.getElementById('dg-note-box');
   if (noteBox) noteBox.hidden = true;
-  // タブの印は ▤ で名前を見ている間だけ (BLK-owner-20260924-0852-prune: 旧 🕸 参照関係の挙動)。
+  // タブの印は ▤ で名前を見ている間だけ (旧 🕸 参照関係の挙動)。
   if (!want) { modal.style.display = 'none'; _riSvgSeq++; _riZoomClose(); _riSetTabMarks([]); return; }
-  // BLK-owner-20260923-1949-prune: 上段は部品名の依存グラフ。置換前に打った名前を
+  // 上段は部品名の依存グラフ。置換前に打った名前を
   // そのまま起点にする (打ち直させない)。症状の語も開くたびに選んだ部品名へ戻す。
-  // seedName: Ctrl+K「名前で図を探す」を開く前に選んでいた部品名 (BLK-primary-20260924-0021-wish)。
+  // seedName: Ctrl+K「名前で図を探す」を開く前に選んでいた部品名。
   var from = (typeof seedName === 'string' && seedName) || (document.getElementById('rename-from') || {}).value || '';
   if (from) _dgName = from;
-  // BLK-primary-20260924-2132-wish: 語は開いたときの名前 (無ければ空) 1 つ。上段の版履歴と下段の
+  // 語は開いたときの名前 (無ければ空) 1 つ。上段の版履歴と下段の
   // 出てくる行が同じ語で並ぶ。名前を持たずに開いたとき、依存グラフが先頭に出す部品名を語に入れない。
   _dgVerKw = from;
   _dgVerLastName = null;
@@ -18622,7 +18007,7 @@ function toggleRenameImpact(open, seedName) {
   modal.style.display = 'flex';
   renderDepGraph();
   var q = document.getElementById('ns-q');
-  // BLK-owner-20260924-0852-prune: 名前を持たずに開いた (Ctrl+K「名前で図を探す」・旧 🕸 参照関係) ときは
+  // 名前を持たずに開いた (Ctrl+K「名前で図を探す」・旧 🕸 参照関係) ときは
   // 名前欄を空のままにし、下段に「図をまたぐ部品名」を並べる (前回の名前を勝手に入れない)。
   if (q) q.value = from || '';
   _nsBuildIndex();
@@ -18636,7 +18021,7 @@ function toggleRenameImpact(open, seedName) {
 
 // ▤ 影響を見る を開く唯一の道。保存フォルダぶんが未読なら読んでから出す
 // (開いているタブだけでは「開いていない図への連鎖」がそのまま抜け落ちる)。
-// BLK-primary-20260924-0021-wish: Ctrl+K「名前で図を探す」を開く前に選んでいた部品名 (Ctrl+H の一括置換と同じ拾い方)。
+// Ctrl+K「名前で図を探す」を開く前に選んでいた部品名 (Ctrl+H の一括置換と同じ拾い方)。
 function _nameSearchSeed() {
   var BR = window.MA.bulkRename;
   if (!BR || !BR.seedForSearch) return '';
@@ -18689,7 +18074,7 @@ function setupRenameImpact() {
     renderRenameImpactBoard();
   });
 
-  // BLK-primary-20260917-0223: 図の出し入れ。消すときは描きかけも止める
+  // 図の出し入れ。消すときは描きかけも止める
   // (会議の途中で切っても、あとから遅れて図が現れない)。
   var svg = document.getElementById('ri-svg');
   if (svg) svg.addEventListener('change', function() {
@@ -18722,7 +18107,7 @@ function setupRenameImpact() {
   });
 }
 
-// ── 部品名の依存グラフ (BLK-primary-20260908-2003-wish) ──────────────────────
+// ── 部品名の依存グラフ ──────────────────────
 // ▤ 影響を見る はヒットした行を図ごとにテキストで並べるだけなので、
 // 「どの図がどの図を参照して連鎖しているか」は各図を開いて目視で推測するしかない。
 // 名前を 1 つ選ぶと参照元 (左) → その名前 (中央) → 参照先 (右) が矢印で並び、
@@ -18743,7 +18128,7 @@ function _dgDocs() {
 }
 
 // 影響が届く図。矢印・宣言で辿れる図に、名前がラベルや note にだけ出る図を「直接」として足す
-// (BLK-primary-20260926-1708-friction: 遷移ラベルにだけ部品名を持つ状態遷移図が影響先から漏れていた)。
+// (遷移ラベルにだけ部品名を持つ状態遷移図が影響先から漏れていた)。
 function _dgImpact(graph, name, hops) {
   var DG = window.MA.depGraph;
   var impact = DG.impactDocs(graph, name, hops);
@@ -18810,7 +18195,7 @@ function _dgImpactHtml(impact) {
   return html + '</tbody></table>';
 }
 
-// ── 影響先へまとめて note (BLK-primary-20260915-0007) ───────────────────────
+// ── 影響先へまとめて note ───────────────────────
 // 「意図的な省略を note で明記する」対応は、依存グラフが挙げた影響先の枚数だけ
 // 同じ文言を打ち直す作業になっていた (1 図ずつ📂一覧から開き、DSL 欄の末尾へ
 // カーソルを合わせ、同じ 1 行をタイプする)。文面は 1 つなのに手数が枚数に比例する。
@@ -18940,7 +18325,7 @@ function applyDgNote(names, text) {
   });
 }
 
-// ── 影響先の版履歴を症状の語で探す (BLK-primary-20260917-0123-wish) ─────────
+// ── 影響先の版履歴を症状の語で探す ─────────
 // 依存グラフは「今どの図が絡むか」までは出すが、「いつこの記述に変わったか」は
 // 各図を 1 枚ずつ開いて中身を目で追うしかなかった (📂一覧・図の設定のどちらにも
 // 版ごとの中身を並べる場所が無い)。影響一覧の版履歴を 1 本の時系列に混ぜ、
@@ -18951,7 +18336,7 @@ var _dgVerKw = null;      // null = まだ触っていない (部品名を既定
 var _dgVerRows = [];
 var _dgVerLastName = null;
 // 保存フォルダの版 (GET /version-search の返り)。鍵は「フォルダ + 語」。
-// BLK-primary-20260924-1232: 材料を ◉ 混入点と同じ保存フォルダにする。ブラウザの
+// 材料を ◉ 混入点と同じ保存フォルダにする。ブラウザの
 // localStorage に積む変遷は起こし直すと空になり、前の run までの版が一切見えなかった。
 var _dgVerCache = {};
 var _dgVerLoading = null;
@@ -19086,7 +18471,7 @@ function renderDgVer() {
     if (openBtn) { openBtn.disabled = true; openBtn.title = hold; }
     return { rows: [], first: null };
   }
-  // BLK-primary-20260924-2132-wish: 語が上で選んでいる部品名そのものなら今までどおり影響が届く図に絞り、
+  // 語が上で選んでいる部品名そのものなら今までどおり影響が届く図に絞り、
   // それ以外の語 (症状の語・部品名でない語) は保存フォルダの版全体から引く (部品名を先に選ばせない)。
   var scoped = _dgVerScoped(kw);
   var targets = scoped ? _dgVerImpact : _dgVerFolderTargets(hist);
@@ -19140,7 +18525,7 @@ function setupDgVer() {
   var changedEl = document.getElementById('dg-ver-changed');
   var openBtn = document.getElementById('dg-ver-open');
   if (kwEl) {
-    // BLK-primary-20260924-2132-wish: ここに打った語は下段の名前欄にも入る (語は 1 つ)。
+    // ここに打った語は下段の名前欄にも入る (語は 1 つ)。
     kwEl.addEventListener('input', function() { _riSetWord(kwEl.value, 'ver'); });
     kwEl.addEventListener('keydown', function(ev) {
       if (ev.key === 'Enter' && openBtn && !openBtn.disabled) { ev.preventDefault(); openBtn.click(); }
@@ -19234,7 +18619,7 @@ function renderDepGraph() {
   if (walkBtn) walkBtn.addEventListener('click', function() {
     startFixWalk(_dgName, impact, { hops: _dgHops });
   });
-  // BLK-primary-20260926-1708-wish: 影響先の行を押すと、下段「出てくる行」をその図の当たり行へ絞る
+  // 影響先の行を押すと、下段「出てくる行」をその図の当たり行へ絞る
   // (図を 1 枚ずつ開いて DSL を目で探さない)。同じ行をもう一度押すと全部に戻る。ボタン (ここから順に直す) は別。
   var docRows = impactEl.querySelectorAll('tr.dg-doc');
   for (var k = 0; k < docRows.length; k++) {
@@ -19257,17 +18642,17 @@ function renderDepGraph() {
   return { graph: graph, view: view, impact: impact };
 }
 
-// BLK-owner-20260923-1949-prune: 依存グラフは ▤ 影響を見る の上段になった。
+// 依存グラフは ▤ 影響を見る の上段になった。
 // 開け閉めは同じ画面の開け閉め (手当て列の「一覧」・版を開く・札にする から呼ばれる)。
 function toggleDepGraph(open, seedName) {
   toggleRenameImpact(open, seedName);
 }
 
-// ── 名前で図を探す (BLK-primary-20260917-0523-wish) ──────────────────────────
+// ── 名前で図を探す ──────────────────────────
 // 仕様変更の影響範囲を洗うとき、指摘.md で対象名を絞ってから保存フォルダの図を
 // 1 枚ずつタブで開いて本文を読む、という手順しか無かった。名前を 1 回打てば
 // 「その名前を使っている図」が出て、行を押せばその図のその行まで運ばれる。
-// BLK-owner-20260923-1949-prune: 別の画面は畳み、▤ 影響を見る の下段 (置換後が空のとき) に出す。
+// 別の画面は畳み、▤ 影響を見る の下段 (置換後が空のとき) に出す。
 var _nsIndex = [];
 
 // 的は開いているタブ + 保存フォルダ。_fiRows は一括置換の読み込みを使い回す
@@ -19331,7 +18716,7 @@ function openNameSearchHit(docName, line) {
   }, function() { /* 読めない図は開かない */ });
 }
 
-// BLK-primary-20260926-1708-wish: 上段の影響先の行で絞った図 ('' = 絞らない) と、そのときの部品名。
+// 上段の影響先の行で絞った図 ('' = 絞らない) と、そのときの部品名。
 var _nsFocusDoc = '';
 var _nsFocusName = '';
 
@@ -19431,7 +18816,7 @@ function renderNameSearch() {
   }
   box.textContent = '';
   box.setAttribute('data-hit-docs', String(res.hitDocs));
-  // BLK-owner-20260924-0852-prune: 名前が空のまま開いたときは、図をまたぐ部品名 (名前と枚数) を並べる。
+  // 名前が空のまま開いたときは、図をまたぐ部品名 (名前と枚数) を並べる。
   if (!res.query) {
     renderRiXrefNames(box);
     return [];
@@ -19505,7 +18890,7 @@ function renderNameSearch() {
     });
     box.appendChild(row);
   });
-  // BLK-primary-20260926-1708-wish: 名前の文字は無いが影響が届く図 (連鎖) も、経由した部品名の行を同じ一覧で読む。
+  // 名前の文字は無いが影響が届く図 (連鎖) も、経由した部品名の行を同じ一覧で読む。
   if (extras.length) {
     if (!focus) {
       var ch = document.createElement('div');
@@ -19523,7 +18908,7 @@ function _riSyncName() {
   _riSetWord((document.getElementById('ns-q') || {}).value || '', 'ns');
 }
 
-// BLK-primary-20260924-2132-wish: ▤ 影響を見る の語は 1 つ。下段の名前欄 (#ns-q) と上段の
+// ▤ 影響を見る の語は 1 つ。下段の名前欄 (#ns-q) と上段の
 // 「版履歴を症状の語で探す」(#dg-ver-kw) のどちらに打っても、もう片方が同じ語になる
 // (以前は部品名のプルダウンを先に選ばないと版履歴が出ず、2 か所を往復した)。
 // 打った語が部品名なら上段の依存グラフ (#dg-name) もその名前に合わせる。
@@ -19549,7 +18934,7 @@ function _riSetWord(word, origin) {
 }
 
 function setupDepGraph() {
-  // BLK-owner-20260923-1949-prune: 入口・閉じる・Esc は ▤ 影響を見る (setupRenameImpact) が持つ。
+  // 入口・閉じる・Esc は ▤ 影響を見る (setupRenameImpact) が持つ。
   var sel = document.getElementById('dg-name');
   if (!sel) return;
   sel.addEventListener('change', function() {
@@ -19637,7 +19022,7 @@ function setupDepGraph() {
   });
 }
 
-// ── 影響の手当て列 (BLK-primary-20260914-2206-wish) ──────────────────────────
+// ── 影響の手当て列 ──────────────────────────
 // 依存グラフの行から図は開けるが、開いた瞬間にモーダルが閉じて一覧が消える。
 // 6 図あれば「◈依存グラフ → 行を探す → 開く」を 6 回繰り返すことになり、
 // 確認 (依存グラフ) と反映 (図の編集) が別経路のままだった。洗った一覧を下端の
@@ -19673,7 +19058,7 @@ function renderFixWalk() {
   if (next) next.disabled = _fwWalk.index >= _fwWalk.items.length - 1;
   // 全部済んだら送り先が無い。押せるままだと「直した」が空振りしたように見える。
   if (done) done.disabled = p.complete;
-  // BLK-primary-20260924-1132-wish: 今の図を保存したら「✓ 直した · 次へ」を目立たせる。
+  // 今の図を保存したら「✓ 直した · 次へ」を目立たせる。
   // 印は付けない (保存は直し終えた印ではない)。押すのは利用者。
   var saved = !p.complete && FW.isSaved && FW.isSaved(_fwWalk);
   bar.setAttribute('data-saved', saved ? '1' : '0');
@@ -19777,11 +19162,11 @@ function setupFixWalk() {
   renderFixWalk();
 }
 
-// ── 変更チケット (BLK-primary-20260909-0603-wish) ────────────────────────────
+// ── 変更チケット ────────────────────────────
 // 依存グラフの影響一覧は一度きりで、モーダルを閉じると消える。仕様変更は数日・
 // 複数 run にまたがるので、「15 枚のうちどこまで直したか」を持ち越す先が要る。
 // 影響一覧を札にして保存フォルダ (`_tickets/`) に置き、次の run は札の未チェック
-// だけを見る。ペルソナをまたぐので localStorage ではなく server に置く
+// だけを見る。人をまたぐので localStorage ではなく server に置く
 // (reviewer も同じ札を読める = 指摘.md への転記が要らない)。
 var _ctRows = [];
 var _ctDir = null;
@@ -19891,7 +19276,7 @@ function _ctItemsHtml(ticket) {
       + '<td class="ct-doc-name">' + esc(it.doc) + '</td>'
       + '<td class="ct-hop">' + (it.hop === 0 ? '直接' : '連鎖 ' + it.hop + ' 段') + '</td>'
       + '<td class="ct-via">' + esc((it.via || []).join(', ')) + '</td>'
-      // BLK-primary-20260924-1132-wish: 押すと図が開くだけでなく、下端の帯で札の図を
+      // 押すと図が開くだけでなく、下端の帯で札の図を
       // 順に送れる。「この図を開く」では列が続くことが読めず、閉じて一覧から探し直していた。
       + '<td><button type="button" class="ct-open" title="この図を開き、下端の帯で札の図を 1 枚ずつ送る">ここから順に直す</button></td></tr>';
   });
@@ -20030,7 +19415,7 @@ function applyRenameToUnopenedFiles(from, to) {
       res.rows.push({ name: r.name, count: n, before: r.dsl, after: next });
       // 読み込み済みの控えも進めておく。次のプレビューが古い本文を数えないように。
       _fiFileDocs.forEach(function(d) { if (d.name === r.name) d.dsl = next; });
-      // BLK-primary-20260914-1206: 書いた後を基準にすると「変更なし」になり、
+      // 書いた後を基準にすると「変更なし」になり、
       // 後から開いたときに直した前後が出せない。基準がまだ無い図は書く **前** を
       // 基準にする (この置換がそのまま ± 差分として読める)。
       if (window.MA.saveDiff) { try { window.MA.saveDiff.markIfAbsent(r.name, r.dsl); } catch (e) {} }
@@ -20113,7 +19498,7 @@ function updateRenamePreview() {
   // 先に確かめてから置換後を決める、という順序を塞がないため。
   var prevBtn = document.getElementById('btn-rename-preview');
   if (prevBtn) prevBtn.disabled = !from || grand === 0;
-  // BLK-primary-20260917-0023: 件数のすぐ横の入口。件数が 0 でも from さえ
+  // 件数のすぐ横の入口。件数が 0 でも from さえ
   // 打ってあれば押せる (「どの図も変わらない」を一覧で確かめる回がある)。
   var hitsBtn = document.getElementById('btn-rename-hits-impact');
   if (hitsBtn) hitsBtn.disabled = !from;
@@ -20131,7 +19516,7 @@ function renameAcrossDocs(from, to, docs) {
   return renamePairsAcrossDocs([{ from: from, to: to }], docs);
 }
 
-// 複数の組を 1 回で当てる (BLK-primary-20260925-0932-wish の「揃える」もこの道を通る)。
+// 複数の組を 1 回で当てる (の「揃える」もこの道を通る)。
 // 1 組のときは従来の ⇄ 一括置換と同じ結果になる。
 function renamePairsAcrossDocs(pairs, docs) {
   var br = window.MA.bulkRename;
@@ -20145,7 +19530,7 @@ function renamePairsAcrossDocs(pairs, docs) {
   var res = list.length === 1 ? br.apply(docs, list[0].from, list[0].to) : br.applyMany(docs, list);
   if (res.changed.length === 0) return res;
 
-  // BLK-primary-20260908-2203-wish: 当てる前の本文を図ごとに控える。
+  // 当てる前の本文を図ごとに控える。
   // レビュー会議で「置換前はこうで、今はこうです」を 1 画面に並べられるように
   // する (Ctrl+Z で戻すと変更後が消えるので、往復では見せられない)。
   _captureBeforeRename(from, to, docs, res.changed);
@@ -20180,7 +19565,7 @@ function renamePairsAcrossDocs(pairs, docs) {
   updateLineNumbers();
   scheduleRefresh();
   renderTabs();
-  // 保存フォルダ運用時は、置換が当たった図だけを書き出す (BLK-primary-20260913-0206)。
+  // 保存フォルダ運用時は、置換が当たった図だけを書き出す。
   writeChangedToFolder(res.changed);
   return res;
 }
@@ -20197,7 +19582,7 @@ function applyBulkRename() {
 }
 
 // ── テンプレートから新規作成 ───────────────────────────────────────────────
-// BLK-junior-20260907-0803-wish: 同じ構成の図をもう 1 枚作るとき、今までは
+// 同じ構成の図をもう 1 枚作るとき、今までは
 // 元の図を開いて構造を覚え、新しいタブでゼロから打ち直していた (模写)。
 // 「元の図 + 置換元語 + 置換先語」を選ぶだけで新しいタブが出来るようにする。
 // 置換結果は確定前に行単位で見せるので、写し間違いが起きる余地がない。
@@ -20219,7 +19604,7 @@ function setupTemplateNew() {
   var docs = [];          // [{ id, name, dsl }] 開いているタブ
   var files = [];         // 保存フォルダのファイル名
   var fileCache = {};     // name → dsl (読み込み済み)
-  // 他のフォルダから覗いた 1 枚 (BLK-junior-20260909-0503-wish)。
+  // 他のフォルダから覗いた 1 枚。
   // 自分の保存フォルダには無いので、渡された本文をそのまま材料にする。
   var seedTpl = null;
 
@@ -20243,7 +19628,7 @@ function setupTemplateNew() {
     files.forEach(function(name) {
       html += '<option value="file:' + esc(name) + '">' + esc(name) + ' (保存フォルダ)</option>';
     });
-    // BLK-junior-20260907-0703: その図種の図がまだ 1 枚も無いときの写す元。
+    // その図種の図がまだ 1 枚も無いときの写す元。
     // 既にある図が既定なのは変えず、末尾に置く。今の図種の雛形が group の先頭に来る。
     var bi = TN.builtins(currentDiagramType);
     if (bi.length) {
@@ -20297,12 +19682,12 @@ function setupTemplateNew() {
     });
   }
 
-  // BLK-primary-20260907-0803-wish: 1 語目の置換のあとに元の系統の名前が
+  // 1 語目の置換のあとに元の系統の名前が
   // 残っていたら、それを片付けるまで確定させない。今までは複製した図に
   // Spi_Driver が残ったまま提出され、同じ指摘をレビューで何度も受けていた。
   // 残った名前ごとに「新しい名前」を入れるか、「そのままで良い」を
   // 明示的に選ぶかのどちらかを必ず通す。
-  // BLK-junior-20260907-0943-wish: 先輩の図の流用は「⧉ 取り込み」と「⇄ 一括置換」を
+  // 先輩の図の流用は「⧉ 取り込み」と「⇄ 一括置換」を
   // 手で組み合わせるしかなく、2 操作の間に無関係な宣言行まで壊れる余地があった。
   // テンプレートに宣言されている部品を全部この表に並べ、それぞれの新しい名前を
   // 1 画面で埋めてから複製する。表からの置換は文字列一致ではなく
@@ -20430,7 +19815,7 @@ function setupTemplateNew() {
     });
   }
 
-  // BLK-primary-20260907-1203-wish: 作る前に、これから作る図の名前がクラスの宣言と
+  // 作る前に、これから作る図の名前がクラスの宣言と
   // 噛み合うかをその場で突き合わせる。複製は接頭辞の置換なので、置換しただけでは
   // 意味の合わない名前 (Adc 由来の conv 系を Timer に付け替えたもの) がそのまま残る。
   // 押してから「🔍 名前突合」で見つけるのでは、次の run まで気づけない。
@@ -20570,7 +19955,7 @@ function setupTemplateNew() {
       if (tpl) {
         fillCandidates(tpl.dsl);
         var fromEl = document.getElementById('tpl-from');
-        // BLK-junior-20260907-0703: 組み込みの雛形は部品名がぜんぶ `Xxx` で
+        // 組み込みの雛形は部品名がぜんぶ `Xxx` で
         // 始まるので、置換元は選んだ時点で決まる。利用者が打つのは
         // 作る部品名の 1 語だけになり、そこへ焦点を移す。
         if (tpl.placeholder && fromEl) {
@@ -20614,11 +19999,11 @@ function setupTemplateNew() {
       diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
     });
     applyActiveDoc();
-    // BLK-primary-20260907-0823: 作った直後にフォルダへ書き出す。ここを踏まないと
+    // 作った直後にフォルダへ書き出す。ここを踏まないと
     // 新しいタブは「まだ 1 度も保存されていない図」のままで、保存先ディレクトリを
     // 設定していても {name}.puml が現れない。
     saveActiveDoc();
-    // BLK-junior-20260907-1403-wish: テンプレート元は、そのままこの図の「型の基準」。
+    // テンプレート元は、そのままこの図の「型の基準」。
     // ここで覚えておけば、作った直後から「同じ形のままか」を見てもらえる。
     if (window.MA.reviewDesk) {
       try {
@@ -20634,7 +20019,7 @@ function setupTemplateNew() {
     } catch (e) {}
   }
 
-  // ── 骨格から新規作成 (BLK-junior-20260907-1903-wish) ─────────────────────
+  // ── 骨格から新規作成 ─────────────────────
   // 同じ骨格の図 (本体 1 + 周辺 3 + 依存 6 本) を題材ごとに毎回ゼロから組み直して
   // いた。下のテンプレート欄でも作れるが、そこで打つのは 4 か所あり、置換元を
   // 選び損ねると骨格が割れる。ここは「同じ図種の図」に絞り、置換元も新しい図の
@@ -20735,12 +20120,12 @@ function setupTemplateNew() {
     updateSkeleton();
   }
 
-  // ── 部品を起こす (BLK-junior-20260913-0206-wish) ─────────────────────────
+  // ── 部品を起こす ─────────────────────────
   // 手本がまったく無い部品を起こす周では、6 図種を別々のタブ・別々の下書き機能で
   // やり直し、部品名を図種ごとに打ち直していた。ここは部品名 1 語で 6 図種ぶんの
   // 下書きをまとめて開く。打つのは 1 回なので、図種を跨いだ綴りが割れない。
   var PS = window.MA.partStarter;
-  // BLK-junior-20260915-0307-wish: 隣のフォルダにある同じ部品名の実図。
+  // 隣のフォルダにある同じ部品名の実図。
   // ダイアログを開いた時に 1 回だけ読み、部品名を打つたびに照合する。
   var partFolders = [];
 
@@ -20909,7 +20294,7 @@ function setupTemplateNew() {
     updatePart();
   }
 
-  // BLK-owner-20260924-2337-prune: 「既存の図や雛形から新しい図を起こす」窓は 1 つ。上端で「何から起こす」を選び、
+  // 「既存の図や雛形から新しい図を起こす」窓は 1 つ。上端で「何から起こす」を選び、
   // 選んだものに要る欄だけを出す (確定ボタンも見えるのは 1 つ)。前は 3 つのフォームを縦に積み、系統ぜんぶは別の窓 (#fc-modal) だった。
   var KINDS = [
     { kind: 'part', label: '部品名だけ（6 図種の下書き）' },
@@ -21071,7 +20456,7 @@ function setupTemplateNew() {
   });
 }
 
-// ── 表記統一の一括反映 (BLK-junior-20260916-0046-wish) ─────────────────────
+// ── 表記統一の一括反映 ─────────────────────
 // 指摘の「表記揺れを canonical に揃える」は、揃える先が既に登録簿 (_names.json)
 // にある。それでも「どのファイルにその揺れが残っているか」は GUI に無いので、
 // junior は登録簿と 📂 一覧を見比べ、該当しそうな図を 1 枚ずつ開いて本文を読み、
@@ -21082,7 +20467,7 @@ function setupTemplateNew() {
 // いる在処と件数が機械から出る。当てる先は保存フォルダの図そのもの (開いていない
 // 図も含む) なので、手順 2〜3 の「開く → 直す → 保存する」が 1 回で済む。
 // ── 社内略語の見分け方 (🔤 表記統一 と 📤 提出前チェック で 1 本) ─────────────
-// BLK-owner-20260924-1252-prune: 略語は glossary.scan で拾い、登録簿で揃える先が決まった語は
+// 略語は glossary.scan で拾い、登録簿で揃える先が決まった語は
 // 数えない。図の束は「開いているタブ + 保存フォルダの図 (同じ名前はタブ側)」。2 つの画面は
 // どちらもここを通るので、同じ保存フォルダなら略語の件数が一致する。
 
@@ -21164,7 +20549,7 @@ function setupNameUnify() {
 
   // 当てる材料を集める。開いているタブと保存フォルダの図を混ぜ、同じ名前は
   // タブ側を勝たせる (編集中の本文の方が新しい)。
-  // BLK-owner-20260924-1252-prune: 集め方は 📤 提出前チェックと共有する (_tabAndFolderDocs)。
+  // 集め方は 📤 提出前チェックと共有する (_tabAndFolderDocs)。
   // 同じ保存フォルダなら 2 つの画面が同じ図の束で社内略語を数える。
   function collect() {
     return _tabAndFolderDocs().then(function(docs) {
@@ -21237,7 +20622,7 @@ function setupNameUnify() {
   var _reg = null;
   var abbrevEl = document.getElementById('unify-abbrev');
 
-  // 登録簿にまだ無い略語の表 (BLK-owner-20260917-2329-prune)。登録簿が読めなくても
+  // 登録簿にまだ無い略語の表。登録簿が読めなくても
   // 略語は図から拾えるので出す。
   function renderAbbrev(docs) {
     var G = window.MA.glossary;
@@ -21425,7 +20810,7 @@ function setupNameUnify() {
     openPanel();
   });
 
-  // BLK-owner-20260924-1332-prune: ▦ 突合ボードの「名前/表記揺れ」の行で揃える先を選んだ回。
+  // ▦ 突合ボードの「名前/表記揺れ」の行で揃える先を選んだ回。
   // 登録簿に入った組を選んだ状態で開く (あとは当てる図を見て「まとめて適用」を押すだけ)。
   _openNameUnifyFor = function(canonical) {
     var key = window.MA.nameRegistry ? window.MA.nameRegistry.normalize(canonical) : '';
@@ -21464,13 +20849,13 @@ function setupBulkRename() {
 
   // 閉じるときも組を覚える。欄から離れずに Esc・[閉じる] で終える打ち方
   // (ヒット 0 件で [適用] が押せないときの普通の終わり方) だと blur が来ず、
-  // 打った組がどこにも残らないままになる (BLK-primary-20260914-1306-friction)。
+  // 打った組がどこにも残らないままになる。
   function closePanel() {
     panel.classList.remove('open');
     rememberRenamePair(fromEl && fromEl.value, toEl && toEl.value, _renameGrandTotal());
     // 当てずに閉じた組は欄に残さない。残すと次に開いたとき「前回の組」の代わりに
     // その組が居座り、本来の組を確かめるたびに消して打ち直すことになる
-    // (BLK-primary-20260914-1106-friction)。打った組は上の行で履歴の行に残るので、
+    // 打った組は上の行で履歴の行に残るので、
     // 要るときは行を 1 回押せば戻る。
     if (fromEl) fromEl.value = '';
     if (toEl) toEl.value = '';
@@ -21505,7 +20890,6 @@ function setupBulkRename() {
     }
     // 前回の組を入れておく。履歴の行は在るのに、焦点が空欄に入るので利用者は
     // 打ち始めてしまう —— 打ち直す 17 打を開いた時点で消す
-    // (BLK-primary-20260914-1106-friction)。
     if (!fromEl.value && !toEl.value) { _seededPair = null; renderRenameSeedNote(null); }
     // 利用者が選んで入った値 (図の選択・エディタの選択) は「尋ねた名前」なので、
     // 入れ直しの印はここで必ず落としてから seed に判断させる。
@@ -21589,7 +20973,7 @@ function setupBulkRename() {
     el.addEventListener('input', updateRenamePreview);
     // 組は「打ち終わった時点」で覚える。ヒット 0 件だと [適用] は押せないまま
     // なので、適用のときだけ覚えていては、空打ちの組が永久に残らない
-    // (BLK-primary-20260914-1306-friction)。打ち終わり = 欄から離れたとき。
+    // 打ち終わり = 欄から離れたとき。
     el.addEventListener('blur', function() {
       // こちらが入れておいた組は「打った組」ではない。覚え直すと、確かめただけの
       // 回が新しい置換として履歴の先頭に積まれる。
@@ -21654,7 +21038,7 @@ function setupBulkRename() {
   document.addEventListener('click', function(ev) {
     if (!panel.classList.contains('open')) return;
     if (panel.contains(ev.target) || ev.target === btn) return;
-    // 下端の統一バッジもこのパネルを開く側 (BLK-primary-20260914-1006-friction)。
+    // 下端の統一バッジもこのパネルを開く側。
     // 外側クリック扱いにすると、開いた同じクリックでそのまま閉じてしまう。
     if (ev.target && ev.target.id === 'status-rename') return;
     // 影響ボードはこのパネルの続きなので、外側クリック扱いにしない
@@ -21667,12 +21051,12 @@ function setupBulkRename() {
 }
 
 // ── 症状検索 ───────────────────────────────────────────────────────────────
-// BLK-primary-20260907-2203-wish: 不具合対応は症状文から始まるのに、過去図を
+// 不具合対応は症状文から始まるのに、過去図を
 // 探す入口は「部品名を思い付いて打つ」しか無かった。思い付ける名前の数が探索の
 // 上限になるので、経験の浅い担当者はそもそも探索を始められない。症状文をその
 // まま貼れば関連度順に図が並び、当たった行を押せばその図のその行へ運ぶ。
 
-// BLK-primary-20260909-0203-wish: 症状検索の探索範囲。既定は開いているタブだけ
+// 症状検索の探索範囲。既定は開いているタブだけ
 // だが、不具合対応で要る図 (dma_transfer_sequence など) は開いていないことの
 // ほうが多い。保存フォルダを入れると、開いていない図も列に載る。
 function _symptomScanFolder() {
@@ -21714,7 +21098,7 @@ function renderSymptomSystems(docs, text) {
     var head = document.createElement('div');
     head.className = 'sym-sys-head';
     head.textContent = sys.systemLabel(row);
-    // BLK-primary-20260924-2132-wish: 当たった語の行から、同じ語で ▤ 影響を見る を開く
+    // 当たった語の行から、同じ語で ▤ 影響を見る を開く
     // (今その語を含む図と行・その語が書き換わった過去の版が 1 画面に並ぶ)。
     head.setAttribute('role', 'button');
     head.tabIndex = 0;
@@ -21753,7 +21137,7 @@ function renderSymptomSystems(docs, text) {
   }
 }
 
-// BLK-primary-20260909-0703-wish: 当たった図どうしの流れ突合。
+// 当たった図どうしの流れ突合。
 // 症状検索で 6 図が当たったあと、利用者は「シーケンスのメッセージに対応する状態が
 // 状態遷移図にあるか」を 1 枚ずつ開いて目で確かめていた。ここで先に突き合わせ、
 // 対応の無い流れを持つ図だけを赤く浮かせ、対応済みの図は「開かなくてよい」と名指しする。
@@ -21884,7 +21268,7 @@ function renderSymptomSearch() {
     k.textContent = r.kindLabel + ' / 関連度 ' + r.score;
     line.appendChild(n);
     line.appendChild(k);
-    // BLK-primary-20260925-1732-wish: 影響を見るの影響先と同じ「ここから順に直す」。当たった図を関連度順に
+    // 影響を見るの影響先と同じ「ここから順に直す」。当たった図を関連度順に
     // 1 枚ずつ開き、下端の手当ての帯の「次へ」で次の当たり図へ送る (帯は 1 本を共用)。
     var walk = document.createElement('button');
     walk.type = 'button';
@@ -21921,7 +21305,7 @@ function renderSymptomSearch() {
   });
 }
 
-// ── 症状検索から順に開く (BLK-primary-20260925-1732-wish) ─────────────────────
+// ── 症状検索から順に開く ─────────────────────
 // 症状検索は当たった図を 1 枚ずつ開けるだけで、次の当たり図へは一覧に戻って探し直していた。
 // 影響を見るの「ここから順に直す」と同じ手当ての帯 (1 本を共用) に、当たった図を関連度順に載せる。
 // 開いた図では、当たった語と「流れ」で対応の無い名前が書かれた行の図形を、DSL と図の相互ジャンプ
@@ -21983,7 +21367,7 @@ function applySymptomMarks() {
   return n;
 }
 
-// ── 混入点 (BLK-primary-20260915-0506-wish) ─────────────────────────────────
+// ── 混入点 ─────────────────────────────────
 // 部品名を 1 回入れると、保存フォルダの全図の版を server 側で走査して
 // 「その名前が増えた版・消えた版」を時系列で出す。版を 1 つずつ開いて
 // 前の版と見比べる往復 (図の枚数 × 版数) を、1 回の検索に畳む。
@@ -22095,7 +21479,7 @@ function renderBlamePoint(payload) {
     open.title = r.file + ' の ' + r.label + ' の版を別タブで開く';
     open.addEventListener('click', function() { _blameOpenVersion(r.file, r.stamp); });
     // 混入点の行から 1 クリックで「この版 vs 直前の版」の全文差分へ
-    // (BLK-primary-20260915-0606-wish。開く → 前版と目で照合 の 2 手を畳む)。
+    // (。開く → 前版と目で照合 の 2 手を畳む)。
     var diff = document.createElement('button');
     diff.className = 'bp-diff';
     diff.type = 'button';
@@ -22139,7 +21523,7 @@ function renderBlamePoint(payload) {
   });
 }
 
-// ── 全文差分ビュー (BLK-primary-20260915-0606-wish) ─────────────────────────
+// ── 全文差分ビュー ─────────────────────────
 // 混入点の行が指す版と、その直前の版を全文で並べる。混入点は当たった行しか
 // 返さないので、原因を直すのに要る前後の文脈がそこでは読めず、版を開いて前版も
 // 開いて目で照合する 2 手が部品数 × 該当版数ぶん積み上がっていた。
@@ -22277,7 +21661,7 @@ function setupVersionDiff() {
     if (!_vdiffLast || _vdiffLast.error) return;
     _blameOpenVersion(_vdiffLast.file, _vdiffLast.stamp);
   });
-  // BLK-reviewer-20260916-0046-wish: 差分を見て事故だと分かった人が、そのまま 1 クリックで
+  // 差分を見て事故だと分かった人が、そのまま 1 クリックで
   // 前回保存版に戻せるようにする。当てるのは版一覧の「戻す」と同じ _applyLineEditText なので、
   // undo 1 手で取り消せて、戻した結果も次の保存で控えが取られる。
   var resBtn = document.getElementById('btn-vdiff-restore');
@@ -22427,7 +21811,7 @@ function setupSymptomSearch() {
 }
 
 // ── 観点一括 ───────────────────────────────────────────────────────────────
-// BLK-junior-20260908-0003-wish: 指摘は 1 件でも、同じ観点は他の題材の対応する
+// 指摘は 1 件でも、同じ観点は他の題材の対応する
 // 図にも当てはまる。今までは図を 1 枚ずつ開いて目で確かめるしかなく、手数が
 // 図の枚数に比例した。観点を先に選べば「欠けている図」だけが残るので、
 // 開くのはその枚数だけで済む。
@@ -22534,9 +21918,9 @@ function setupPatternCheck() {
 }
 
 // ── 図をまたぐ部品名 (▤ 影響を見る の中) ─────────────────────────────────────
-// BLK-primary-20260908-0003-wish で 🕸 参照関係 として作った「図をまたぐ部品名の一覧」
+// で 🕸 参照関係 として作った「図をまたぐ部品名の一覧」
 // 「その名前が出る図のタブの印」「図どうしの繋がり」「xref.md の書き出し」は、
-// BLK-owner-20260924-0852-prune で ▤ 影響を見る 1 つに寄せた。「この部品名はどの図に
+// で ▤ 影響を見る 1 つに寄せた。「この部品名はどの図に
 // 出てくるか」に答える画面が 2 つあると、どちらを開けばよいかを選ばせるため。
 // 集計は core/xref-graph、ここは ▤ の中での描画と結線だけ。
 var _riTabMarks = [];   // 今タブに印を付けている図の名前 (▤ で見ている名前が出てくる図)
@@ -22686,7 +22070,7 @@ function setupXrefGraph() {
 // ── 一括適用 ───────────────────────────────────────────────────────────────
 // レビュー指摘は「この 3 クラスに同じメソッドが無い」の形で来るのに、GUI 側は
 // クラスを 1 つ選ぶ → フォームを開く → 打つ、を対象の数だけ繰り返すしかなく、
-// 手数が対象数に比例して増えていた (BLK-primary-20260906-2043)。
+// 手数が対象数に比例して増えていた。
 // 名前を 1 度だけ打ち、当てる先をまとめて選んで 1 回で当てる。
 
 function setupBulkApply() {
@@ -22841,7 +22225,7 @@ function setupBulkApply() {
 }
 
 // ── 名前突合 ───────────────────────────────────────────────────────────────
-// BLK-owner-20260924-1332-prune: 🔍 名前突合の画面は畳んだ。表記揺れ・宣言なし・メソッド突合は
+// 🔍 名前突合の画面は畳んだ。表記揺れ・宣言なし・メソッド突合は
 // ▦ 突合ボードが同じ nameAudit / methodAudit で 1 行ずつ出し (openAuditBoardFor)、
 // 揺れを直す道は 🔤 表記統一の 1 本 (ボードの行で揃える先を選ぶと登録簿に入って表記統一が開く)。
 // 図 × 部品名の対照表は ▤ 影響を見る (名前を空で開くと図をまたぐ部品名が枚数付きで並び、
@@ -23161,7 +22545,7 @@ function renderOutline() {
   renderOutlineCompare(result);
 }
 
-// BLK-junior-20260907-1703-wish: 先輩の図と「同じ形か」を、開いた瞬間に数で出す。
+// 先輩の図と「同じ形か」を、開いた瞬間に数で出す。
 // 参照図はタブから選ぶ (compare-view と同じ選び方)。選んだ相手は覚えておくので、
 // 図を直すたびに選び直さずに済む。
 var _outlineCmpRefId = null;
@@ -23222,7 +22606,7 @@ function gotoOutlineLine(line) {
   var lineHeight = editorEl.scrollHeight / Math.max(1, lines.length);
   editorEl.scrollTop = Math.max(0, (line * lineHeight) - (editorEl.clientHeight / 2));
   if (lineNumbersEl) lineNumbersEl.scrollTop = editorEl.scrollTop;
-  // BLK-junior-20260907-2303: 行へ飛ぶだけではなく、その行の要素を選んだ
+  // 行へ飛ぶだけではなく、その行の要素を選んだ
   // 状態にする。右パネルにその要素の編集フォームが出るので、
   // プレビュー上で座標を探し直さなくて済む。
   if (!selectElementAtLine(line + 1) && window.MA.selection) {
@@ -23239,7 +22623,7 @@ function gotoOutlineLine(line) {
 // 参照側は読むだけ (選択・編集はしない)。スクロールは主プレビューと独立。
 
 var _compareOpen = false;
-// 参照ペインの幅も覚える (先輩の枠と同じ規則。BLK-human-20260915-1203)。
+// 参照ペインの幅も覚える (先輩の枠と同じ規則。)。
 var COMPARE_PANE_KEY = 'pua.compare.pane';
 var _compareRefId = null;    // 選んでいる参照図の doc id
 var _compareShownDsl = null; // 直近に描いた DSL (同じなら描き直さない)
@@ -23251,7 +22635,7 @@ function _compareDocs() {
   try { return window.MA.workspace.list() || []; } catch (e) { return []; }
 }
 
-// BLK-primary-20260909-0303-wish: 「この図の変更前後」と「他の図との見比べ」は
+// 「この図の変更前後」と「他の図との見比べ」は
 // 同じ 1 つの業務 (会議で変わったところを見せる) の裏表なので、同じペインの
 // タブにする。開いたまま切り替えられれば、外れた方を閉じ直す往復が消える。
 var _compareMode = 'ref';   // 'ref' … 他の図/変更前と並べる, 'diff' … 前回保存との差分
@@ -23269,7 +22653,7 @@ function toggleCompareView(open, mode) {
     // 登録した雛形は 2 枚目のタブが無くても選べる (参照図が要らないのが登録の値打ち)。
     renderTemplateRegistry();
     setCompareMode(mode || _compareMode);
-    // BLK-owner-20260924-2135-prune: 相手のフォルダ (FILES で比較中のフォルダ) を開くたびに読み直す。
+    // 相手のフォルダ (FILES で比較中のフォルダ) を開くたびに読み直す。
     try { syncCrossRefDir(true); } catch (e) {}
   }
 }
@@ -23290,7 +22674,7 @@ function setCompareMode(mode) {
 }
 
 // 「± 差分」タブ: 編集中の図の前回保存時点からの行差分と、他に変わった図の一覧。
-// 保存フォルダへ直接書いた回を ± 差分の基準に使えるか (BLK-primary-20260914-1206)。
+// 保存フォルダへ直接書いた回を ± 差分の基準に使えるか。
 // 使うのは「前回保存時点という基準が役に立たないとき」だけ:
 //  - 基準がまだ無い (開き直した図・一度も保存していない図)
 //  - 基準はあるが今と同じ (書いた後が基準になっていて、直した前後が出ない)
@@ -23331,7 +22715,7 @@ function renderCompareDiffView() {
     var at = SD.markedAt(active.name);
     var c = SD.changedLines(active.name, active.dsl);
     var head = esc(active.name) + ' ・ ';
-    // BLK-primary-20260914-1206: 保存フォルダへ直接書いた図は「前回保存時点」が
+    // 保存フォルダへ直接書いた図は「前回保存時点」が
     // 無い (または書いた後と同じ) ので、これまでは「まだ保存していない (基準なし)」
     // としか出ず、レビュー会議でその図の前後を出せなかった。基準が無い/変わって
     // いないときは、書き込み履歴の直近の回の **書く前** を基準に据える。
@@ -23344,7 +22728,7 @@ function renderCompareDiffView() {
     // 「前回保存時点と比べてどうか」は言い切ったままにする (意味をすり替えない)。
     var fc = fb ? SD.countBetween(fb.dsl, active.dsl) : null;
     if (fb) head += ' ・ ' + esc(fb.label) + 'から +' + fc.added + ' −' + fc.removed;
-    // BLK-owner-20260923-1307-prune: 下端の札から寄せてきた分 (消える向きの警告と
+    // 下端の札から寄せてきた分 (消える向きの警告と
      // 「前回保存版に戻す」) は、この ± 差分タブが引き受ける。別の比較画面を開かせない。
     var LDm = window.MA.liveDiff;
     var pair = _liveDiffPair();
@@ -23413,7 +22797,7 @@ function renderCompareDiffView() {
   }
 }
 
-// ── 書き込み履歴から並べる (BLK-primary-20260914-1206-wish) ─────────────────
+// ── 書き込み履歴から並べる ─────────────────
 // 保存フォルダへ直接書いた操作は、その図を開いていなくても前後が残っている。
 // 編集中の図に当たる回を、参照ペインの候補として出す。
 function _activeWriteHistory(docs, activeId) {
@@ -23521,7 +22905,7 @@ function toggleWriteHistory(open) {
   if (show) renderWriteHistory();
 }
 
-// 編集中の図の「変更前スナップショット」(BLK-primary-20260908-2203-wish)。
+// 編集中の図の「変更前スナップショット」。
 // 一括置換を当てたときにだけ控えられる。今の本文と同じなら null を返す
 // (並べても何も見えない候補を選択肢に出さない)。
 function _activeBeforeSnapshot(docs, activeId) {
@@ -23658,7 +23042,7 @@ function renderCompareView() {
   });
 }
 
-// ── 整合チェック (BLK-junior-20260907-0843-wish) ──────────────────────────
+// ── 整合チェック ──────────────────────────
 // 同じ雛形を部品名だけ替えて書き写す業務では、打ち間違い・並べ間違いが毎回起きる。
 // 参照図と突き合わせて食い違いを保存前に挙げ、行を押すとその行へ飛ぶ。
 // 判断は consistency-check が持ち、ここは押した結果を並べるだけ。
@@ -23733,7 +23117,7 @@ function runConsistencyCheck() {
   renderCheckList();
 }
 
-// ── 対応表 (BLK-junior-20260908-0823-wish) ────────────────────────────────
+// ── 対応表 ────────────────────────────────
 // 先輩の図と自分の図は、同じ GPIO ドライバの状態遷移でも状態名・イベント名・
 // 抽象度がばらばらで、読み比べても「先輩が後から足した 1 要素」を名前だけでは
 // 当てられない。名前の形だけで対応を機械的に取り、対応が付いた組と
@@ -23741,17 +23125,17 @@ function runConsistencyCheck() {
 // (参照図だけの行は、押しても飛び先が無いので参照図の行番号を出すだけ)。
 // 対応の規則は state-map が持ち、ここは並べるだけ。
 //
-// BLK-junior-20260908-1103-wish: 参照図だけの行 (橙) には「＋この図にも足す」を
+// 参照図だけの行 (橙) には「＋この図にも足す」を
 // 付ける。見つけた要素をそのまま自分の図の末尾に入れられれば、
 // 「読み比べて一括入力欄に打ち直す」がボタン 1 回になる。
 // 端点の対応が付かない遷移だけ、どの状態から出すかを 1 回聞き返す。
 //
-// BLK-junior-20260908-1203-wish: クラス図にも同じ対応表を出す。図種で使う規則を
+// クラス図にも同じ対応表を出す。図種で使う規則を
 // 選ぶだけで、並べ方も「＋この図にも足す」も共通にする (図種によらず同じ操作)。
 // クラス図の関係は向き (どちらが親か) を行に持つので、取り込みでは参照図の向きを
 // そのまま写す。Relation フォームで From/To を選び直して逆向きに張る手間が消える。
 //
-// BLK-junior-20260908-0823 (差し戻し 1 回目): 名前の形だけで組んだ対応は、
+// 名前の形だけで組んだ対応は、
 // 抽象度の違う 2 枚では当たらない。「参照図だけ」の行が先輩の足した要素なのか、
 // 対応を取り損ねただけなのかを機械は決められない。対応そのものを人が
 // 「同じもの」「対応なし」で決められるようにし、推測が 0 件になった時点で
@@ -23807,7 +23191,7 @@ function _mapper() { return _mapModule || window.MA.stateMap; }
 
 // 図種を選ぶ。自分の図が読めればそれに合わせる。読めないときだけ参照図を見る。
 function _pickMapModule(refText, mineText) {
-  // BLK-primary-20260925-0932-wish: シーケンス図は参加者 (部品名) とメッセージで組む。
+  // シーケンス図は参加者 (部品名) とメッセージで組む。
   var seqMod = window.MA.modules && window.MA.modules.plantumlSequence;
   if (window.MA.seqMap && seqMod && seqMod.detect(mineText || '')) return window.MA.seqMap;
   var classMod = window.MA.modules && window.MA.modules.plantumlClass;
@@ -23880,7 +23264,6 @@ function _mapRow(listEl, row) {
   _mapDecideControls(el, row);
   // 不一致の行は、機械では「どちらが後から足したか」まで決められない。
   // 自分で決め切らずに先輩・reviewer へ 1 件の質問として預けて、次へ進む
-  // (BLK-junior-20260908-0923-wish)。
   var mq = window.MA.mapQuestion;
   if (mq && mq.askable(row)) {
     var ask = document.createElement('button');
@@ -23917,7 +23300,7 @@ function _mapRow(listEl, row) {
   listEl.appendChild(el);
 }
 
-// 1 行に「同じもの」「対応なし」「戻す」を付ける (BLK-junior-20260908-0823)。
+// 1 行に「同じもの」「対応なし」「戻す」を付ける。
 // 機械が組んだ行は人が見て確かめるまで推測のままで、決めた行だけが確定になる。
 function _mapDecideControls(el, row) {
   var sm = _mapper();
@@ -24096,7 +23479,7 @@ function _applyMapAdopt(row, picks) {
 }
 
 // 不一致の行 1 つを、先輩・reviewer 宛ての質問 1 件にして自分の図に残す
-// (BLK-junior-20260908-0923-wish)。図と一緒に保存フォルダへ渡るので、相手の
+// 図と一緒に保存フォルダへ渡るので、相手の
 // 「📮 指摘箱」に並ぶ。ここで答えを待たないのが要点なので、飛び先へは移動しない。
 function askMapRow(row) {
   var mq = window.MA.mapQuestion;
@@ -24128,7 +23511,7 @@ function renderMapAsked() {
   el.hidden = (text === '');
 }
 
-// ── 対応表の組を相手の綴りに揃える (BLK-primary-20260925-0932-wish) ──────────
+// ── 対応表の組を相手の綴りに揃える ──────────
 // 「{相手フォルダ} の「X」に揃える」は名前の形で結べた綴り違いにしか出ず、部品名が総入れ替えの
 // 2 枚 (spi_init_sequence / spi_sequence) では揃える行が 1 つも出なかった。対応表で組になった行
 // (機械の組も、「同じもの」「対応を選ぶ」で手で結んだ組も) を同じ 1 つの行に並べ、チェックした
@@ -24269,7 +23652,7 @@ function renderStateMap() {
   listEl.hidden = false;
   sumEl.textContent = sm.summary(_mapResult);
   sumEl.classList.remove('clean', 'dirty');
-  // BLK-junior-20260914-1606: メンバーの差も「片方にしかない」なので同じ数に入れる。
+  // メンバーの差も「片方にしかない」なので同じ数に入れる。
   var onlyCount = _mapResult.states.concat(_mapResult.transitions)
     .concat(_mapResult.members || []).filter(function(r) {
       return r.match === 'ref-only' || r.match === 'mine-only';
@@ -24315,7 +23698,7 @@ function runStateMap() {
   if (!cv || !stateMod || !sumEl) return;
 
   var ref = _compareRefId ? cv.doc(_compareDocs(), _compareRefId) : null;
-  // BLK-primary-20260925-0932-wish: 並べる別タブが無くても、比較中のフォルダの同じ部品・同じ図種の図
+  // 並べる別タブが無くても、比較中のフォルダの同じ部品・同じ図種の図
   // (増分の突き合わせが選んだ相手) があれば、それを参照図にする。同名ファイルでなくてよい。
   if (!ref && _xfUseAsRef()) ref = cv.doc(_compareDocs(), _compareRefId);
   if (!ref) {
@@ -24348,7 +23731,7 @@ function runStateMap() {
   if (listEl) listEl.hidden = false;
 }
 
-// ── 雛形との差分 (BLK-junior-20260908-1303-wish) ───────────────────────────
+// ── 雛形との差分 ───────────────────────────
 // UART / CAN / GPIO の初期化図は、同じ雛形をペリフェラル名だけ変えて複製したもの。
 // これまでは 2 枚をまっさらな図として全文読み比べ、構造が同じかどうかを毎回
 // 目で判断していた。参照図を雛形とみなし、題材語を伏せて行を突き合わせて
@@ -24362,7 +23745,7 @@ function _clearTemplateDiff() {
   if (sumEl) { sumEl.textContent = ''; sumEl.classList.remove('clean', 'dirty'); }
 }
 
-// ── 雛形を登録して残す (BLK-junior-20260908-1403-wish) ─────────────────────
+// ── 雛形を登録して残す ─────────────────────
 // 「雛形との差分」の相手は毎回その場で探していた。別の人のフォルダにある図なら
 // 「🧩 相手のフォルダ」に絶対パスを打ち直し、名前の近い図を選び直す。同じ 2 枚を
 // 何周も突き合わせる業務では、この探し直しだけが毎周積み上がる。
@@ -24534,7 +23917,7 @@ function runTemplateDiff() {
   });
 }
 
-// ── 系統ぜんぶと比べる (BLK-junior-20260908-1403) ──────────────────────────
+// ── 系統ぜんぶと比べる ──────────────────────────
 // 2 枚比べ (雛形との差分) は、先発版と後発版の間に固有の行が 1 つも無いとき
 // 「違いは語の言い換えだけ」で行き止まりになり、「取り込む対象がどこにあるのか /
 // 本当にどこにも無いのか」を人が同じ 2 枚を読み直して判断し続けることになる。
@@ -24629,7 +24012,7 @@ function runTemplateCohort() {
   });
 }
 
-// ── 他の人のフォルダの同じ図と突き合わせる (BLK-junior-20260908-0723-wish) ──
+// ── 他の人のフォルダの同じ図と突き合わせる ──
 // 先輩版と自分版の同種図を見比べる場面で、これまでは自分の保存先設定を先輩の
 // フォルダへ一時的に替えて開き、内容を憶えてから設定を戻し、記憶を頼りに
 // 打ち直していた。相手のフォルダを打てば、名前の近い図を勝手に引き当て、
@@ -24644,7 +24027,7 @@ var _xfResult = null;   // 直近の突き合わせ結果
 // 取り込む分に入れた行 (本文をそのまま鍵にする。一覧を出し直しても選びが残る)
 var _xfChecked = Object.create(null);
 
-// BLK-owner-20260924-2135-prune: 相手のフォルダは FILES「読むだけ」で比較中にしたフォルダ
+// 相手のフォルダは FILES「読むだけ」で比較中にしたフォルダ
 // (_seniorState().dir) 1 つから取る。以前はこの枠にパスを打つ欄 (#xf-dir + 🔍 探す) があり、
 // 控えも別 (pua.crossRef.dir) で、ツリーで比較中にしたフォルダとは連動しなかった。
 // 古い控えは、比較中のフォルダがまだ無い人に 1 度だけ引き継いで消す (控えは 1 つにする)。
@@ -24735,7 +24118,7 @@ function loadCrossRefFolder() {
     }
     var CRD = window.MA.crossRefDiff;
     var selfName = _xfSelfName();
-    // BLK-junior-20260917-0423: 近い名前が無いときに先頭のファイルを黙って
+    // 近い名前が無いときに先頭のファイルを黙って
     // 相手にすると、図種違いの図と突き合わせた結果が「先輩が全部書き換えた」
     // に見える。相手が決まらないことは、それ自体が手順 1 の答えなので言う。
     var verdict = CRD ? CRD.counterpartVerdict(_xfEntries, selfName, _xfSelfKind()) : null;
@@ -24743,7 +24126,7 @@ function loadCrossRefFolder() {
     if (!verdict || verdict.state !== 'picked') {
       var settledState = verdict && (verdict.state === 'no-kind' || verdict.state === 'no-part');
       _xfShowMessage(verdict ? verdict.message : '相手が決まりません', settledState ? 'clean' : 'dirty');
-      // BLK-junior-20260917-0523-wish: 相手に実体が無いと言い切れたら、その場で
+      // 相手に実体が無いと言い切れたら、その場で
       // 「対応不要（手本なし）」として自分の図に控えられるようにする (覗き一覧の控えと同じ行)。
       if (settledState) _xfAppendKeepVerdict(dir, verdict);
       _xfFile = null;
@@ -24840,7 +24223,7 @@ function _xfRenderPick(selected) {
       var lab = (DK && DK.label) ? DK.label(c.kind) : '';
       tail = ' (' + (lab ? lab + '図' : '別の図種') + '。図種が違います)';
     } else if (c.partMismatch && c.distance !== 0) {
-      // BLK-junior-20260917-0523-friction: 図種は合うが部品名を含まない候補
+      // 図種は合うが部品名を含まない候補
       tail = ' (部品名なし。' + c.part + ' を含みません)';
     } else if (c.distance === 0) tail = ' (同じ名前)';
     else if (c.distance == null) tail = ' (名前が離れています)';
@@ -24883,11 +24266,11 @@ function renderCrossRefDiff() {
   var clean = _xfResult.onlyRef.length === 0 && _xfResult.onlySelf.length === 0;
   _xfShowMessage(CRD.summary(_xfResult), clean ? 'clean' : 'dirty');
 
-  // BLK-junior-20260908-0823: 名前が 1 つも対応しない 2 枚は、行の一覧を
+  // 名前が 1 つも対応しない 2 枚は、行の一覧を
   // 「相手が足した差分」として出しても取り込む 1 個を選べない。
   // 形 (種別ごとの件数) の見比べに切り替えて、同じ粒度かどうかを先に見せる。
   var comp = CRD.comparability(_xfResult);
-  // BLK-junior-20260908-1303: 名前が対応しなくても、種別の並びが位置ごとに
+  // 名前が対応しなくても、種別の並びが位置ごとに
   // 一致していれば「別の粒度」ではなく「同じ骨格の言い換え」。形の件数表より、
   // 位置で対応させた語の対応表の方が「取り込む要素は無い」と言い切れる。
   var par = CRD.parallel(selfDsl, _xfRefDsl);
@@ -25029,7 +24412,7 @@ function _xfRow(entry, side) {
   row.setAttribute('data-side', side);
   row.setAttribute('data-kind', entry.kind || '');
 
-  // BLK-junior-20260917-0223-wish: 増分が何本もある回は 1 行ずつ押していられない。
+  // 増分が何本もある回は 1 行ずつ押していられない。
   // 相手にしかない行にチェックを付け、まとめて取り込めるようにする。
   if (side === 'ref') {
     var pick = document.createElement('input');
@@ -25191,7 +24574,7 @@ function setupCompareView() {
   }
   var tdBtn = document.getElementById('btn-td-run');
   if (tdBtn) tdBtn.addEventListener('click', runTemplateDiff);
-  // BLK-junior-20260908-1403-wish: 雛形の登録・選択・取り消し
+  // 雛形の登録・選択・取り消し
   var trAdd = document.getElementById('btn-tr-add');
   if (trAdd) trAdd.addEventListener('click', function() { registerTemplate(); });
   var trDel = document.getElementById('btn-tr-del');
@@ -25256,9 +24639,9 @@ function setupOutline() {
 // 対になる道具で、こちらは動作名 (矢印のラベル) を見る。
 
 var _familyAuditDocs = [];   // 表の行から図へ飛ぶための、表示中の系統の図一覧
-var _familyDensity = null;   // BLK-primary-20260908-1403-wish: 系統ごとの遷移密度
-var _familyTrace = [];       // BLK-primary-20260908-1603-wish: 系統ごとのトレース突合
-var _familyLabelPos = null;  // BLK-reviewer-20260908-1703-wish: ラベル位置の慣習
+var _familyDensity = null;   // 系統ごとの遷移密度
+var _familyTrace = [];       // 系統ごとのトレース突合
+var _familyLabelPos = null;  // ラベル位置の慣習
 
 // 遷移密度の表。系統ごとに「1 メッセージ何遷移か」を並べ、他系統の中央値から
 // 外れた系統を上に置く。レビュー指摘の粒度差は、これまで指摘の文章を読んでから
@@ -25275,7 +24658,7 @@ function _densityTableHtml(result, SECTION, CELL) {
   if (!result.rows.length) return html;
   html += '<table id="fd-table" style="border-collapse:collapse;width:100%;margin-top:4px;">'
     + '<tr>'
-    // BLK-reviewer-20260908-1603: メッセージが遷移と同じ粒度かを見せる。
+    // メッセージが遷移と同じ粒度かを見せる。
     // 「6 メッセージ」だけでは、それが初期化 1 回の内訳なのか状態機械の動作なのか分からない。
     + ['系統', '状態数', '遷移数', 'メッセージ数', '遷移に対応', '遷移/メッセージ', ''].map(function(h) {
         return '<th style="' + CELL + 'text-align:left;color:var(--text-secondary);font-weight:normal;">'
@@ -25401,7 +24784,7 @@ function _familyAuditRender(families, selectedKey) {
     + 'style="font-size:11px;color:' + (sel.mismatches.length ? 'var(--accent-orange)' : 'var(--accent-green)') + ';">'
     + esc(fa.summaryLine(sel)) + '</div>';
 
-  // BLK-owner-20260924-1855-prune: 遷移ごとの「対応するメッセージ」の表は
+  // 遷移ごとの「対応するメッセージ」の表は
   // 状態遷移のトレース漏れ (#tc-modal) の 1 枚に寄せた。ここには案内だけを置き、
   // 押すとこの系統を選んだ状態でその画面を開く (同じ行を 2 画面で数えない)。
   html += '<div id="fa-trace-link" style="font-size:11px;color:var(--text-secondary);margin-top:8px;">'
@@ -25548,7 +24931,7 @@ function openFamilyAudit() {
 }
 
 // ── トレースカバレッジ ─────────────────────────────────────────────────────
-// BLK-reviewer-20260907-1903-wish: 状態遷移図に書いた遷移が、同じ系統の
+// 状態遷移図に書いた遷移が、同じ系統の
 // シーケンス図のどこにも現れないことを見つけるのに、系統チェックの
 // 「片方にしか無い動作名」から目視で拾い上げていた。ここは向きを
 // 「状態遷移 → シーケンス」の 1 方向に固定し、系統ごとに遷移を全件並べて
@@ -25558,7 +24941,7 @@ function openFamilyAudit() {
 var _traceRows = [];   // 表の行から図の行へ飛ぶための、表示中の系統の遷移一覧
 
 // ── 担当範囲の宣言 ─────────────────────────────────────────────────────────
-// BLK-reviewer-20260907-2003-wish: 「初期化専用シーケンス vs フル状態遷移」の
+// 「初期化専用シーケンス vs フル状態遷移」の
 // 粒度差を、これまでは語彙一致率から推測していた。推測なので系統が増えるたび
 // 誤検出が出る。ここでシーケンス図が担当する遷移をチェックボックスで宣言し、
 // DSL に `' @covers Idle -> Configured` として書き込む。宣言のある系統では、
@@ -25643,7 +25026,7 @@ function _traceScopeSection(family, SECTION, CELL, BTN) {
 }
 
 // 宣言欄の注記。宣言が無い系統でも、粒度違いで外した遷移があればそう言う
-// (BLK-reviewer-20260907-2003)。「遷移すべてを突き合わせています」と出しながら
+// 「遷移すべてを突き合わせています」と出しながら
 // 実際には外している状態を作らない。
 function _traceScopeNote(family) {
   var esc = window.MA.htmlUtils.escHtml;
@@ -25710,7 +25093,7 @@ function _traceRender(families, selectedKey) {
   for (var i = 0; i < families.length; i++) if (families[i].key === selectedKey) sel = families[i];
   if (!sel) sel = families[0];
 
-  // BLK-owner-20260924-1855-prune: 系統チェックにあった「遷移ラベル × シーケンスの
+  // 系統チェックにあった「遷移ラベル × シーケンスの
   // メッセージ」の表をここに寄せた。行は traceLabelTable の並び (対応が無い行が上) で、
   // 対応するメッセージ (無ければ実在名の候補) とラベル位置の慣習の列を足す。
   // 対象外の遷移は上の担当範囲の欄に並ぶので、表には入れない (二重に並べない)。
@@ -25733,7 +25116,7 @@ function _traceRender(families, selectedKey) {
       + 'color:var(--text-primary);padding:3px 6px;border-radius:3px;font-family:var(--font-mono);">'
     + families.map(function(f) {
         // 対象外に回した遷移があれば件数を並べる。「遷移 0, 漏れ 0 件」だけだと
-        // 遷移を書いていない系統と見分けが付かない (BLK-reviewer-20260907-2003)。
+        // 遷移を書いていない系統と見分けが付かない。
         var oos = (f.outOfScope || []).length;
         return '<option value="' + esc(f.key) + '"' + (f === sel ? ' selected' : '') + '>'
           + esc(f.key) + ' (遷移 ' + f.rows.length + ', 漏れ ' + f.missing.length + ' 件'
@@ -25766,7 +25149,7 @@ function _traceRender(families, selectedKey) {
 
   if (tRows.length === 0) {
     // 対象外に回した遷移があるのに「遷移がありません」と出すと、
-    // 図を書いていないのか見ていないのかが読めない (BLK-reviewer-20260907-2003)。
+    // 図を書いていないのか見ていないのかが読めない。
     var oosN = (sel.outOfScope || []).length;
     html += '<tr><td id="tc-no-rows" colspan="5" style="' + CELL
       + 'color:var(--text-secondary);">'
@@ -25932,7 +25315,7 @@ function setupTraceCoverage() {
 }
 
 // ── 整合性チェック ─────────────────────────────────────────────────────────
-// BLK-reviewer-20260907-0843: レビューは 17 枚の DSL を読み、命名規約・未使用
+// レビューは 17 枚の DSL を読み、命名規約・未使用
 // participant・メソッドの欠落・粒度対応を突合パターンごとに探していた。ここは
 // 4 種の突合結果を 1 本の一覧にし、ステータスバーに件数を常時出す。作った側も
 // 保存を待たずに自分の逸脱に気付ける。
@@ -25943,7 +25326,7 @@ function _consistencyDocs() {
   return window.MA.workspace.list();
 }
 
-// BLK-reviewer-20260908-1703: ラベル位置の慣習ズレは「⇉ 系統チェック」を開けば
+// ラベル位置の慣習ズレは「⇉ 系統チェック」を開けば
 // 並ぶが、開くまで在ることに気付けない。実在チェックを通ってしまうズレなので、
 // 気付く手掛かりが要る。同じ突合結果を下端の 整合 の件数にも数え、開く前から出す。
 function _labelOddRows(docs) {
@@ -26035,7 +25418,7 @@ function openConsistencyPanel() {
     return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">' + esc(r.name) + '</span>'
       + ' <span style="color:var(--text-secondary);">(' + esc(r.doc) + ')</span>';
   });
-  // BLK-reviewer-20260907-1703: 応答 (Ack / Ready) は毎回ここに並び、
+  // 応答 (Ack / Ready) は毎回ここに並び、
   // どれが本物の欠落かを目でふるい分けていた。突合から外した分は数だけ出す。
   html += section('ck-methods', 'メソッド不一致 (呼んでいるのにクラスに無い)', result.methods, function(r) {
     return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">'
@@ -26049,7 +25432,7 @@ function openConsistencyPanel() {
       + esc(reps.slice(0, 5).map(function(r) { return r.method; }).join(', '))
       + (reps.length > 5 ? ' ほか' : '') + ')</div>';
   }
-  // BLK-reviewer-20260907-0943: state の遷移ラベルはこれまでどの突合にも掛からず、
+  // state の遷移ラベルはこれまでどの突合にも掛からず、
   // 接頭辞だけ替えて複製した図のイベント名の取り残しを誰も見つけられなかった。
   html += section('ck-events', 'イベント名不一致 (state の遷移に対応するクラスメソッドが無い)', result.events, function(r) {
     return '<span style="font-family:var(--font-mono);color:var(--accent-orange);">' + esc(r.event) + '</span>'
@@ -26106,7 +25489,7 @@ function setupConsistencyPanel() {
 }
 
 // ── イベント⇔メソッド整合 ─────────────────────────────────────────────────
-// BLK-primary-20260907-1803-wish: レビュー指摘は「イベント名の一覧」で来るのに、
+// レビュー指摘は「イベント名の一覧」で来るのに、
 // GUI 側には「どのクラスに何が足りないか」をまとめて示す画面が無かった。
 // 指摘文とクラス一覧を目で見比べて対応表を作り、Adc_Driver / Gpio_Driver /
 // Can_Driver を順にクリックしてメソッド追加フォームを開き名前を打つ、を
@@ -26292,7 +25675,7 @@ function setupEventSyncPanel() {
 }
 
 // ── 引き継ぎパッケージ ─────────────────────────────────────────────────────
-// BLK-primary-20260907-1303-wish: 新人への引き継ぎは ⇉系統チェック・🔍名前突合・
+// 新人への引き継ぎは ⇉系統チェック・🔍名前突合・
 // ▤変更サマリ を別々のタブで開いて見せ、「問題なし」を口頭で伝える形だった。
 // 渡された側は後から同じ状態を再現できない。ここは 4 つ (系統チェック結果 /
 // 名前突合結果 / 直近の変更サマリ / SVG 一式) を 1 つの zip に固めて渡す。
@@ -26329,7 +25712,7 @@ function buildHandoffPackage(targetDocs) {
   return renderNext(0).then(function() {
     var FA = window.MA.familyAudit;
     var NA = window.MA.nameAudit;
-    // BLK-primary-20260914-1906-wish: 引き継ぎサマリに「要修正の印が残っている行数」を
+    // 引き継ぎサマリに「要修正の印が残っている行数」を
     // 出すため、図ごとのレビュー結果も渡す (印の持ち主は review-verdicts)。
     var RV = window.MA.reviewVerdicts;
     var verdicts = {};
@@ -26359,17 +25742,17 @@ function buildHandoffPackage(targetDocs) {
 }
 
 // ── 書き出す前の対象確認 (引き継ぎチェックリストの窓の中) ─────────────────────
-// BLK-primary-20260908-2303-wish: 📦引き継ぎ は開いているタブだけを対象にする
+// 📦引き継ぎ は開いているタブだけを対象にする
 // ため、保存フォルダに 14 枚あってもタブ 2 枚分しか zip に入らず、受け取った
 // 新人が開いて初めて欠落に気づく。書き出す前に「対象 2 枚 / 保存フォルダ 14 枚」
 // の差分と「保存フォルダ全体を対象にする」への切替を出し、渡す前に直せるようにする。
-// BLK-owner-20260925-0235-prune: 対象確認は別の窓にせず、📋 引き継ぎチェックリストの窓 (#hb-modal) に畳む。
+// 対象確認は別の窓にせず、📋 引き継ぎチェックリストの窓 (#hb-modal) に畳む。
 // 揃っているかを見る一覧と、入れるかを決める一覧を同じ行にする (行の頭の ✔ / − を押して切り替える)。
 // 保存フォルダの図はチェックリストが読んだものをそのまま使う (同じフォルダを 2 回読まない)。
 // 判定は src/core/export-target.js の職掌。ここは材料集めと結線だけ。
 
 var _etMode = null;      // 'open' | 'folder' | null (既定に任せる)
-// BLK-primary-20260909-0403-wish: 「-編集中」等のスクラッチは既定で対象外。
+// 「-編集中」等のスクラッチは既定で対象外。
 // 渡す側が意図してチェックを入れたときだけ同梱する (開き直すと既定に戻る)。
 var _etIncludeScratch = false;
 var _etOverrides = {};   // 行ごとの入る / 入らない ({name: true|false})。開き直すと既定に戻る
@@ -26495,7 +25878,7 @@ function setupHandoffPackage() {
 }
 
 // ── 納品パッケージ ─────────────────────────────────────────────────────────
-// BLK-primary-20260907-1703-wish: 顧客に渡す最終成果物は、全図 SVG の zip に
+// 顧客に渡す最終成果物は、全図 SVG の zip に
 // 表紙 (図一覧・版数・提出前チェック結果) と変更履歴 (前回提出からの差分) を
 // 人手で足して作っていた。材料はどれも GUI にあるのに、組み立てだけが画面の外だった。
 // ここは対象の枚数・題・版数を選ばせ、1 つの zip にまとめて出す。
@@ -26503,7 +25886,7 @@ function setupHandoffPackage() {
 
 var _dpDocs = null;      // 対象に選んでいる図 (name の配列)。null は「まだ既定を決めていない」
 
-// BLK-primary-20260908-1903: 対象の的は保存フォルダ全体。開いているタブだけを
+// 対象の的は保存フォルダ全体。開いているタブだけを
 // 見ていたので、14 枚のフォルダで 5 枚しかタブが無いと残り 9 枚が黙って落ちた。
 var _dpFileDocs = [];    // 保存フォルダから読んだ図 ({name, dsl})
 var _dpRoles = {};       // file-role (テンプレは既定から外す)
@@ -26511,7 +25894,7 @@ var _dpFolderDir = null; // 読み込み済みのフォルダ。開き直すた�
 var _dpLoading = false;
 var _dpSeq = 0;
 
-// BLK-primary-20260909-0003-wish: 「前回いつ・どの版を客先に出したか」の控えは
+// 「前回いつ・どの版を客先に出したか」の控えは
 // 保存フォルダに置く (localStorage だけだと開き直すたびに消え、同じフォルダで
 // 何度出しても毎回「初回提出 (23 枚すべて新規)」になっていた)。
 // ここは読み込んだ控えを持つだけ。判定は src/core/export-log.js の職掌。
@@ -26519,12 +25902,12 @@ var _dpMetaTouched = false;  // 題・版数を手で書き換えたか (書き�
 var _elLog = null;        // 保存フォルダの控え。null は「まだ読んでいない」
 var _elDir = null;        // その控えを読んだフォルダ
 
-// BLK-primary-20260914-2106-wish: 履歴の行を選ぶと、その回に渡した版と今を
+// 履歴の行を選ぶと、その回に渡した版と今を
 // 図ごとに突き合わせて出す。null は「まだどの回も開いていない」。
 var _dpHistPick = null;
 var _dpHistResult = null; // 開いている回の突き合わせ結果 (対象の選び直しに使う)
 
-// BLK-primary-20260916-2314-friction: 毎回 24 枚全部チェック済みから「全部外す → 14 枚を 1 枚ずつ」
+// 毎回 24 枚全部チェック済みから「全部外す → 14 枚を 1 枚ずつ」
 // 選び直していた。既定は前回出した図 (控えの最新、無ければフォルダの最新の納品 zip) にする。
 var _dpZips = [];          // 保存フォルダの delivery-*.zip ({file, at, names})
 var _dpRecall = null;      // 既定に使った「前回と同じ図」の出どころ
@@ -27066,10 +26449,10 @@ function buildDeliveryPackage() {
 }
 
 // ── 提出前レビュー (変更前後を並べて出す) ─────────────────────────────────
-// BLK-primary-20260908-1903-wish: 納品パッケージは「差分の行数」までしか言わず、
+// 納品パッケージは「差分の行数」までしか言わず、
 // 客の目に何が違って見えるかはタブを 1 枚ずつ切り替えて見比べるしかなかった。
 
-// BLK-primary-20260924-1332-wish: 🔍 提出前レビュー (#dr-modal) は ▤ 変更サマリボードに畳んだ。
+// 🔍 提出前レビュー (#dr-modal) は ▤ 変更サマリボードに畳んだ。
 // 「前回提出と今を図で並べる」は、ボードを 変更前 = 前回提出・🖼 SVGで見る で開くことと同じ。
 // 入口 (📦 納品パッケージの「🔍 変更前後を見比べる」・Ctrl+K「提出前レビュー」) はここを通る。
 function openDeliveryReview() {
@@ -27090,7 +26473,7 @@ function setupDeliveryPackage() {
 
 
 // ── 系統マップ ────────────────────────────────────
-// BLK-reviewer-20260908-0103-wish: spi_init_sequence → spi_state のような図と図の
+// spi_init_sequence → spi_state のような図と図の
 // 対応関係は現場では固定なのに、GUI はそれをどこにも持っていなかった。
 // 系統チェックは毎回名前の頭から推測し直し、語彙が重ならない組を黙って外す。
 // ここでは対応関係を宣言として保存し、宣言された組は必ず突き合わせて、崩れていれば赤くする。
@@ -27282,7 +26665,7 @@ function setupFamilyAudit() {
 }
 
 // ── 提出前チェック ─────────────────────────────────────────────────────────
-// BLK-primary-20260907-1403-wish: 顧客資料に組み込む前、14 枚のタイトル・注釈・
+// 顧客資料に組み込む前、14 枚のタイトル・注釈・
 // 部品名を 1 枚ずつ開いて社内略語や日付入りの一時識別子が残っていないか読んでいた。
 // 読む対象は決まっているので、全図から抜き出して 1 枚の表にし、辞書に当たった行だけ
 // 赤くする。辞書はその場で書き換えられ、次に開いたときも残る。
@@ -27297,7 +26680,7 @@ function _scLoadDict() {
   } catch (e) { return window.MA.submitCheck.DEFAULT_TERMS.join('\n'); }
 }
 
-// BLK-owner-20260924-1252-prune: 辞書は「略語以外で出したくない語」。glossary が略語として
+// 辞書は「略語以外で出したくない語」。glossary が略語として
 // 見分ける短縮語 (前の既定の Drv / Ctrl / Mgr / Cfg を含む) は辞書に残っていても使わない。
 function _scWordTerms(dictText) {
   var SC = window.MA.submitCheck;
@@ -27466,8 +26849,8 @@ function _renderSubmitCheck(docs, reg, ready) {
 }
 
 // ── 社内略語 → 正式名称の組 (🔤 表記統一パネルの略語欄) ─────────────────────
-// BLK-primary-20260913-0206-wish で 📤 提出前チェックに置いた対応表は、
-// BLK-owner-20260917-2329-prune で 🔤 表記統一へ寄せた。「正式な名前の組を決めて全図に
+// で 📤 提出前チェックに置いた対応表は、
+// で 🔤 表記統一へ寄せた。「正式な名前の組を決めて全図に
 // 当てる」道具を 2 つ持たない。登録簿にまだ無い略語だけを表に出し、確定すると
 // 組を登録簿へ入れ、全図に 1 回で当て、当てた後の残存件数を表で言い切る。
 
@@ -27537,7 +26920,7 @@ function setupSubmitCheck() {
   });
 }
 
-// ── 手元の .puml を開く (BLK-human-20260917-0901) ──────────────────────────
+// ── 手元の .puml を開く ──────────────────────────
 // 入口は「📄 ファイルを開く(.puml)」(タブ列・📂 一覧の頭・起動直後の空の画面) と
 // エディタ/プレビューへのドラッグ&ドロップ。複数枚はタブで全部開く。
 // 開いたファイルの場所・文字コード・改行は doc id ごとに覚え、上書き保存は元のファイルへ
@@ -27553,7 +26936,7 @@ function _sourcePathOf(docId) {
   return (m && m.path) || '';
 }
 
-// BLK-migrator-20260918-0349: 保存フォルダへ書く経路 (別名保存・自動保存) にも、
+// 保存フォルダへ書く経路 (別名保存・自動保存) にも、
 // 開いたときの改行を持たせる。元が LF のファイルが、開いて保存するだけで
 // 全行 CRLF に書き換わっていた (server は付いていなければ既定のまま書く)。
 function _withSourceEol(doc) {
@@ -27614,7 +26997,7 @@ function onFilePicked(e) {
 }
 
 // 読んだファイルをタブで開く。最後に開いた 1 枚を前に出す。
-// BLK-human-20260923-1600 (design 9a): Import ▾ の「クリップボードの DSL から開く」。
+// Import ▾ の「クリップボードの DSL から開く」。
 // 他ツールや課題票から貼られた DSL は、今まで新しいタブを作って貼り付ける 2 手だった。
 // 読み込む経路は openSourceFiles 1 本のままにして、入口だけを足す。
 function openFromClipboard() {
@@ -27706,9 +27089,9 @@ function renderUnsupportedPanel() {
   }
   var doc = window.MA.workspace.getActive();
   if (!doc || !_openedSourceOf(doc.id)) { panel.hidden = true; panel.setAttribute('data-count', '0'); return; }
-  // BLK-migrator-20260924-0637: 描いた図種に合わせて読み直した図は、その図種として読めない行を出す。
+  // 描いた図種に合わせて読み直した図は、その図種として読めない行を出す。
   var kind = (_svgKindFix && currentModule && currentModule.type) ? currentModule.type : doc.diagramType;
-  // BLK-migrator-20260925-1600: 行ごとの正規表現では決めない。今の本文に対するエンジンの答えがあるときだけ、
+  // 行ごとの正規表現では決めない。今の本文に対するエンジンの答えがあるときだけ、
   // その答え (エラー行・落ちた理由・閉じない枠) を理由つきで出す。答えの無い本文 (描く前・描けなかった) には出さない。
   var dsl = (doc.id === window.MA.workspace.getActiveId() && typeof mmdText === 'string') ? mmdText : doc.dsl;
   var verdict = (_engineVerdict && _engineVerdict.text === dsl) ? _engineVerdict : null;
@@ -27840,10 +27223,10 @@ function writeBackToSource(doc) {
   }).catch(function(e) { return { ok: false, error: String((e && e.message) || e) }; });
 }
 
-// BLK-primary-20260907-0823: 保存先ディレクトリを設定していても「保存」は
+// 保存先ディレクトリを設定していても「保存」は
 // ダウンロードしか起こさず、フォルダに .puml ができなかった。保存先を設定して
 // いる間は、保存先へ書くのが「保存」である。判定は save-target が唯一の規約。
-// ── 保存が控えへ逸れたときの帯 (BLK-primary-20260914-1406) ──────────────────
+// ── 保存が控えへ逸れたときの帯 ──────────────────
 // 「保存を押したのにディスクが変わらない」の正体は、source-lock の既定が
 // 黙って `{名前}-編集中` へ書き先を移していたこと。帯で書いた先を名指しし、
 // [本体に書く] の 1 押しで本体へ入れられるようにする。
@@ -27905,7 +27288,7 @@ function writeRedirectToOrigin(info, dir) {
   });
 }
 
-// BLK-human-20261006-2020-1 / BLK-owner-20261006-2021-1: 手で押した保存が書けたら、その中身を
+// 手で押した保存が書けたら、その中身を
 // 「前回保存版」にして未保存の印 (タブ・上部バー・FILES の行) を同じ時に消し、保存ボタンの隣に
 // 時刻と書いた先を数秒出す。以前は自動の書き戻し (saveActiveDoc) だけが基準を更新していたので、
 // 書き戻しを見送る見本のままのタブや、ダウンロード保存では、ファイルが書けても ○ / ● が残った。
@@ -27947,7 +27330,7 @@ function saveFile() {
   // 押した時点の編集内容を workspace のアクティブなドキュメントに書き戻してから
   // 保存する (打った直後に押しても最後の 1 文字が落ちない)。
   var doc = saveActiveDoc();
-  // BLK-primary-20260914-1406: saveActiveDoc は錠が効いたとき控えの名前を持つ doc を返す。
+  // saveActiveDoc は錠が効いたとき控えの名前を持つ doc を返す。
   // そのまま錠に問い直すと「名前が変わった」と見えて錠が外れ、逸れたことも言えなくなる。
   // 画面で開いている図の名前は workspace から取り直す。
   var openName = doc ? doc.name : '';
@@ -27958,9 +27341,9 @@ function saveFile() {
   if (doc && openName && doc.name !== openName) {
     doc = { id: doc.id, name: openName, diagramType: doc.diagramType, dsl: doc.dsl };
   }
-  // BLK-primary-20260924-1132-wish: 手で押した保存も、手当ての帯の今の図なら帯に伝える。
+  // 手で押した保存も、手当ての帯の今の図なら帯に伝える。
   try { if (doc) _fwNoteSaved(doc.name); } catch (e) {}
-  // BLK-human-20260917-0901: 手元から開いたファイルの上書き保存は、元のファイルへ戻す。
+  // 手元から開いたファイルの上書き保存は、元のファイルへ戻す。
   if (doc && _sourcePathOf(doc.id)) {
     writeBackToSource(doc).then(function(res) {
       var st = document.getElementById('status-save-result');
@@ -27979,10 +27362,10 @@ function saveFile() {
   }
   var cfg = null;
   try { cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null; } catch (e) { cfg = null; }
-  // 手で押した「保存」も、開いた元ファイルの錠に従う (BLK-junior-20260908-1803-wish)。
+  // 手で押した「保存」も、開いた元ファイルの錠に従う。
   // 「元のまま保つ」を選んだあとに保存を押して元が消えたら、選ばせた意味が無い。
   var SLm = window.MA.sourceLock;
-  // BLK-primary-20260914-1406: 押した保存が控え (`{名前}-編集中`) へ逸れたことを、
+  // 押した保存が控え (`{名前}-編集中`) へ逸れたことを、
   // 保存のその場で言うために「開いている図の名前」を控えておく。
   var redirected = null;
   if (doc && SLm && cfg && cfg.backend === 'file') {
@@ -27996,38 +27379,21 @@ function saveFile() {
       doc = { id: doc.id, name: dm.name, diagramType: doc.diagramType, dsl: doc.dsl };
     }
   }
-  // BLK-reviewer-20260915-0007-wish: 書き込む前に、同じ保存フォルダのクラス図と
-  // 突き合わせる。宣言の無い呼び出しがあれば、ここで止めて一覧を出す
-  // (保存後に言う save-check では、書けたと思って次の図へ移った後になる)。
-  // BLK-builder-20260924-0012-b2-1-red: 突き合わせる相手 (保存フォルダのクラス図) を
-  // まだ読んでいなければ、読んでから判定し直す。読む前に判定すると相手 0 枚で
-  // 素通りし、開いて最初の保存だけが宣言の無い呼び出しのまま書き込まれていた。
-  // 読んでいる最中にもう一度押されても、同じ読み込みを待つ (先に素通りさせない)。
-  if (_sgdNeedsFolder()) {
-    _sgdLoadFolder(_wsFileDir()).then(function() { saveFile(); });
-    return;
-  }
-  if (runSaveGuard(doc)) return;
 
   var ST = window.MA.saveTarget;
-  // BLK-human-20260925-1150: 書き先はそのタブのフォルダ。保存先を替えても、前に開いたタブは開いたファイルへ書く。
+  // 書き先はそのタブのフォルダ。保存先を替えても、前に開いたタブは開いたファイルへ書く。
   var target = ST ? ST.decide(_cfgForDoc(doc) || cfg, doc, title) : { mode: 'download', name: title };
 
   if (target.mode === 'file') {
     // saveActiveDoc() が既に書き出しているが、ここでは結果を待って利用者に伝える。
     window.MA.workspace.saveToFile(_withSourceEol(doc), target.dir).then(function(ok) {
       setSaveStatus(ST.messageFor(target, ok));
-      // 保存できた図にだけ、その場で突合を掛ける (BLK-reviewer-20260908-1503-wish)。
       if (ok) {
         _afterManualSave(doc, target, true);
         // 書いた先が開いている図と違うなら、そのことを最優先で言う。
         // 状態バーの 1 行だけでは「保存した」と「本体が変わった」の食い違いが読めない。
         showSaveRedirect(redirected, target.dir);
-        runSaveCheck(doc && doc.name);
-        // 隣の persona と部品名がぶつかっていないか (BLK-primary-20260916-0526-wish)。
-        // 読み込みを待つので保存の表示は止めない。
-        runSaveClash(doc && doc.name);
-        // この保存で中身が別名の図と入れ替わっていないか (BLK-reviewer-20260912-2103-wish)
+        // この保存で中身が別名の図と入れ替わっていないか
         runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
       }
     });
@@ -28038,263 +27404,16 @@ function saveFile() {
   if (ST) setSaveStatus(ST.messageFor(target, true));
   // ダウンロードした中身を前回保存版にする (書いたファイルと画面の印を食い違わせない)。
   if (doc) _afterManualSave({ id: doc.id, name: doc.name, diagramType: doc.diagramType, dsl: mmdText }, target, false);
-  runSaveCheck(doc && doc.name);
-  runSaveClash(doc && doc.name);
   runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
 }
 
-// ── 保存時チェック (BLK-reviewer-20260908-1503-wish) ────────────────────────
-// 「保存」を押したその場で突合ボードと同じ突合を掛け、いま保存した図に新しく
-// 生えた不一致を図の上に出す。判定は src/core/save-check.js。ここは結線だけ。
-
-function _svckState() {
-  var SC = window.MA.saveCheck;
-  return SC ? SC.load(_reviewStore(), _wsFileDir()) : { seen: {} };
-}
-
-// 保存した図 1 枚について突合を掛け、警告を作る。控えは進めない (描画側で進める)。
-function _svckEvaluate(docName) {
-  var SC = window.MA.saveCheck, AB = window.MA.auditBoard;
-  if (!SC || !AB || !docName) return null;
-  var run = _atRunAudits();
-  var findings = null;
-  try { findings = _mfRows(); } catch (e) { findings = null; }
-  // SVG 実体のずれは 📂 一覧が読んだ結果があるときだけ載る (保存で読みに行かない)。
-  var board = AB.build({ audits: run.audits, svg: _abSvgScan, findings: findings });
-  _abBoard = board;
-  return SC.evaluate(board, { doc: docName, state: _svckState() });
-}
-
-function hideSaveCheckIfOtherDoc(activeId) {
-  var el = document.getElementById('save-check-overlay');
-  if (el && !el.hidden && el.getAttribute('data-doc-id') !== String(activeId)) el.hidden = true;
-}
-
-function hideSaveCheck() {
-  var el = document.getElementById('save-check-overlay');
-  if (el) el.hidden = true;
-}
-
-function renderSaveCheck(res) {
-  var SC = window.MA.saveCheck;
-  var el = document.getElementById('save-check-overlay');
-  if (!SC || !el) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  var sum = document.getElementById('sck-summary');
-  var list = document.getElementById('sck-list');
-  if (!res) { el.hidden = true; return; }
-
-  if (sum) sum.textContent = SC.summaryLine(res);
-  if (list) {
-    var html = '';
-    SC.lines(res).forEach(function(l) {
-      html += '<li class="' + (l.isNew ? 'sck-new' : 'sck-old') + '">'
-        + '<span class="sck-tag">' + (l.isNew ? '新規' : 'そのまま ' + l.ignored + ' 回')
-        + '</span>' + esc(l.text) + '</li>';
-    });
-    list.innerHTML = html;
-    list.hidden = !html;
-  }
-  // 指摘が無いときは帯を出さない (毎回の保存で図が隠れる方が邪魔になる)。
-  // 指摘が無いときは帯を出さず、突合の結果はステータスバーの保存先の後ろに足す。
-  // ここで setSaveStatus に置き換えると「どこに書いたか」が消える。
-  if (!SC.shouldWarn(res)) { el.hidden = true; appendSaveStatus(SC.checkLine(res)); return; }
-  var ws = window.MA.workspace;
-  el.setAttribute('data-doc-id', ws ? String(ws.getActiveId()) : '');
-  el.hidden = false;
-}
-
-// 保存のたびに呼ぶ。突合が落ちても保存そのものは成立させる。
-function runSaveCheck(docName) {
-  var SC = window.MA.saveCheck;
-  if (!SC) return null;
-  var res = null;
-  try { res = _svckEvaluate(docName); } catch (e) { res = null; }
-  if (!res) { hideSaveCheck(); return null; }
-  try { renderSaveCheck(res); } catch (e) { /* 表示できなくても控えは進める */ }
-  try { SC.save(_reviewStore(), _wsFileDir(), SC.advance(_svckState(), res)); } catch (e) {}
-  return res;
-}
-
-// ── 保存時の他 persona 衝突 (BLK-primary-20260916-0526-wish) ────────────────
-// 隣の persona と部品名が表記違いでぶつかっていることは、これまで reviewer が
-// audit を通しで走らせて指摘.md に書くまで分からなかった (ClockCtrl ⇔ Clock_Ctrl の
-// 継続 3 tick 目)。📂一覧の「他personaと突合」は押さないと動かないので、日常の
-// 保存には乗らない。ここで保存のたびに同じ突合を掛け、ぶつかっていれば相手と
-// 相手の図を名指しする。判定は src/core/save-clash.js。ここは結線だけ。
-
-// 隣のフォルダは保存のたびには読み直さない (フォルダ数 × 枚数の読み込みが
-// 保存の速さを食う)。自分のフォルダだけは必ず読み直す — いま保存した本文が
-// 控えのままだと、直した綴りでまた警告が出る。
-var _sclOthers = null;      // 隣のフォルダを読んだ控え
-var _sclOthersAt = 0;
-var _sclOthersMs = 60000;
-var _sclBusy = false;
-var _sclPlan = null;        // 帯の「揃える」が押されたときに実行する置換
-
-// 1 つのフォルダの図を、突合に掛けられる形 ({ name, persona, dsl }) で読む。
-function _sclReadDir(d) {
-  var WS = window.MA.workspace;
-  return WS.listFiles(d.path).then(function(names) {
-    return Promise.all((names || []).filter(function(n) { return n; }).map(function(n) {
-      return WS.loadFile(n, d.path).then(function(text) {
-        return { name: d.name + '/' + n, persona: d.name, _file: n,
-                 dsl: typeof text === 'string' ? text : '' };
-      }).catch(function() { return null; });
-    })).then(function(rows) {
-      return (rows || []).filter(function(r) { return r; });
-    });
-  }).catch(function() { return []; });
-}
-
-function _sclDirs() {
-  var dirs = _peekDirs.slice();
-  if (!dirs.length) dirs = [{ path: _wsFileDir(), name: _noteMineFolder() || '自分', current: true }];
-  return dirs;
-}
-
-// 突合に掛ける図をそろえる。隣は控えでよいが、自分は読み直す。
-// BLK-releaser-20260930-0802-1: 隣のフォルダの一覧 (_peekDirs) は、以前は保存先の一覧の参照タブ列が
-// 起動時に読んでいた。参照タブ列を外した (BLK-owner-20260925-0416-prune) ので、FILES「読むだけ」を
-// 開かないまま保存すると一覧が空で、自分のフォルダしか突き合わせずに「衝突なし」と言っていた。
-// 突合の前に一覧を自分で読みに行く (読めていれば読み直さない)。
-function _sclCollect() {
-  var ensure = (typeof _ensurePeekDirs === 'function') ? _ensurePeekDirs() : Promise.resolve(false);
-  return ensure.catch(function() { return false; }).then(_sclCollectDirs);
-}
-
-function _sclCollectDirs() {
-  var dirs = _sclDirs();
-  var mineDir = null, others = [];
-  dirs.forEach(function(d) { if (d.current) mineDir = d; else others.push(d); });
-  if (!mineDir) mineDir = dirs[0];
-  var fresh = (_sclOthers && (Date.now() - _sclOthersAt) < _sclOthersMs)
-    ? Promise.resolve(_sclOthers)
-    : Promise.all(others.map(_sclReadDir)).then(function(sets) {
-        var out = [];
-        sets.forEach(function(rows) { (rows || []).forEach(function(r) { out.push(r); }); });
-        _sclOthers = out;
-        _sclOthersAt = Date.now();
-        return out;
-      });
-  return fresh.then(function(theirs) {
-    return _sclReadDir(mineDir).then(function(mine) {
-      return { mine: mine, docs: window.MA.saveClash.merge(theirs, mine) };
-    });
-  });
-}
-
-// 保存した図が、突合の中で何という名前になっているか。
-// 見つからないまま「衝突なし」と言わないために、名前で引けないときは null を返す。
-function _sclDocName(mine, docName) {
-  var want = _s2(docName);
-  if (!want) return null;
-  for (var i = 0; i < mine.length; i++) {
-    var f = _s2(mine[i]._file);
-    if (f === want || f.replace(/\.[^.]+$/, '') === want) return mine[i].name;
-  }
-  return null;
-}
-
-function _s2(v) { return v == null ? '' : String(v); }
-
-function hideSaveClash() {
-  var el = document.getElementById('save-clash-overlay');
-  if (el) el.hidden = true;
-  _sclPlan = null;
-}
-
-function renderSaveClash(ev) {
-  var SL = window.MA.saveClash;
-  var el = document.getElementById('save-clash-overlay');
-  if (!SL || !el) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  // ぶつかっていないときは帯を出さず、照合したことだけを保存先の後ろに足す
-  // (保存のたびに図が隠れる方が邪魔になる)。
-  if (!SL.shouldWarn(ev)) { hideSaveClash(); appendSaveStatus(SL.statusLine(ev)); return; }
-
-  var sum = document.getElementById('scl-summary');
-  if (sum) sum.textContent = SL.summaryLine(ev);
-  var list = document.getElementById('scl-list');
-  if (list) {
-    var html = '';
-    SL.lines(ev).forEach(function(l) {
-      html += '<li>' + esc(l.mine + ' ⇔ ' + l.theirs + ' — 揃える先: ' + l.suggested)
-        + ' <span class="scl-where">'
-        + esc('（' + (l.personas.length ? l.personas.join('・') + ' の ' : '')
-              + l.docs.join('、') + '）')
-        + '</span></li>';
-    });
-    list.innerHTML = html;
-  }
-  // 揃える先が相手の綴りなら、この図をその場で揃えられる。揃える先が自分の綴りの
-  // ときはボタンを出さない (相手の図を断りなく書き換えることになる)。
-  var plans = SL.fixPlan(ev);
-  _sclPlan = plans.length === 1 ? plans[0] : null;
-  var fix = document.getElementById('btn-scl-fix');
-  if (fix) {
-    fix.hidden = !_sclPlan;
-    if (_sclPlan) {
-      fix.textContent = SL.fixLabel(_sclPlan);
-      fix.title = 'この図の ' + _sclPlan.from + ' を ' + _sclPlan.to
-        + ' に置き換えます（開いている他の図は触りません）';
-    }
-  }
-  // BLK-migrator-20260923-1409: どの図の保存で出た帯かを憶え、別の図へ移ったら引っ込める
-  var wsCl = window.MA.workspace;
-  el.setAttribute('data-doc-id', wsCl ? String(wsCl.getActiveId()) : '');
-  el.hidden = false;
-}
-
-// 保存のたびに呼ぶ。突合が落ちても保存そのものは成立させる。
-function runSaveClash(docName) {
-  var SL = window.MA.saveClash;
-  var NC = window.MA.nameClash;
-  if (!SL || !NC || !window.MA.workspace || _sclBusy || !docName) return Promise.resolve(null);
-  _sclBusy = true;
-  return _sclCollect().then(function(got) {
-    var res = NC.audit(got.docs);
-    var ev = SL.evaluate(res, { doc: _sclDocName(got.mine, docName) });
-    _sclBusy = false;
-    try { renderSaveClash(ev); } catch (e) {}
-    return ev;
-  }, function() {
-    _sclBusy = false;
-    hideSaveClash();
-    return null;
-  });
-}
-
-function setupSaveClash() {
-  // 帯は #preview-container の中にある。キャンバスのクリック (挿入ピッカー) へ
-  // 抜けさせない。
-  var el = document.getElementById('save-clash-overlay');
-  if (el) el.addEventListener('click', function(ev) { ev.stopPropagation(); });
-  var close = document.getElementById('btn-scl-close');
-  if (close) close.addEventListener('click', hideSaveClash);
-  var folder = document.getElementById('btn-scl-folder');
-  if (folder) folder.addEventListener('click', function() { _ensureFolderListOpen(); });
-  var fix = document.getElementById('btn-scl-fix');
-  if (fix) {
-    fix.addEventListener('click', function() {
-      if (!_sclPlan) return;
-      // 台本 5.5 のとおり、参加者名だけの変更は対象図だけに絞る。
-      var activeId = window.MA.workspace.getActiveId();
-      var docs = _renameDocs().filter(function(d) { return d.id === activeId; });
-      renameAcrossDocs(_sclPlan.from, _sclPlan.to, docs);
-      setSaveStatus(_sclPlan.from + ' を ' + _sclPlan.to + ' に揃えました。保存すると相手と揃います');
-      hideSaveClash();
-    });
-  }
-}
-
-// ── 保存の入れ替わり検知 (BLK-reviewer-20260912-2103-wish) ──────────────────
+// ── 保存の入れ替わり検知 ──────────────────
 // 「この保存で図の中身が別名の図と入れ替わっていないか」を保存のその場で言い、
 // 保存操作そのものをファイル名込みで控える。判定は src/core/save-swap.js。
 //
 // 直前の中身は、この画面がその図を最後に保存したときのものを覚えておく
 // (server 側の _versions/ は中身は残るが「どの操作で」が残らない)。
-// BLK-reviewer-20260914-0906-wish: 一覧を読んだときのクロス判定の控え。
+// 一覧を読んだときのクロス判定の控え。
 // 保存の直後に「この図の SVG は別の図の絵だ」とその場で言うために使う。
 var _svgCrossLatest = null;
 
@@ -28313,19 +27432,10 @@ function hideSaveSwap() {
   if (el) el.hidden = true;
 }
 
-// BLK-migrator-20260923-2312: 「保存の記録」の帯 (一致した組の一覧) は保存した図のもの。
+// 「保存の記録」の帯 (一致した組の一覧) は保存した図のもの。
 // 別の図に移っても出たままだと図を帯の高さだけ下へ押し、縦に長い図の下の方が画面の外へ
 // 出てホバーが届かない。保存時チェックの帯と同じく、次の図を開いたら引っ込める
 // (次の保存でまた出る)。記録を自分で開いているときは追跡の最中なので残す。
-// BLK-migrator-20260923-1409: 「名前の衝突」の帯も保存した図のもの (相手の図と名前は保存した図の中身から
-// 出している)。別の図に移っても出たままだと、入れ替わりの帯と同じく図を帯の高さだけ下へ押し、縦に長い図
-// (AWS 構成図の Figure 5 など) の下端の参加者が画面の外へ出てホバーが届かない。次の保存でまた出る。
-function hideSaveClashIfOtherDoc(activeId) {
-  var el = document.getElementById('save-clash-overlay');
-  if (!el || el.hidden) return;
-  if (el.getAttribute('data-doc-id') !== String(activeId)) hideSaveClash();
-}
-
 function hideSaveSwapIfOtherDoc(activeId) {
   var el = document.getElementById('save-swap-overlay');
   if (!el || el.hidden || _sswLogOpen) return;
@@ -28377,7 +27487,7 @@ function renderSaveSwap(res) {
   renderSaveSwapLog();
 }
 
-// ── 一致した組の一覧と 1 操作の復元 (BLK-primary-20260912-2206-wish) ────────
+// ── 一致した組の一覧と 1 操作の復元 ────────
 // save-swap は「いま保存した 1 枚」の相手しか言わない。3 枚が同時に雛形へ落ちた
 // primary の事故では、保存した 1 枚を直しても残りが黙って壊れたままになる。
 // ここはフォルダ全体の一致した組を並べ、保存した図には「戻す」を 1 つ出す。
@@ -28482,7 +27592,7 @@ function runSaveSwapCheck(docName, dsl) {
           new Date().toISOString(), SS.lineCount(dsl)));
     } catch (e) {}
     try { renderSaveSwap(res); } catch (e) {}
-    // BLK-reviewer-20260914-0906-wish: 出力先がクロスしていることに、保存した本人が
+    // 出力先がクロスしていることに、保存した本人が
     // その場で気付けるようにする (reviewer の突合を待たない)。一覧を読んでいない
     // 間は控えが無いので何も言わない。
     try {
@@ -28523,226 +27633,10 @@ function setupSaveSwap() {
   });
 }
 
-// ── 保存前のメソッド突合 (BLK-reviewer-20260915-0007-wish) ──────────────────
-// 保存を書き込む前に、いま保存する図の呼び出しを**同じ保存フォルダのクラス図**と
-// 突き合わせ、宣言が無ければ帯で止めて一覧を出す。判定は src/core/save-guard.js。
-// save-check (保存後) と違い、相手はタブではなく📂 一覧が読んだフォルダの中身。
-
-var _sgdAck = {};        // 図の名前 → 「このまま保存」を選んだときの顔ぶれ
-var _sgdPending = null;  // 帯を出したあと「このまま保存」で再実行する保存
-var _sgdRes = null;      // いま帯に出している突合の結果 (第 3 選択肢が書く対象)
-
-function hideSaveGuard() {
-  var el = document.getElementById('save-guard-overlay');
-  if (el) el.hidden = true;
-  _sgdPending = null;
-  _sgdRes = null;
-  var row = document.getElementById('sgd-omit-row');
-  if (row) row.hidden = true;
-}
-
-function renderSaveGuard(res) {
-  var SG = window.MA.saveGuard;
-  var el = document.getElementById('save-guard-overlay');
-  if (!SG || !el) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  var sum = document.getElementById('sgd-summary');
-  if (sum) sum.textContent = SG.summaryLine(res);
-  var list = document.getElementById('sgd-list');
-  if (list) {
-    var html = '';
-    SG.lines(res).forEach(function(l) {
-      html += '<li>' + esc(l.text)
-        + (l.decl ? '<span class="sgd-decl">クラス図に足すなら: ' + esc(l.decl) + '</span>' : '')
-        + (l.note ? '<span class="sgd-note">' + esc(l.note) + '</span>' : '')
-        + '</li>';
-    });
-    list.innerHTML = html;
-  }
-  // 第 3 選択肢 (意図的に省略) の理由欄は、押されるまで閉じておく。
-  _sgdRes = res;
-  var row = document.getElementById('sgd-omit-row');
-  if (row) row.hidden = true;
-  var rin = document.getElementById('sgd-omit-reason');
-  if (rin) rin.value = '';
-  _sgdNotePrefill = '';
-  renderOmitPreview();
-  el.hidden = false;
-}
-
-// BLK-reviewer-20260923-2012-wish: 帯の指摘が note の自由文で既に答えてあるとき、
-// 「🚫 意図的に省略」で理由欄に入れた note の本文。理由欄がこのままなら、
-// 指摘ごとに自分の note の本文を理由に使う (note が 2 つ以上あっても打ち直させない)。
-var _sgdNotePrefill = '';
-
-// ── 意図的な省略 (BLK-reviewer-20260915-0106-wish) ─────────────────────────
-// 帯に出ている指摘を「宣言しないと決めた」として片づけるとき、note の自由文では
-// なく `'@omit-method Cls.Method 理由` の 1 行を図に足す。次の突合 (GUI・CLI とも
-// src/core/method-audit.js) はこの行を読んで指摘から外すので、reviewer は puml を
-// 開いて日本語の意図を読み取らなくても「意図省略で解消」と書ける。
-
-// 書き込む行を、書く前にそのまま見せる。何が図に残るかを押す前に読ませる。
-function renderOmitPreview() {
-  var pv = document.getElementById('sgd-omit-preview');
-  var OM = window.MA.omitMethod;
-  if (!pv) return;
-  if (!OM || !_sgdRes) { pv.textContent = ''; return; }
-  var rin = document.getElementById('sgd-omit-reason');
-  var reason = rin ? rin.value : '';
-  pv.textContent = omitTagLines(reason).join('\n');
-}
-
-// いま帯に出ている指摘のうち、まだ宣言が無いものぶんの行。
-function omitTagLines(reason) {
-  var OM = window.MA.omitMethod;
-  if (!OM || !_sgdRes) return [];
-  var cur = mmdText;
-  var out = [];
-  var asNote = !!_sgdNotePrefill && String(reason || '').trim() === _sgdNotePrefill.trim();
-  (_sgdRes.issues || []).forEach(function(i) {
-    if (OM.has(cur, i)) return;
-    var r = (asNote && i.noteReply && i.noteReply.reason) ? i.noteReply.reason : reason;
-    out.push(OM.tagLine(i, r));
-  });
-  return out;
-}
-
-// 理由を図に書き込んでから保存へ進む。理由が空なら書かない —— 理由の無い
-// 省略宣言は、note の自由文を機械可読にした意味が無くなる。
-function applyOmitAndSave() {
-  var OM = window.MA.omitMethod;
-  var rin = document.getElementById('sgd-omit-reason');
-  var reason = rin ? String(rin.value || '').trim() : '';
-  if (!OM || !_sgdRes) return;
-  if (!reason) {
-    var pv = document.getElementById('sgd-omit-preview');
-    if (pv) pv.textContent = '理由を書いてください（この行は図に残り、監査はここを読みます）';
-    if (rin) rin.focus();
-    return;
-  }
-  var add = omitTagLines(reason);
-  if (add.length) {
-    if (window.MA.history) { try { window.MA.history.pushHistory(); } catch (e) {} }
-    mmdText = OM.apply(mmdText, add);
-    suppressSync = true;
-    editorEl.value = mmdText;
-    suppressSync = false;
-    try { window.MA.workspace.updateActive({ dsl: mmdText }); } catch (e) {}
-    updateLineNumbers();
-    scheduleRefresh();
-    try { renderTabs(); } catch (e) {}
-  }
-  hideSaveGuard();
-  // 書き足したので、次の突合ではこの指摘は外れる (帯はもう出ない)。
-  saveFile();
-}
-
-// 保存前に呼ぶ。止めるなら true。止めないときは帯を隠して保存を続けさせる。
-// BLK-migrator-20260923-1809: 開いたときから本文が 1 文字も変わっていないか。
-// 判定の正本は source-lock の指紋 (開いた瞬間に憶えている)。錠を持たない図
-// (自分で作ったタブ) は「開いたまま」ではないので false。
-// BLK-builder-20260924-0637-b2-1-red: 問い合わせで錠を動かさない。decide は名前が変わると
-// 錠を外すので、控えへ逸らした後の doc (名前が `{名前}-編集中`) で聞くと、それだけで
-// 錠が外れ、保存直後の突合が本体へ書き戻していた (「本体は変更前のまま」と帯が言うのに本体が変わる)。
-function _isUnchangedSinceOpen(doc) {
-  var SL = window.MA.sourceLock;
-  if (!SL || !doc || !doc.id || typeof doc.dsl !== 'string') return false;
-  try {
-    return !!SL.unchangedSinceOpen(doc.id, doc.dsl);
-  } catch (e) { return false; }
-}
-
-// 保存前の突合の相手 (保存フォルダ) をまだ読んでいないか。読みに行って失敗した
-// フォルダでは待たない (保存そのものを止め続けない)。
-var _sgdFolderTried = null;
-var _sgdFolderLoad = null;
-function _sgdLoadFolder(dir) {
-  if (!_sgdFolderLoad) {
-    var done = function() { _sgdFolderTried = dir; _sgdFolderLoad = null; };
-    _sgdFolderLoad = loadFolderImpact(true).then(done, done);
-  }
-  return _sgdFolderLoad;
-}
-function _sgdNeedsFolder() {
-  if (!_fiFolderMode()) return false;
-  var dir = _wsFileDir();
-  return !!dir && _fiDir !== dir && _sgdFolderTried !== dir;
-}
-
-function runSaveGuard(doc) {
-  var SG = window.MA.saveGuard;
-  if (!SG || !doc || !doc.name) return false;
-  var res = null;
-  try {
-    // 相手は📂 一覧が読んだ保存フォルダの中身だけ。タブで代用しない —— 開いて
-    // いないだけのクラス図を「無い」と読んで no-class を量産するのを避ける。
-    res = SG.check({ doc: doc, folderDocs: _fiFileDocs, unchanged: _isUnchangedSinceOpen(doc) });
-  } catch (e) { return false; }
-  if (!SG.shouldBlock(res)) { hideSaveGuard(); return false; }
-  // 同じ顔ぶれを一度「承知」しているなら、二度は止めない。
-  if (_sgdAck[doc.name] === SG.signature(res)) { hideSaveGuard(); return false; }
-  _sgdPending = { name: doc.name, sig: SG.signature(res) };
-  try { renderSaveGuard(res); } catch (e) { return false; }
-  // BLK-migrator-20260923-1809: 止めたことを状態バーにも言う。帯はプレビュー枠の
-  // 中に出るので、大きい図で下へ送られていると「押したのに何も起きない」に見える。
-  try { setSaveStatus('保存を止めました: ' + SG.summaryLine(res)); } catch (e) {}
-  return true;
-}
-
-function setupSaveGuard() {
-  var el = document.getElementById('save-guard-overlay');
-  if (el) el.addEventListener('click', function(ev) { ev.stopPropagation(); });
-  var fix = document.getElementById('btn-sgd-fix');
-  if (fix) fix.addEventListener('click', function() { hideSaveGuard(); });
-  var go = document.getElementById('btn-sgd-save');
-  if (go) go.addEventListener('click', function() {
-    var p = _sgdPending;
-    hideSaveGuard();
-    if (p) _sgdAck[p.name] = p.sig;
-    saveFile();
-  });
-  var omit = document.getElementById('btn-sgd-omit');
-  if (omit) omit.addEventListener('click', function() {
-    var row = document.getElementById('sgd-omit-row');
-    if (!row) return;
-    row.hidden = false;
-    var rin = document.getElementById('sgd-omit-reason');
-    // note で既に答えてある組なら、その本文を理由欄に入れて開く (note は消さない)。
-    var SG = window.MA.saveGuard;
-    var pre = (SG && SG.notePrefill) ? SG.notePrefill(_sgdRes) : '';
-    if (rin && pre && !String(rin.value || '').trim()) {
-      rin.value = pre;
-      _sgdNotePrefill = pre;
-    }
-    renderOmitPreview();
-    if (rin) rin.focus();
-  });
-  var omitReason = document.getElementById('sgd-omit-reason');
-  if (omitReason) {
-    omitReason.addEventListener('input', renderOmitPreview);
-    omitReason.addEventListener('keydown', function(ev) {
-      if (ev.key === 'Enter') { ev.preventDefault(); applyOmitAndSave(); }
-    });
-  }
-  var omitGo = document.getElementById('btn-sgd-omit-go');
-  if (omitGo) omitGo.addEventListener('click', applyOmitAndSave);
-}
-
-function setupSaveCheck() {
-  // 帯は #preview-container の中にある。キャンバスのクリック (挿入ピッカー) へ
-  // 抜けさせない。抜けると帯のボタンを押すたびに挿入ピッカーが開く。
-  var el = document.getElementById('save-check-overlay');
-  if (el) el.addEventListener('click', function(ev) { ev.stopPropagation(); });
-  var close = document.getElementById('btn-sck-close');
-  if (close) close.addEventListener('click', hideSaveCheck);
-  var board = document.getElementById('btn-sck-board');
-  if (board) board.addEventListener('click', function() { toggleAuditBoard(true); });
-}
-
 // 保存の結果をステータスバーに数秒だけ出す。押しても何も起きないように
 // 見える状態を作らないための表示で、通常の自動保存表示は上書きしない。
 var _saveStatusTimer = null;
-// BLK-builder-20260924-1413-2 (design 7a / 9c): 下端は 1 行。見せるのは短い形 (ファイル名に保存 · 衝突なし)
+// 下端は 1 行。見せるのは短い形 (ファイル名に保存 · 衝突なし)
 // で、パス・内訳を含む全文は title と、読み上げ・テキストとして取れる隠れた span に残す
 // (全文を下端に出すと、パース OK や件数が語の途中で 2 行に折れていた)。
 function setSaveStatus(msg) {
@@ -28780,7 +27674,7 @@ function appendSaveStatus(msg) {
 }
 
 // ── Export ─────────────────────────────────────────────────────────────────
-// BLK-junior-20260915-0406: 1 枚書き出しの名前は .puml の保存名 (図の名前) に揃える。
+// 1 枚書き出しの名前は .puml の保存名 (図の名前) に揃える。
 // title を使うと spi_state.puml の隣に「SPI ドライバ 状態遷移.svg」が並び、
 // 一覧でどれとどれが対か名前だけでは分からなくなる。
 function exportFileName(ext) {
@@ -28797,22 +27691,21 @@ function exportSVG() {
   if (!svgEl) return;
   var clone = svgEl.cloneNode(true);
   var svgOut = new XMLSerializer().serializeToString(clone);
-  // BLK-junior-20260923-1409: 画面に入れた時点で `<?plantuml-src …?>` はコメントに
+  // 画面に入れた時点で `<?plantuml-src …?>` はコメントに
   // 化けており、畳んだ文字列に `--` があると保存した svg が XML として壊れる。
   // 埋め込みは差分・突き合わせが読むので落とさず、元の処理命令に戻す。
   if (window.MA.svgExport) svgOut = window.MA.svgExport.restoreEmbeddedSource(svgOut);
   downloadBlob(exportFileName('svg'),
     new Blob([svgOut], { type: 'image/svg+xml' }));
   // 書き出した瞬間が「この周を完走した」区切り。ここで庫へロックする
-  // (BLK-junior-20260908-2203-wish)。
   stashToVault('SVG');
 }
 
-// BLK-primary-20260907-0443: 図が増えるほど「タブ切替 → Export → SVG」の 3 クリックが
+// 図が増えるほど「タブ切替 → Export → SVG」の 3 クリックが
 // 枚数分積み上がっていた。ここではタブを切り替えず、各ドキュメントの DSL を /render に
 // 直接投げて保存するので、何枚でも Export を開く → この項目を押す の 2 クリックで済む。
 // 保存はブラウザの複数ダウンロードを 1 件ずつ直列に走らせる。
-// BLK-primary-20260929-1108: dir は相対の !include を探す起点 (その図の .puml のあるフォルダ)。
+// dir は相対の !include を探す起点 (その図の .puml のあるフォルダ)。
 // 渡さなければ今の保存先 (保存フォルダの図を描き直す経路が大半のため)。
 function renderDslToSvg(dsl, dir) {
   var mode = (document.getElementById('render-mode') || {}).value || 'local';
@@ -28843,7 +27736,7 @@ function browserDownload(filename, blob) {
   setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
 }
 
-// BLK-primary-20260918-0249: a[download] はどこへ落ちたか (落ちたのか) を
+// a[download] はどこへ落ちたか (落ちたのか) を
 // 呼び出し側に返さないので、届いていない zip にも「保存しました」と出ていた。
 // zip は保存フォルダに書いて、書けたバイト数を確かめてから成功を名乗る。
 // ブラウザのダウンロードは今まで通り併せて出す (落とし先を選びたい人のため)。
@@ -28882,7 +27775,7 @@ function deliverZip(filename, bytes) {
   });
 }
 
-// BLK-human-20260909-2200: アプリ版 (pywebview) にはブラウザのダウンロード先が無く、
+// アプリ版 (pywebview) にはブラウザのダウンロード先が無く、
 // a[download] を押しても何も起きない。アプリ版のときだけネイティブの保存ダイアログに
 // 回し、断られた・使えないときは従来どおりダウンロードに落ちる (Web 版は素通り)。
 function downloadBlob(filename, blob) {
@@ -28903,7 +27796,7 @@ function downloadBlob(filename, blob) {
   fr.readAsDataURL(blob);
 }
 
-// -- 資料セット (BLK-primary-20260914-2006-wish) -----------------------------
+// -- 資料セット -----------------------------
 // 「全図を SVG で保存 (zip)」の対象は今開いているタブだけで、保存フォルダに
 // 25 枚あってもタブが 1 枚なら 1 枚しか入らない。しかも入らなかったことは zip を
 // 開くまで分からないので、書き出すたびに「今何枚開いているか」を数え直すはめに
@@ -28915,7 +27808,7 @@ var _dsSets = [];
 var _dsDir = null;
 var _dsNames = [];
 
-// ── 引き継ぎチェックリスト (BLK-primary-20260917-0323-wish) ────────────────
+// ── 引き継ぎチェックリスト ────────────────
 // 統一を終えた図を新人に渡してよいかを、1 画面で読み切る。置換の残りは
 // ⇄ 一括置換の履歴、note の鮮度は図を 1 枚ずつ開いて目で、SVG の追いつきは
 // 📂 一覧 —— と 3 つの画面に散っていた答えを 1 行に並べる。
@@ -28968,7 +27861,7 @@ function loadHandoverBoard() {
         if (typeof t === 'string') texts[n] = t;
       }, function() {});
     })).then(function() {
-      // BLK-owner-20260925-0235-prune: 引き継ぎ zip の対象も、この表と同じ読み込みから決める。
+      // 引き継ぎ zip の対象も、この表と同じ読み込みから決める。
       _etFileDocs = names.filter(function(n) { return typeof texts[n] === 'string'; })
         .map(function(n) { return { name: n, dsl: texts[n] }; });
       _etRoles = (info && info.roles) || {};
@@ -29068,7 +27961,7 @@ function renderHandoverBoard() {
     tr.setAttribute('data-ready', r.ready ? '1' : '0');
     if (r.blockers.length) tr.setAttribute('data-blockers', r.blockers.join('、'));
 
-    // BLK-owner-20260925-0235-prune: 行の頭 = 引き継ぎ zip に入る (✔) / 入らない (−)。押して切り替える。
+    // 行の頭 = 引き継ぎ zip に入る (✔) / 入らない (−)。押して切り替える。
     var isIn = _etRowIn(em, r.name);
     tr.setAttribute('data-in', isIn ? '1' : '0');
     var inTd = document.createElement('td');
@@ -29187,7 +28080,7 @@ function openHandoverBoard(opts) {
   });
 }
 
-// ── 渡す相手 (BLK-primary-20260924-1432-wish) ──────────────────────────────
+// ── 渡す相手 ──────────────────────────────
 // 新人に渡す前に、相手のフォルダの同名図と食い違っていないかをこの表の 5 列目で読む。
 // 以前は保存先を相手のフォルダに切り替え、1 枚ずつ開いて本文を目で読み比べていた。
 // 相手は FILES「読むだけ」・並べて比較と同じ隣のフォルダから選び、保存先は動かさない。
@@ -29290,7 +28183,7 @@ function _hbPeerCells(names, texts) {
   }).catch(function() { return null; });
 }
 
-// ── 食い違いを要素で読む (BLK-primary-20260924-2332-wish) ────────────────────
+// ── 食い違いを要素で読む ────────────────────
 // 5 列目の食い違う要素名を 3 つで切らずに全部チップで出し、同じ食い違い方をしている図の枚数を
 // 添える (`EnableClock ×4`)。チップを押すと同じ組を持つ行だけに絞り、もう一度押すか Esc で戻す。
 // 図の数だけ「開く→読む→戻る」を繰り返さず、食い違いの種類の数だけ判断すれば済むようにする。
@@ -29411,7 +28304,7 @@ document.addEventListener('keydown', function(ev) {
 }, true);
 
 function setupHandoverBoard() {
-  // BLK-owner-20260918-0429-prune: ツール ▾ →「確かめる」の項目はこのボタンを押す。
+  // ツール ▾ →「確かめる」の項目はこのボタンを押す。
   var open = document.getElementById('btn-tab-handover');
   if (open) open.addEventListener('click', function() { openHandoverBoard(); });
   var close = document.getElementById('hb-close');
@@ -29548,7 +28441,7 @@ function renderDocSets() {
     go.addEventListener('click', function() { exportDocSet(set.name); });
     row.appendChild(go);
 
-    // 貼る前の確認を 1 クリックで済ませる口 (BLK-primary-20260918-0549-friction)。
+    // 貼る前の確認を 1 クリックで済ませる口。
     var ba = document.createElement('button');
     ba.type = 'button';
     ba.className = 'ds-before-after';
@@ -29567,7 +28460,7 @@ function renderDocSets() {
     lay.addEventListener('click', function() { openDocLayout(set.name); });
     row.appendChild(lay);
 
-    // 書き出した後に、客先に見せる形のまま見返す口 (BLK-primary-20260916-0426-wish)。
+    // 書き出した後に、客先に見せる形のまま見返す口。
     // 書き出し直後でなくても入れる。差し戻しは zip を解かずにここから直す。
     var proof = document.createElement('button');
     proof.type = 'button';
@@ -29616,7 +28509,7 @@ function saveDocSet(name, docs, items) {
     }, function() { _dsStatus('登録できませんでした'); return null; });
 }
 
-// ── 資料の体裁と貼り込みプレビュー (BLK-primary-20260916-0100-wish) ──────────
+// ── 資料の体裁と貼り込みプレビュー ──────────
 // 資料セットは登録して zip にするところまでは GUI で完結していたが、実際に
 // 提案書やレビュー資料へ貼るときの「どの順で並べるか」「どんな見出し・1 行説明を
 // 添えるか」は zip を開いた後に資料側で手作業だった。順序を入れ替えたい・説明を
@@ -29626,7 +28519,7 @@ function saveDocSet(name, docs, items) {
 
 var _dlName = '';
 var _dlRows = [];
-// 「空欄だけ」に絞っているか (BLK-primary-20260917-0423-wish)
+// 「空欄だけ」に絞っているか
 var _dlBlankOnly = false;
 
 function _dlSet() {
@@ -29696,7 +28589,7 @@ function renderDocLayout() {
   }
 
   box.textContent = '';
-  // BLK-primary-20260917-0423-wish: 14 枚ぶんの欄が縦に並ぶだけでは、どれが
+  // 14 枚ぶんの欄が縦に並ぶだけでは、どれが
   // 埋まっていてどれが空かを読み取るのに 1 行ずつ目で追うことになる。
   // 行の頭に ○× を置き、「空欄だけ」で絞れるようにして、手順を
   // 「一覧を見る → × の行だけ直す」の 2 手にする。
@@ -29791,7 +28684,7 @@ function renderDocLayout() {
   renderDocSheet();
 }
 
-// 行の ○× と絞り込みを、打っている最中でも合わせ直す (BLK-primary-20260917-0423-wish)。
+// 行の ○× と絞り込みを、打っている最中でも合わせ直す。
 // 行を組み直すと打っている欄から focus が飛ぶので、印と表示/非表示だけを差し替える。
 // いま打っている行は、○ になっても欄から離れるまで残す (打ち終える前に消えない)。
 function _dlRefreshMarks() {
@@ -29888,7 +28781,7 @@ function renderDocSheet() {
   });
 }
 
-// ── 納品プレビュー (BLK-primary-20260916-0426-wish) ───────────────────────
+// ── 納品プレビュー ───────────────────────
 // 書き出した後に「客先に見せてよい状態か」を確かめる場が無かった。編集用の
 // プレビューは 1 枚ずつ DSL 入力欄と並ぶ画面で、体裁プレビュー (doc-layout) は
 // 文字だけの 1 枚物なので、資料として組んだ後の見た目 (表紙・目次・図番号・
@@ -29939,12 +28832,12 @@ function _dpShow(name, files, meta) {
   return _dpProof;
 }
 
-// ── 資料セットをまとめて変更前後で確かめる (BLK-primary-20260918-0549-friction) ──
+// ── 資料セットをまとめて変更前後で確かめる ──
 // 顧客向け資料に載せる前の確認で、図ごとに「一覧を開く → タブで開く → 変更前後を出す」を
 // 枚数分繰り返していた。セットには既に「どの図を渡すか」が入っているので、
 // その並びをそのまま会議セットに渡し、既存の変更サマリボードを図モードで開く。
 // 新しい画面は作らない (ボードの 1 枚ずつ 変更前 / 変更後 / 差分 のタブをそのまま使う)。
-// Ctrl+K から呼ばれたときの共通の受け口 (BLK-primary-20260918-0549-friction)。
+// Ctrl+K から呼ばれたときの共通の受け口。
 // セットが 1 つだけならその場でそれを開く (選ばせる意味が無い)。
 // 複数ある・まだ無いなら資料セットの画面を開いて、そこから選んでもらう。
 function runDocSetCommand(fn) {
@@ -30090,7 +28983,7 @@ function renderDocProof() {
   box.appendChild(cover);
 
   // 出す前に直す所。判定の内訳を表紙の次に置く (めくる前に読ませる)。
-  // BLK-primary-20260916-0626-wish: 指摘を押すと、最初に埋めるページの入力欄へ飛ぶ。
+  // 指摘を押すと、最初に埋めるページの入力欄へ飛ぶ。
   var iss = _dpPage('dp-issue');
   iss.id = 'dp-issues';
   box.appendChild(iss);
@@ -30132,7 +29025,7 @@ function renderDocProof() {
     if (!pg.note) n.style.display = 'none';
     page.appendChild(n);
 
-    // BLK-primary-20260916-0626-wish: 書き出しの指摘 (見出しが図名のまま / 注記が空) を、
+    // 書き出しの指摘 (見出しが図名のまま / 注記が空) を、
     // 資料を開いたままこのページで埋める。編集画面に戻って 1 枚ずつ開き直さない。
     var fix = document.createElement('div');
     fix.className = 'dp-fix';
@@ -30188,7 +29081,7 @@ function renderDocProof() {
   });
 }
 
-// ── 資料の画面で見出し・注記を埋める (BLK-primary-20260916-0626-wish) ──────
+// ── 資料の画面で見出し・注記を埋める ──────
 var _dpDirty = false;
 
 function _dpRenderIssues() {
@@ -30308,7 +29201,7 @@ function deleteDocSet(name) {
 
 // セットの図を保存フォルダから読んで zip にする。タブは見ない。
 // 欠けている図は書き出す前に名指しして、zip を開いてから気付く形にしない。
-// BLK-builder-20260924-0637-3-red: 書き出す直前に保存フォルダの一覧を読み直す。
+// 書き出す直前に保存フォルダの一覧を読み直す。
 // 画面を開いた時点の一覧のまま突き合わせると、開き直した直後 (一覧の読み込みが
 // 済む前) に押したときに、ある図を「無い」と数えて zip から落としていた。
 function exportDocSet(name) {
@@ -30348,7 +29241,7 @@ function _exportDocSetNow(name) {
   return Promise.all(res.present.map(function(n) { return _load(n, true); })).then(function() {
     var built = FE.docsFrom(res.present, texts);
     if (!built.docs.length) { _dsStatus('図の本文を読めませんでした'); return null; }
-    // BLK-primary-20260916-0100-wish: 組んだ体裁のまま出す。図番号を名前の先頭に
+    // 組んだ体裁のまま出す。図番号を名前の先頭に
     // 付けて貼る順にフォルダで並べ、目次付きの 1 枚物を同じ zip に入れる
     // (zip を開いた後に並べ直す・目次を打ち直す手作業をここで終わらせる)。
     var DL = window.MA.docLayout;
@@ -30368,7 +29261,7 @@ function _exportDocSetNow(name) {
     }
     return exportAllSVG(docs, document.getElementById('docset-status'), extra)
       .then(function(summary) {
-        // BLK-primary-20260918-0249: zip が届いていないなら、資料セットの成功文も
+        // zip が届いていないなら、資料セットの成功文も
         // 見返す画面も出さない (届いていないことに画面で気付けるようにする)。
         if (summary && summary.delivered === false) {
           _dsStatus(summary.message);
@@ -30376,7 +29269,7 @@ function _exportDocSetNow(name) {
         }
         var note = FE.missingNote(built.missing.concat(res.missing));
         // 書き出した中身を、そのまま客先資料の体裁で見返せるようにする
-        // (zip を解凍して 1 枚ずつ開き直さない。BLK-primary-20260916-0426-wish)。
+        // (zip を解凍して 1 枚ずつ開き直さない。)。
         var proof = _dpShow(name, summary.files || [],
           { zipFile: summary.zipFile, at: _dpNow() });
         var verdict = proof ? window.MA.docProof.verdict(proof).text : '';
@@ -30388,7 +29281,7 @@ function _exportDocSetNow(name) {
   });
 }
 
-// BLK-owner-20260923-1829-prune: 「資料にする」出口は 📦 資料セット 1 つ。範囲は
+// 「資料にする」出口は 📦 資料セット 1 つ。範囲は
 // メニューの項目数ではなくこの画面の「対象の選び方」で選ぶ。set 以外は畳んだ入口の
 // 実体 (#toolbar-actions の hidden なボタン) を押すので、処理も件数も今までどおり。
 var _dsScope = 'set';
@@ -30501,7 +29394,7 @@ function exportAllSVG(pickedDocs, statusEl, extraFiles) {
       return summary;
     }
     // 会議資料は「図 + どの指摘への対応か」で 1 組。指摘を 1 件でも結んでいれば
-    // 対応表を同じ zip に入れる (BLK-primary-20260908-1703-wish)。
+    // 対応表を同じ zip に入れる。
     var map = buildFindingMap();
     if (map && map.table && map.table.total > 0) {
       files.push({ name: '指摘対応表.md', content: map.text });
@@ -30510,11 +29403,10 @@ function exportAllSVG(pickedDocs, statusEl, extraFiles) {
       if (f && f.name) files.push({ name: f.name, content: String(f.content == null ? '' : f.content) });
     });
     // 何を zip に入れたかは、書き出した後に資料として見返す側が要る
-    // (BLK-primary-20260916-0426-wish)。
     summary.files = files;
     var name = window.MA.bulkExport.zipName();
     var bytes = window.MA.bulkExport.buildZip(files);
-    // BLK-primary-20260918-0249: 届いたことを確かめる前に「保存しました」と言わない。
+    // 届いたことを確かめる前に「保存しました」と言わない。
     return deliverZip(name, bytes).then(function(res) {
       if (!res.ok) {
         var bad = 'zip を保存できませんでした（' + name + '）— ' + res.error;
@@ -30533,7 +29425,7 @@ function exportAllSVG(pickedDocs, statusEl, extraFiles) {
       summary.message = msg;
       if (status) status.textContent = msg;
       if (window.MA.toast) window.MA.toast.show(msg);
-      // BLK-primary-20260909-0003-wish: 出した時点を保存フォルダに控える。
+      // 出した時点を保存フォルダに控える。
       // 次に書き出すときの「前回書き出しから変わった図」の基準になる。
       return _elRecord('svg', { file: summary.zipFile, docs: docs }).then(function() {
         if (document.getElementById('expick-modal') &&
@@ -30548,7 +29440,7 @@ function exportAllSVG(pickedDocs, statusEl, extraFiles) {
   });
 }
 
-// ── 部品の図をまとめて資料化 (BLK-junior-20260908-1903-wish) ─────────────────
+// ── 部品の図をまとめて資料化 ─────────────────
 // 設計書には同じ部品の全図種を並べて貼る。1 枚ずつ「開き直す → Export → PNG」を
 // 図種の数だけ繰り返していたので、枚数に比例して手数が伸びていた。保存フォルダの
 // 名前から部品を割り出して全図種を集め、図番号・図名を振った PNG セットと図一覧を
@@ -30563,7 +29455,7 @@ var _cpackPick = '';
 // タブを切り替えずに何枚でも書き出せる。
 function svgTextToPngBlob(svgText, transparent) {
   return new Promise(function(resolve, reject) {
-    // BLK-junior-20260923-1409: 1 枚書き出しと同じ理由で、埋め込みの元 DSL を落としてから渡す。
+    // 1 枚書き出しと同じ理由で、埋め込みの元 DSL を落としてから渡す。
     if (window.MA.svgExport) svgText = window.MA.svgExport.stripEmbeddedSourceText(svgText);
     var m = /<svg[^>]*\bwidth="([\d.]+)/.exec(svgText);
     var m2 = /<svg[^>]*\bheight="([\d.]+)/.exec(svgText);
@@ -30743,7 +29635,7 @@ function setupComponentPack() {
   if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeComponentPack(); });
 }
 
-// ── 1 枚を資料化 (BLK-junior-20260908-2303-wish) ─────────────────────────────
+// ── 1 枚を資料化 ─────────────────────────────
 // 設計書に貼る資料を作る場面は「題名に (資料用) を付けて保存」「図種に合わせた形式で
 // Export」「保存先確認」「一覧から開き直す」の 4 操作に分かれ、しかも形式 (状態遷移図
 // = SVG、他 = PNG 透過) は利用者が覚えて選んでいた。覚え違いは実際に手戻りになっている。
@@ -30754,9 +29646,9 @@ function setupComponentPack() {
 var _mexpFiles = [];
 var _mexpEntries = [];
 // 利用者が部品欄で選び直した部品。選び直していない間だけ、残りの多い部品を
-// 初期値に差し替える (BLK-junior-20260914-2006)。
+// 初期値に差し替える。
 var _mexpPicked = '';
-// BLK-junior-20260929-0854: 資料化の元にするファイル。開いたときは開いているタブの図、
+// 資料化の元にするファイル。開いたときは開いているタブの図、
 // 図種の欄で別のファイルを選べばそれ。同じ部品・図種にファイルが複数あっても、
 // 部品と図種の 2 欄だけで名前の短い別の図に決めない。
 var _mexpSource = '';
@@ -30801,14 +29693,14 @@ function _mexpRenderKinds() {
   if (!ME || !comp || !kindSel) return;
   var want = kindSel.value;
   var rows = ME.kindsFor(_mexpFiles, comp.value);
-  // BLK-junior-20260914-2006: 図種にも「未 / 古 / 済」を出す。どれが済んでいるかは
+  // 図種にも「未 / 古 / 済」を出す。どれが済んでいるかは
   // 資料一式ボードを開かないと分からず、済んだ図種をもう一度選んでしまっていた。
   var MB = window.MA.materialBoard;
   var mark = {};
   if (MB) {
     var boardRows = MB.rows(_mexpEntries, comp.value);
     boardRows.forEach(function(r) { mark[r.kind] = r; });
-    // BLK-junior-20260914-2106: 印を付けただけでは、欲しい図種を上から目で探して
+    // 印を付けただけでは、欲しい図種を上から目で探して
     // ［未］／［済］を読み比べることになる。手当ての要る図種を先頭にまとめる
     // (状態の分からない図種は末尾に、元の順のまま残す)。
     var order = MB.kindOrder(boardRows);
@@ -30898,7 +29790,7 @@ function _mexpRenderComponents() {
   var count = _mexpSel('mexp-count');
   if (!ME || !comp) return;
   var list = ME.components(_mexpFiles);
-  // BLK-junior-20260914-2006: 部品欄は先頭の部品で開き、図種欄にはその部品の
+  // 部品欄は先頭の部品で開き、図種欄にはその部品の
   // 図種しか出ない。ほぼ資料化済みの部品が先頭に来ていると、手を付けるべき
   // 部品は 1 つずつ選び直して図種欄を見るまで分からなかった。残りを行に書き、
   // 残りの多い部品を開いた時点で選んでおく。
@@ -30934,7 +29826,7 @@ function _mexpRenderComponents() {
   _mexpRenderKinds();
 }
 
-// ── 資料化の残り (部品 × 図種) — BLK-junior-20260914-2006-wish ──────────────
+// ── 資料化の残り (部品 × 図種) — ──────────────
 // 部品を 1 つ選ぶまで図種の残りが見えないと、GPIO がほぼ済んでいて TIMER が
 // 丸ごと未着手でも、選び直すまでそれが分からない。開いた時点で全部品の残りを
 // 出し、マスを押せば部品欄・図種欄がそこに合う (選び直しの往復が消える)。
@@ -30949,7 +29841,7 @@ function _mexpScan() {
   return sc;
 }
 
-// ── 貼付先の見出し (BLK-junior-20260914-2106-wish) ──────────────────────────
+// ── 貼付先の見出し ──────────────────────────
 // 資料化した画像が設計書のどの見出しに貼るものかは、今までどこにも残らず
 // ファイル名から人が思い出していた。マスに 1 回登録すれば以後ずっと残り、
 // 設計書側からは「この見出しの最新画像はどれか」を逆引きできる。
@@ -31095,7 +29987,7 @@ function _mexpRenderMatrix() {
                 ? window.MA.materialAnchor.cellText(row.component, c.kind, c.heading) : ''))) + '">'
         + _mexpEsc(c.absent ? '−' : c.mark) + '</td>';
     });
-    // 行まるごとの一括資料化 (BLK-junior-20260915-0106-wish)。図種を 1 つずつ
+    // 行まるごとの一括資料化。図種を 1 つずつ
     // 選び直さずに、その部品の未/古のマスを 1 押しで全部出す。
     html += '<td class="mexp-mrun"><button type="button" class="mexp-row-run"'
       + ' data-component="' + _mexpEsc(row.component) + '"'
@@ -31180,7 +30072,7 @@ function runMaterialRow(component) {
   });
 }
 
-// ── 部品サマリカード (BLK-junior-20260915-0206-wish) ────────────────────────
+// ── 部品サマリカード ────────────────────────
 // 一括資料化で出し終えたあと、「6 図種とも揃っているか」を見返す手立てが
 // どこにも無く、📂一覧を部品名でフィルタして 1 枚ずつ開き、題名の (資料用) と
 // 保存日時を目で追っていた。部品の図種を、資料用の絵と保存日時ごと 1 枚に並べる。
@@ -31294,7 +30186,7 @@ function openMaterialExport() {
     _mexpFiles = _mexpEntries.map(function(e) {
       return (e && typeof e === 'object') ? String(e.name || '') : String(e == null ? '' : e);
     }).filter(function(n) { return n !== ''; });
-    // BLK-junior-20260929-0854: 開いているタブの図が保存フォルダにあれば、それを既定の元にする
+    // 開いているタブの図が保存フォルダにあれば、それを既定の元にする
     // (部品・図種の組から、名前の短い別のファイルを選ばない)。
     var ME = window.MA.materialExport;
     var hit = (ME && ME.sourceOf) ? ME.sourceOf(_mexpFiles, _activeDocName()) : null;
@@ -31315,7 +30207,7 @@ function closeMaterialExport() {
 // (2 通りの手順を持つと、まとめて出したときだけ庫に入らない、が起きる)。
 // opts.open=false のときはタブを開き直さない (まとめて流すときに図種の数だけ
 // タブが開くと、終わったあとの画面が資料の最後の 1 枚で埋まる)。
-// BLK-junior-20260928-2255: 画像はブラウザのダウンロードに渡すだけで、保存フォルダにも提出物庫にも
+// 画像はブラウザのダウンロードに渡すだけで、保存フォルダにも提出物庫にも
 // 実体が無かった (画面は「保存フォルダと提出物庫に入れました」と言っていた)。保存フォルダと庫に
 // 画像を書き、書けたバイト数が作った画像と合うのを確かめてから済んだことにする。合わなければ理由を投げる。
 function _mexpBlobBase64(blob) {
@@ -31409,7 +30301,7 @@ function runMaterialPlan(p, opts) {
     });
 }
 
-// ── 資料化の根拠を残す (BLK-junior-20260915-0007) ───────────────────────────
+// ── 資料化の根拠を残す ───────────────────────────
 // 資料化は押した直後にモーダルが閉じ、根拠は一瞬のトーストだけだった。見落とせば
 // 「保存先に置けたか」を確かめる手段がモーダルに残らず、📂一覧を開き直して名前で
 // 探すまで確信が持てない (資料化 1 枚ごとに フォルダタブ → フィルタ入力 → クリック)。
@@ -31433,7 +30325,7 @@ function _mexpShowVerify(v) {
   if (open) open.hidden = (v.status !== 'ok');
 }
 
-// ── 保存された本文をその場で読む (BLK-junior-20260915-0106) ─────────────────
+// ── 保存された本文をその場で読む ─────────────────
 // 「置けた」だけでは手順7 の「指摘の内容が反映されているか」は確かめられず、
 // モーダルを閉じて📂一覧 → フィルタ入力 → 行クリック、と同じ確認をもう一度たどる
 // ことになっていた。保存先から本文を読み直してここに出す (画面を閉じさせない)。
@@ -31522,13 +30414,13 @@ function runMaterialExport() {
 
   var dsl = '';
   // 書き出し・資料用の版の保存・画像を保存フォルダと庫へ・タブの切り替えは runMaterialPlan と同じ道
-  // (BLK-junior-20260928-2255: 2 通りに持っていたので、画像の実体を書く直しが片方に漏れる)。
+  // (2 通りに持っていたので、画像の実体を書く直しが片方に漏れる)。
   return runMaterialPlan(p, { open: true })
     .then(function(done) {
       dsl = done.dsl;
       var msg = ME.doneMessage(p, done);
       // 貼付先が登録済みなら、出来た画像をどの見出しに貼るかまでを 1 行で言う
-      // (BLK-junior-20260914-2106-wish: 資料化の直後に確かめに戻らないため)。
+      // (資料化の直後に確かめに戻らないため)。
       var MAn2 = window.MA.materialAnchor;
       var anch = MAn2 ? MAn2.get(_mexpAnchors(), p.component, p.kind) : '';
       if (anch) msg += '。貼付先は「' + anch + '」です';
@@ -31536,7 +30428,7 @@ function runMaterialExport() {
       if (window.MA.toast) window.MA.toast.show(msg);
       if (run) run.disabled = false;
       try { refreshFolderPanelNow(); } catch (e) {}
-      // BLK-junior-20260915-0007: 保存先の一覧を読み直して「本当に置けたか」を
+      // 保存先の一覧を読み直して「本当に置けたか」を
       // このモーダルに残す。閉じないので、トーストを見落としても📂一覧へ戻らずに済む。
       return _mexpVerify(p, dsl, done).then(function() { return p; });
     })
@@ -31564,7 +30456,7 @@ function setupMaterialExport() {
   if (close) close.addEventListener('click', closeMaterialExport);
   var run = document.getElementById('mexp-run');
   if (run) run.addEventListener('click', function() { runMaterialExport(); });
-  // 確かめた図を 📂一覧で開く (BLK-junior-20260915-0007)。確かめは modal に残るので、
+  // 確かめた図を 📂一覧で開く。確かめは modal に残るので、
   // このボタンは「確かめた後に開きたいとき」の 1 手にすぎない。
   var rbFind = document.getElementById('mexp-readback-find');
   if (rbFind) rbFind.addEventListener('input', _mexpRenderReadbackLines);
@@ -31590,7 +30482,7 @@ function setupMaterialExport() {
     _mexpSource = o ? (o.getAttribute('data-source') || '') : '';
     _mexpRenderPlan();
   });
-  // 貼付先の見出し (BLK-junior-20260914-2106-wish)。入れ終えた時点で覚える
+  // 貼付先の見出し。入れ終えた時点で覚える
   // (別に「登録」ボタンを押させると、押し忘れたぶんだけ対応が抜ける)。
   var anchor = document.getElementById('mexp-anchor');
   if (anchor) anchor.addEventListener('change', function() {
@@ -31610,13 +30502,13 @@ function setupMaterialExport() {
     toggle.textContent = open ? '見出しから逆引き…' : '逆引きを閉じる';
     if (!open) _mexpRenderLookup();
   });
-  // 部品サマリカード (BLK-junior-20260915-0206-wish)
+  // 部品サマリカード
   var sumBtn = document.getElementById('mexp-summary-toggle');
   if (sumBtn) sumBtn.addEventListener('click', function() { _mexpToggleSummary(); });
   if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeMaterialExport(); });
 }
 
-// ── 要求ID対応 (BLK-junior-20260909-0103-wish) ──────────────────────────────
+// ── 要求ID対応 ──────────────────────────────
 // 設計書に貼る資料では、クラス・メソッドの横に対応する ASPICE 要求 ID を書く。
 // 今まで GUI にはそれを書く場所も見る場所も無く、図を作ったあとで別文書に対応表を
 // 手で作り直していた (図と表の二重管理。名前を直すと表だけが古くなる)。
@@ -31760,7 +30652,7 @@ function setupReqTrace() {
   if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeReqTrace(); });
 }
 
-// ── 部品の資料一式 (BLK-junior-20260909-0003-wish) ───────────────────────────
+// ── 部品の資料一式 ───────────────────────────
 // 設計書に貼る資料は 1 部品の複数図種で 1 組なのに、資料化は 1 枚ずつしかできず、
 // 「どの図種の資料用がまだ無いか」「元の図が資料用より新しくないか」は保存フォルダの
 // 名前と日時を人が読み比べるしかなかった。開いてから初めて気付くので、手順 1 で
@@ -31944,7 +30836,7 @@ function setupMaterialBoard() {
   if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeMaterialBoard(); });
 }
 
-// ── 指摘の付いた図だけを 1 押しで出す (BLK-primary-20260908-1903-friction) ──
+// ── 指摘の付いた図だけを 1 押しで出す ──
 // 指摘対応で「名指しされた数枚だけ」を再エクスポートするのに、図を 1 枚ずつ開いて
 // Export ▾ → SVG を図の数だけ繰り返していた (図 2 枚で 6 クリック)。絞り込みの画面は
 // あるが Export メニューからは「全図」しか見えず、指摘対応の場面で見つからない。
@@ -31994,7 +30886,7 @@ function setupFixExport() {
   refreshFixExportEntry();
 }
 
-// ── 提出用 zip の図選び (BLK-primary-20260908-1203-wish) ─────────────────────
+// ── 提出用 zip の図選び ─────────────────────
 // 「全図をSVGで保存（zip）」は開いている図を無条件に全部詰める。顧客に渡すのは
 // ふつう「前回提出後に変わった図」か「[要修正] が付いた図」だけなので、見比べた
 // 結果を頭に置いたまま Export に戻って選び直す二度手間になっていた。
@@ -32003,9 +30895,9 @@ function setupFixExport() {
 var _expickList = [];
 var _expickMode = 'all';
 
-var _expickQuery = '';   // 名前の絞り込み欄 (BLK-primary-20260925-1032-wish)
+var _expickQuery = '';   // 名前の絞り込み欄
 
-// BLK-primary-20260925-1032-wish: 候補は開いているタブの図 + 保存先 (保存フォルダ) の図。
+// 候補は開いているタブの図 + 保存先 (保存フォルダ) の図。
 // 保存フォルダの本文は ▤ 影響を見る・会議セットと同じ読み込み (loadFolderImpact) を使う。
 function _expickDocs() {
   if (!window.MA.workspace) return [];
@@ -32025,7 +30917,7 @@ function _expickBuild() {
   return ES.buildList(_expickDocs(), {
     statusOf: SD ? function(name, dsl) { return SD.statusOf(name, dsl); } : null,
     fixCountOf: RV ? function(name) { return RV.counts(name).fix; } : null,
-    // BLK-primary-20260909-0003-wish: 「前回この zip を出した時点から」の差。
+    // 「前回この zip を出した時点から」の差。
     // 保存からの差 (statusOf) では、出したあとに保存し直しただけの図と
     // 出してから中身が変わった図が区別できない。
     sinceStatusOf: EL ? function(name, dsl) { return EL.statusOf(_elLog, 'svg', name, dsl); } : null,
@@ -32055,7 +30947,7 @@ function renderExportPick() {
   } else if (shown.length === 0) {
     body.innerHTML = '<div class="expick-empty">「' + esc(_expickQuery) + '」を名前に含む図はありません</div>';
   } else {
-    // BLK-primary-20260925-1032-wish: 開いている図 / 保存先の図 の 2 段 (会議セットの選ぶ欄と同じ見出し)。
+    // 開いている図 / 保存先の図 の 2 段 (会議セットの選ぶ欄と同じ見出し)。
     var GROUP = { open: '開いている図', folder: '保存先の図（タブを開かずに、保存されている中身で書き出します）' };
     var cur = '';
     body.innerHTML = shown.map(function(it) {
@@ -32126,7 +31018,7 @@ function toggleExportPick(open, mode) {
   }
   // 保存フォルダの控えは開くたびに読み直す (別の端末で出した分も基準に入れる)。
   _elLoad().then(function(log) { if (log) rebuild(); });
-  // BLK-primary-20260925-1032-wish: 保存先の図も候補に並べる (読み終えたら足す。タブは開かない)。
+  // 保存先の図も候補に並べる (読み終えたら足す。タブは開かない)。
   if (_fiFolderMode()) loadFolderImpact(false).then(function(ok) { if (ok) rebuild(); });
   var body = document.getElementById('expick-body');
   if (body) body.scrollTop = 0;
@@ -32188,7 +31080,7 @@ function setupExportPick() {
   var save = document.getElementById('expick-save');
   if (save) save.addEventListener('click', function() { exportPickedSVG(); });
 
-  // BLK-primary-20260925-1032-wish: 名前の絞り込み欄。見える行を減らすだけで、印は変えない。
+  // 名前の絞り込み欄。見える行を減らすだけで、印は変えない。
   var find = document.getElementById('expick-filter');
   if (find) find.addEventListener('input', function() {
     _expickQuery = find.value;
@@ -32200,7 +31092,7 @@ function svgToCanvas(transparent, callback) {
   var svgEl = previewSvgEl.querySelector('svg');
   if (!svgEl) return;
   var clone = svgEl.cloneNode(true);
-  // BLK-junior-20260923-1409: PlantUML が末尾に埋める <?plantuml-src ...?> は
+  // PlantUML が末尾に埋める <?plantuml-src ...?> は
   // innerHTML を通るとコメントに化け、中身に `--` があると XML として壊れる。
   // 描画に関わらないので書き出す前に落とす。
   if (window.MA.svgExport) window.MA.svgExport.stripNonRendered(clone);
@@ -32238,7 +31130,7 @@ function exportPNG(transparent) {
   });
 }
 
-// ── 提出物庫 (BLK-junior-20260908-2203-wish) ─────────────────────────────────
+// ── 提出物庫 ─────────────────────────────────
 // 保存は「図の名前 = ファイル名」なので、次の周が diagram1 という同じ名前で
 // 始まれば前の周に完走した図は上書きで消える。_versions の控えは残るが、そこに
 // 積まれるのは「上書きされた中身」で、どれが提出物かは開くまで分からない。
@@ -32274,7 +31166,7 @@ function loadVault(force) {
 
 // 画像を書き出した瞬間に呼ぶ。積めなくても書き出しは止めない (庫は副作用)。
 // opts (任意): { dsl, name, image: {ext, base64} } — 今のタブではない図を控えるとき (資料化をまとめて流すとき) と、
-// 画像の実体も庫に入れるとき (BLK-junior-20260928-2255)。
+// 画像の実体も庫に入れるとき。
 function stashToVault(format, opts) {
   var V = window.MA.vault;
   if (!V || !_fiFolderMode()) return Promise.resolve(null);
@@ -32476,7 +31368,7 @@ function exportClipboard() {
   });
 }
 
-// ── レビュー指摘のピン (BLK-reviewer-20260907-1203-wish) ────────────────────
+// ── レビュー指摘のピン ────────────────────
 // 指摘を文章で書き直しては次の run で該当箇所を探し直す、を繰り返していた。
 // 指摘を図の行に貼れば、図を開いた瞬間に該当箇所へ赤い番号が出る。既読の印が
 // そのまま「反映を確認した」の記録になるので、前回指摘の追跡が diff 読みでなくなる。
@@ -32593,7 +31485,7 @@ function openPinPanel(focusId) {
   }
 }
 
-// 指摘 1 件ぶんの「直す側の応答」(BLK-reviewer-20260908-1303-wish)。
+// 指摘 1 件ぶんの「直す側の応答」。
 // 応答が書かれていれば誰が何と言ったかを出し、書かれていなければ書く欄を出す。
 // 応答は指摘 1 件に何度でも返せる (保留 → 対応した が履歴として残る)。
 function _pinReplyHtml(p, esc) {
@@ -32638,7 +31530,7 @@ function renderPinPanel() {
     + '" data-stale="' + sum.stale + '">レビュー指摘 ' + sum.total + ' 件 ・ 未対応 ' + sum.pending
     + ' ・ 対応済み ' + sum.done
     + (sum.stale ? ' ・ 行が見つからない ' + sum.stale : '') + '</div>';
-  // 直す側の応答の内訳 (BLK-reviewer-20260908-1303-wish)。reviewer が最初に
+  // 直す側の応答の内訳。reviewer が最初に
   // 知りたいのは「全部確かめ直すのか、裏取りだけでよいのか」なので先頭に置く。
   var PR = window.MA.pinReply;
   if (PR && pins.length) {
@@ -32729,7 +31621,7 @@ function renderPinPanel() {
     renderPinBadge();
     renderPinPanel();
   });
-  // 直す側の応答 (BLK-reviewer-20260908-1303-wish)。
+  // 直す側の応答。
   bindAll('pin-reply-add', function(id) {
     var PRa = window.MA.pinReply;
     if (!PRa) return;
@@ -32788,7 +31680,7 @@ function renderPinPanel() {
   }
 }
 
-// ── 指摘から対象要素へのジャンプ (BLK-junior-20260907-2303-wish) ────────────
+// ── 指摘から対象要素へのジャンプ ────────────
 // 指摘の対象を選び直すのに、レイアウトが変わるたび要素を目で探してクリックし直して
 // いた。再レイアウト直後は隣を掴む誤クリックも起きる。指摘は対象行を覚えているので、
 // その行の選択候補を引き当てて 移動 + 選択 + 修正フォームまでを 1 操作で済ませる。
@@ -32876,7 +31768,7 @@ function setupPinPanel() {
   renderPinBadge();
 }
 
-// ── 指摘の受信箱 (BLK-junior-20260907-2203-wish) ────────────────────────────
+// ── 指摘の受信箱 ────────────────────────────
 // 📌 指摘は開いている 1 図ぶんしか出ない。指摘を受けて直す業務は、前の図を
 // 1 枚ずつ開いてバッジを見て回るところから始まっていた。保存フォルダの図を
 // まとめて読み、「未対応が何件・どの図に残っているか」を先に出す。
@@ -32900,7 +31792,7 @@ function _inboxUnreadOnly() {
 function _inboxSetUnreadOnly(v) {
   try { window.localStorage.setItem('pua.pin-inbox.unread', v ? '1' : '0'); } catch (e) { /* 同上 */ }
 }
-// 出典の絞り込み (BLK-owner-20260923-1409-prune)。'' = 全部 / 'audit' = 監査が出した /
+// 出典の絞り込み。'' = 全部 / 'audit' = 監査が出した /
 // 'manual' = 手で書いた。🔖 手動指摘のタブをここに畳んだので、同じものはこの絞り込みで出す。
 function _inboxSource() {
   try { return window.localStorage.getItem('pua.pin-inbox.source') || ''; } catch (e) { return ''; }
@@ -32909,10 +31801,10 @@ function _inboxSetSource(v) {
   try { window.localStorage.setItem('pua.pin-inbox.source', String(v == null ? '' : v)); } catch (e) { /* 同上 */ }
 }
 
-// ── 着手状況の追跡 (BLK-reviewer-20260908-1603-wish) ───────────────────────
+// ── 着手状況の追跡 ───────────────────────
 // 受信箱は「まだ直っていない指摘」を並べるが、並ぶのは指摘であって着手状況ではない。
 // 前回の依頼に手が付いたかを知るには audit.js --since-files で保存フォルダの全図の
-// 指紋を控えと突き合わせるしかなく、何 tick 放置されているかも数え直していた。
+// 指紋を控えと突き合わせるしかなく、何回 放置されているかも数え直していた。
 // 走査のたびに指摘 1 件ずつを未着手 / 着手 / 解消へ仕分け、控えを憶えておく。
 // 仕分けの規則は src/core/pin-progress.js。ここは控えの出し入れと画面だけ。
 var _inboxProgress = null;   // { key: entry } 直近の走査で付けた着手状況
@@ -32963,7 +31855,7 @@ function _progressOf(item) {
   return _inboxProgress[PP.keyOf(item)] || null;
 }
 
-// ── 反映の判定 (BLK-reviewer-20260908-1903-wish) ───────────────────────────
+// ── 反映の判定 ───────────────────────────
 // 着手状況が言えるのは puml 側だけで、客が見る SVG に出ているかは別に確かめていた
 // (puml diff・label-position 監査・/render 再描画・/verify-svg を 4 本別々に回す)。
 // 指摘の付いている図だけを描き直して突き合わせ、1 件ごとに 1 つの札にする。
@@ -33086,7 +31978,7 @@ function _inboxShown() {
   return list.filter(function(p) {
     var e = _progressOf(p);
     if (!(e && e.status === 'resolved')) return true;
-    // BLK-reviewer-20260908-1903-wish: puml が直っていても、保存中の SVG が
+    // puml が直っていても、保存中の SVG が
     // 直す前のままなら依頼は終わっていない。作り直し漏れと分かったものは
     // 解消として落とさず箱に残す (落とすと、再エクスポート漏れは誰も見ない)。
     // SVG がそもそも無い図はここでは残さない。書き出していない保存フォルダで
@@ -33128,7 +32020,7 @@ function scanPinInbox() {
       docs.push({ name: n, dsl: openDocs[n] });
     });
     _inboxDocs = docs;
-    // BLK-owner-20260923-1409-prune: 手で書いた指摘も同じ走査で仕分ける。
+    // 手で書いた指摘も同じ走査で仕分ける。
     // 🔖 手動指摘が別に保存フォルダを読み直していた往復がここで 1 回になる。
     var byName = {};
     docs.forEach(function(d) { if (d && typeof d.dsl === 'string') byName[d.name] = d.dsl; });
@@ -33232,7 +32124,7 @@ function renderInboxPanel() {
     + '<label><input type="checkbox" id="ib-resolved"' + (_inboxShowResolved() ? ' checked' : '')
     + '> 解消も出す</label> '
     + '<label>自分 <input id="ib-me" placeholder="junior" value="' + esc(_inboxMe()) + '"></label>'
-    // BLK-owner-20260923-1409-prune: 🔖 手動指摘のタブを畳んだ代わりの絞り込み。
+    // 🔖 手動指摘のタブを畳んだ代わりの絞り込み。
     // 「手で書いた / 監査が出した」は札ではなく出典なので、ここで選ぶ。
     + ' <label>出典 <select id="ib-source">'
     + '<option value=""' + (_inboxSource() === '' ? ' selected' : '') + '>すべて</option>'
@@ -33246,7 +32138,7 @@ function renderInboxPanel() {
     + ' <button type="button" id="mf-add">L' + _pinTargetLine() + ' に足す</button>'
     + ' <button type="button" id="mf-copy">指摘.md へコピー</button></div>';
 
-  // 着手状況の帯 (BLK-reviewer-20260908-1603-wish)。指摘そのものではなく
+  // 着手状況の帯。指摘そのものではなく
   // 「前回の依頼に手が付いたか」を先に出す。手順 1 はこの 1 行で足りる。
   var PP = window.MA.pinProgress;
   if (PP && _inboxProgress) {
@@ -33257,7 +32149,7 @@ function renderInboxPanel() {
       + esc(PP.headText(psum)) + '</div>';
   }
 
-  // 反映の判定の帯 (BLK-reviewer-20260908-1903-wish)。puml と SVG を 1 つの札にした
+  // 反映の判定の帯。puml と SVG を 1 つの札にした
   // 結果をここで先に言う。手順 8 (前回指摘の反映確認) はこの 1 行で終わる。
   var PV = window.MA.pinVerify;
   if (PV && _inboxVerifyState === 'running') {
@@ -33271,7 +32163,7 @@ function renderInboxPanel() {
       + esc(PV.headText(vsum)) + '</div>';
   }
 
-  // BLK-reviewer-20260908-0003: 手で書いた指摘は audit.js のどの監査にも当たらず、
+  // 手で書いた指摘は audit.js のどの監査にも当たらず、
   // 根拠 (別の図の中身) が消えても「DSL 無変更 → 前回のまま」で引き継がれ続ける。
   // 受信箱を開いた時点で、根拠が崩れたものだけを名指しで先頭に出す。
   var CC = window.MA.claimCheck;
@@ -33300,12 +32192,12 @@ function renderInboxPanel() {
     html += '<div class="ib-group" data-doc="' + esc(g.doc) + '" data-open="' + g.open + '">'
       + '<div class="ib-doc">' + esc(PI.groupText(g)) + '</div>';
     g.items.forEach(function(p) {
-      // 直す側の応答を指摘と同じ行に出す (BLK-reviewer-20260908-1303-wish)。
+      // 直す側の応答を指摘と同じ行に出す。
       // これが無いと、reviewer は次の run で図をまたいで全部を確かめ直すことになる。
       var reply = _inboxReply(p);
       var prog = _progressOf(p);
       var jv = _inboxVerifyOf(p);
-      // BLK-owner-20260923-1409-prune: 手で書いた指摘にも同じ語彙の札を付ける。
+      // 手で書いた指摘にも同じ語彙の札を付ける。
       // 監査が出した指摘は puml/SVG の判定 (jv) が札になり、手で書いた指摘は
       // 仕分け (指紋の持ち越し) を同じ 4 つへ対応付けたものが札になる。
       var FV = window.MA.findingVocab;
@@ -33527,7 +32419,7 @@ function setupPinInbox() {
   renderInboxBadge();
 }
 
-// ── 手動指摘の台帳 (BLK-reviewer-20260908-0003-wish) ────────────────────────
+// ── 手動指摘の台帳 ────────────────────────
 // audit.js が拾えない、図を読んで初めて気づく類の指摘は `指摘.md` に自然文で書くしか
 // なく、次に見るときは全文を読み直していた。読み直しを省くと、もう直っている指摘を
 // 引き継ぎ続ける。指摘 1 件を「対象ファイル + 行 + 行の指紋」で憶えておき、
@@ -33565,10 +32457,10 @@ function _mfOpenDocs() {
 }
 
 // 🔖 手動指摘のタブ (旧 findings-panel) は 📥 指摘箱に畳んだ
-// (BLK-owner-20260923-1409-prune)。走査は scanPinInbox が 1 回で行い、
+// 走査は scanPinInbox が 1 回で行い、
 // 仕分けの規則は src/core/manual-findings.js のまま、出典の絞り込みで出す。
 
-// ── セット複製 (BLK-junior-20260907-1203-wish) ──────────────────────────────
+// ── セット複製 ──────────────────────────────
 // 題材替え (GPIO → UART) は 6 図種ぶん、テンプレート作成を図種の数だけ
 // 繰り返していた。系統でまとまった 1 セットに対応表を 1 回入れれば 6 枚が
 // 一度に揃う。組み立て (どの図がどんな名前で作られるか) は
@@ -33628,7 +32520,7 @@ function _fcSourceDocs() {
   return out;
 }
 
-// ── 題材プリセット (BLK-junior-20260907-1303-wish) ─────────────────────────
+// ── 題材プリセット ─────────────────────────
 // セットを 1 度登録しておけば、次の題材からは「プリセットを選ぶ → 題材名を打つ →
 // 生成」の 3 操作で一式が揃う。元の図をタブに開く必要も、置換元を打ち直す必要も無い。
 // 何がどう置き換わるかは src/core/subject-preset.js、ここは画面と保存だけ。
@@ -33945,7 +32837,7 @@ function openFamilySet() {
   closeFamilyClone();
 }
 
-// BLK-owner-20260924-2337-prune: 系統ぜんぶの複製は「既存の図や雛形から新しい図を起こす」窓 (#tpl-modal) の
+// 系統ぜんぶの複製は「既存の図や雛形から新しい図を起こす」窓 (#tpl-modal) の
 // 「同じ系統の図ぜんぶ」で出す (別の窓 #fc-modal と入口 ⧉⧉ セット複製 は畳んだ)。中身の描き方はそのまま。
 function closeFamilyClone() {
   var modal = document.getElementById('tpl-modal');
@@ -33996,7 +32888,7 @@ function scheduleRefresh() {
   syncEditedText();
 }
 
-// BLK-owner-20260925-0312-1: 本文を書き換えた後始末の 1 本道。本文欄で打っても、フォーム・選択パネル・
+// 本文を書き換えた後始末の 1 本道。本文欄で打っても、フォーム・選択パネル・
 // 窓・一括操作・元に戻すで書き換えても、本文を書き換えた側は mmdText を入れて scheduleRefresh() を
 // 呼ぶ (ctx.onUpdate もそれ)。ここでタブの本文 (workspace)・自動保存・タブの印・上部バーの保存状態を
 // 同じ時にそろえて追わせる。経路を図種ごとに足さない。判定は MA.textSync (タブを替えた・開いただけは書かない)。
@@ -34013,19 +32905,19 @@ function syncEditedText() {
     try { WS.updateActive({ dsl: mmdText, diagramType: currentDiagramType }); } catch (e) {}
   }
   if (!d.save) return;
-  // 自動保存より **前** に workspace を書き戻すこと (BLK-primary-20260914-2206: 自動保存は書き先を
+  // 自動保存より **前** に workspace を書き戻すこと (自動保存は書き先を
   // 決めるのに「タブの本文が開いたときから変わったか」を見る)。
   if (window.MA.autoSave) {
     try { window.MA.autoSave.scheduleSave(currentDiagramType, mmdText); } catch (e) {}
   }
   // 前回保存時点との差分 (タブの ● ・上部バーの保存・下端の差分) を追従させる。
   try { renderDiffBadge(); } catch (e) {}
-  // 前回保存版との ＋a −b は、保存を押す前に気付けることが値打ち (BLK-reviewer-20260915-2346-wish)。
+  // 前回保存版との ＋a −b は、保存を押す前に気付けることが値打ち。
   try { renderLiveDiffChip(); } catch (e) {}
   try { renderVersionBadge(); } catch (e) {}
   // Git のコミットを並べている間は、作業中との色付けも追う (design 10c)。
   try { if (window.MA.appGit) window.MA.appGit.refreshDiff(); } catch (e) {}
-  // BLK-junior-20260907-1403-wish: 「見てもらいながらその場で直す」ので、指摘は書き換えるたびに引き直す。
+  // 「見てもらいながらその場で直す」ので、指摘は書き換えるたびに引き直す。
   try { renderReviewBadge(); } catch (e) {}
   try { renderConsistencyBadge(); } catch (e) {}
   try { renderEventSyncBadge(); } catch (e) {}
@@ -34043,7 +32935,7 @@ function markTextSynced() {
   _textSyncLast = TS.baseline(doc, mmdText);
 }
 
-// BLK-primary-20260924-0805-design: 仮のタブで本文や図を 1 か所でも直したら、その場で固定のタブにする
+// 仮のタブで本文や図を 1 か所でも直したら、その場で固定のタブにする
 // (次の 1 回押しで入れ替わって、直した中身がタブ列から消えない)。
 function pinPreviewIfEdited() {
   var WS = window.MA.workspace;
@@ -34054,7 +32946,7 @@ function pinPreviewIfEdited() {
   try { renderTabs(); } catch (e) {}
 }
 
-// BLK-builder-20260924-1202-2: 本文から決まった図種を、図種を名乗る所 (currentDiagramType・上端の図種欄・
+// 本文から決まった図種を、図種を名乗る所 (currentDiagramType・上端の図種欄・
 // 左レール・ズームの帯・タブ) にそろえる。本文は書き換えない (図種欄の change は鳴らさない。
 // 鳴らすと図種の切り替えとして本文が見本や下書きに入れ替わる)。
 // 起動時の復元 (bootRestore) が本文から図種を当てるときと同じそろえ方。
@@ -34087,14 +32979,14 @@ function refresh() {
   if (window.MA.parserUtils.isAmbiguousType(mmdText) && modules[currentDiagramType]) {
     detectedType = currentDiagramType;
   }
-  // BLK-migrator-20260924-0637: 直前の描画で PlantUML が別の図種と言った DSL は、その図種で読む
+  // 直前の描画で PlantUML が別の図種と言った DSL は、その図種で読む
   // (手続きで宣言した部品の図を毎回シーケンスで読み直して、描画のたびに右パネルが入れ替わらないように)。
   if (_svgKindFix && _svgKindFix.from === detectedType && modules[_svgKindFix.to]) {
     detectedType = _svgKindFix.to;
   }
   var mod = detectedType ? modules[detectedType] : null;
   if (mod) currentModule = mod;
-  // BLK-builder-20260924-1202-2 (design 4a/4b/4c): 右パネルと下端の件数が本文の図種に替わるなら、
+  // 右パネルと下端の件数が本文の図種に替わるなら、
   // ズームの帯・左レール・上端の図種欄・タブの図種も同じ図種にそろえる。
   if (mod) _adoptDetectedType(detectedType);
 
@@ -34114,7 +33006,7 @@ function refresh() {
   // elements / relations を持たないので、モジュールの戻り値を直接数えると
   // どちらも常に 0 になっていた。構造タブと同じ outline.countLabel で数えて、
   // 同じ図の 2 か所に違う数が出ないようにする。
-  // BLK-migrator-20260929-1351: 展開が手元にある本文は、マクロを呼んだ行を展開後の行に差し替えた本文で数える。
+  // 展開が手元にある本文は、マクロを呼んだ行を展開後の行に差し替えた本文で数える。
   var _PE = window.MA.preprocExpand;
   statusInfoEl.textContent = window.MA.outline.countLabel(
     window.MA.outline.build((_PE && _PE.has(mmdText) && _PE.splicedText(mmdText)) || mmdText).counts,
@@ -34126,13 +33018,13 @@ function refresh() {
   renderSvg();
 }
 
-// ── 図の設定タブ (BLK-primary-20260907-0703) ───────────────────────────────
+// ── 図の設定タブ ───────────────────────────────
 // 色・文字サイズ・テーマ・タイトルを変える経路が DSL の手書きしか無かった。
 // 右パネルに常設のタブを置き、選ぶとその場で DSL 先頭に skinparam / title が
 // 書き込まれ、書き込まれる行も同じ画面に出す。
 var dsSettings = null;
 
-// ── ドメイン宣言 (BLK-reviewer-20260909-0703-wish) ──────────────────────────
+// ── ドメイン宣言 ──────────────────────────
 // 図の設定に置く「隣のフォルダの同名ドメインと同一 / 別物」の宣言欄。
 // 書くのは domain-verdict の印 1 行だけで、名前の置換や title の書き換えはしない
 // (それは突合の画面で差分を見ながら決めること)。宣言は手順 4 / 4.7 の突合が読む。
@@ -34280,7 +33172,7 @@ function dsSet(patch) {
 }
 
 // ── 図名 (= ファイル名) の付け替え ─────────────────────────────────────────
-// BLK-junior-20260908-1603。名前を変えると、前の名前のファイルは保存フォルダに
+// 名前を変えると、前の名前のファイルは保存フォルダに
 // 残る。そこに「名前を変える直前の自動保存」が入っていることがあるので
 // (前周の完了物が今回の編集で上書きされる)、戻せる版があるなら戻す口を出す。
 
@@ -34326,7 +33218,7 @@ function _dsShowRenameNotice(el) {
   el.appendChild(btn);
 }
 
-// ── 改名の後始末 (BLK-junior-20260915-0307) ────────────────────────────────
+// ── 改名の後始末 ────────────────────────────────
 // 前の名前のファイルが今の図そのものなら、それは改名であって複製ではない。
 // 新しい名前で書いてから前の名前を消す。中身が違うなら別物なので残し、
 // rename-guard の知らせ (戻す口) に任せる。
@@ -34342,7 +33234,7 @@ function _sweepRenamedFile(from, to, dsl, out) {
   if (!saved) return Promise.resolve('');
   var dir = _wsFileDir();
   var body = String(dsl == null ? '' : dsl);
-  // BLK-junior-20260925-1732-friction: 直前の編集 (タイトル欄など) の自動保存がまだ待っていると、
+  // 直前の編集 (タイトル欄など) の自動保存がまだ待っていると、
   // それは前の名前で後から書かれ、付け替えた後に前の名前のファイルが同じ中身で戻ってくる。
   // 先に書き切らせてから前の名前のファイルを読む (書き切った中身は今の図と同じなので付け替えになる)。
   var AS = window.MA.autoSave;
@@ -34396,9 +33288,9 @@ function _dsRenameActive(next) {
   ws.rename(id, to);
   var name = _dsActiveDocName();
   var note = RG ? RG.notice({ from: from, to: name, saved: saved, version: version }) : null;
-  // BLK-releaser-20260929-0851-1: 付け替え (BLK-junior-20260915-0307) は前の名前のファイルが
+  // 付け替え は前の名前のファイルが
   // 今の図と同じなら消す。そのファイルが前周の完了物に今回の編集が紛れ込んだもの
-  // (BLK-junior-20260908-1603) なら、前周の版は控えにしか残らない。付け替えた後も
+  // なら、前周の版は控えにしか残らない。付け替えた後も
   // 「直前の版に戻す」を残す。戻す口は付け替えが済んでから出す (途中で戻すと、戻した版を付け替えが消す)。
   var restorable = !!(note && note.canRestore);
   var restoreDsl = version ? version.dsl : '';
@@ -34432,13 +33324,13 @@ function _dsRenameActive(next) {
 }
 
 // ── 図名とタイトルの末尾を連動させる ───────────────────────────────────────
-// BLK-junior-20260909-0003: 手順4「タイトルの末尾に (資料用) を付け足して保存」は、
+// 手順4「タイトルの末尾に (資料用) を付け足して保存」は、
 // 「タイトル / Title」と「図名 / File name」を別々に書き換える作業になっていた。
 // 片方だけ直すとファイル名と図の見出しがずれる。末尾を足した / 外しただけの編集は
 // もう片方にも同じことをして、何をしたかを欄の下に書く (黙って書き換えない)。
 var _dsLinkNotice = '';
 
-// BLK-junior-20260909-0103: 図名が新規タブの既定名 (diagram2_sequence-3 など) のままなら、
+// 図名が新規タブの既定名 (diagram2_sequence-3 など) のままなら、
 // 末尾を足すだけでは本体が食い違う。既定名の間はタイトルの全体を図名にする。
 function _dsPropagateFromTitle(before, after) {
   var L = window.MA.nameTitleLink;
@@ -34474,7 +33366,7 @@ function renderDiagramSettings(keepState) {
   // タブを開いた時点の DSL を読み戻して、今の図の見た目に合わせる。
   if (!keepState || !dsSettings) { dsSettings = ds.readFrom(mmdText); _dsLinkNotice = ''; }
   var resolved = ds.resolve(dsSettings);
-  // BLK-junior-20260909-0003: 欄の change から再描画が入れ子で走ると、先に消えた
+  // 欄の change から再描画が入れ子で走ると、先に消えた
   // 子を removeChild しようとして例外になり、change の続き (連動) が止まっていた。
   host.textContent = '';
 
@@ -34506,7 +33398,7 @@ function renderDiagramSettings(keepState) {
   }
 
   // 図名 (= 保存されるファイル名)。
-  // BLK-junior-20260908-1603: 台本の「タイトルの末尾に付け足す」を DSL の title 行の
+  // 台本の「タイトルの末尾に付け足す」を DSL の title 行の
   // ことだと思って editor を書き換えようとした。ファイル名を決めているのは図名の方で、
   // その対応は画面のどこにも出ていなかった。ここで並べて出し、名前もここで変える
   // (タブのダブルクリックの prompt はブラウザを止めるので、開いている間に自動保存が
@@ -34535,7 +33427,7 @@ function renderDiagramSettings(keepState) {
   nameNotice.hidden = true;
   gName.appendChild(nameNotice);
   if (_dsRenameNotice) _dsShowRenameNotice(nameNotice);
-  // 連動したことの知らせ (BLK-junior-20260909-0003)。
+  // 連動したことの知らせ。
   var linkNotice = document.createElement('div');
   linkNotice.id = 'ds-link-notice';
   linkNotice.className = 'ds-note';
@@ -34561,7 +33453,7 @@ function renderDiagramSettings(keepState) {
   titleHint.textContent = '末尾に付け足した文字は 図名 / File name にも同じように付きます (逆も同じ)';
   gTitle.appendChild(titleHint);
 
-  // ドメイン宣言 / Domain verdict (BLK-reviewer-20260909-0703-wish)
+  // ドメイン宣言 / Domain verdict
   // 「この図は隣のフォルダの同名ドメインと同一か別物か」は、これまで突合の画面まで
   // 行かないと決められず、決めた印は DSL のコメント行の手書き規約だった。reviewer は
   // 突合が出した食い違い 1 件ごとに「もう判断済みか」を grep で確かめ直していた。
@@ -34611,7 +33503,7 @@ function renderDiagramSettings(keepState) {
     function(it) { return Number(it.value) === Number(resolved.fontSize); },
     function(v) { dsSet({ fontSize: Number(v) }); });
 
-  // BLK-builder-20260907-1248-2 (design 5b の網羅表): メッセージの通し番号。
+  // メッセージの通し番号。
   // autonumber はシーケンス図だけの指定なので、他の図種では出さない。
   if (currentDiagramType === 'plantuml-sequence') {
     var AN = window.MA.sequenceAutonumber;
@@ -34655,7 +33547,7 @@ function renderDiagramSettings(keepState) {
         start: startEl.value,
         step: stepEl.value,
         // 書式は触らせない。実物の図の `"<b>[000]"` を開始番号の変更で落とさない
-        // (BLK-migrator-20260918-0549)。undefined を渡すと今の行の書式を引き継ぐ。
+        // undefined を渡すと今の行の書式を引き継ぐ。
         format: undefined,
       });
       if (next === mmdText) { renderDiagramSettings(true); return; }
@@ -34721,7 +33613,7 @@ function updateSelectionNotice(sel) {
 // 設定 (エディタタブ) で切れる。DSL タブを開いていないときは動かさない
 // (構造タブを見ている最中に裏で textarea だけが動いても何も起きないため)。
 // キーボードで選択を移している最中かどうか。「選んだ行へ飛ぶ」はどの経路でも textarea へ
-// focus を移さない (BLK-owner-20260930-0111-1) ので、今は呼び出しの印として残すだけ。
+// focus を移さない ので、今は呼び出しの印として残すだけ。
 var _kbdNavSelect = false;
 function kbdSetSelected(items) {
   _kbdNavSelect = true;
@@ -34729,7 +33621,7 @@ function kbdSetSelected(items) {
   finally { _kbdNavSelect = false; }
 }
 
-// BLK-owner-20260930-0111-1: 図を押しても本文欄へは focus を移さず、行を選択状態にもしない。
+// 図を押しても本文欄へは focus を移さず、行を選択状態にもしない。
 // 以前は図のクリックのたびに textarea を focus して行全体を選んでいたので、続く Enter で行が空行 2 つに、
 // 文字キーで行がその 1 文字に置き換わり、そのまま自動保存されていた (design 5b の図の編集キーは
 // 「入力中」とみなされて素通しされ、効かなかった)。行はスクロールと帯 (#editor-jump-band) で見せ、
@@ -34810,7 +33702,7 @@ function updatePropsTabLabel(sel) {
   btn.title = PTL.titleFor(n);
 }
 
-// ── 名前帳 (BLK-junior-20260915-0406-wish) ──────────────────────────────────
+// ── 名前帳 ──────────────────────────────────
 // 先輩の図を手本に打ち直す場面では、同じ部品の 6 図種に同じ名前が出る。
 // 図ごとに独立した GUI だと名前の対応がどこにも出ないので、開いているタブと
 // 隣のフォルダ (先輩の保存フォルダ) を 1 つの名前帳にまとめ、入力欄の下に出す。
@@ -34857,8 +33749,8 @@ function _loadVocabFolders() {
     .catch(function() {});
 }
 
-// BLK-reviewer-20260915-0506-wish: 表記揺れの「揃える先」は reviewer が 1 度だけ
-// 決めて保存フォルダの親 (persona-data) の `_names.json` に置く。junior/primary は
+// 表記揺れの「揃える先」は reviewer が 1 度だけ
+// 決めて保存フォルダの親 (作業フォルダ) の `_names.json` に置く。junior/primary は
 // それを読むだけで、入力欄が揺れた綴りをその場で正式表記へ指す。
 // 名前帳 (partVocab) が「この部品の図に出てくる名前」なのに対し、こちらは
 // 「人が揃える先として決めた綴り」なので、両方を並べて出す。
@@ -34906,7 +33798,7 @@ function refreshPartVocab() {
   PV.setCurrent(PV.collect(subject, all));
 }
 
-// BLK-owner-20260929-2131-1: 選んだ部品が「その部品 1 つだけを書いた行」から描かれていない (!while・!foreach の中、
+// 選んだ部品が「その部品 1 つだけを書いた行」から描かれていない (!while・!foreach の中、
 // 手続きの中身・呼び出し、$変数・%関数で名前が決まる行、展開後の行から読んだ部品) なら、どの行が作っているかを返す
 // (src/core/generated-part.js)。右パネル・キー操作・参加者のドラッグは、そういう部品を書き換えない。
 function _parsedPartOf(s) {
@@ -34956,7 +33848,7 @@ function renderProps(parsed) {
   refreshPartVocab();
   var sel = window.MA.selection.getSelected();
   updatePropsTabLabel(sel);
-  // BLK-migrator-20260923-1909: フォームが読めない記法の要素 (overlay-builder.addUnclaimed) は、
+  // フォームが読めない記法の要素 (overlay-builder.addUnclaimed) は、
   // 本文のどの行に書かれているかと、フォームでは直せないことを言う (黙って空欄にしない)。
   if (sel && sel.length === 1 && sel[0].type === 'source-line' && propsEl) {
     var esc = window.MA.htmlUtils.escHtml;
@@ -34976,7 +33868,7 @@ function renderProps(parsed) {
       '</div>';
     return;
   }
-  // BLK-owner-20260929-2131-1: 繰り返し・手続きが作った部品の欄は読むだけ (本文を書き換えない)
+  // 繰り返し・手続きが作った部品の欄は読むだけ (本文を書き換えない)
   var _gen = (sel && sel.length) ? _generatedOfSelection(sel) : null;
   var _GP = window.MA.generatedPart;
   var _ctx = {
@@ -34988,7 +33880,7 @@ function renderProps(parsed) {
       suppressSync = false;
       // Re-parse synchronously so any setSelected() that fires right
       // after sees the updated structure. Without this, currentParsed
-      // stayed stale until the async refresh tick and caused selection
+      // stayed stale until the async refresh and caused selection
       // look-ups to hit wrong elements (cross-ported from MermaidAssist
       // PR #1 commit a4e8410).
       if (currentModule && currentModule.parse) {
@@ -35003,11 +33895,11 @@ function renderProps(parsed) {
 
 // design 5a: 描画エラーの出し方。「図の上に重ねて表示」が入っていれば
 // 直前の図を残して帯だけ重ね、外れていれば従来どおり図をエラー 1 行に差し替える。
-// BLK-owner-20260925-1132-2: 「直前の図」はそのタブ自身が前に描けた図に限る。プレビューの図がどのタブのものか
+// 「直前の図」はそのタブ自身が前に描けた図に限る。プレビューの図がどのタブのものか
 // (タブの id と名前。ファイルを開いて白紙のタブに入れ替わったときも別の図と分かる。
 // PlantUML の案内画面「Welcome to PlantUML!」は図に数えないので false)。
 var _previewOwnerId = false;
-// BLK-primary-20260929-1108: 描くときに相対の !include / !includesub を探すフォルダ。
+// 描くときに相対の !include / !includesub を探すフォルダ。
 // 手元から開いたファイルはそのファイルのフォルダ、保存先の図はそのタブの保存フォルダ (留めたタブは留めた先)。
 // 保存先がフォルダでない (ブラウザ内) ときは渡さない。
 function _renderSaveDir() {
@@ -35073,7 +33965,7 @@ function clearRenderError() {
   if (banner) { banner.hidden = true; banner.textContent = ''; }
 }
 
-// BLK-junior-20260916-0526-wish: 焦点中の階層だけの DSL。焦点が無ければ空で、
+// 焦点中の階層だけの DSL。焦点が無ければ空で、
 // 呼ぶ側はこれまで通り図全体を描く。
 function stateTreeFocusText() {
   if (!stateTreeFocusId) return '';
@@ -35083,7 +33975,7 @@ function stateTreeFocusText() {
   catch (e) { return ''; }
 }
 
-// BLK-migrator-20260924-0637: `!include` した手続き (`WorkDocs(...)` など) で部品を宣言した図は、
+// `!include` した手続き (`WorkDocs(...)` など) で部品を宣言した図は、
 // DSL には `actor` と `-->` しか見えないのでシーケンス図と読まれ、選択枠が 1 つも出なかった。
 // 手続きの中身は展開して読まず、PlantUML が SVG に残した図種 (data-diagram-type) に合わせる。
 // 合わせた結果は _svgKindFix に憶え、同じ DSL の判定が出る間は refresh() もその図種で読む。
@@ -35096,7 +33988,7 @@ function _reconcileKindWithSvg(svgEl) {
   if (PU.isAmbiguousType(mmdText)) return;
   var svgType = SK.of(svgEl);
   var cur = currentModule.type;
-  // BLK-migrator-20260929-1051: 図種は SVG が決める。DSL は DESCRIPTION の中の component / usecase の見分けにだけ使う。
+  // 図種は SVG が決める。DSL は DESCRIPTION の中の component / usecase の見分けにだけ使う。
   var want = SK.reconcile(cur, svgType, mmdText);
   var fromDsl = PU.detectDiagramType(mmdText);
   if (!want || want === cur || !modules[want]) {
@@ -35110,14 +34002,14 @@ function _reconcileKindWithSvg(svgEl) {
   currentModule = modules[want];
   try { currentParsed = currentModule.parse(mmdText); }
   catch (e) { currentParsed = { meta: {}, elements: [], relations: [], groups: [] }; }
-  // BLK-migrator-20260929-1051: 右パネルだけでなく、図種欄・左レール・ズームの帯・タブの図種も SVG の図種にそろえる
+  // 右パネルだけでなく、図種欄・左レール・ズームの帯・タブの図種も SVG の図種にそろえる
   // (以前は右パネルだけ component に替わり、帯と左レールは Class / Sequence のまま残っていた)。
   _adoptDetectedType(want);
   try { renderProps(currentParsed); } catch (e) {}
   try { renderUnsupportedPanel(); } catch (e) {}
 }
 
-// BLK-migrator-20260925-1600: 「読めない行」の帯はエンジンの答えで決める。最後に描いた本文と、その答え。
+// 「読めない行」の帯はエンジンの答えで決める。最後に描いた本文と、その答え。
 // { text, state: 'ok' | 'error' | 'none', line, message, crashed, noStartEnd, causeLine }
 var _engineVerdict = null;
 function _setEngineVerdict(text, v) {
@@ -35139,16 +34031,16 @@ function renderSvg() {
     return now - startedAt;
   };
   var myGen = ++renderGen;
-  // BLK-junior-20260916-0526-wish: 入れ子ツリーで階層を選んでいる間は、
+  // 入れ子ツリーで階層を選んでいる間は、
   // その階層だけの DSL を描く (図の中で小さく潰れずに済む)。
   // 図と DSL の行番号がずれるので、焦点中は overlay を作らない。
   var focusDsl = stateTreeFocusText();
   var renderText = focusDsl || mmdText;
-  var renderDocKey = _activeDocKey();  // BLK-owner-20260925-1132-2: この回の図がどのタブのものか
-  // BLK-migrator-20260929-1351: マクロのある本文は、描画と並べて PlantUML のプリプロセッサに展開を頼み、
+  var renderDocKey = _activeDocKey();  // この回の図がどのタブのものか
+  // マクロのある本文は、描画と並べて PlantUML のプリプロセッサに展開を頼み、
   // 選択枠はその展開を読んでから当てる (展開できない・遅いときは今までの読み方で当てる)。
   var _PEx = window.MA.preprocExpand;
-  // BLK-primary-20260929-1108: 相対の !include は、このタブの .puml のあるフォルダから探す。
+  // 相対の !include は、このタブの .puml のあるフォルダから探す。
   var renderDir = _renderDirOfActive();
   var expandP = (!focusDsl && _PEx) ? _PEx.ensure(mmdText, null, renderDir).catch(function() { return false; }) : Promise.resolve(false);
   var renderBody = { text: renderText, mode: mode };
@@ -35162,7 +34054,7 @@ function renderSvg() {
     if (!resp.ok) {
       return resp.json().then(function(err) {
         var e = new Error(err.error || ('HTTP ' + resp.status));
-        e.renderInfo = err;  // BLK-migrator-20260925-0752: 版・行・推測した図種 (422)
+        e.renderInfo = err;  // 版・行・推測した図種 (422)
         throw e;
       });
     }
@@ -35180,7 +34072,7 @@ function renderSvg() {
     var errInfo = window.MA.renderError.detect(svg);
     if (errInfo.isError) {
       var detectedText = window.MA.renderError.describe(errInfo);
-      // BLK-migrator-20260925-1332: 落ちた絵には行が無い。本文から落ちる原因の行を探して添える (server の 422 と同じ文)。
+      // 落ちた絵には行が無い。本文から落ちる原因の行を探して添える (server の 422 と同じ文)。
       var causeText = window.MA.renderError.crashCause ? window.MA.renderError.crashCause(errInfo, renderText) : '';
       if (causeText) {
         detectedText += '。' + causeText;
@@ -35227,22 +34119,22 @@ function renderSvg() {
     if (svgEl && !focusDsl && currentModule && currentModule.buildOverlay) {
       syncOverlayOrigin();
       var report = currentModule.buildOverlay(svgEl, currentParsed, overlayEl, mmdText);
-      // BLK-builder-20260925-0934-3: title / header / footer / caption / legend は図種を問わず同じ当て方で枠を置く。
+      // title / header / footer / caption / legend は図種を問わず同じ当て方で枠を置く。
       try { if (window.MA.overlayBuilder.addDocumentChrome) window.MA.overlayBuilder.addDocumentChrome(svgEl, overlayEl, mmdText); } catch (e) {}
-      // BLK-migrator-20260930-0157: 図種のモジュールが枠を置けなかった note の紙と接続線に、note 自身の行で枠を置く (図種を問わず 1 か所)。
+      // 図種のモジュールが枠を置けなかった note の紙と接続線に、note 自身の行で枠を置く (図種を問わず 1 か所)。
       try {
         if (window.MA.overlayBuilder.addNoteFrames) {
           window.MA.overlayBuilder.addNoteFrames(svgEl, overlayEl, mmdText, (currentParsed && currentParsed.notes) || []);
         }
       } catch (e) {}
-      // BLK-migrator-20260929-1611: 対象へ伸びる note の楔の上も note の当たりにする (図種を問わず 1 か所)。
+      // 対象へ伸びる note の楔の上も note の当たりにする (図種を問わず 1 か所)。
       try { if (window.MA.overlayBuilder.addNoteTails) window.MA.overlayBuilder.addNoteTails(svgEl, overlayEl); } catch (e) {}
       if (report && warnEl) {
         var u = report.unmatched || {};
         var totalUnmatched = (u.participant || 0) + (u.message || 0) + (u.note || 0) + (u.activation || 0);
         if (totalUnmatched > 0) {
           warnEl.style.display = 'block';
-          // BLK-owner-20260925-1932-1: 内部の件数 (JSON) ではなく利用者の言葉で言う。内訳は title に残す。
+          // 内部の件数 (JSON) ではなく利用者の言葉で言う。内訳は title に残す。
           warnEl.textContent = '⚠ 図の要素 ' + totalUnmatched + ' 個に選択枠を当てられませんでした。本文か構造から直せます';
           warnEl.title = JSON.stringify(u);
         }
@@ -35251,19 +34143,19 @@ function renderSvg() {
         var sel = window.MA.selection.getSelected() || [];
         window.MA.selectionRouter.applyHighlight(overlayEl, sel);
       }
-      // BLK-reviewer-20260907-1203-wish: 指摘の付いた行に印を置く。
+      // 指摘の付いた行に印を置く。
       try { drawPinMarkers(overlayEl); } catch (e) {}
-      // BLK-primary-20260908-1603: overlay は描画のたびに作り直されるので、
+      // overlay は描画のたびに作り直されるので、
       // 今のキャレット行の対応表示を引き直す (再描画で peek が消えたままにしない)。
       try { refreshLinePeek(); } catch (e) {}
-      // BLK-primary-20260925-1732-wish: 症状検索の列で開いた図は、当たった語と対応の無い名前の行も光らせ直す。
+      // 症状検索の列で開いた図は、当たった語と対応の無い名前の行も光らせ直す。
       try { applySymptomMarks(); } catch (e) {}
     }
-    // BLK-builder-20260924-1823-2 (design 10c): コミットと比較している間は、描き直した図にも
+    // コミットと比較している間は、描き直した図にも
     // そのコミットとの差の色を付け直す (打つたびに追う)。
     try { syncGitDiagramDiff(); } catch (e) {}
     var took = elapsed();
-    // BLK-builder-20260924-1427-3 (design 7a / 10a): 見出しは「Rendered · 32ms」。
+    // 見出しは「Rendered · 32ms」。
     // 描画方法は上部バーの「local · 32ms」にあるので、ここでは title に回す。
     renderStatusEl.textContent = window.MA.topStatus
       ? window.MA.topStatus.previewHead(took) : 'Rendered';
@@ -35273,19 +34165,19 @@ function renderSvg() {
   }).catch(function(err) {
     if (myGen !== renderGen) return;  // stale failure — ignore
     var bandText = (err && err.message) || err;
-    // BLK-migrator-20260925-1600: エンジンが答えた (エラー画 / 落ちた絵) ときだけ帯の根拠にする。届かなかったときは何も言わない。
+    // エンジンが答えた (エラー画 / 落ちた絵) ときだけ帯の根拠にする。届かなかったときは何も言わない。
     var ri = err && err.renderInfo;
     _setEngineVerdict(renderText, ri ? {
       state: 'error', line: ri.line || null, message: ri.message || String(bandText),
       crashed: !!ri.crashed || ri.kind === 'plantuml-crash', causeLine: ri.causeLine || null,
     } : { state: 'none' });
-    // BLK-migrator-20260925-0752: PlantUML がその行で図種を見失った (本文の図種と違うものを推測した) ときは、そのことを帯に足す。
+    // PlantUML がその行で図種を見失った (本文の図種と違うものを推測した) ときは、そのことを帯に足す。
     try {
       var note = err && err.renderInfo && window.MA.renderError.kindNote
         ? window.MA.renderError.kindNote(err.renderInfo, currentModule && currentModule.type) : '';
       if (note) bandText += '。' + note;
     } catch (e) {}
-    // BLK-migrator-20260925-1332: 最初の並行領域が空で落ちた図は、直し方 (その領域に状態を置く) と、描けない間も本文は壊れないことを言う。
+    // 最初の並行領域が空で落ちた図は、直し方 (その領域に状態を置く) と、描けない間も本文は壊れないことを言う。
     if (err && err.renderInfo && err.renderInfo.causeLine) {
       bandText += '。その領域に状態を 1 つ置くと描けます (右パネルの「追加する位置」)。本文はそのまま直せ、何もせず保存しても書き換わりません';
     }
@@ -35296,7 +34188,7 @@ function renderSvg() {
   });
 }
 
-// BLK-junior-20260908-1903: 保存先 (backend / fileDir) はブラウザの好みではなく
+// 保存先 (backend / fileDir) はブラウザの好みではなく
 // マシンの置き場所なので server が `.assist-prefs.json` に覚えている。だがその
 // 取り込み (autoSave.init → hydrateFromServer) は「前回の DSL を復元する」処理の
 // 中にあり、ワークスペースが残っているプロファイルでは丸ごと飛ばされていた。
@@ -35338,7 +34230,7 @@ if (document.readyState === 'loading') {
   bootWithSavedPrefs();
 }
 
-// ── 呼び出しグラフ (BLK-reviewer-20260917-0323-wish) ────────────────────────
+// ── 呼び出しグラフ ────────────────────────
 // 突合の答えは ClockCtrl.EnableClock のようなメソッド 1 個に付いているのに、
 // 手掛かりはファイル単位 (24 枚) でしか返らないため、読む側は毎回
 // シーケンス図 5〜6 枚を開いて「どの上位ドメインから呼ばれているか」を
@@ -35354,7 +34246,7 @@ var _cgFiles = {};
 
 function _cgModal() { return document.getElementById('cg-modal'); }
 
-// 読む対象は自分のフォルダと、隣の persona のフォルダ (他 persona との突合と同じ範囲)。
+// 読む対象は自分のフォルダと、隣のフォルダ。
 // 押されるまで読まない (見る気になっていない段階で枚数 × フォルダ数を読まない)。
 function loadCallGraph() {
   var CG = window.MA.callGraph;
@@ -35370,7 +34262,7 @@ function loadCallGraph() {
       return Promise.all((names || []).filter(function(n) { return n; }).map(function(n) {
         return WS.loadFile(n, d.path).then(function(text) {
           // 名前は「フォルダ/ファイル名」。1 フォルダしか見ていないときは素の名前
-          // (同じ図が persona 違いで 2 行に出るときだけ、どちらのものかを言う)。
+          // (同じ図が フォルダ違いで 2 行に出るときだけ、どちらのものかを言う)。
           // 一覧は拡張子を落とした名前を返すので、表示は `.puml` を付けた形に揃える
           // (reviewer が CLI と指摘.md で見ている名前と同じにする)。
           var file = /\.puml$/i.test(n) ? n : n + '.puml';

@@ -2,7 +2,6 @@
 window.MA = window.MA || {};
 
 // map-question — 対応表の不一致行を「先輩・reviewer への質問」1 件にして預ける
-// (BLK-junior-20260908-0923-wish)。
 //
 // 対応表 (state-map / class-map) は名前の形だけで機械的に組を作る。名前も抽象度も
 // 違う 2 枚では、状態名の一致が 1/6 しか付かず、残りは「片方だけ」と「見せかけの
@@ -46,7 +45,7 @@ window.MA.mapQuestion = (function() {
     transition: '遷移',
     'class': 'クラス',
     relation: '関係',
-    // BLK-junior-20260914-1606: クラスの中のメソッド・属性も対応表の行になる。
+    // クラスの中のメソッド・属性も対応表の行になる。
     member: 'メンバー',
   };
 

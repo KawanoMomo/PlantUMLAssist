@@ -1,6 +1,6 @@
 'use strict';
 window.MA = window.MA || {};
-// BLK-owner-20260924-2232-4: 図の編集の窓と「末尾に追加」のフォームをキーボードだけで確定する。
+// 図の編集の窓と「末尾に追加」のフォームをキーボードだけで確定する。
 // 図種ごとに付けず、窓 (`{図種}-modal`) と末尾に追加 (`{図種}-tail-detail`) の形で 1 か所から当てる。
 //   窓: 入力欄・選択欄で Enter、どこでも Ctrl+Enter で `*-confirm` を押す。Esc で `*-cancel` を押す。
 //       本文欄 (rich-label-editor) の Enter は欄が出す rle-enter、Esc は rle-escape で受ける (Shift+Enter は改行)。
@@ -64,9 +64,9 @@ window.MA.modalKeys = (function() {
     var form = target && target.closest ? target.closest('[id$="-tail-detail"]') : null;
     return form ? visibleButton(form, '-tail-add') : null;
   }
-  // BLK-owner-20260925-0312-4: 末尾に追加の本文欄 (textarea) のうち data-enter="submit" のものは、
+  // 末尾に追加の本文欄 (textarea) のうち data-enter="submit" のものは、
   // Enter で確定・Shift+Enter で改行 (アクティビティの処理欄・注釈欄)。
-  // BLK-owner-20260930-0311-2: 注釈の本文欄 (`{図種}-tail-ntext`) は図種を問わずこの 1 か所で Enter 確定にする
+  // 注釈の本文欄 (`{図種}-tail-ntext`) は図種を問わずこの 1 か所で Enter 確定にする
   // (状態遷移・クラス・ユースケースは改行が入るだけで行が書かれなかった)。まとめて入れる欄は改行のまま。
   var TAIL_NOTE_AREA_RE = /-tail-ntext$/;
   function isTailEnterArea(el) {
@@ -75,7 +75,7 @@ window.MA.modalKeys = (function() {
     return TAIL_NOTE_AREA_RE.test(el.id || '') && !!(el.closest && el.closest('[id$="-tail-detail"]'));
   }
 
-  // BLK-owner-20260930-0311-2: 末尾に追加の欄のうち既定の値を持つもの (条件分岐の yes / no、枝の数 …) は、
+  // 末尾に追加の欄のうち既定の値を持つもの (条件分岐の yes / no、枝の数 …) は、
   // 押す・Tab で入ると値全体が選ばれた状態になり、打てば置き換わる (値の後ろに付け足して `yesyes` にならない)。
   // 既定のまま (value が描いたときの値と同じ) の欄だけ。打ちかけの欄はキャレットをそのまま置く。
   function isDefaultField(el) {
@@ -100,7 +100,7 @@ window.MA.modalKeys = (function() {
   function onTailBlur(e) {
     if (e.target && e.target._maSelectOnUp) e.target._maSelectOnUp = false;
   }
-  // BLK-owner-20260926-0550-1: 確定すると右パネルが描き直され、キャレットが BODY に落ちて次の 1 件を打つたびに
+  // 確定すると右パネルが描き直され、キャレットが BODY に落ちて次の 1 件を打つたびに
   // 欄を押し直していた。確定の後に描き直された「末尾に追加」のフォームへキャレットを戻す。
   // 戻す先は Enter を押した欄 (同じ id / 同じ本文欄)。ボタンを押して確定したときや、その欄が無くなったときは
   // その種別の最初に打つ欄 (本文欄があれば本文、無ければ最初の文字欄)。
@@ -166,7 +166,7 @@ window.MA.modalKeys = (function() {
     var tries = 0;
     var wait = o.wait || 50;
     var limit = o.limit || 40;
-    function tick() {
+    function poll() {
       tries++;
       var now = doc.getElementById(formId);
       if (now && now !== form) {
@@ -183,9 +183,9 @@ window.MA.modalKeys = (function() {
         }
         return;
       }
-      if (tries < limit) setTimeout(tick, wait);
+      if (tries < limit) setTimeout(poll, wait);
     }
-    setTimeout(tick, 0);
+    setTimeout(poll, 0);
   }
   function onTailAddClick(e) {
     var btn = e.target && e.target.closest ? e.target.closest('button[id$="-tail-add"]') : null;

@@ -159,7 +159,7 @@ window.MA.classScaffold = (function() {
       var needsParent = s.classes.some(function(c) { return c.relation !== 'none'; });
       if (needsParent) errors.push('親クラスを入れるか、関連を「なし」にしてください');
     }
-    // BLK-human-20260923-1330: 未定義の相手は PlantUML 側がその行からクラスを起こすので
+    // 未定義の相手は PlantUML 側がその行からクラスを起こすので
     // 生成はできる。止めずに「確かめたいこと」として警告に落とす。
     var warnings = [];
     s.relations.forEach(function(r) {
@@ -169,7 +169,7 @@ window.MA.classScaffold = (function() {
     return { ok: errors.length === 0, errors: errors, warnings: warnings };
   }
 
-  // BLK-primary-20260929-2056-friction: 継承を図の書き方に合わせる。図の継承が `子 --|> 親` の向きで多く書かれていれば
+  // 継承を図の書き方に合わせる。図の継承が `子 --|> 親` の向きで多く書かれていれば
   // 新しい継承もその向きで書く (`親 <|-- 子` と混ぜると、揃える手が別に要った)。
   function childFirstInheritance(text) {
     var fwd = 0, back = 0;

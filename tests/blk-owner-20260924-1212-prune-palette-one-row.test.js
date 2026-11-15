@@ -33,7 +33,7 @@ function commandOf(id) {
   return c;
 }
 
-var IDS = ['name-search', 'tab-versions', 'tab-audit-timeline', 'tab-lineage', 'tab-symptom', 'tab-blame', 'part-board', 'tab-senior'];
+var IDS = ['name-search', 'tab-versions', 'tab-lineage', 'tab-symptom', 'tab-blame', 'part-board', 'tab-senior'];
 function items() {
   return CP.buildItems(IDS.map(commandOf).filter(Boolean), '');
 }

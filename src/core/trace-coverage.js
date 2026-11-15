@@ -12,7 +12,7 @@ window.MA = window.MA || {};
 //
 // 粒度差 (初期化専用シーケンス vs フル状態遷移) の切り方は 2 段。
 // 担当範囲の宣言 (`' @covers A -> B`) があればそれを使い、無ければ
-// 遷移の担当割合で推測する (BLK-reviewer-20260907-2003)。宣言が無いときに
+// 遷移の担当割合で推測する。宣言が無いときに
 // 何も外さないと、`*_init_sequence.puml` しか無い系統は初期化後の遷移が
 // 構造的に全部 missing になる。
 window.MA.traceCoverage = (function() {
@@ -82,7 +82,7 @@ window.MA.traceCoverage = (function() {
   // 「現れている」と言い切らないための下限。
   var PARTIAL_MIN = 5;
 
-  // 突き合わせた相手のメッセージ名も返す (BLK-primary-20260908-1603-wish)。
+  // 突き合わせた相手のメッセージ名も返す。
   // 図の名前だけだと「対応するメッセージ名に直す」ときに、どの名前に
   // 合わせればよいかがこの表からは読めない。
   function _match(keys, seqKeys) {
@@ -121,7 +121,7 @@ window.MA.traceCoverage = (function() {
   // 初期化専用シーケンスは PowerOn / Configure といった初期化の遷移しか
   // 担当せず、StartConv / Transfer / Reset 等の初期化後の遷移には一度も
   // 触れない。担当が半分に満たない相手は「書き漏らし」ではなく別の粒度で
-  // 書かれた図なので、突き合わせない (BLK-reviewer-20260907-2003)。
+  // 書かれた図なので、突き合わせない。
   //
   // 語彙の集合そのものの一致率 (family-audit の Jaccard) ではなく担当割合で
   // 見るのは、遷移 1〜2 本の小さな図で「語彙が 1 つずれただけ」を粒度差と
@@ -207,7 +207,7 @@ window.MA.traceCoverage = (function() {
     }
     var hasDecl = declaredBy.length > 0;
 
-    // BLK-reviewer-20260907-2003: 宣言が無い系統では、family-audit と同じ
+    // 宣言が無い系統では、family-audit と同じ
     // 語彙一致率で粒度差を外す。`*_init_sequence.puml` しか持たない系統は、
     // 状態遷移図の初期化後の遷移 (StartConv / Transfer / Reset …) が構造的に
     // 全部 missing になり、8 系統ぶんを毎回「これは粒度差」と目で判定していた。

@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // note-board — 指摘.md を 📂一覧の側から読み、保存フォルダの図 1 枚ずつに
 // 「対象外 / ⚠未確認 / ✅対応済み」を付ける。
 //
-// BLK-junior-20260914-1206-wish: 指摘.md は自由文で、「対象図種・部品・対応要否」が
+// 指摘.md は自由文で、「対象図種・部品・対応要否」が
 // 構造化されていない。junior は図を 1 枚開くたびに、自分のフォルダと先輩のフォルダの
 // 両方を開いて突き合わせ、「この図は対応不要」を自分で判定していた。指摘の無い図でも
 // 同じ往復をするので、判定の手間は図の枚数ぶん増える (指摘の件数ではなく)。
@@ -31,7 +31,7 @@ window.MA = window.MA || {};
 // DOM にも fetch にも触らない。本文の取り寄せと描画は app.js の職掌。
 window.MA.noteBoard = (function() {
 
-  // BLK-owner-20260923-1409-prune: 札の語彙は 📥 指摘箱の 4 つ (finding-vocab) が正本。
+  // 札の語彙は 📥 指摘箱の 4 つ (finding-vocab) が正本。
   // ここは「図 1 枚ずつ」という文脈のショートカットなので画面は残し、札の表示だけを
   // 揃える。⚠未確認 → ⚠確かめられず、✅対応済み → ✅反映済み。
   // 「対象外」は札ではなく絞り込み条件 (指摘の対象になっていない図) なのでそのまま。
@@ -223,7 +223,7 @@ window.MA.noteBoard = (function() {
     return { done: false, why: '本文からは判定できません（開いて確かめてください）', term: termIn(text, body) };
   }
 
-  // BLK-junior-20260924-1632-wish: 指摘文が `…` で括った語のうち、本文に語として出てくる最初の 1 つ。
+  // 指摘文が `…` で括った語のうち、本文に語として出てくる最初の 1 つ。
   // FILES ツリーの札を押して図を開いたとき、どこを見ればよいかをエディタで選んで見せるのに使う。
   // 見つからなければ '' (図を開くだけにする。当てずっぽうの語は選ばない)。
   var CODE_RE = /`([^`\n]+)`/g;
@@ -249,7 +249,7 @@ window.MA.noteBoard = (function() {
     var reasons = [];
     var allDone = true;
     // head / term: まだ反映を確かめられない最初の 1 件の見出しと、その件が指す本文の語
-    // (FILES ツリーの札の title と、押したときに選ぶ語。BLK-junior-20260924-1632-wish)。
+    // (FILES ツリーの札の title と、押したときに選ぶ語。)。
     var head = '', term = '', open = 0;
     hits.forEach(function(h) {
       var v = verdictOf(h.row, o.dsl, { mineFolder: o.mineFolder });
@@ -313,14 +313,14 @@ window.MA.noteBoard = (function() {
     var un = (board.unaddressed || []).length;
     if (un) {
       // 件数だけでは「自分宛か」を確かめに GUI の外へ出ることになる。
-      // 宛先まで言い切れる分は言う (BLK-junior-20260914-1306)。
+      // 宛先まで言い切れる分は言う。
       s += ' — ' + unaddressedSummary(board, o);
     }
     return s;
   }
 
   // ── 宛先の書かれていない指摘 ────────────────────────────────────────────
-  // BLK-junior-20260914-1306: 図名も図種も書かれていない件はどの図にも割り当てられず、
+  // 図名も図種も書かれていない件はどの図にも割り当てられず、
   // 一覧は件数だけを言っていた。その件が自分宛かどうかは、結局 GUI の外で
   // 指摘.md の全文を読むまで分からない。宛先は本文に書かれていることが多いので
   // (「junior 側 …」「primary への依頼」「junior は …」)、そこまでは機械で言う。
@@ -332,7 +332,7 @@ window.MA.noteBoard = (function() {
     unknown: { key: 'unknown', mark: '宛先不明' },
   };
 
-  // 本文にフォルダ名 (= ペルソナ名) が語として出てくるか。
+  // 本文にフォルダ名 (= 人の名前) が語として出てくるか。
   function _mentions(text, who) {
     return _hasWord(_s(text).toLowerCase(), _s(who).toLowerCase());
   }

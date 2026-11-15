@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // cohort-ack — ドメイン突合で「この組は内部揺れで、実害としては衝突していない」と
 // reviewer が一度確かめた組を、確定として覚えておく台帳。
 //
-// BLK-reviewer-20260917-0423-wish: junior×primary の突合 (spi/timer の 4 組) は毎 tick
+// junior×primary の突合 (spi/timer の 4 組) は毎回
 // 同じ「部品名/ラベルが違うだけ」の差分を出し続け、reviewer はそのたびに同じ diff を
 // 最初から読み直して同じ結論を出していた。domain-verdict の宣言は図の中に書く印なので、
 // 自分のフォルダの図にしか書けない (相手の図には触らない)。reviewer は junior の図も
@@ -18,7 +18,7 @@ window.MA = window.MA || {};
 // 指紋が変われば「確認済み」は自動的に外れる (確認済みの印が、後から入った新しい
 // 食い違いを隠してはならない)。
 //
-// 保管は name-registry と同じく保存フォルダの親 (= persona-data) 直下の
+// 保管は name-registry と同じく保存フォルダの親 (= 作業フォルダ) 直下の
 // `_cohort-ack.json` 1 個。DOM も fetch も触らない。
 window.MA.cohortAck = (function() {
 

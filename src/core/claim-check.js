@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // claim-check — 手で書いた指摘の「根拠」を毎回機械で確かめ直す。
 //
-// BLK-reviewer-20260908-0003: 指摘の中には audit.js のどの監査 (name / method /
+// 指摘の中には audit.js のどの監査 (name / method /
 // consistency / family / trace) にも当たらない、reviewer が図を読んで手で書いた
 // ものがある。その多くは「A 図のこの遷移に対応する行が B 図に無い」という形で、
 // 根拠は B 図の中身にある。ところが指摘そのものは A 図に貼られるので、B 図が

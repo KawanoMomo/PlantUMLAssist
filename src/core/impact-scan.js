@@ -191,7 +191,7 @@ window.MA.impactScan = (function() {
     return { docs: rows.length, total: total, roles: roles, summary: summarize({ roles: roles }) };
   }
 
-  // BLK-primary-20260926-1708-wish: 影響先の図 1 枚で、名前のどれかに当たった行 (行番号・本文・役割)。
+  // 影響先の図 1 枚で、名前のどれかに当たった行 (行番号・本文・役割)。
   // 連鎖で届いた図は元の部品名を持たないので、経由した部品名 (via) の行を読む。1 行は 1 度だけ
   // (2 つの名前が同じ行に出ても重ねない)。names: 当たった名前を並べる順。
   function linesFor(dsl, names) {

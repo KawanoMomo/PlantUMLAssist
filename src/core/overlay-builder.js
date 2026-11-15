@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 window.MA.overlayBuilder = (function() {
   var SVG_NS = 'http://www.w3.org/2000/svg';
 
-  // BLK-owner-20260930-0711-1: 境界 (package / rectangle / namespace …) の当たり判定。複合状態・partition と同じ入れ物の形にする。
+  // 境界 (package / rectangle / namespace …) の当たり判定。複合状態・partition と同じ入れ物の形にする。
   //   中の空所 … data-hit-kind="container" (中の部品・関係の線・ラベル・矢じりより後ろ)
   //   4 辺の細い帯と見出しの札 … framebelt (関係の線・ラベルと要素の間の段: 辺・札を横切る関係の線より手前で、見出しの文字を指したら境界。
   //   辺の上に置かれた部品 (port など) は帯より手前なので、帯に隠れない)
@@ -51,7 +51,7 @@ window.MA.overlayBuilder = (function() {
     if (attrs) {
       Object.keys(attrs).forEach(function(k) { rect.setAttribute(k, attrs[k]); });
     }
-    // BLK-junior-20260908-1703: data-hint を持つ rect には SVG の <title> も付ける。
+    // data-hint を持つ rect には SVG の <title> も付ける。
     // 画面の吹き出し (#edge-hint) が出ない場面 (SVG を書き出して別のビューアで
     // 開く、ブラウザ既定のツールチップに頼る) でも相手が読めるようにする。
     var hint = attrs && attrs['data-hint'];
@@ -94,7 +94,7 @@ window.MA.overlayBuilder = (function() {
     return null;
   }
 
-  // BLK-builder-20260925-0656-2: <path d> の外接矩形をコマンドを読んで求める (jsdom には getBBox が無く、
+  // <path d> の外接矩形をコマンドを読んで求める (jsdom には getBBox が無く、
   // 属性から枠を作る箇所が使う)。数字を 2 つずつ座標として読むと、smetana が複合状態の見出しに使う円弧
   // `A rx,ry rot large sweep x,y` の半径・フラグが座標に混ざり、枠が図の左上 (x=0) まで広がった。
   // 曲線は制御点まで含める (実際の線より少し広いが当たり判定としては安全側)。円弧は中心を求めて周上を拾う。
@@ -177,12 +177,12 @@ window.MA.overlayBuilder = (function() {
     return { xs: xs, ys: ys };
   }
 
-  // BLK-migrator-20260926-1116: 注釈 (note) の紙の外形を全図種で 1 か所で求める。
+  // 注釈 (note) の紙の外形を全図種で 1 か所で求める。
   // PlantUML は note を図種によらず「塗りのある外形の path + 右上の折り返しの小さい三角の path」で描き、
   // 本文の Creole (表の罫線・箇条書きの点・リンク・区切り線) はその後ろに並べる。中身の図形から範囲を
   // 取ると (最初の rect = 箇条書きの点、最初の text = 表の 1 セル) 紙のほとんどが当たり判定から外れた。
   // 範囲は紙の外形 (対象へ伸びる吹き出しの尖りを含む、描かれた形そのもの) から取る。
-  // BLK-migrator-20260929-1858: 折り返しは頂点の数ではなく描いた形で見分ける。`skinparam roundCorner` を付けると
+  // 折り返しは頂点の数ではなく描いた形で見分ける。`skinparam roundCorner` を付けると
   // 折り返しの左下の角が円弧 (A) で丸められ、頂点が 4 つでなくなって紙が 1 枚も見つからなかった。
   // 折り返しは「外接矩形 (小さい正方形) の左上から始まって左上に戻り、左の縁を下へ降り、右下の角を通り、
   // どの点も左上→右下の対角線より上に出ない」閉じた形 (左下の直角三角形。角が丸いか・曲線かは問わない)。
@@ -270,7 +270,7 @@ window.MA.overlayBuilder = (function() {
     return best;
   }
 
-  // BLK-migrator-20260929-1611: 対象を指す note は、紙の外形の path に対象へ伸びる楔 (尖り) を含めて 1 本で描かれる
+  // 対象を指す note は、紙の外形の path に対象へ伸びる楔 (尖り) を含めて 1 本で描かれる
   // (接続線を別の線として持たない)。楔は紙の矩形の外へ飛び出した頂点の並びと、その前後の紙の縁の頂点で囲まれた多角形。
   // 紙の外形の path から [[x, y], ...] の多角形の列を返す (楔の無い紙は [])。
   function noteTails(paper) {
@@ -407,7 +407,7 @@ window.MA.overlayBuilder = (function() {
     overlayEl.appendChild(fr);
   }
 
-  // BLK-migrator-20260930-0157: note の枠を、図種ごとの拾い方 (宣言の並び順で SVG の note と組にする) ではなく、
+  // note の枠を、図種ごとの拾い方 (宣言の並び順で SVG の note と組にする) ではなく、
   // PlantUML が SVG に残した note 自身の情報で全図種共通の 1 か所で当てる。
   //  - 紙: notePapers (外形の path と折り返し) と、それを包む <g> の data-source-line (0 始まり) = note の行
   //    (複数行の note は本文の 1 行目を指すので _noteHeadLine で見出しの行に直す)。
@@ -561,7 +561,7 @@ window.MA.overlayBuilder = (function() {
           return f.getAttribute('data-note-frame-of') === key;
         })[0] || null;
       }
-      // BLK-owner-20260930-0711-1: 境界の 4 辺の帯・見出しの札 (framebelt) を指したら、境界全体の枠 (中の空所の container) を光らせる。
+      // 境界の 4 辺の帯・見出しの札 (framebelt) を指したら、境界全体の枠 (中の空所の container) を光らせる。
       if (!fr && overlayEl && r && r.getAttribute && r.getAttribute('data-hit-kind') === 'framebelt') {
         fr = Array.prototype.filter.call(overlayEl.querySelectorAll('rect[data-hit-kind="container"]'), function(c) {
           return c.getAttribute('data-type') === r.getAttribute('data-type') && c.getAttribute('data-id') === r.getAttribute('data-id') &&
@@ -599,7 +599,7 @@ window.MA.overlayBuilder = (function() {
     return s.replace(/\s+/g, ' ').trim();
   }
 
-  // BLK-human-20260912-0900: g.message は「矢印 (line/polygon) + ラベル + 番号
+  // g.message は「矢印 (line/polygon) + ラベル + 番号
   // (autonumber) + ステレオタイプ」を子に持ち、何を付けたかで <text> の並びが変わる。
   // extractBBox は最初の <text> しか見ないため、autonumber を付けると番号の上、
   // ステレオタイプを付けるとステレオタイプの上だけがクリックに反応していた。
@@ -683,7 +683,7 @@ window.MA.overlayBuilder = (function() {
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
   }
 
-  // BLK-human-20260912-2130: 関係 (遷移・関連・依存・矢印) の当たり判定を全図種で 1 つに寄せる。
+  // 関係 (遷移・関連・依存・矢印) の当たり判定を全図種で 1 つに寄せる。
   // PlantUML は <g class="link"> の中に 線 (path/line) + 矢じり (polygon) +
   // ラベル・ガード・多重度 (text) をまとめて置く。シーケンスのメッセージ (extractUnionBBox) と
   // 同じ考え方で子要素全部の和集合を 1 つの当たり判定にし、図種ごとに別実装しない。
@@ -698,16 +698,16 @@ window.MA.overlayBuilder = (function() {
     };
   }
 
-  // BLK-human-20260912-2130: 関係 1 本ぶんの当たり判定を置く。全図種でここだけを呼ぶ。
+  // 関係 1 本ぶんの当たり判定を置く。全図種でここだけを呼ぶ。
   //  1. 和集合の rect …… 線・矢じり・ラベル・ガード・多重度を囲う「選択範囲」。
   //     hover の枠がこれで出るので、押す前にどこまでが同じ関係か見て分かる。
   //  2. ラベル (<text>) ごとの小さい rect …… 同じ data-id / data-type を持つ。
   //     斜めの関係どうしは 1. の箱が重なりうる。ラベルの上だけは必ず自分の関係が
   //     選ばれるよう、小さい箱を手前 (raiseSmallestLast) に重ねて取りこぼしを防ぐ。
   // どちらを押しても選ばれる関係は同じなので、利用者から見た当たり判定は 1 つ。
-  // BLK-builder-20260925-0305-1: linkGroupEl は <g> の配列でもよい (中継点で 2 本に割れた 1 つの関係)。
+  // linkGroupEl は <g> の配列でもよい (中継点で 2 本に割れた 1 つの関係)。
   // 選択範囲は全部の和集合 1 つにし、ラベル・矢じりの小さい rect は各 <g> から置く。
-  // BLK-migrator-20260925-1032: 関係の線 (<path d> / <line> / <polyline>) を折れ線の点列にする。曲線は細かく刻む。
+  // 関係の線 (<path d> / <line> / <polyline>) を折れ線の点列にする。曲線は細かく刻む。
   // 返すのは部分路ごとの点列の配列 ([[x,y], ...] の配列)。
   function linePoints(el) {
     var tag = (el && el.tagName || '').toLowerCase();
@@ -782,7 +782,7 @@ window.MA.overlayBuilder = (function() {
     return subs.filter(function(s) { return s.length > 1; });
   }
 
-  // BLK-migrator-20260925-1032: 関係の線に沿った当たり判定。関係の選択範囲 (線・矢じり・ラベルを囲う箱) は
+  // 関係の線に沿った当たり判定。関係の選択範囲 (線・矢じり・ラベルを囲う箱) は
   // 斜めや曲がった線では線の無い空所まで広く覆い、複合状態のような入れ物の真ん中 (空所) を指しても
   // その中を通る遷移が選ばれていた。線そのものは太い透明な線 (幅 = 余白 × 2) で当て、入れ物より手前に置く。
   // 選択範囲の箱は入れ物より後ろに下げる (raiseSmallestLast)。入れ物の外では箱が今までどおり当たる。
@@ -864,7 +864,7 @@ window.MA.overlayBuilder = (function() {
         tb.x - labelPad, tb.y - labelPad,
         tb.width + 2 * labelPad, tb.height + 2 * labelPad, labelAttrs);
     });
-    // BLK-migrator-20260924-0637: 矢じりは行き先の図形の縁に接して描かれ、図形の枠 (余白付き) の内側に
+    // 矢じりは行き先の図形の縁に接して描かれ、図形の枠 (余白付き) の内側に
     // 食い込む。関係は要素より後ろなので、矢じりを指すと行き先の図形が選ばれていた。矢じり (<polygon>)
     // そのものの範囲だけは関係を手前 (data-hit-kind="linkhead") に置く。余白は付けない。
     var headAttrs = {};
@@ -895,7 +895,7 @@ window.MA.overlayBuilder = (function() {
     return null;
   }
 
-  // BLK-human-20260912-2130: 当たり判定を広げると、大きい箱 (斜めの関係・入れ物) が
+  // 当たり判定を広げると、大きい箱 (斜めの関係・入れ物) が
   // 小さい箱 (状態・クラス・部品) を覆い隠し、押しても手前の大きい方が選ばれてしまう。
   // 前後関係を 2 段で決める。hitTestTopmost もブラウザの pointer-events も
   // 「後ろの子が手前」なので、これ 1 つで「枠内のどこを押してもその要素が選べる」が
@@ -915,13 +915,13 @@ window.MA.overlayBuilder = (function() {
     if (k === 'container') return -1;
     if (k === 'linkline') return 0;
     if (k === 'linklabel') return 0.5;   // ラベルの文字は他の関係の線より手前 (文字を押したらその関係)
-    // BLK-owner-20260930-0711-1: 境界 (addContainer) の 4 辺の帯と見出しの札は、横切る関係の線・ラベルより手前、
+    // 境界 (addContainer) の 4 辺の帯と見出しの札は、横切る関係の線・ラベルより手前、
     // 辺の上に置かれた部品 (port など) より後ろ。
     if (k === 'framebelt') return 0.9;
-    // BLK-migrator-20260929-0951: 1 本の線で描いた棒 (activity の split / end split) は、棒に入る・棒から出る矢印の
+    // 1 本の線で描いた棒 (activity の split / end split) は、棒に入る・棒から出る矢印の
     // 端の枠と重なる。棒の細い帯の上は棒が選ばれる (矢じりの関係 linkhead よりは後ろ)。
     if (k === 'bar') return 1.5;
-    // BLK-migrator-20260929-0952: 入れ物 (activity の partition) の枠線の細い帯と見出しの札も同じ。辺・札を横切る矢印より手前で、
+    // 入れ物 (activity の partition) の枠線の細い帯と見出しの札も同じ。辺・札を横切る矢印より手前で、
     // 見出し・枠線のどこを押しても入れ物が選ばれる。
     if (k === 'frameline') return 1.5;
     return k === 'linkhead' ? 2 : 1;
@@ -941,9 +941,9 @@ window.MA.overlayBuilder = (function() {
     if (rects.length < 2) return;
     var area = _hitArea;
     var isLink = _hitRank;
-    // BLK-migrator-20260923-2312: 入れ物 (data-hit-kind="container"、複合状態など) は関係よりさらに後ろ。
+    // 入れ物 (data-hit-kind="container"、複合状態など) は関係よりさらに後ろ。
     // 入れ物の中を通る関係のラベルを押したら、入れ物ではなくその関係が選ばれる。
-    // BLK-migrator-20260925-1032: 関係の選択範囲の箱 (link) は入れ物よりさらに後ろ。箱は線の無い空所も覆うので、
+    // 関係の選択範囲の箱 (link) は入れ物よりさらに後ろ。箱は線の無い空所も覆うので、
     // 入れ物の中の空所を指したら入れ物が選ばれる。線そのもの (linkline) とラベル (linklabel) は入れ物より手前、要素より後ろ。
     // 元の並び順を保つ安定ソート (面積が同じものの前後関係を変えない)
     rects.forEach(function(r, i) { r.__ovIdx = i; });
@@ -1006,13 +1006,13 @@ window.MA.overlayBuilder = (function() {
     return lines;
   }
 
-  // BLK-migrator-20260923-1409: この PlantUML は data-source-line を出さないので、
+  // この PlantUML は data-source-line を出さないので、
   // 行での対応は必ず失敗し matchByOrder に落ちる。順番で当てると、パーサが読めない
   // 記法が 1 行あるだけで以後の枠が全部ずれる (同じ症状がこれで 4 件目)。
   // PlantUML は参加者の <g> に data-qualified-name (= DSL の別名) を自分で残すので、
   // 描いた側の名前で当てる。行を読み直さないので記法が増えても穴が開かない。
   //
-  // BLK-builder-20260925-0314-1: PlantUML は data-qualified-name の ASCII 以外の文字を 1 文字ずつ
+  // PlantUML は data-qualified-name の ASCII 以外の文字を 1 文字ずつ
   // `.` に置き換えて出す (`センサ制御` → `.....`、`A太郎b` → `A..b`、サロゲート対も 1 文字)。
   // 名前をそのまま比べると日本語の名前を持つ要素に枠が 1 つも出ない。同じ伏せ方をした名前で比べ、
   // 伏せた結果が重なる (`太郎` と `別名` はどちらも `..`) ときは、PlantUML が要素を作った順
@@ -1056,7 +1056,7 @@ window.MA.overlayBuilder = (function() {
     return matches;
   }
 
-  // BLK-migrator-20260923-1409: 参加者の頭は PlantUML が <rect> で実寸を描く。
+  // 参加者の頭は PlantUML が <rect> で実寸を描く。
   // extractBBox は最初の <text> しか見ないため、表示名が ¥n で複数行になると
   // 1 行目の上だけが当たり判定になり、2 行目以降を指しても枠が出なかった。
   // 塗りのある図形 (= 実際に描かれた箱) の和集合を取れば、行数にも装飾 (<b> 等) にも
@@ -1081,7 +1081,7 @@ window.MA.overlayBuilder = (function() {
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
   }
 
-  // BLK-migrator-20260923-1909: PlantUML が SVG に残す要素情報 (data-qualified-name /
+  // PlantUML が SVG に残す要素情報 (data-qualified-name /
   // data-source-line) を先に使って当てる。パーサが読めない記法 (`abstract X` / `circle` /
   // `cloud { }` / `artifact` …) が 1 つあるだけで、並び順で当てていた枠が全部ずれたり、
   // 名前が合わずに枠が出なかったりした。記法ごとに穴を塞がず、描いた側の情報で当てる。
@@ -1106,7 +1106,7 @@ window.MA.overlayBuilder = (function() {
 
   // 関係 (線) は書かれた行で当てる。行で当たらない関係は、行が 1 本も当たらなかった
   // (= SVG に行の情報が無い) ときだけ並び順で残りに当てる。戻り値は relations と同じ長さ。
-  // BLK-builder-20260925-0305-1: 行で当たらない関係は、SVG の線が持つ両端 (data-entity-1 / -2 → その要素の
+  // 行で当たらない関係は、SVG の線が持つ両端 (data-entity-1 / -2 → その要素の
   // data-qualified-name) で当てる。`!pragma layout smetana` の SVG は線に行の情報を付けず、関連クラス
   // `(A, B) . C` があると A→B の線は名前の無い中継点 (junction) で 2 本に割れる。並び順で当てると
   // 前半だけ・別の線に枠が付き、矢じりを指すと行き先の要素が選ばれていた。
@@ -1257,7 +1257,7 @@ window.MA.overlayBuilder = (function() {
   // 右欄で「フォーム未対応の記法」と分かる (黙って何も出さない、をやめる)。
   // claimed: モジュールが既に当てた <g> の配列。戻り値は置いた数。
   // selector: 見る <g> を絞るとき (state 図は要素を自前で当てるので題 `g.title` だけ)。
-  // BLK-migrator-20260926-1116: 複数行の note (`note right of X` … `end note`) の data-source-line は、PlantUML が
+  // 複数行の note (`note right of X` … `end note`) の data-source-line は、PlantUML が
   // note の見出しの行でなく本文の 1 行目を指す。1 行上が note の見出しならその行を note の行にする
   // (押すと本文の 1 行目でなく note の行が選ばれる)。1 行の note・浮いた note は書いた行のまま。
   function _noteHeadLine(dslText, line) {
@@ -1276,7 +1276,7 @@ window.MA.overlayBuilder = (function() {
     var nodes = svgEl.querySelectorAll(selector || 'g.entity, g.cluster, g.title, g.legend, g.link, g[class*="link_"]');
     Array.prototype.forEach.call(nodes, function(g) {
       if (taken.indexOf(g) >= 0) return;
-      // BLK-migrator-20260925-0932: 題・凡例・見出し・脚注・説明は addDocumentChrome の 1 か所で当てる。
+      // 題・凡例・見出し・脚注・説明は addDocumentChrome の 1 か所で当てる。
       if (CHROME_KINDS.indexOf((g.getAttribute('class') || '').split(/\s+/)[0]) >= 0) return;
       var line = _srcLine(g);
       var paperBox = notePaperBox(g);
@@ -1301,7 +1301,7 @@ window.MA.overlayBuilder = (function() {
       var bb = paperBox || extractUnionBBox(g, 'text, line, polygon, polyline, path, rect, ellipse');
       if (!bb || !(bb.width > 0 || bb.height > 0)) return;
       var pad = cls === 'cluster' ? 2 : 4;
-      // BLK-owner-20260930-0711-1: パーサが読めない入れ物 (cloud / database / node …) も package と同じ入れ物の当て方。
+      // パーサが読めない入れ物 (cloud / database / node …) も package と同じ入れ物の当て方。
       if (cls === 'cluster') addContainer(overlayEl, bb.x - pad, bb.y - pad, bb.width + pad * 2, bb.height + pad * 2, attrs, g);
       else addRect(overlayEl, bb.x - pad, bb.y - pad, bb.width + pad * 2, bb.height + pad * 2, attrs);
       n++;
@@ -1310,7 +1310,7 @@ window.MA.overlayBuilder = (function() {
     return n;
   }
 
-  // BLK-migrator-20260924-0752: PlantUML は旧記法のアクティビティ図 (`(*) -->` / `if "..." then` /
+  // PlantUML は旧記法のアクティビティ図 (`(*) -->` / `if "..." then` /
   // `===LABEL===`) を関係 (<g class="link">) には行つきで描くが、動作の箱・同期バーは <g> に入れず、
   // 分岐の菱形は行の無い <g class="entity"> で描く。行の無い図形は、端が触れている関係の行で当てる
   // (入ってくる関係のうち最も早く書かれた行 = その要素を初めて書いた行。無ければ出ていく関係の行)。
@@ -1384,7 +1384,7 @@ window.MA.overlayBuilder = (function() {
     return n;
   }
 
-  // BLK-migrator-20260923-2012: シーケンスの参加者は宣言キーワードで形が変わる
+  // シーケンスの参加者は宣言キーワードで形が変わる
   // (actor = 棒人間の下に名前、boundary / control / entity = 円の下に名前、database = 円柱、
   // queue = 横向きの筒 …)。名前が図形の外に出る形では、塗りのある図形だけを囲むと
   // 名前の上に枠が出ない。描かれた図形と文字の和集合で囲む。キーワードごとの分岐は持たない
@@ -1528,7 +1528,7 @@ window.MA.overlayBuilder = (function() {
     return rect;
   }
 
-  // BLK-builder-20260925-0934-3: 図の飾り (title / header / footer / caption / legend) の当て方を図種で分けない。
+  // 図の飾り (title / header / footer / caption / legend) の当て方を図種で分けない。
   // PlantUML は図種によって <g class="header"> などに入れて描く (class / component …、legend は行を持たない) か、
   // class の無い裸の <text> と <rect> で描く (sequence) ので、図種ごとのモジュールでは header・footer・caption・
   // legend に枠が出なかった。本文の行から飾りを読み、<g class="{種類}"> があればそれ、無ければ文字の一致する
@@ -1564,7 +1564,7 @@ window.MA.overlayBuilder = (function() {
         cur.texts.push(t);
         continue;
       }
-      // BLK-migrator-20260925-1732: `mainframe 見出し` は図全体を囲む枠と左上の札。札の文字を本文のその行に当てる。
+      // `mainframe 見出し` は図全体を囲む枠と左上の札。札の文字を本文のその行に当てる。
       var mf = /^mainframe\s+(.+)$/i.exec(t);
       if (mf) { out.push({ kind: 'mainframe', line: i + 1, texts: [mf[1]] }); continue; }
       var m = /^(?:(left|right|center)\s+)?(title|header|footer|caption|legend)\b\s*(.*)$/i.exec(t);
@@ -1643,7 +1643,7 @@ window.MA.overlayBuilder = (function() {
     return 1;
   }
 
-  // BLK-migrator-20260925-1732: mainframe の描いた物を探す。PlantUML は図全体を囲む裸の <rect>、左上の札の輪郭
+  // mainframe の描いた物を探す。PlantUML は図全体を囲む裸の <rect>、左上の札の輪郭
   // (<path> 1 本: 右上から下りて斜めに左下へ)、札の文字 (<text>) を、どの <g> にも入れずに描く (6 図種とも同じ)。
   // 札の文字は本文の見出しと同じ文字の裸の <text> のうち最も上のもの、札はその文字を囲む最も小さい裸の <path>、
   // 枠はその札の左上の角に左上の角が重なる裸の <rect>。戻り値: [{ line, text, path, rect, tab: 札の矩形 }]

@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // part-slice — 複合クラス図から、1 つの部品に関わる所だけを切り出す。
 //
-// BLK-junior-20260914-1006-wish: 先輩 (primary) は GPIO 単独のクラス図を持たず、
+// 先輩 (primary) は GPIO 単独のクラス図を持たず、
 // `driver_common_class.puml` (共通基底 + Spi/Can/Gpio/Uart/Timer/Adc の 8 クラス)
 // にまとめている。junior が見たいのは Gpio の所だけなのに、並べて見る機能は
 // ファイル名で対をなすため (`GpioDrv派生クラス図` ⇔ `driver_common_class`) この組は
@@ -207,7 +207,7 @@ window.MA.partSlice = (function() {
   }
 
   // ── 相手のフォルダから「その部品が載っている図」を探す ────────────────
-  // BLK-junior-20260914-1006: 自分の図と先輩の図はファイル名が対をなさないので
+  // 自分の図と先輩の図はファイル名が対をなさないので
   // (`GpioDrv派生クラス図(資料用)` ⇔ `driver_common_class`)、「本当に見るべき
   // 先輩の図はこれで合っているか」を複合図を開いて目で確かめるしかなかった。
   // 自分の図の部品名で相手のフォルダの本文を引き、載っている図を名指しする。

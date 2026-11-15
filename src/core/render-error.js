@@ -12,12 +12,12 @@ window.MA.renderError = (function() {
   // エラー画の目印。3 つとも揃ったときだけエラーと判定する (緑の目印・赤字・出所の行か波線の行)。
   // 図の中にたまたま「Syntax Error?」という文字列があっても誤検出しないよう、
   // PlantUML がエラー画にしか使わない配色 (#33FF02 の緑) を条件に加えている。
-  // BLK-human-20260925-1500: 1.2026.7 からは色を短く書く (赤は #F00)。どちらの書き方でも拾う。
+  // 1.2026.7 からは色を短く書く (赤は #F00)。どちらの書き方でも拾う。
   var RED_TEXT_RE = /<text[^>]*fill="#(?:FF0000|F00)"[^>]*>([\s\S]*?)<\/text>/i;
   var GREEN_MARK = 'fill="#33FF02"';
   // `[From string (line 3) ]` — 何行目で転んだか (jar に直接渡すと `[From x.puml (line 3) ]`)。
   var LINE_RE = /\[From [^\]]*?\(line (\d+)\)/;
-  // BLK-migrator-20260926-1608 / BLK-owner-20260925-1932-1: 赤字の文言は「Syntax Error?」だけでなく
+  // 赤字の文言は「Syntax Error?」だけでなく
   // 「Illegal sequence arrow」「No such color」など error の語を含まないものもある。文言には依らず、
   // エラー画の形 (緑の目印・赤字に加え、`[From …]` の出所の行か波線の付いた行) で見分ける。
   var WHERE_RE = /\[From [^\]]*\]|text-decoration="wavy underline"/;
@@ -36,9 +36,9 @@ window.MA.renderError = (function() {
       .trim();
   }
 
-  // BLK-migrator-20260924-1432: PlantUML が描いている途中で自分が落ちた (例外) ときの絵は、
+  // PlantUML が描いている途中で自分が落ちた (例外) ときの絵は、
   // 文法エラーの配色 (緑・赤) を使わず、白地に黒文字で「An error has occured : <例外>」
-  // 「PlantUML (版) has crashed.」と書く (1.2026.3 からは綴りが occurred。どちらも見分ける。BLK-builder-20260925-1052-4)。これを図として流し込むと、見出しが Rendered のまま
+  // 「PlantUML (版) has crashed.」と書く (1.2026.3 からは綴りが occurred。どちらも見分ける。)。これを図として流し込むと、見出しが Rendered のまま
   // エラーの文言が図の代わりに並ぶ (成功のふり)。両方の文が揃ったときだけ落ちた絵と見分ける。
   var CRASH_HEAD_RE = /<text[^>]*>\s*An error has occurr?ed\s*:?\s*([\s\S]*?)<\/text>/i;
   var CRASH_MARK_RE = /<text[^>]*>\s*PlantUML \(([^)<]*)\) has crashed\.?\s*<\/text>/i;
@@ -73,7 +73,7 @@ window.MA.renderError = (function() {
       message: message,
       line: lm ? parseInt(lm[1], 10) : null,
     };
-    // BLK-migrator-20260925-0752: エラー画に書いてある版・波線の行・PlantUML が推測した図種。
+    // エラー画に書いてある版・波線の行・PlantUML が推測した図種。
     var vm = svgText.match(VERSION_RE);
     if (vm) info.version = vm[1];
     var sm = svgText.match(SOURCE_RE);
@@ -110,7 +110,7 @@ window.MA.renderError = (function() {
       ' として開いています。本文はそのまま直せ、何もせず保存しても書き換わりません (⚙ 設定 → レンダリングで別の版の plantuml.jar を入れると読めることがあります)';
   }
 
-  // BLK-migrator-20260925-1332: smetana で描く state 図は、複合状態の最初の並行領域が空
+  // smetana で描く state 図は、複合状態の最初の並行領域が空
   // (`state X {` の直後に `--` / `||`) だと PlantUML 1.2026.3 自身が IllegalArgumentException で落ちる
   // (1.2026.7 からは描けるが、同梱版を上げると sequence / state の SVG の形が変わる)。
   // 落ちた絵には行が書かれないので、本文からその区切りの行を探す。server.py の empty_first_regions と同じ規則。
@@ -158,7 +158,7 @@ window.MA.renderError = (function() {
     return r[0].line + ' 行目 `' + r[0].sep + '` の前の並行領域が空です';
   }
 
-  // BLK-migrator-20260925-1600: @enduml の無い本文に PlantUML は「No valid @start/@end found」の絵を返す。
+  // @enduml の無い本文に PlantUML は「No valid @start/@end found」の絵を返す。
   // 赤字を使わないので detect はエラーと見なさない (図として出す) が、帯の判定ではエンジンが読めなかった答えとして扱う。
   var NO_START_END_RE = /<text[^>]*>\s*(No valid @start\/@end found[^<]*)<\/text>/;
   function noStartEnd(svgText) {

@@ -2,7 +2,7 @@
 
 // finding-origins — 指摘 1 件を 1 行にして、「何を比較して出たか」(出典) ごとに畳む。
 //
-// BLK-reviewer-20260915-2240-wish: status-dashboard は「図 1 枚 = 1 行」に畳んだ。
+// status-dashboard は「図 1 枚 = 1 行」に畳んだ。
 // 残っているのは逆の軸で、reviewer は手順 2・7・8 で
 // `audit.js --board` / `findings.js` / `pins.js --all` / `POST /verify-svg` の
 // 出力を並べ、「この行とあの行は同じ指摘の別表現か、本当に別物か」を頭の中で
@@ -41,7 +41,7 @@
     return s.replace(/\.(puml|svg)$/i, '');
   }
 
-  // 📌 の本文に書かれた指摘 ID (`F-01継続3tick目` のように地の文に混ざる)。
+  // 📌 の本文に書かれた指摘 ID (`F-01継続3回目` のように地の文に混ざる)。
   var ID_RE = /F-\d+/g;
   function idsInText(text) {
     var m = _s(text).match(ID_RE);

@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // file-tree — レール右の FILES ツリーの中身を組む (design 10a)。
 //
-// BLK-human-20260923-1700: 「保存先チップ」「📂 一覧」「📄 開く」「⇔ 先輩」の 4 つが
+// 「保存先チップ」「📂 一覧」「📄 開く」「⇔ 先輩」の 4 つが
 // 別々の入口になっていて、どこに何があるかを入口ごとに覚え直していた。
 // 10a はこれを 1 本のツリーに畳む。節は上から
 //   開いている図(N) / 保存先 / 読むだけ / GIT
@@ -27,7 +27,7 @@ window.MA.fileTree = (function() {
     sequence: 'SEQ', state: 'ST', 'class': 'CLS',
     usecase: 'UC', component: 'CMP', activity: 'ACT',
   };
-  // BLK-builder-20260924-2231-1 (design 10a): 部品フォルダの中の図と未作成の略号は左レールと同じ
+  // 部品フォルダの中の図と未作成の略号は左レールと同じ
   // 図種の順 (SEQ・UC・CMP・CLS・ACT・ST) に並べる。10a の SPI は spi_init_sequence・spi_transfer_sequence・
   // spi_class・spi_state。名前の順だと行頭の線画がばらばらの順で並び、同じ図種の図が離れる。
   var RAIL_ORDER = ['sequence', 'usecase', 'component', 'class', 'activity', 'state'];
@@ -73,7 +73,7 @@ window.MA.fileTree = (function() {
     return false;
   }
 
-  // BLK-builder-20260924-1719-3: 区切りの無い日本語名 (`TIMERドライバ状態遷移`) の図種の語。
+  // 区切りの無い日本語名 (`TIMERドライバ状態遷移`) の図種の語。
   // 名前の中で最も後ろに出た語を採る (`…シーケンス` `…状態遷移(資料用)`)。
   var KIND_WORDS_JA = [
     ['ユースケース', 'usecase'], ['コンポーネント', 'component'], ['アクティビティ', 'activity'],
@@ -167,7 +167,7 @@ window.MA.fileTree = (function() {
     });
   }
 
-  // BLK-owner-20260924-0637-1: 保存先節のツリーの形。図種の読めない図 (名前にも本文にも図種が無い
+  // 保存先節のツリーの形。図種の読めない図 (名前にも本文にも図種が無い
   // `diagram2` など) は部品のフォルダに分けず、保存先の直下にファイル行で並べる
   // (1 枚ずつ「DIAGRAM2 0 / 6・未作成 6 図種」と出すと、中に図があるのに無いと読める)。
   // 本文から図種が読める図 (e.kind) は、名前に図種が無くても部品の側で数える。
@@ -185,7 +185,7 @@ window.MA.fileTree = (function() {
     return { groups: groups(kinded), loose: loose };
   }
 
-  // design 10a (BLK-builder-20260924-1715-1): 上部バーのパンくずの「部品フォルダ」。
+  // design 10a: 上部バーのパンくずの「部品フォルダ」。
   // 保存先の一覧 (entries) に name の図があり、ツリーがそれを部品のフォルダに入れているときだけ
   // その部品を返す (ツリーと同じ layout で決めるので、ツリーに無いフォルダ名は出ない)。
   // 保存先に無い図・図種が読めず直下に並ぶ図は null。
@@ -255,7 +255,7 @@ window.MA.fileTree = (function() {
     });
   }
 
-  // BLK-builder-20260924-2336-3 (design 10a「⌕ ファイル名・部品名で絞り込む」): 絞り込み中は、当たった図のある
+  // 絞り込み中は、当たった図のある
   // 部品のフォルダを開いて描く (畳んだフォルダの奥に当たった図が隠れて、見出しだけが残っていた)。
   // 覚えている開閉 (stored) は書き換えない。絞り込みを消せば元の開閉で描く。
   function partOpen(stored, query) {
@@ -279,7 +279,7 @@ window.MA.fileTree = (function() {
     return !!_s(a) && f(a) === f(b);
   }
 
-  // design 10a (BLK-builder-20260924-1749-3): 「読むだけ」節の行。隣の保存フォルダ (/peek-dirs の
+  // design 10a: 「読むだけ」節の行。隣の保存フォルダ (peek-dirs の
   // 自分以外) を 1 行ずつ。右の枠に並べている相手 (comparingDir) の行には「比較中」。
   // 並びは名前の順 (毎回同じ所にある)。
   function readonlyRows(dirs, comparingDir) {
@@ -309,7 +309,7 @@ window.MA.fileTree = (function() {
     return out;
   }
 
-  // BLK-owner-20260926-0550-3: 保存先の一覧に並べた図の名前と、ディスクの図の名前の「顔ぶれ」。
+  // 保存先の一覧に並べた図の名前と、ディスクの図の名前の「顔ぶれ」。
   // 自動保存・Ctrl+S で新しい図を書いても、外で図が増えた・消えても、一覧は読み込み直すまで古いままだった。
   // 書いた後・フォーカスが戻った時に顔ぶれを比べ、違えば一覧を読み直す (同じなら読み直さない)。
   // entries は server の一覧の行 ({ type } / { name }) か名前の文字列。
@@ -346,7 +346,7 @@ window.MA.fileTree = (function() {
     return { total: list.length, unapplied: un, draft: dr };
   }
 
-  // design 10a (BLK-builder-20260924-1735-3): 部品フォルダの「＋ 未作成 2 図種（UC・ACT）」。
+  // design 10a: 部品フォルダの「＋ 未作成 2 図種（UC・ACT）」。
   // 括弧の中の略号はそれぞれ押せる (その図種をその場で作る)。行頭の ＋ はまとめて作る。
   // 返すのは略号の並び (左レールと同じ図種の順) と、＋ の説明。
   function missingParts(g) {

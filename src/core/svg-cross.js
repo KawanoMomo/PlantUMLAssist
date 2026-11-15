@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // svg-cross — {name}.svg が、その名前の puml ではなく「別の図」の絵になっていないか。
 //
-// BLK-reviewer-20260914-0906-wish: server は svg を書き出すとき元 puml の sha1 を
+// server は svg を書き出すとき元 puml の sha1 を
 // 末尾に刻む (entry.svgSource) ので、svg-freshness は「今の puml の絵ではない」
 // までは言える。だが言えるのはそこまでで、driver_common_class.svg と
 // plantuml-class.svg の絵が丸ごと入れ替わった事故では、どちらも同じ「内容ずれ」に
@@ -80,7 +80,7 @@ window.MA.svgCross = (function() {
     if (!row) return null;
     var extra = row.others && row.others.length
       ? '（同じ中身の図が他にも: ' + row.others.join(', ') + '）' : '';
-    // BLK-reviewer-20260914-0906: 印の無い svg は、PlantUML が畳んだ元の DSL から
+    // 印の無い svg は、PlantUML が畳んだ元の DSL から
     // 持ち主を突き止めている。何を見て名指ししたのかを印の側に書く
     // (reviewer が render API を叩いて確かめ直さなくて済むように)。
     if (row.from === 'embedded') {

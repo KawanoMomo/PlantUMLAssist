@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // finding-actions — 指摘 1 件を「対象図 + 当てる操作」に翻訳する。
 //
-// BLK-primary-20260914-1006-wish: 指摘.md の 1 件を押すと図の組が並ぶ所までは
+// 指摘.md の 1 件を押すと図の組が並ぶ所までは
 // 来たが (review-note)、そこから先は primary が自分で「これは ⇄一括置換 か、
 // 再出力か、別ドメイン宣言か」を毎回読んで決め、対応する画面を探して開いていた。
 // 指摘が 1 件増えるたびに、この「読む→手段を決める→画面を探す」が増える。
@@ -25,7 +25,7 @@ window.MA.findingActions = (function() {
     verdict: { label: '別ドメイン明示', verb: '別物と決めて印を残す' },
     addmethod: { label: 'メソッド追加', verb: '遷移ラベルに対応するメソッドをクラス図に足す' },
     addclass: { label: 'クラス追加', verb: 'クラス図に宣言を足す' },
-    // BLK-primary-20260915-0007-friction: 依頼2 は「クラス図に足す」「意図的省略を明記する」の
+    // 依頼2 は「クラス図に足す」「意図的省略を明記する」の
     // 二択で来る。前者だけが [適用] だと、後者を選んだ primary は note を全文手打ちする。
     noteintent: { label: '意図を明記', verb: 'クラス図に note で意図的省略を書く' },
     manual: { label: '手で判断', verb: '' },
@@ -46,18 +46,18 @@ window.MA.findingActions = (function() {
   var PREFIX_RE = /`([A-Za-z_][\w]*)`[^\n]{0,16}[(（]接頭辞あり[)）][^\n]{0,24}vs[^\n]{0,24}`([A-Za-z_][\w]*)`[^\n]{0,16}[(（]接頭辞なし[)）]/;
 
   // `domain-verdict` は「印が未反映」という状況説明としても書かれるので合図にしない
-  // (BLK-primary-20260914-1006-friction: 再出力を頼まれた件が印の話に化けた)。
+  // (再出力を頼まれた件が印の話に化けた)。
   var VERDICT_RE = /別ドメイン|別のドメイン|別物|すり合わせ|未宣言/;
   var REEXPORT_RE = /再エクスポート|再出力|出し直|書き出し直/;
   // 「再出力」と書かれていなくても、svg の中身が違うと言っていれば出し直すしかない。
-  // ただし svg の話だと分かるときだけにする (BLK-primary-20260914-1006-friction:
+  // ただし svg の話だと分かるときだけにする (
   // 「部品名不一致」= すり合わせの依頼まで再出力に化けた)。
   var SVG_RE = /svg/i;
   var SVG_BAD_RE = /入れ替わ|クロス|残存|不一致|食い違/;
 
   function svgIsBad(text) { return SVG_RE.test(text) && SVG_BAD_RE.test(text); }
 
-  // 「このクラスにこのメソッドを追加する」型 (BLK-primary-20260914-1106-wish)。
+  // 「このクラスにこのメソッドを追加する」型。
   // 遷移ラベル / メッセージに対応するメソッドがクラス図に無い、という指摘は
   // 突合 (eventSync) がそのまま「足す先のクラスと足すメソッド名」まで出せるので、
   // primary が ⇄突合の画面を自分で開き直す理由が無い。
@@ -94,7 +94,7 @@ window.MA.findingActions = (function() {
   }
 
   // 指摘文がその図を名指ししているか。語の切れ目で見る。
-  // BLK-primary-20260914-1006-friction: 実物の指摘.md で `spi` / `can` という短い名前の
+  // 実物の指摘.md で `spi` / `can` という短い名前の
   // 図が、本文の `Can_Driver` / `spi_dma` に含まれるというだけで対象に挙がり、
   // 指摘が触れていない図まで [適用] が書き換えていた。読むだけなら余計な行が 1 本
   // 増えるだけだが、当てる側では黙って別の図を書き替える。
@@ -148,7 +148,7 @@ window.MA.findingActions = (function() {
 
     // 「再エクスポートが必要」のように手段が名指しされている件は、本文が
     // 別ドメインの話にも触れていても、頼まれた通り再出力にする
-    // (BLK-primary-20260914-1006-friction: gpio_state の再出力依頼が印の話に化けた)。
+    // (gpio_state の再出力依頼が印の話に化けた)。
     if (REEXPORT_RE.test(text)) return _finish(_reexport(base, names));
 
     var pair = renamePair(text);

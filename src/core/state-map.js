@@ -1,7 +1,7 @@
 'use strict';
 window.MA = window.MA || {};
 
-// state-map — 2 枚の状態遷移図の「対応表」を作る (BLK-junior-20260908-0823-wish)。
+// state-map — 2 枚の状態遷移図の「対応表」を作る。
 //
 // 同じ GPIO ドライバの状態遷移でも、書いた人が違えば状態名・イベント名・抽象度が
 // ばらばらになる。目で読み比べて「先輩が後から足した 1 要素」を当てる作業は、
@@ -81,7 +81,7 @@ window.MA.stateMap = (function() {
     return 'none';
   }
 
-  // ── 手で決めた対応 (BLK-junior-20260908-0823) ─────────────────────────
+  // ── 手で決めた対応 ─────────────────────────
   //
   // 名前の形だけで組んだ対応は、抽象度の違う 2 枚では当たらない。
   // `[*] --> Idle` と `AnomalyCheck --> Idle` のように、行き先が同じというだけで
@@ -432,7 +432,7 @@ window.MA.stateMap = (function() {
     return { states: states, transitions: transitions, overrides: overrides(ov) };
   }
 
-  // ── 参照図だけの行を自分の図にも足す (BLK-junior-20260908-1103-wish) ──
+  // ── 参照図だけの行を自分の図にも足す ──
   //
   // 対応表は「先輩にしかない要素」を見つけるところまでしかやらず、足すのは
   // 一括入力欄に自分で書き直す作業だった。名前も抽象度も違う 2 枚を読み比べて
@@ -697,7 +697,7 @@ window.MA.stateMap = (function() {
     summary: summary,
     abstractionWarning: abstractionWarning,
     matchLabel: matchLabel,
-    // 手で決める対応 (BLK-junior-20260908-0823)
+    // 手で決める対応
     supportsOverrides: true,
     EMPTY_OVERRIDES: EMPTY_OVERRIDES,
     overrides: overrides,

@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // part-starter — 新しい部品を起こす作業を、図種ごとの 6 回ではなく 1 部品ぶんの
 // 1 回にする。
 //
-// BLK-junior-20260913-0206-wish: 手本がまったく無い部品 (TIMER) を起こす周では、
+// 手本がまったく無い部品 (TIMER) を起こす周では、
 // シーケンス → 状態遷移 → クラス → アクティビティ → コンポーネント → ユースケースの
 // 6 図種を、その都度別のタブを新規に開いて手順 1〜7 をやり直していた。下書きを作る
 // 機能は図種ごとに別々 (定石カタログ・依存チェック・driver-usecase-starter …) なので、
@@ -219,7 +219,7 @@ window.MA.partStarter = (function() {
   // plan(subject, docs, refs) — 何が作られるかを、開く前の形で返す。
   //
   // refs は part-reference.collect() の結果 (隣のフォルダにある同じ部品名の実図)。
-  // BLK-junior-20260915-0307-wish: 手本がある図種は汎用ひな形ではなくその実図を写す。
+  // 手本がある図種は汎用ひな形ではなくその実図を写す。
   // 名前は自分の名前 (spi_sequence) のままで、写すのは中身だけ。
   function plan(subject, docs, refs) {
     var n = identifiers(subject);

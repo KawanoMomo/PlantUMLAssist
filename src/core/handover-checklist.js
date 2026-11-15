@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // handover-checklist — 引き継ぎに添える「申し送りチェックリスト」と、新人からの返信。
 //
-// BLK-primary-20260908-1803-wish: 申し送り (handover-notes) は変更サマリの差分行に
+// 申し送り (handover-notes) は変更サマリの差分行に
 // 添える形なので、直した内容が基準へ取り込まれた後は書く場所が無い。渡した後も、
 // 新人が読んだか・対応したかは、次にその図を開いて帯が消えているかを見るまで
 // 分からない。
@@ -121,7 +121,7 @@ window.MA.handoverChecklist = (function() {
     try { v = (typeof raw === 'string') ? JSON.parse(raw) : raw; } catch (e) { return null; }
     if (!v || typeof v !== 'object') return null;
     var hasReplies = !!v.replies && typeof v.replies === 'object';
-    // BLK-primary-20260915-2346-wish: 申し送りが 0 件でも「見る順をどこまで辿ったか」
+    // 申し送りが 0 件でも「見る順をどこまで辿ったか」
     // だけを返せる。返信として読めるのは、どちらか一方が入っていれば足りる。
     var HR = window.MA.handoffRoute;
     var route = HR ? HR.parseRoute(v.route) : null;

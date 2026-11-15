@@ -23,7 +23,6 @@ const sourceFiles = [
   'src/core/review-watch.js',
   'src/core/review-diff.js',
   'src/core/selected-endpoints.js',
-  'src/core/review-carry.js',
   'src/core/scaffold-notice.js',
   'src/core/state-branch.js',
   'src/core/state-transition.js',

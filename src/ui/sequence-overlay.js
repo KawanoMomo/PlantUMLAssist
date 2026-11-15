@@ -28,7 +28,7 @@ window.MA.sequenceOverlay = (function() {
     } catch (e) { return null; }
   }
 
-  // BLK-migrator-20260923-1409: 左寄せ (skinparam NoteTextAlignment left など) の注釈は
+  // 左寄せ (skinparam NoteTextAlignment left など) の注釈は
   // 1 行を語ごとの <text> に分けて描く (`missing` ` ` `Accept-Version` …)。texts[i] から
   // 同じ高さに続く <text> をつないだものが 1 行目と一致するかを見る (空白は比べない)。
   function _lineStartsAt(texts, i, first) {
@@ -51,7 +51,7 @@ window.MA.sequenceOverlay = (function() {
 
   // 注釈本文の 1 行目を持つ <text> (未使用のもの) を探し、それを囲む塗りのある最小の図形を返す。
   // 群の枠 (alt 等) は fill="none" なので候補にならない。見つからなければ null。
-  // BLK-migrator-20260926-1116: 1 行目は Creole の印 (表の `|=` `|`・箇条書きの `*` `#`・リンクの URL) を落として比べ
+  // 1 行目は Creole の印 (表の `|=` `|`・箇条書きの `*` `#`・リンクの URL) を落として比べ
   // (OB.noteLineKey)、文字が注釈の紙 (折り返し角の path) の上なら紙の外形を返す (中の表・点の図形を範囲にしない)。
   function _findNoteShape(svgEl, note, usedTexts, usedPapers) {
     var key = OB.noteLineKey || function(l) { return String(l).replace(/<[^>]*>|\*\*|\/\/|__|""/g, '').trim(); };
@@ -88,7 +88,7 @@ window.MA.sequenceOverlay = (function() {
     return null;
   }
 
-  // BLK-migrator-20260929-0459: 注釈の紙は DSL の読み取りが注釈と認めたかどうかに関係なく枠にする。
+  // 注釈の紙は DSL の読み取りが注釈と認めたかどうかに関係なく枠にする。
   // 本文の `note` / `hnote` / `rnote` で始まる行のうち、パーサが注釈の要素にしなかった行 (読めない書き方) を
   // 注釈の行として拾う。本文は `:` の後ろか、`end note` までの行。行は 1 始まり、描かれる範囲
   // (@startuml … 最初の @enduml、newpage より前) だけ。読んだ注釈の行の範囲 (見出し … end) は除く。
@@ -110,7 +110,7 @@ window.MA.sequenceOverlay = (function() {
       if (ln >= stop) break;
       var t = lines[i].trim();
       if (ln > from && /^@enduml/i.test(t)) break;
-      // BLK-migrator-20260930-0255: `<style>` の中の `note {` は見た目の指定で、注釈ではない (描かれた紙を取り合わない)。
+      // `<style>` の中の `note {` は見た目の指定で、注釈ではない (描かれた紙を取り合わない)。
       if (inStyle) { if (/<\/style>/i.test(t)) inStyle = false; continue; }
       if (/^<style\b/i.test(t)) { inStyle = !/<\/style>/i.test(t); continue; }
       if (covered[ln]) continue;
@@ -177,7 +177,7 @@ window.MA.sequenceOverlay = (function() {
     var boxes = (parsedData.boxes || []).slice();
     if (!boxes.length) return;
     var headTop = _firstHeadTop(svgEl);
-    // BLK-migrator-20260929-1651: 囲みは参加者の頭を上下にまたぐ rect (頭より上で始まり、頭より下まで続く)。
+    // 囲みは参加者の頭を上下にまたぐ rect (頭より上で始まり、頭より下まで続く)。
     // 頭より前に出る枠線つきの rect には、囲みでないもの (PlantUML の警告の帯 — 古い skinparam を使うと図の先頭に
     // 「Please use CSS style instead of skinparam …」を描く) もあり、並び順だけで対応させると 1 番目の囲みの当たりが
     // 図の上端の帯に置かれ、見出しの文字から外れていた。skinparam の名前ごとの補正は足さず、囲みの形で見分ける。
@@ -206,14 +206,14 @@ window.MA.sequenceOverlay = (function() {
     OB.warnIfMismatch('box', boxes.length, n);
   }
 
-  // BLK-migrator-20260923-2012: 図の題名 (title)。PlantUML は SVG の <title> に題名を入れ、
+  // 図の題名 (title)。PlantUML は SVG の <title> に題名を入れ、
   // 図の上端に class の無い <text> で描く。<title> に含まれる文字の <text> を、参加者・
   // メッセージより前 (document 順) から拾い、その和集合を枠にする。`!if` の枝ごとに
   // title 行があるときは、描かれた題名と同じ文字の行 (無ければ最後の行) に当てる。
   function _addTitleRect(svgEl, parsedData, overlayEl) {
     var tls = (parsedData.meta && parsedData.meta.titleLines) || [];
     if (!tls.length || !svgEl || !svgEl.querySelector) return;
-    // BLK-migrator-20260925-0752: PlantUML 1.2026.3 以降は <title> を出さず、題名を
+    // PlantUML 1.2026.3 以降は <title> を出さず、題名を
     // <g class="title" data-source-line> (@startuml を 0 とする行) に包む。その行と文字をそのまま使う。
     var tg = svgEl.querySelector('g.title[data-source-line]');
     if (tg) {
@@ -266,12 +266,12 @@ window.MA.sequenceOverlay = (function() {
     });
   }
 
-  // BLK-migrator-20260923-2012 差し戻し: メッセージの当たり判定 (矢印とラベルの和集合の箱) の中で、
+  // 差し戻し: メッセージの当たり判定 (矢印とラベルの和集合の箱) の中で、
   // ライフラインの線の上にメッセージの文字・矢じり・線が無い高さを、ライフラインの手前の
   // 当たり判定にする。手前の分は .selectable を持たない (枠は元のライフラインの rect が
   // hover の仲間として出す) ので、ライフラインの rect の数・選択の見た目は変わらない。
-  // procMsgs: class の無い SVG で当てたメッセージ ({ box, parts })。BLK-human-20260925-1500: 1.2026.7 からは全部がこちら。
-  // BLK-builder-20260926-1243-2: `create` / `**` で作った参加者の頭は、それを作るメッセージの高さに描かれ、メッセージの枠
+  // procMsgs: class の無い SVG で当てたメッセージ ({ box, parts })。1.2026.7 からは全部がこちら。
+  // `create` / `**` で作った参加者の頭は、それを作るメッセージの高さに描かれ、メッセージの枠
   // (矢印と文言の和) の中に入る。頭は塗りのある箱で、メッセージの矢印は頭の縁で止まる (描いた側では頭が手前)。
   // メッセージの枠と重なる参加者の枠だけを、メッセージ (とその高さで手前に出したライフライン) より手前に置く。
   function _raiseHeadsOverMessages(overlayEl) {
@@ -348,17 +348,17 @@ window.MA.sequenceOverlay = (function() {
     });
   }
 
-  // BLK-migrator-20260924-1132: `!include` した手続き (C4_Sequence など) で描いた図は、参加者の頭も
+  // `!include` した手続き (C4_Sequence など) で描いた図は、参加者の頭も
   // メッセージも class の無い <rect>/<text>/<line>/<polygon> で出る。手続きの名前は覚えず、描かれた物から当てる:
   // 参加者 = 表示名と同じ文字の <text> を囲むいちばん小さい <rect>、メッセージ = 矢じり (<polygon>) の付いた線。
-  // BLK-migrator-20260924-1332: alt / loop / ref / 区切り / 遅延 が混ざると線の本数が合わず全部を諦めていた。
+  // alt / loop / ref / 区切り / 遅延 が混ざると線の本数が合わず全部を諦めていた。
   // 枠 (見出しの五角形が角に付いた rect)・区切り・遅延を先に見分けてその文字を除き、残りの矢印は
   // 線の上に書かれた文字とメッセージの文言の一致で当てる (本数の一致に頼らない)。
   function _num(el, a) { return parseFloat(el.getAttribute(a)); }
-  // BLK-migrator-20260925-1732: mainframe の枠・札・札の文字は図全体の飾り。overlayBuilder.addDocumentChrome が
+  // mainframe の枠・札・札の文字は図全体の飾り。overlayBuilder.addDocumentChrome が
   // 先に当てるので、参加者・メッセージ・枠を描いた形から探すときは数えない (buildSequenceOverlay が描画ごとに入れ直す)。
   var _chromeSkip = [];
-  // BLK-migrator-20260930-0351: 手書き風 (`skinparam handwritten true` / `!option handwritten true`) の図は、PlantUML が
+  // 手書き風 (`skinparam handwritten true` / `!option handwritten true`) の図は、PlantUML が
   // 線を揺らして描く。<line> は頂点の多い <path> に、<rect> は頂点の多い <polygon> (角丸なら閉じた <path>) になり、
   // 形の種類で探す当て方 (点線の <line> = ライフライン、矢じりの付いた <line> = メッセージ、塗りなしの <rect> = 枠 …) が
   // 全部外れて、図の要素に 1 つも枠が出なかった。手書き風のキーワードは覚えず、描いた図形の外形で読む:
@@ -523,9 +523,9 @@ window.MA.sequenceOverlay = (function() {
     });
   }
   // 比べるための文言: 空白・&nbsp; を落とし、SHOW_INDEX の頭の番号 (`1:`) を外す。
-  // BLK-builder-20260925-1552-3: Creole の飾り (`<b>` `**` `//` `""` `__` `~~`) は描かれた文字に残らないので、
+  // Creole の飾り (`<b>` `**` `//` `""` `__` `~~`) は描かれた文字に残らないので、
   // 本文側・SVG 側の両方から落として比べる (`... Some ~~long delay~~ ...` は「Some」「long delay」と描かれる)。
-  // BLK-builder-20260925-1835-2: 改行は `\n` のほかに左寄せ `\l`・右寄せ `\r` もあり、どれも描かれた文字に残らない。
+  // 改行は `\n` のほかに左寄せ `\l`・右寄せ `\r` もあり、どれも描かれた文字に残らない。
   // スプライト `<$name>` / `<$name{scale=.5}>` と OpenIconic `<&icon>` は絵として描かれ、文字に残らない。
   function _procNorm(s) {
     return String(s || '').replace(/\\[nlr]/g, '').replace(/&nbsp;/g, '').replace(/<[$&][^>]*>/g, '').replace(/<\/?[a-zA-Z][^>]*>/g, '')
@@ -556,7 +556,7 @@ window.MA.sequenceOverlay = (function() {
     var polys = _bareShapes(svgEl, 'polygon').map(function(pg) {
       return String(pg.getAttribute('points') || '').split(/[\s,]+/).map(parseFloat);
     });
-    // BLK-human-20260925-1500: 開いた矢じり (`->>`) と ×印 (`->x`) は <polygon> ではなく斜めの短い <line> 2 本で描かれる。
+    // 開いた矢じり (`->>`) と ×印 (`->x`) は <polygon> ではなく斜めの短い <line> 2 本で描かれる。
     var tipLines = [];
     _bareShapes(svgEl, 'line').forEach(function(l) {
       var x1 = _num(l, 'x1'), y1 = _num(l, 'y1'), x2 = _num(l, 'x2'), y2 = _num(l, 'y2');
@@ -591,7 +591,7 @@ window.MA.sequenceOverlay = (function() {
       var r = a.x1 <= a.x2 ? { x: a.x2, y: a.y2 } : { x: a.x1, y: a.y1 };
       // 矢じりの向き: 重心がこの線の範囲に掛かり、端に近い矢じりだけをその線のものと見る
       // (teoz の並んだ矢印では、隣の矢印の矢じりがこの線の始点のすぐ外にある)。
-      // BLK-builder-20260925-1712-1: 自分の矢じりとして見た形の外接矩形を tips に集める (ライフラインを手前に出す高さを
+      // 自分の矢じりとして見た形の外接矩形を tips に集める (ライフラインを手前に出す高さを
       // 描いた形で決めるため)。開いた矢じり・×印の短い斜線は、端に接するものを矢じりとして数える。
       var tips = [];
       function _box(xs, ys) {
@@ -646,7 +646,7 @@ window.MA.sequenceOverlay = (function() {
         tipL: tipL, tipR: tipR, tips: tips };
     }).sort(function(a, b) { return a.top - b.top; });
   }
-  // BLK-human-20260925-1500: PlantUML 1.2026.7 からシーケンス図は teoz の描き方だけになり、参加者・メッセージの
+  // PlantUML 1.2026.7 からシーケンス図は teoz の描き方だけになり、参加者・メッセージの
   // <g class> と data-* が SVG から消えた。残るのはライフラインの `<g><title>表示名</title><rect 透明/><line 点線/></g>`
   // (表示名の ASCII 以外は '.' に伏せられる。遅延 `...` で区間ごとの <g> に分かれる)。
   // ライフラインを列の錨にして、参加者 = その列の線の上端のすぐ上 (頭) / 下端のすぐ下 (尻) に接して描かれた
@@ -698,7 +698,7 @@ window.MA.sequenceOverlay = (function() {
     var restC = [], restP = participants.filter(function(p) { return used.indexOf(p) < 0; });
     cols.forEach(function(c, i) { if (!owner[i]) restC.push(i); });
     if (restC.length && restC.length === restP.length) { restC.forEach(function(ci, k) { owner[ci] = restP[k]; }); return owner; }
-    // BLK-migrator-20260930-0255: 人数が合わない (本文から読んだ参加者に描かれない者が混ざる・読み落としがある) ときも、
+    // 人数が合わない (本文から読んだ参加者に描かれない者が混ざる・読み落としがある) ときも、
     // 左から順に「伏せ字の表示名と字数・ASCII の字が食い違わない」次の参加者を当てる。1 人の読み違いで全員の枠を外さない。
     var from = 0;
     restC.forEach(function(ci) {
@@ -774,7 +774,7 @@ window.MA.sequenceOverlay = (function() {
     });
     return out;
   }
-  // BLK-migrator-20260929-0011: destroy した名前を create し直すと、PlantUML は同じ列 (同じライフライン) の途中に
+  // destroy した名前を create し直すと、PlantUML は同じ列 (同じライフライン) の途中に
   // 頭をもう一度描く (1 回目の頭と同じ x・幅・高さの箱)。名前で 1 つに畳まず、描いた回ごとに枠を持つ。
   // 回の順 (上から) に、本文の create の行 (`create X` / `create participant … as X` / `A -> X **`) の後ろから当てる
   // (頭の数より create が少ないのは、1 回目の頭が宣言で描かれた頭のとき)。
@@ -944,7 +944,7 @@ window.MA.sequenceOverlay = (function() {
       if (!label) return;
       if (dm) {
         // 区切り: 表示名を囲む小さい rect。横いっぱいの 2 本線まで広げる。
-        // BLK-builder-20260925-1552-3: 描かれた区切りの形 (rect を左右に突き抜ける横線がある) を持つ rect に限る
+        // 描かれた区切りの形 (rect を左右に突き抜ける横線がある) を持つ rect に限る
         // (同じ文字を持つ注釈や手続きの部品の箱を区切りと取り違えない)。
         var best = null;
         rects.forEach(function(r) {
@@ -983,7 +983,7 @@ window.MA.sequenceOverlay = (function() {
         return true;
       });
     });
-    // BLK-migrator-20260929-2158: 図全体にかかる区切りの線のうち、枠・区切り (`==`) の中に無いもの。どのライフラインも
+    // 図全体にかかる区切りの線のうち、枠・区切り (`==`) の中に無いもの。どのライフラインも
     // 左右に突き抜ける横の破線は、メッセージ (ライフラインの上から出る) でも枠の else の点線 (枠の中) でもなく、
     // ページの境目の区切り (`newpage` が 1 枚目の下端に描く全幅の破線)。本文で箱を持たない区切りの行 (`newpage`) に
     // 上から順に当てる。本数が合わなければ当てない (推し量って別の行を指さない)。
@@ -1019,7 +1019,7 @@ window.MA.sequenceOverlay = (function() {
     var texts = (scene && scene.texts) || _procTexts(svgEl);
     var claimed = (scene && scene.claimed) || [];
     var prevY = typeof floorY === 'number' && isFinite(floorY) ? floorY - 4 : -Infinity;
-    // BLK-builder-20260925-0314-1: teoz の `&` は前の矢印と同じ高さに矢印を並べる。同じ高さの矢印どうしは
+    // teoz の `&` は前の矢印と同じ高さに矢印を並べる。同じ高さの矢印どうしは
     // 同じ床 (その段より前の矢印の下端) から文字を探す (前の矢印の下端を床にすると、並んだ矢印の文字が消える)。
     var rowTop = null, rowFloor = prevY;
     var own = arrows.map(function(a) {
@@ -1068,7 +1068,7 @@ window.MA.sequenceOverlay = (function() {
       // (両側に広げると、隣の矢印の矢じりまで覆って別のメッセージの枠が出る)。
       var top = a.top - 6, left = a.x1 - (a.tipL ? 6 : 0), right = a.x2 + (a.tipR ? 6 : 0);
       // parts: メッセージが自分で描いた所 (文字・矢印の線と矢じり)。ライフラインを手前に出す高さを決めるのに使う。
-      // BLK-builder-20260925-1712-1: 線は描いた太さ (上下 1px)、矢じりはその形の外接矩形。矢印全体を上下 5px の帯 1 枚に
+      // 線は描いた太さ (上下 1px)、矢じりはその形の外接矩形。矢印全体を上下 5px の帯 1 枚に
       // すると、ライフラインの上で線の尾 (太さ 1px) の上下 7px までがメッセージのものになり、ライフラインを指しても
       // 近くの矢印が選ばれた (class の付いた旧版の SVG は線を実際の太さで数えていた)。
       var parts = [{ x: a.x1, y: a.top - 1, width: a.x2 - a.x1, height: a.bottom - a.top + 2 }];
@@ -1085,7 +1085,7 @@ window.MA.sequenceOverlay = (function() {
   }
 
   // 手続きの図の ref / 区切り / 遅延: フォームで直せない記法として、書かれた行を指す枠 (app.js が右欄に行を出す)。
-  // BLK-owner-20260924-0637-2: 枠 (alt / loop / opt / par / break / critical / group) の当たり判定。
+  // 枠 (alt / loop / opt / par / break / critical / group) の当たり判定。
   // 枠全体を覆う rect はライフラインの当たり矩形の下にあり、左上の札「alt」はライフラインや帯の上に
   // 描かれるので、札を押すとライフライン選択か帯の「ここに挿入」に吸われていた。PlantUML が SVG に残した
   // 札の五角形 (枠の左上角から始まる path) と枠線・条件の文字を、ライフラインより手前の当たりにする。
@@ -1165,7 +1165,7 @@ window.MA.sequenceOverlay = (function() {
     });
   }
 
-  // BLK-builder-20260926-1010-1: 枠 (ref) の箱の中が塗られているか。描いた側の塗りで決める: 箱と同じ位置・大きさの
+  // 枠 (ref) の箱の中が塗られているか。描いた側の塗りで決める: 箱と同じ位置・大きさの
   // rect に塗り (fill が none でも透明でもない) があれば塗りあり。見つからなければ塗りありとみなす (これまでどおり)。
   function _framePainted(svgEl, bb) {
     var found = false, painted = false;
@@ -1180,7 +1180,7 @@ window.MA.sequenceOverlay = (function() {
     return !found || painted;
   }
 
-  // BLK-builder-20260926-1010-1: 塗りの無い ref の箱は、中を通るライフラインが透けて見える (描いた側では線が手前)。
+  // 塗りの無い ref の箱は、中を通るライフラインが透けて見える (描いた側では線が手前)。
   // 群の枠と同じく、箱全体の枠はライフラインより奥に置き、札と見出しの行・枠線・中の文字だけを一番手前にする。
   function _addFrameFronts(svgEl, overlayEl, bb, attrs) {
     var EDGE = 3;
@@ -1206,7 +1206,7 @@ window.MA.sequenceOverlay = (function() {
     });
   }
 
-  // BLK-builder-20260925-0314-1: 作られた参加者 (`create`) の頭。尻 (g.participant-tail) の箱と
+  // 作られた参加者 (`create`) の頭。尻 (g.participant-tail) の箱と
   // 同じ x・同じ幅で、尻より上にある裸の <rect> (参加者の <g> の外) がそれ。
   function _drawnRect(g) {
     var rs = g && g.querySelectorAll ? g.querySelectorAll('rect') : [];
@@ -1248,9 +1248,9 @@ window.MA.sequenceOverlay = (function() {
     return out;
   }
 
-  // BLK-migrator-20260925-1732: プレビューは `newpage` で分けた 1 枚目だけを描く。2 枚目以降の
+  // プレビューは `newpage` で分けた 1 枚目だけを描く。2 枚目以降の
   // メッセージ・注釈・帯・群は並びの照合にも数にも入れない (参加者は全ページの頭に描かれるので残す)。
-  // BLK-migrator-20260929-1300: 描かれない物も並びの照合と数から外す。
+  // 描かれない物も並びの照合と数から外す。
   //   - `!ifdef` / `!if` の描かれない枝の行 (meta.deadLines)。参加者は、宣言の行が描かれない枝でも、
   //     描かれる枝のメッセージに出てくれば描かれるので残す
   //   - `hide unlinked` の図で、描かれるメッセージを 1 本も持たない参加者
@@ -1300,7 +1300,7 @@ window.MA.sequenceOverlay = (function() {
     var participants = parsedData.elements.filter(function(e) { return e.kind === 'participant'; });
     var createLines = (parsedData.meta && parsedData.meta.createLines) || null;
 
-    // BLK-migrator-20260923-1307: `box "…" #色` … `end box` の囲み。
+    // `box "…" #色` … `end box` の囲み。
     // PlantUML は囲みを、参加者より先に描く「塗りと細い枠を持つ rect」で出す
     // (class は付かない)。参加者の頭より上に出る見出しの帯だけを枠にして、
     // 見出しにホバーするとその囲みを指すようにする。囲み全体を覆うと、図の中の
@@ -1309,7 +1309,7 @@ window.MA.sequenceOverlay = (function() {
     _addBoxRects(svgEl, parsedData, overlayEl);
     _addTitleRect(svgEl, parsedData, overlayEl);
 
-    // BLK-migrator-20260923-1409: 参加者は PlantUML が <g> に残した名前
+    // 参加者は PlantUML が <g> に残した名前
     // (data-qualified-name) で当てる。全員が名前で当たるときだけ採り、
     // 当たらない参加者が 1 人でもいれば今までの行/順番の当て方に落ちる。
     function _matchParts(selector) {
@@ -1322,19 +1322,19 @@ window.MA.sequenceOverlay = (function() {
       return OB.pickBestOffset(svgEl, participants, selector, candidates).matches;
     }
     // 枠は描かれた箱 (塗りのある図形) に合わせる。複数行の表示名でも高さが合う。
-    // BLK-migrator-20260923-2012: actor / boundary / control / entity / database / queue …
+    // actor / boundary / control / entity / database / queue …
     // は名前が図形の外 (下や上) に出るので、図形と名前の和集合で囲む。
     function _partBox(groupEl) {
       return OB.extractFigureBBox(groupEl) || OB.extractBBox(groupEl);
     }
 
-    // BLK-migrator-20260924-1332: 手続きで描いた図 (class の無い SVG) は、枠・区切り・遅延を先に見分けておく。
+    // 手続きで描いた図 (class の無い SVG) は、枠・区切り・遅延を先に見分けておく。
     var procScene = null, procArrows = null;
     if (participants.length && !svgEl.querySelector('g.participant-head') && !svgEl.querySelector('g.message')) {
       procArrows = _procArrows(svgEl);
       procScene = _procStructures(svgEl, dslText);
     }
-    // BLK-builder-20260925-1552-3: ref / 区切り / 遅延は、ふつうの図 (参加者・メッセージに class が付く SVG) でも
+    // ref / 区切り / 遅延は、ふつうの図 (参加者・メッセージに class が付く SVG) でも
     // class の無い <rect>/<path>/<line>/<text> で描かれる。手続きの図と同じく描かれた形から見分け、書かれた行を指す枠を置く
     // (ふつうの図では ref も区切りも遅延も枠が 1 つも出ていなかった)。枠は最後にまとめて手前に置く
     // (ref の箱・区切りの帯はライフラインの上に描かれ、先に置くとライフラインに吸われる)。
@@ -1374,7 +1374,7 @@ window.MA.sequenceOverlay = (function() {
         'data-line': m.item.line,
       });
     });
-    // BLK-builder-20260925-0314-1: `create X` / `create participant "…" as X` の参加者は、PlantUML が
+    // `create X` / `create participant "…" as X` の参加者は、PlantUML が
     // 頭を g.participant-head に入れず、作られたメッセージの高さに裸の <rect>+<text> で描く
     // (尻は g.participant-tail に入る)。尻と同じ幅・同じ x の箱を上に探して頭の枠にする。
     var headIds = {};
@@ -1408,7 +1408,7 @@ window.MA.sequenceOverlay = (function() {
     // そのまま使える。
     var lifelines = svgEl.querySelectorAll('g.participant-lifeline');
     Array.prototype.forEach.call(lifelines, function(lg) {
-      // BLK-migrator-20260923-2012: 遅延 (`...`) や間隔 (`|||`) があると、PlantUML は
+      // 遅延 (`...`) や間隔 (`|||`) があると、PlantUML は
       // ライフラインを区間ごとの <line> に分けて描く。最初の 1 本だけを見ると、
       // 最初の区間より下のライフラインに枠が出ない。全区間の上端〜下端で囲む。
       var segs = lg.querySelectorAll('line');
@@ -1424,7 +1424,7 @@ window.MA.sequenceOverlay = (function() {
         if (isNaN(y2) || bottom > y2) y2 = bottom;
       });
       if (isNaN(x1) || isNaN(x2) || isNaN(y1) || isNaN(y2)) return;
-      // BLK-migrator-20260923-1409: ライフラインも PlantUML の名前で当てる。
+      // ライフラインも PlantUML の名前で当てる。
       // 頭の枠の x 範囲で当てていたため、表示名が複数行で枠がずれると
       // 隣の参加者のライフラインを掴み、別人の枠が出ていた。
       var id = null, lineNum = null;
@@ -1463,10 +1463,10 @@ window.MA.sequenceOverlay = (function() {
         { 'data-type': 'lifeline', 'data-id': id, 'data-line': lineNum });
     });
 
-    // BLK-builder-20260925-0314-1: class の無い SVG (teoz・手続きの図) もライフラインを
+    // class の無い SVG (teoz・手続きの図) もライフラインを
     // `<g><title>表示名</title><rect 透明/><line 点線/></g>` で描く。表示名か別名で参加者に当てて枠を置く。
     if (!lifelines.length) {
-      // BLK-human-20260925-1500: 表示名は ASCII 以外が伏せ字になるので、列の並びも使って当てる (_lifelineOwners)。
+      // 表示名は ASCII 以外が伏せ字になるので、列の並びも使って当てる (_lifelineOwners)。
       // create した参加者は線が頭の上端から始まるので、線の枠は頭の下から (頭を指すと参加者が選ばれる)。
       var byCol = _procParticipantsByLifeline(svgEl, participants, createLines) || { cols: [], owner: [] };
       byCol.cols.forEach(function(c, i) {
@@ -1501,7 +1501,7 @@ window.MA.sequenceOverlay = (function() {
       Array.prototype.forEach.call(allRects, function(r) {
         var style = (r.getAttribute('style') || '') + '';
         // group 境界 rect は枠線を持つ。lifeline の hit-area rect (fill-opacity:0) は除外。
-        // BLK-migrator-20260923-1409: 枠線の色はテーマ (skinparam / strictuml) で変わる
+        // 枠線の色はテーマ (skinparam / strictuml) で変わる
         // (AWS の図では #7D8998)。黒に限ると枠が 1 つも拾えない。
         if (!/stroke:\s*#/.test(style)) return;
         if (r.getAttribute('fill-opacity') === '0' || parseFloat(r.getAttribute('fill-opacity')) === 0) return;
@@ -1524,7 +1524,7 @@ window.MA.sequenceOverlay = (function() {
       });
       // document 順 (= 上から下 = DSL 順) にすでに並んでいるので y で再 sort して安定化。
       bboxes.sort(function(a, b) { return a.y - b.y; });
-      // BLK-migrator-20260923-2012: `ref over A, B` も PlantUML は同じ「塗りなし・枠線あり」の
+      // `ref over A, B` も PlantUML は同じ「塗りなし・枠線あり」の
       // rect で描く。群だけを数えて順に当てると、ref より後の群が 1 つずつずれ、alt を選ぶと
       // ref の枠が出ていた。ref も並びに入れて上から順に当て、枠は群にだけ出す。
       var frames = groups.map(function(g) { return { group: g, line: g.line || 0 }; });
@@ -1532,7 +1532,7 @@ window.MA.sequenceOverlay = (function() {
         if (i + 1 < pageEnd && /^\s*ref\s+over\b/i.test(raw)) frames.push({ group: null, line: i + 1 });
       });
       frames.sort(function(a, b) { return a.line - b.line; });
-      // BLK-migrator-20260924-1332: 手続きの図では ref の枠が塗り付き (skinparam) で出て、塗りなしの rect だけを
+      // 手続きの図では ref の枠が塗り付き (skinparam) で出て、塗りなしの rect だけを
       // 数えると枠の並びがずれる。見出しの五角形が角に付いた rect を枠として数え、数が合えばそちらで当てる。
       if (procScene && procScene.frames.length === frames.length) bboxes = procScene.frames;
       else if (scene && bboxes.length !== frames.length && scene.frames.length === frames.length) bboxes = scene.frames;
@@ -1565,17 +1565,17 @@ window.MA.sequenceOverlay = (function() {
         scene.frames.forEach(function(bb, i) { srcHits.push({ box: bb, line: refLines[i], kind: 'ref' }); });
       }
     }
-    // BLK-migrator-20260924-1332: 区切り (`== x ==`) と遅延 (`... x ...`) にもその行を指す枠を置く。
+    // 区切り (`== x ==`) と遅延 (`... x ...`) にもその行を指す枠を置く。
     if (scene) {
       scene.dividers.forEach(function(d) { srcHits.push({ box: d.box, line: d.line, kind: 'divider' }); });
       scene.delays.forEach(function(d) { srcHits.push({ box: d.box, line: d.line, kind: 'delay' }); });
-      // BLK-migrator-20260929-2158: ページの境目の破線 (`newpage`) も区切りと同じくその行を指す
+      // ページの境目の破線 (`newpage`) も区切りと同じくその行を指す
       (scene.rules || []).forEach(function(d) { srcHits.push({ box: d.box, line: d.line, kind: 'newpage' }); });
     }
-    // BLK-migrator-20260923-1409: 群の枠は内側全体を覆うので、先に置いたライフラインが
+    // 群の枠は内側全体を覆うので、先に置いたライフラインが
     // その下に隠れ、alt の中のライフラインを指すと alt が選ばれていた。細いライフラインを
     // 群の枠より手前に出す (メッセージ・注釈はこの後に足すので、さらに手前に来る)。
-    // BLK-builder-20260926-1010-1: 塗りの無い ref の箱は群と同じくライフラインより奥 (札・枠線・文字は最後に手前へ)。
+    // 塗りの無い ref の箱は群と同じくライフラインより奥 (札・枠線・文字は最後に手前へ)。
     srcHits.forEach(function(h) {
       if (h.kind !== 'ref' || _framePainted(svgEl, h.box)) return;
       _addProcSourceLine(overlayEl, h.box, h.line, h.kind);
@@ -1585,7 +1585,7 @@ window.MA.sequenceOverlay = (function() {
       overlayEl.appendChild(r);
     });
 
-    // BLK-migrator-20260923-1409: `return` 行も PlantUML は矢印 (g.message) を 1 本描く。
+    // `return` 行も PlantUML は矢印 (g.message) を 1 本描く。
     // 順番で当てるとき return を数えないと、それ以後のメッセージの枠が 1 本ずつずれる。
     // return は並びを合わせるためだけに入れ、枠は出さない (編集対象のメッセージではない)。
     var msgItems = parsedData.relations.concat(parsedData.returns || []).sort(function(a, b) {
@@ -1595,7 +1595,7 @@ window.MA.sequenceOverlay = (function() {
     var msgMatches = msgBest.matches.filter(function(m) { return m.item.kind !== 'return'; });
     var procMsgs = [];
     if (!msgMatches.length && parsedData.relations.length && !svgEl.querySelector('g.message')) {
-      // BLK-migrator-20260925-1800: 床は最初の矢印より上にある頭 (図の上端に並ぶ頭) の下端だけで決める。`create` / `**` で
+      // 床は最初の矢印より上にある頭 (図の上端に並ぶ頭) の下端だけで決める。`create` / `**` で
       // 途中に作られた参加者の頭は、作られたメッセージの高さに描かれる。それも床に入れると床が下がり、その頭より上の
       // メッセージの文字が拾われず枠が出なかった (1.2026.8 からは全ての sequence 図が class の無い SVG でここを通る)。
       var firstArrowTop = Infinity;
@@ -1605,7 +1605,7 @@ window.MA.sequenceOverlay = (function() {
         if (!m.box || m.box.y + m.box.h > firstArrowTop) return;
         headFloor = Math.max(headFloor, m.box.y + m.box.h);
       });
-      // BLK-builder-20260925-1835-2: `return` の矢印も並びに入れる (文言の無いメッセージと return が並ぶ区間で
+      // `return` の矢印も並びに入れる (文言の無いメッセージと return が並ぶ区間で
       // 本数が合わず、その区間のメッセージが当たらなかった)。return の枠は出さない。
       procMsgs = _procMessages(svgEl, msgItems, headFloor, procScene).filter(function(m) { return m.item.kind !== 'return'; });
       procMsgs.forEach(function(m) {
@@ -1615,7 +1615,7 @@ window.MA.sequenceOverlay = (function() {
       });
     }
     msgMatches.forEach(function(m) {
-      // BLK-human-20260912-0900: 矢印・ラベル・番号 (autonumber)・ステレオタイプの
+      // 矢印・ラベル・番号 (autonumber)・ステレオタイプの
       // どこを押しても同じメッセージが選ばれるよう、g.message の子要素全部を覆う。
       // 最初の <text> だけを見る extractBBox では、autonumber なら番号の上、
       // ステレオタイプ付きならステレオタイプの上しか反応しなかった。
@@ -1628,7 +1628,7 @@ window.MA.sequenceOverlay = (function() {
       });
     });
 
-    // BLK-migrator-20260923-2012 差し戻し: メッセージの枠は矢印とラベルの和集合なので、
+    // 差し戻し: メッセージの枠は矢印とラベルの和集合なので、
     // 長いメッセージが横切るライフラインは、ラベルも矢印も無い高さでもメッセージに吸われていた
     // (ライフラインを指すと別のメッセージの枠)。描いた側で決める: ライフラインの線の上で
     // メッセージの文字・矢じり・線が無い所は、ライフラインを手前に出す。
@@ -1644,7 +1644,7 @@ window.MA.sequenceOverlay = (function() {
     // data-source-line も付かないため、selector マッチは成立せず placeholder rect を挿入する。
     // (overlay は data-line が正しければ click hit/jump が機能する。座標精度は後続 task で改善。)
     var notes = parsedData.elements.filter(function(e) { return e.kind === 'note'; });
-    // BLK-migrator-20260929-0459: 描いた紙は、読めない書き方の注釈の行にも当てる (紙を黙って捨てない)。
+    // 描いた紙は、読めない書き方の注釈の行にも当てる (紙を黙って捨てない)。
     // 読んだ注釈と並べて行の順にし、文字で当て、残りの紙を並び順で残りの行に当てる。
     var extraNotes = _unparsedNoteLines(dslText, notes, parsedData.meta);
     var notePicked = OB.pickBestOffset(svgEl, notes, 'g.note', candidates);
@@ -1681,7 +1681,7 @@ window.MA.sequenceOverlay = (function() {
         });
       });
       notes.forEach(function(n) {
-        // BLK-human-20260916-0900: 描かれた注釈の形 (note=path / hnote=polygon / rnote=rect) を
+        // 描かれた注釈の形 (note=path / hnote=polygon / rnote=rect) を
         // 本文の 1 行目から探し、その矩形全体を当たり判定にする (どこを押しても選べる)。
         var shapeBox = boxOf[n.id];
         if (shapeBox) {
@@ -1746,11 +1746,11 @@ window.MA.sequenceOverlay = (function() {
     }
     OB.warnIfMismatch('activation', activations.length, overlayEl.querySelectorAll('rect[data-type="activation"]').length);
 
-    // BLK-human-20260915-1204: 帯の矩形を「押した場所が帯の内か外か」を決める材料として置く。
+    // 帯の矩形を「押した場所が帯の内か外か」を決める材料として置く。
     // 選択の当たり判定には混ぜない (pointer-events を切る) ので、帯の中を押しても
     // これまでどおり挿入メニューが開く。resolveInsertLine だけがこれを読む。
     var zones = bandZones(svgEl, dslText);
-    // BLK-builder-20260925-0314-1: 帯はふつうライフラインの枠の中に収まり、指すとその参加者のライフラインが出る。
+    // 帯はふつうライフラインの枠の中に収まり、指すとその参加者のライフラインが出る。
     // `destroy` した参加者を `create` し直すと PlantUML は作り直した後のライフラインしか描かず、それより上の帯は
     // どの枠にも入らない。帯の矩形そのものをその参加者のライフラインの枠にする。
     var lifelineRects = Array.prototype.slice.call(overlayEl.querySelectorAll('rect[data-type="lifeline"]'));
@@ -1781,7 +1781,7 @@ window.MA.sequenceOverlay = (function() {
       r.classList.remove('selectable');
     });
 
-    // BLK-owner-20260924-0637-2: 枠の札・見出し・枠線・条件の文字は一番手前に置く。ライフラインの当たり
+    // 枠の札・見出し・枠線・条件の文字は一番手前に置く。ライフラインの当たり
     // (メッセージの間の細い区間はメッセージより後に足される) より奥だと、札を押してもライフラインに吸われる。
     // 帯は細く中身が隠れないので、ここで塞ぐのは枠の縁 (幅 6px) と見出しの行だけ。
     srcHits.forEach(function(h) {
@@ -1817,7 +1817,7 @@ window.MA.sequenceOverlay = (function() {
     };
   }
 
-  // BLK-human-20260915-1204: 実行中の帯 (activation バー) の矩形を SVG から拾う。
+  // 実行中の帯 (activation バー) の矩形を SVG から拾う。
   // PlantUML は帯を <g><title>{participant}</title><rect fill="#FFFFFF" width="10" …/></g>
   // として描き、class も data-source-line も付けない (同じ矩形を 2 回出す)。
   // lifeline の当たり矩形は fill-opacity:0 なので、塗りと stroke で見分ける。
@@ -1841,7 +1841,7 @@ window.MA.sequenceOverlay = (function() {
       var w = parseFloat(r.getAttribute('width'));
       var h = parseFloat(r.getAttribute('height'));
       if (isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h)) return;
-      // BLK-builder-20260925-0314-1: `create` で作られた参加者の頭も <title> 付きの裸の <g> に入る。帯は幅 10px ほどなので、幅のある箱は帯ではない。
+      // `create` で作られた参加者の頭も <title> 付きの裸の <g> に入る。帯は幅 10px ほどなので、幅のある箱は帯ではない。
       if (w > 30) return;
       var key = titleEl.textContent + '|' + x + ',' + y + ',' + w + ',' + h;
       if (seen[key]) return;                                      // 同じ帯が 2 回描かれる
@@ -1866,7 +1866,7 @@ window.MA.sequenceOverlay = (function() {
     Object.keys(byPart).forEach(function(k) {
       byPart[k].sort(function(a, b) { return a.activateLine - b.activateLine; });
     });
-    // BLK-builder-20260925-0314-1: 帯の <title> は表示名 (`participant "Session Manager" as SM` なら
+    // 帯の <title> は表示名 (`participant "Session Manager" as SM` なら
     // `Session Manager`)。DSL の帯は別名で持つので、表示名から別名へ引き直す。
     var aliasOf = {};
     var SEQ = window.MA.modules && window.MA.modules.plantumlSequence;
@@ -1878,7 +1878,7 @@ window.MA.sequenceOverlay = (function() {
         if (!byPart[lb] && aliasOf[lb] === undefined) aliasOf[lb] = e.id;
       });
     }
-    // BLK-human-20260925-1500: PlantUML 1.2026.7 からは帯の <g> の <title> が空。帯の真ん中に最も近いライフラインの列
+    // PlantUML 1.2026.7 からは帯の <g> の <title> が空。帯の真ん中に最も近いライフラインの列
     // (列 → 参加者は _lifelineOwners) で、どの参加者の帯かを決める。
     if (bars.some(function(b) { return !b.part; }) && SEQ && SEQ.parseSequence) {
       var parts = (SEQ.parseSequence(dslText).elements || []).filter(function(e) { return e.kind === 'participant'; });
@@ -1906,7 +1906,7 @@ window.MA.sequenceOverlay = (function() {
   }
 
   // 押した点が帯の矩形の中か、その下のライフライン線かを決める
-  // (BLK-human-20260915-1204)。返すのは resolve に渡す hint と同じ形。
+  // 返すのは resolve に渡す hint と同じ形。
   //   { zone: 'inside' | 'outside', bandLine }  … 帯が絡む
   //   null                                      … 帯から離れた所。DSL だけで決めさせる
   var BAND_X_TOLERANCE = 16;   // 帯は幅 10px ほど。ライフライン線を押しても同じ列と見なす
@@ -1944,7 +1944,7 @@ window.MA.sequenceOverlay = (function() {
     return null;
   }
 
-  // BLK-human-20260928-2255-2: 注釈・枠 (alt など)・ref は複数行にまたがる。挿入の当たりが「その後ろ」を
+  // 注釈・枠 (alt など)・ref は複数行にまたがる。挿入の当たりが「その後ろ」を
   // 指すとき、始まりの行の後ろ (= 注釈や枠の中) ではなく終わりの行の後ろに入れられるよう、終わりの行を持たせる。
   function _markStatementEnds(overlayEl, parsedData, dslText) {
     var endOf = { note: {}, group: {}, 'source-line': {} };
@@ -2020,7 +2020,7 @@ window.MA.sequenceOverlay = (function() {
     var items = _insertMarks(overlayEl);
     if (items.length === 0) return null;
     var zoneHint = resolveBandZone(overlayEl, x, y);
-    // BLK-human-20260928-2255-2: 押した点より上にある目印のうち、境が一番下のものの後ろ。メッセージだけを
+    // 押した点より上にある目印のうち、境が一番下のものの後ろ。メッセージだけを
     // 見ていたので、末尾の区切り線・注釈・遅延・ref・枠の下を押しても最後のメッセージの後ろ (それらより前) に入った。
     // 境が同じ高さなら DSL で後に書いた方 (外側の枠の end など) の後ろ。
     var below = null;

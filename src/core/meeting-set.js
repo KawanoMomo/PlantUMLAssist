@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // meeting-set — 会議で見せる図を自分で選んで並べる「会議セット」。
 //
-// BLK-primary-20260918-0249-wish: レビュー会議で変更前後を見せる場面では、その日の
+// レビュー会議で変更前後を見せる場面では、その日の
 // 対象は毎回変わる (今日は spi_init_sequence / spi_state / driver_common_class の 3 枚)。
 // 変更サマリボードは「変わった図」を全部並べるので、会議で見せない図も混ざり、
 // 見せたい 3 枚はタブを 1 枚ずつ開き直して ⇔見比べ・±差分・▤ を往復するしかなかった。
@@ -116,7 +116,7 @@ window.MA.meetingSet = (function() {
     return out;
   }
 
-  // BLK-primary-20260924-2232-friction: 会議で見せる図を選ぶ欄の候補。開いているタブの図に加えて、
+  // 会議で見せる図を選ぶ欄の候補。開いているタブの図に加えて、
   // 保存先 (保存フォルダ) の図も並べる。ワークスペースは同時に開ける図が限られるので、開いている図だけだと
   // 1 枚ごとに「一覧を開く → 図を開く → ボードを開き直す」を繰り返すことになっていた。
   // 返すのは [{ name, group: 'open' | 'folder', picked }]。同名は開いている方だけ (未保存の編集を含む方)。
@@ -143,7 +143,7 @@ window.MA.meetingSet = (function() {
   // 保存フォルダのファイルから補う。開き直さずに選んだ図も、変わっていなくても会議セットに並ぶ。
   // 返す形は change-board.folderExtras と同じ (origin: 'folder')。meetingPick を立てる。
   // 変更前は基準より前の最後の版 (版の控え・Git のコミット) から引き、今の中身では埋めない
-  // (BLK-primary-20260925-0637-wish。黙って同じ図を 2 つ並べない)。
+  // (。黙って同じ図を 2 つ並べない)。
   function folderPicks(fileDocs, boardDocs) {
     var inBoard = {};
     (Array.isArray(boardDocs) ? boardDocs : []).forEach(function(d) {

@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // status-badges — 下端の件数表示を 1 種類の形に揃える (design 9c)。
 //
-// BLK-human-20260923-1602: 「整合 3」はオレンジの枠付き、「⇄ イベント 0」は緑の文字と、
+// 「整合 3」はオレンジの枠付き、「⇄ イベント 0」は緑の文字と、
 // 同じ「件数を持つ項目」が札ごとに違う見た目で出ていた。0 件の項目も常に場所を取るので、
 // 下端は「今なにも起きていない」ときがいちばん賑やかだった。
 //
@@ -49,7 +49,7 @@ window.MA.statusBadges = (function() {
   }
 
   // 件数ではなく「相手の名前」を言う項目 (並べて比較 spi_state) も同じ 1 種類の形にする
-  // (BLK-builder-20260924-1716-4)。count が 0 (相手がまだ決まっていない) なら出さないので '' を返す。
+  // count が 0 (相手がまだ決まっていない) なら出さないので '' を返す。
   function namedText(name, count) {
     if (!isVisible(count)) return '';
     return DOT + ' ' + label(name);

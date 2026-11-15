@@ -1,16 +1,16 @@
 'use strict';
 window.MA = window.MA || {};
 
-// domain-cohort — 同じドメインの図を、フォルダ (ペルソナ) をまたいで並べる。
+// domain-cohort — 同じドメインの図を、フォルダ (人) をまたいで並べる。
 //
-// BLK-reviewer-20260909-0403-wish: 対象を junior の図に広げたとき、GPIO 系統で
+// 対象を junior の図に広げたとき、GPIO 系統で
 // junior/primary 双方の init_sequence・state が別物 (部品名・状態名・遷移ラベルとも
-// 不一致) と分かるまでに、`persona-data\junior\` と `persona-data\primary\` の
+// 不一致) と分かるまでに、`作業フォルダ\junior\` と `作業フォルダ\primary\` の
 // 該当ファイルを名前で推測して 4 枚個別に開き、テキストを見比べるしかなかった。
 // 「同じドメイン名 (gpio 等) の図を他フォルダから見つけて並べる」手段が無い。
 //
 // family-audit は系統 (ドメイン) でまとめるがフォルダを意図的に捨てる
-// (BLK-reviewer-20260907-1803)。ここは逆に、フォルダを軸として残したまま
+// ここは逆に、フォルダを軸として残したまま
 // 同じドメイン・同じ図種の組だけを突き合わせる。突合そのもの (名前の正規化・
 // 動作名の拾い方) は name-audit / family-audit をそのまま呼ぶので、
 // GUI と CLI と既存監査で「同じ名前」の判定がずれない。
@@ -24,7 +24,7 @@ window.MA.domainCohort = (function() {
   function _na() { return window.MA.nameAudit; }
   function _scope() { return window.MA.auditScope; }
 
-  // BLK-reviewer-20260909-0503-wish: 突合を GPIO の外へ広げた回、`plantuml`
+  // 突合を GPIO の外へ広げた回、`plantuml`
   // ドメインが junior/primary/reviewer の 3 フォルダで「食い違い」と出た。中身は
   // plantuml-sequence.puml 等のアプリ同梱テンプレ (Sample Sequence / User→System→DB) を
   // 各自が独立に複製しただけの練習用で、GPIO のような業務上の名前空間衝突ではない。
@@ -45,7 +45,7 @@ window.MA.domainCohort = (function() {
   function isTemplate(docName) { return templateReasonOf(docName) !== ''; }
 
   // `junior/gpio_state.puml` → `junior`。フォルダの無い名前は '' (= 分類なし)。
-  // 深い階層は先頭 1 段だけを見る。ペルソナ = 保存フォルダ 1 段という置き方に合わせる。
+  // 深い階層は先頭 1 段だけを見る。人 = 保存フォルダ 1 段という置き方に合わせる。
   function folderOf(docName) {
     var s = _s(docName).split('\\').join('/');
     var i = s.indexOf('/');
@@ -207,7 +207,7 @@ window.MA.domainCohort = (function() {
   function _id(x) { return x.key; }
   function _label(x) { return x.name || x.label; }
 
-  // ── 宣言を読む (BLK-reviewer-20260909-0703-wish) ────────────────────────
+  // ── 宣言を読む ────────────────────────
   // 「この図は向こうのフォルダの同名ドメインとは別物」という判断は、図の中の
   // `' domain-verdict: ...` 行に残っている。これまで突合はその行を一切見なかったので、
   // reviewer は突合が出した食い違いを 1 件ずつ grep で「決定済みか」確かめ直していた。
@@ -284,7 +284,7 @@ window.MA.domainCohort = (function() {
         var a = entries[i], b = entries[j];
         if (a.folder === b.folder) continue;
         if (!a.kind || a.kind !== b.kind) continue;
-        // BLK-reviewer-20260912-2206: ファイル名まで同じ組は「同じ図の 2 人の版」で、
+        // ファイル名まで同じ組は「同じ図の 2 人の版」で、
         // ドメイン+図種が同じだけの組 (gpio_init_sequence × gpio_read_sequence) とは
         // 突合の意味が違う。組み方は変えず印だけ付け、並びで先に出す。
         out.push({ kind: a.kind, a: a, b: b, sameBase: a.base === b.base });
@@ -335,7 +335,7 @@ window.MA.domainCohort = (function() {
     var all = groups(docs);
     var cross = crossFolder(all, opts).map(function(g) { return compare(g, opts); });
     var tpl = templateOnly(all);
-    // BLK-reviewer-20260912-2206: 食い違っている名前そのものを結果に載せる。
+    // 食い違っている名前そのものを結果に載せる。
     // CLI も画面もここを読むだけにして、手 diff に戻る口を残さない。
     var dr = diffRows({ groups: cross });
     dr.forEach(function(r) { r.text = diffRowText(r); });
@@ -357,7 +357,7 @@ window.MA.domainCohort = (function() {
           reason: (g.entries[0] && g.entries[0].templateReason) || 'テンプレ',
         };
       }),
-      // 宣言済みで突合から降りた組と、宣言が実体と合っていない組 (BLK-reviewer-20260909-0703-wish)。
+      // 宣言済みで突合から降りた組と、宣言が実体と合っていない組。
       // reviewer が見るべきは conflicts と、宣言なしの食い違い (groups[].mismatched) だけ。
       declared: cross.reduce(function(n, g) { return n + (g.declared | 0); }, 0),
       conflicts: cross.reduce(function(n, g) { return n + (g.conflicts | 0); }, 0),
@@ -379,7 +379,7 @@ window.MA.domainCohort = (function() {
       + tpl.map(function(t) { return t.domain; }).join(', ') + ')';
   }
 
-  // 宣言を数えた尾 (BLK-reviewer-20260909-0703-wish)。宣言済みを黙って外すと
+  // 宣言を数えた尾。宣言済みを黙って外すと
   // 件数の減りが「直った」に見えるので、外した数と、宣言が実体と合っていない数を必ず言う。
   function verdictNote(result) {
     var r = result || {};
@@ -409,7 +409,7 @@ window.MA.domainCohort = (function() {
     return out;
   }
 
-  // BLK-reviewer-20260912-2206: これまで CLI が出すのは「どのドメインが食い違うか」
+  // これまで CLI が出すのは「どのドメインが食い違うか」
   // までで、食い違っている名前そのものは出なかった。reviewer は毎回 2 フォルダから
   // 同名ファイルを開いて手 diff し、そこで初めて `Gpio` vs `Gpio_Driver` に気づいていた。
   // 突き合わせた組ごとに、どちらにしか無い部品名・ラベルを名指しする行を返す。

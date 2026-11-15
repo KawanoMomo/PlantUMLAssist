@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // pin-inbox — 保存フォルダ全体の指摘を 1 つの受信箱にまとめる。
 //
-// BLK-junior-20260907-2203-wish: 指摘ピン (review-pins) は 1 図ずつにしか付かない。
+// 指摘ピン (review-pins) は 1 図ずつにしか付かない。
 // 「レビュー指摘を受けて直す」業務は、前の図を 1 枚ずつ開いて 📌 のバッジを見て回り、
 // どこに未対応が残っているかを自分で覚えておくところから始まっていた。
 // 図をまたいで「未対応が何件・どの図に残っているか」を先に見せれば、
@@ -34,7 +34,7 @@ window.MA.pinInbox = (function() {
       if (typeof d.dsl !== 'string') return;
       _pinsOf(d.dsl).forEach(function(p) {
         p.doc = d.name;
-        // BLK-owner-20260923-1409-prune: 出典を札ではなく列で持つ。
+        // 出典を札ではなく列で持つ。
         // 手で書いた指摘 (fromManual) と同じ箱に並べても見分けが付くようにする。
         p.source = 'audit';
         out.push(p);
@@ -45,7 +45,7 @@ window.MA.pinInbox = (function() {
 
   // fromManual: 手で書いた指摘 (manual-findings.review の行) を、箱に並ぶ形にする。
   //
-  // BLK-owner-20260923-1409-prune: 🔖 手動指摘のタブは「指摘を集めて札を付けて一覧する」
+  // 🔖 手動指摘のタブは「指摘を集めて札を付けて一覧する」
   // という 📥 指摘箱と同じ目的の 2 つ目の入口だった。同じ 1 件が 2 か所で別々に数えられ、
   // 札の語彙も違った。手で書いた指摘もここで箱の項目にし、出典の絞り込みで出す。
   // 仕分けの中身 (指紋での持ち越し・要再確認の判定) は manual-findings のまま使う。
@@ -175,7 +175,7 @@ window.MA.pinInbox = (function() {
   }
 
   // 同じ図の同じ行に同じ文面があれば 1 件に畳む。出典が違っても二重に数えない
-  // (BLK-owner-20260923-1409-prune: 🔖 と 📥 の別勘定をここで止める)。
+  // (🔖 と 📥 の別勘定をここで止める)。
   // 監査が出した側を残す (根拠の機械確認が付いているのはそちら)。
   function dedupe(items) {
     var FV = window.MA.findingVocab;

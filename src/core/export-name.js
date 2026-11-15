@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // export-name — 1 枚書き出し (SVG / PNG) のファイル名を決める。
 //
-// BLK-junior-20260915-0406: Export ▾ →「SVGとして保存」は図の title
+// Export ▾ →「SVGとして保存」は図の title
 // (@startuml の title 行) をそのままファイル名にしていた。.puml の保存名は
 // 図の名前 (workspace の doc.name) なので、同じ図の spi_state.puml と
 // 「SPI ドライバ 状態遷移.svg」が保存フォルダに並び、どれとどれが対か

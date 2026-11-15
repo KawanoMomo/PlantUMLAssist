@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // file-menu — FILES ツリーのファイル・フォルダの右クリックに集める操作 (design 10b)。
 //
-// BLK-human-20260923-1701: ファイル 1 枚に対する操作が、タブ列 (一時控え・並べて比較)、
+// ファイル 1 枚に対する操作が、タブ列 (一時控え・並べて比較)、
 // ツール ▾ (この図の変遷)、下端の札 (前回保存版) と散らばっていて、「この図に何ができるか」を
 // 入口ごとに探し直していた。10b はファイルの右クリックに全部を集める。
 // フォルダの右クリックは「そこに作る」「そこを保存先 / 読むだけにする」。
@@ -38,10 +38,10 @@ window.MA.fileMenu = (function() {
   // フォルダの右クリック。部品のフォルダ (`SPI 4 / 6`) はファイル名の頭で束ねた見出しで
   // 実在のディレクトリではないので、「保存先にする / 読むだけにする」は出さない。
   // 読むだけのフォルダ (design 10a「右クリックから「並べて比較」できます」「編集はできません」) は
-  // 並べて比較が先頭で、そこに作る 2 つは出さない (BLK-builder-20260924-1749-3)。
+  // 並べて比較が先頭で、そこに作る 2 つは出さない。
   var FOLDER_ITEMS = [
     { id: 'compare', label: '並べて比較', readonlyOnly: true },
-    // BLK-owner-20260924-1836-prune: 覗く窓 (#peek-modal) はツリーで選んだフォルダの「道具の置き場」
+    // 覗く窓 (#peek-modal) はツリーで選んだフォルダの「道具の置き場」
     // (部品ビュー・指摘から選ぶ・ドメインで揃える・同名で並べる・自分の部品を探す・テンプレート)。
     // 入口はここ (と「読むだけ」見出しの目の印) で、窓の中でフォルダを選び直させない。
     { id: 'peek', label: 'このフォルダの図を調べる…', readonlyOnly: true },
@@ -50,10 +50,10 @@ window.MA.fileMenu = (function() {
     { sep: true, realOnly: true },
     { id: 'set-target', label: '保存先にする', realOnly: true },
     { id: 'set-readonly', label: '読むだけにする', realOnly: true },
-    // BLK-primary-20260925-0232-design: 保存先の行・「保存先」見出しから別のフォルダを保存先に替える
+    // 保存先の行・「保存先」見出しから別のフォルダを保存先に替える
     // (隣のフォルダから選ぶか、パスを入れる)。今は ⚙ 設定 → 自動保存 → ファイル → パス の 5 手だった。
     { id: 'change-target', label: '別のフォルダを保存先にする…', targetOnly: true },
-    // BLK-owner-20260924-0637-1: 旧 📂 一覧 (要約・選ぶバー・対象 set・SVG の鮮度…) はツリーから外し、
+    // 旧 📂 一覧 (要約・選ぶバー・対象 set・SVG の鮮度…) はツリーから外し、
     // 今の保存先の右クリックからだけ中央の枠に開く。
     { sep: true, targetOnly: true },
     { id: 'open-list', label: '保存先の一覧を開く', targetOnly: true },
@@ -95,7 +95,7 @@ window.MA.fileMenu = (function() {
         o.disabled = true;
         o.title = '今の保存先です';
       }
-      // BLK-owner-20260924-1836-prune: 「読むだけにする」は名前どおりの操作だけをする (覗く窓は開かない)。
+      // 「読むだけにする」は名前どおりの操作だけをする (覗く窓は開かない)。
       // 保存先は書く場所なので読むだけにはできない。別のフォルダを保存先にすると、ここは「読むだけ」に並ぶ。
       if (o.id === 'set-readonly' && kind === 'target') {
         o.disabled = true;
@@ -136,7 +136,7 @@ window.MA.fileMenu = (function() {
     return j;
   }
 
-  // BLK-builder-20260924-2316-3 (design 10b「↑↓ で移動、Enter で開く」): 図を開くとツリーが描き直され、
+  // 図を開くとツリーが描き直され、
   // 押した行の button が DOM から外れてフォーカスが body に落ちていた (続けて ↓ で次の図へ移れない)。
   // 描き直す前の行を「種類 (class) + 目印の属性」で覚え、描き直した後の同じ行を探してフォーカスを戻す。
   var ROW_CLASSES = ['files-row', 'files-part-file', 'files-part-head', 'files-part-missing-all',
@@ -207,7 +207,7 @@ window.MA.fileMenu = (function() {
     return v;
   }
 
-  // BLK-builder-20260924-1917-1 (design 10b): ツリーの上で名前を直すとき、決まりに合わない名前の理由 (1 行)。
+  // ツリーの上で名前を直すとき、決まりに合わない名前の理由 (1 行)。
   // 合っていれば ''。isValid は workspace.isValidName (判定の正本はそちら)、rule は nameRuleText。
   function renameProblem(next, isValid, rule) {
     var n = _s(next);
@@ -238,7 +238,7 @@ window.MA.fileMenu = (function() {
     var m = /^([^_\-\s]+)([_\-\s].*)?$/.exec(n);
     if (!m) return null;
     var FT = window.MA.fileTree;
-    // BLK-builder-20260924-1719-3: 区切りの無い日本語名 (`TIMERドライバ状態遷移`) は、ツリーと同じく
+    // 区切りの無い日本語名 (`TIMERドライバ状態遷移`) は、ツリーと同じく
     // 先頭の英数字の語が部品。そこだけを差し替え、全部大文字の部品名なら大文字で書く。
     var sp = FT && FT.splitPart ? FT.splitPart(n) : null;
     if (sp && sp.part !== m[1]) {
@@ -253,7 +253,7 @@ window.MA.fileMenu = (function() {
     return to + (m[2] || '');
   }
 
-  // BLK-builder-20260924-1831-2 (design 10b): 「別のフォルダへ移動…」の行き先。
+  // 「別のフォルダへ移動…」の行き先。
   // 絶対パスを打たせる前に、ツリーに見えている行き先をメニューの中に並べる:
   // 保存先の部品フォルダ (今いる部品以外。ドラッグと同じく名前の頭を替える) → 隣の保存フォルダ
   // → 最後に「パスを入力…」(一覧に無い所へ)。
@@ -291,7 +291,7 @@ window.MA.fileMenu = (function() {
   // 外からツリーへ落としたファイルのうち取り込むもの。.puml / .plantuml / .uml / .txt。
   // 返り値は { name, file } の並び (name は拡張子を落とした図の名前)。
   // 外から部品のフォルダに落とした図の名前 (design 10b「外から .puml をツリーに落とすと、
-  // そのフォルダへ取り込みます」。BLK-builder-20260924-1915-4)。部品はファイル名の頭の語なので、
+  // そのフォルダへ取り込みます」。)。部品はファイル名の頭の語なので、
   // その部品の下に出るように名前を組む:
   //   - もうその部品の名前 (`timer_state` を TIMER へ) … そのまま
   //   - 図種の語を持つ名前 (`gpt_state` を TIMER へ) … ツリー内の移動と同じく頭の語を差し替える
