@@ -136,11 +136,11 @@ window.MA.svgFreshness = (function() {
   }
 
   var BASIS_TEXT = {
-    stamp: '印 (@pua-source-sha1) の突合',
-    embedded: 'SVG に畳まれた元の DSL の突合',
+    stamp: '印 (@pua-source-sha1) の照合',
+    embedded: 'SVG に畳まれた元の DSL の照合',
     rerender: '描き直してのバイト比較',
     // 指紋ではなく「描かれる行」で比べた結果。
-    visible: 'SVG に畳まれた元の DSL と今の puml の、描かれる行の突合',
+    visible: 'SVG に畳まれた元の DSL と今の puml の、描かれる行の照合',
   };
 
   function basisText(basis) { return BASIS_TEXT[basis] || ''; }
@@ -393,9 +393,9 @@ window.MA.svgFreshness = (function() {
     var parts = [];
     // 指紋ではなく描かれる行で比べた枚数。
     if (b.visible) parts.push(basisText('visible') + ' ' + b.visible + ' 枚');
-    if (b.stamp) parts.push('印 (@pua-source-sha1) の突合 ' + b.stamp + ' 枚');
+    if (b.stamp) parts.push('印 (@pua-source-sha1) の照合 ' + b.stamp + ' 枚');
     // 印の無い svg は、PlantUML が畳んだ元の DSL で判定する。
-    if (b.embedded) parts.push('SVG に畳まれた元の DSL の突合 ' + b.embedded + ' 枚');
+    if (b.embedded) parts.push('SVG に畳まれた元の DSL の照合 ' + b.embedded + ' 枚');
     if (b.rerender) parts.push('描き直してのバイト比較 ' + b.rerender + ' 枚');
     if (!parts.length) return '判定の根拠: まだ 1 枚も内容で判定していません (印が無く、確かめてもいない)';
     return '判定の根拠: ' + parts.join(' / ') + '。' + (b.stamp ? STAMP_NOTE : '保存中の SVG は上書きしていません');

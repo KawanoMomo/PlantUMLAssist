@@ -395,7 +395,7 @@ window.MA.methodAudit = (function() {
     var head = names.slice(0, 5).join(' / ');
     return 'state の遷移イベント ' + ex.length + ' 種 (' + head
       + (names.length > 5 ? ' ほか' : '')
-      + ') は接頭辞を持たない UML のイベント名なので、メソッド突合の対象外です';
+      + ') は接頭辞を持たない UML のイベント名なので、メソッドとの照合の対象外です';
   }
 
   return {

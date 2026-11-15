@@ -15,18 +15,19 @@ const html = fs.readFileSync(path.resolve(__dirname, '..', 'plantuml-assist.html
 
 // 「渡す」(引き継ぎ zip・納品パッケージ) は TICKET-owner-20261115-1828-prune で外し、左列は 5 分類になった。
 describe('左列の分類', function() {
-  test('5 分類がこの順で並ぶ', function() {
+  // TICKET-owner-20261115-1841-prune: 「確かめる」(図をまたぐ監査) を外し、左列は 4 分類になった。
+  test('4 分類がこの順で並ぶ', function() {
     expect(tm.panelGroups().map(function(g) { return g.title; }))
-      .toEqual(['図をつくる', '書き換える', '探す', '確かめる', 'レビュー']);
+      .toEqual(['図をつくる', '書き換える', '探す', 'レビュー']);
   });
 
   // TICKET-owner-20261115-1840-prune: ピン留めと指摘箱を外したので、レビューの件数は差分と基準の図の分だけ。
-  test('分類側に件数の合計が出る (確かめる 1 / レビュー 6)', function() {
+  test('分類側に件数の合計が出る (書き換える 1 / レビュー 6)', function() {
     var counts = tm.groupCounts({
-      'btn-tab-cross': '1',
+      'btn-tab-rename': '1',
       'btn-tab-review': '4', 'btn-tab-diff': '2',
     });
-    expect(counts.check).toBe(1);
+    expect(counts.edit).toBe(1);
     expect(counts.review).toBe(6);
     // 0 件の分類は数字を持たない (常に場所を取る 0 を出さない)
     expect(counts.make).toBe(undefined);
@@ -59,13 +60,8 @@ describe('右列の小見出し', function() {
     expect(subs).toEqual(['指摘', '変更の履歴']);
   });
 
-  test('確かめるは 名前と系統 / まとめて点検 に分かれる', function() {
-    var g = tm.panelGroups().filter(function(x) { return x.key === 'check'; })[0];
-    var subs = [];
-    g.items.forEach(function(it) {
-      if (subs.indexOf(it.group) < 0) subs.push(it.group);
-    });
-    expect(subs).toEqual(['名前と系統', 'まとめて点検']);
+  test('確かめる の分類は無い', function() {
+    expect(tm.panelGroups().filter(function(x) { return x.key === 'check'; }).length).toBe(0);
   });
 
   test('項目名は tool-menu.js のラベルそのまま (言い換えない)', function() {
@@ -84,12 +80,12 @@ describe('パネルの HTML', function() {
     expect(out).toContain('Ctrl+K でも引けます');
   });
 
-  test('左列は 5 つ、最初の分類だけが開いている', function() {
+  test('左列は 4 つ、最初の分類だけが開いている', function() {
     var out = tm.buildMenuHtml();
-    expect((out.match(/class="tool-menu-cat"/g) || []).length).toBe(5);
+    expect((out.match(/class="tool-menu-cat"/g) || []).length).toBe(4);
     expect((out.match(/aria-selected="true"/g) || []).length).toBe(1);
-    // 5 分類のうち 4 つは畳んだ状態で出す (1 画面に収める)
-    expect((out.match(/class="tool-menu-group" data-group="[a-z]+" hidden/g) || []).length).toBe(4);
+    // 4 分類のうち 3 つは畳んだ状態で出す (1 画面に収める)
+    expect((out.match(/class="tool-menu-group" data-group="[a-z]+" hidden/g) || []).length).toBe(3);
   });
 
   test('分類の合計は項目の件数と別の印にする (件数の数え方を壊さない)', function() {

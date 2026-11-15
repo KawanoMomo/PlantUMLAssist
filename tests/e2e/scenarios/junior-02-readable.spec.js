@@ -1311,56 +1311,6 @@ async function putRegistry(page, dir, entries) {
   }, { dir, entries });
 }
 
-test('手順2 登録簿の組を選ぶだけで、揺れの残る図がまとめて正式表記に揃う', async ({ page }) => {
-  await S.bootWithSaveDir(page, UNIFY_DIR);
-  await S.clearDir(page, UNIFY_DIR);
-  await S.putDoc(page, UNIFY_DIR, 'gpio_init_sequence', U_GPIO);
-  await S.putDoc(page, UNIFY_DIR, 'spi_sequence', U_SPI);
-  await S.putDoc(page, UNIFY_DIR, 'timer_init_sequence', U_OK);
-  // 揃える先は reviewer が決めて置いた 1 冊 (保存フォルダの親)。
-  await putRegistry(page, UNIFY_DIR, [
-    { canonical: 'IRQCtrl', variants: ['IrqCtrl', 'Irq_Ctrl'] },
-    { canonical: 'Clock_Ctrl', variants: ['ClockCtrl'] },
-  ]);
-  await page.reload();
-  await page.waitForSelector('html[data-app-ready="1"]');
-  await page.waitForSelector('#btn-tab-unify');
-
-  await page.locator('#btn-tab-unify').click();
-  await expect(page.locator('#unify-panel')).toHaveClass(/open/);
-
-  // 到達条件その1: 何組が揃っていないかが、ファイルを 1 枚も開かずに出る。
-  await expect(page.locator('#unify-summary')).toHaveText('2 組 / 6 件が揃っていません', { timeout: 15000 });
-
-  // 到達条件その2: 組を選ぶと、揺れの残る図だけが在処として並ぶ
-  // (既に揃っている timer_init_sequence は出ない)。
-  await page.locator('#unify-entry').selectOption('irqctrl');
-  const files = page.locator('#unify-panel .unify-file');
-  await expect(files).toHaveCount(2);
-  await expect(files.filter({ hasText: 'gpio_init_sequence' })).toHaveCount(1);
-  await expect(files.filter({ hasText: 'spi_sequence' })).toHaveCount(1);
-  await expect(files.filter({ hasText: 'timer_init_sequence' })).toHaveCount(0);
-
-  // 到達条件その3: チェックした分をまとめて当てると、保存まで終わっている
-  // (開いて直して保存する往復が無い)。
-  await page.locator('#btn-unify-apply').click();
-  await expect(page.locator('#unify-result')).toHaveAttribute('data-applied-docs', '2', { timeout: 15000 });
-  await expect(page.locator('#unify-result')).toContainText('IRQCtrl に 4 件 / 2 枚を揃えました');
-
-  const gpio = await S.readDoc(page, UNIFY_DIR, 'gpio_init_sequence');
-  expect(gpio).toContain('participant IRQCtrl');
-  expect(gpio).not.toContain('IrqCtrl');
-  const spi = await S.readDoc(page, UNIFY_DIR, 'spi_sequence');
-  expect(spi).toContain('Spi_Driver -> IRQCtrl : Spi_Init()');
-  expect(spi).not.toContain('Irq_Ctrl');
-  // 揃っていた図は触られない。
-  expect(await S.readDoc(page, UNIFY_DIR, 'timer_init_sequence')).toBe(U_OK);
-
-  // 到達条件その4: 当て終わった組は一覧から消え、残りの組がそのまま次に選べる。
-  await expect(page.locator('#unify-summary')).toHaveText('1 組 / 2 件が揃っていません', { timeout: 15000 });
-  await expect(page.locator('#unify-entry option')).toHaveCount(1);
-  await expect(page.locator('#unify-entry option').first()).toHaveText(/^Clock_Ctrl ← ClockCtrl/);
-});
 
 // BLK-junior-20260917-0223-wish: 場面3 (先輩の図の変更を自分の図に取り込む) の手順1〜2。
 // 先輩側の増分は「相手だけ」の行として既に並ぶが、取り込みは 1 行ずつで、押すまで

@@ -137,7 +137,7 @@ test('手順4.10 印の無い SVG も、一覧の上で「今の puml の絵か 
   // 「確かめていないのでは」と疑って CLI に戻ることになる。
   await expect(raw.locator('[data-svg-content]')).toHaveCount(0);
   await expect(page.locator('#folder-svg-basis'))
-    .toContainText('SVG に畳まれた元の DSL の突合 2 枚');
+    .toContainText('SVG に畳まれた元の DSL の照合 2 枚');
   await expect(page.locator('#folder-svg-content')).toContainText('一致 2 枚');
 
   // 到達条件その2: 絵が入れ替わっている図は、相手を名指しされる
@@ -327,15 +327,3 @@ test('手順4.10 印が食い違った図の「見かけ上の stale」と「内
   await expect(page.locator('#svg-visual-report')).toHaveValue(/R04g_renamed/);
   await expect(page.locator('#svg-visual-report')).toHaveValue(/- Spi_Driver/);
 });
-
-// BLK-reviewer-20260915-0606: 手順4.10 は GUI の一覧だけでなく
-// `node tools/audit.js <フォルダ> --board` からも通る。その CLI 側は判定材料が
-// 指紋 (印 / 畳まれた DSL の sha1) しか無く、コメントや体裁だけを書き換えて
-// 保存し直した図まで「出力物/SVG 内容ずれ」= 作り直し要 として名指ししていた。
-// reviewer は --board を打つたびに、名指しされた枚数ぶん /verify-svg へ curl して
-// differ-format (体裁差のみ) と裏取りし、指摘.md への誤報告を防いでいた。
-// 畳まれた元の DSL と今の puml を「描かれる行だけ」で比べれば、その裏取りは要らない。
-const cliBoard = require('../../../src/core/audit-board');
-
-const CLI_DIR = DIR + '-cli';
-const CLI_ABS = path.join(__dirname, '..', '..', '..', CLI_DIR.replace(/^\.\//, ''));

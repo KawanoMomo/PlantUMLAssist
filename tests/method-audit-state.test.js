@@ -117,28 +117,3 @@ describe('method-audit — state の遷移イベント (BLK-reviewer-0943)', () 
     expect(MAUD.describe(none).indexOf('()')).toBe(-1);
   });
 });
-
-describe('consistency — イベント名不一致をバッジに数える (BLK-reviewer-0943)', () => {
-  test('check: events に載り、count に加算される', () => {
-    try { delete require.cache[require.resolve('../src/core/family-audit.js')]; } catch (e) {}
-    require('../src/core/family-audit.js');
-    try { delete require.cache[require.resolve('../src/core/consistency.js')]; } catch (e) {}
-    require('../src/core/consistency.js');
-    var ck = global.window.MA.consistency;
-    var res = ck.check([TIMER_STATE, CLASS_DOC]);
-    expect(res.events.length).toBe(2);
-    expect(res.events.map(function(e) { return e.event; }).sort().join(',')).toBe('Timer_Fault,Timer_StartConv');
-    expect(res.events[0].cls).toBe('Timer_Driver');
-    expect(res.count >= 2).toBe(true);
-    expect(ck.badgeLabel(res).indexOf('⚠')).toBe(0);
-  });
-
-  test('eventGaps: 宣言が揃っていれば 0 件', () => {
-    var ck = global.window.MA.consistency;
-    var ok = {
-      name: 'cls', diagramType: 'plantuml-class',
-      dsl: '@startuml\nclass Timer_Driver {\n  +Timer_StartConv()\n  +Timer_Ack()\n  +Timer_Fault()\n}\n@enduml',
-    };
-    expect(ck.eventGaps([TIMER_STATE, ok]).length).toBe(0);
-  });
-});

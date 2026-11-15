@@ -11,9 +11,7 @@ const TOOLS = [
   'btn-tab-new',
   'btn-tab-folder',
   'btn-tab-rename',
-  // BLK-owner-20260924-1332-prune: 🔍 名前突合は ▦ 突合ボードに畳んだ
-  'btn-tab-cross',
-  'btn-tab-family',
+  // ▦ 突合ボード・⇉ 系統チェックは TICKET-owner-20261115-1841-prune で外した
   'btn-tab-lines',
   // BLK-owner-20260923-1509-prune: ⇔ 並べて見る は「並べて比較」1 つに畳み、タブバーのボタンは無くなった
   'btn-tab-template',

@@ -197,7 +197,7 @@ window.MA.svgCompareRow = (function() {
     if (!list || !list.length) return '';
     var n = unstampedNames(list).length;
     if (n === 0) return '印: ' + list.length + ' 枚とも書き出した元 puml を名乗っています（未刻印なし）';
-    return '印: 未刻印 ' + n + ' 枚（この ' + n + ' 枚だけが描き直しての突合が要ります）';
+    return '印: 未刻印 ' + n + ' 枚（この ' + n + ' 枚だけが描き直しての照合が要ります）';
   }
 
   return {

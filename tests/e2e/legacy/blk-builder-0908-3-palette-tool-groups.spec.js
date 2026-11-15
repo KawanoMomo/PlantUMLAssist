@@ -28,33 +28,13 @@ test.describe('BLK-builder-0908-3 パレットのツール 6 分類', () => {
     expect(missing).toEqual([]);
   });
 
-  test('Tab で「確かめる」だけに絞り込める', async ({ page }) => {
-    await gotoApp(page);
-    await page.keyboard.press('Control+k');
-    // 「確かめる」の見出しに着くまで Tab を送る (前に add / jump などが並ぶ)。
-    for (let i = 0; i < 12; i++) {
-      const foot = await page.locator('#cp-foot').textContent();
-      if (foot && foot.indexOf('(確かめる / Check)') >= 0) break;
-      await page.keyboard.press('Tab');
-    }
-    await expect(page.locator('#cp-foot')).toContainText('(確かめる / Check)');
-    await expect(page.locator('#cp-list .cp-group')).toHaveCount(1);
-    await expect(page.locator('#cp-list .cp-item', { hasText: '突合ボード (表記揺れ' })).toHaveCount(1);
-    await expect(page.locator('#cp-list .cp-item', { hasText: '引き継ぎ zip' })).toHaveCount(0);
-  });
-
+  // 「確かめる」分類 (突合ボードほか) と 🔤 表記統一は TICKET-owner-20261115-1841-prune で外した。
   test('メニューで覚えた言葉でも、元の道具名でも引ける', async ({ page }) => {
     await gotoApp(page);
+    await page.locator('#editor').click();
     await page.keyboard.press('Control+k');
-    await page.locator('#cp-input').fill('表記揺れ');
-    // BLK-owner-20260924-1332-prune: 見つける ▦ 突合ボード が先頭、直す 🔤 表記統一 が次の 2 行
-    // (旧 🔍 名前突合の行は無い)。
-    await expect(page.locator('#cp-list .cp-item').first()).toContainText('突合ボード (表記揺れ');
-    await expect(page.locator('#cp-list .cp-item')).toHaveCount(2);
-    await expect(page.locator('#cp-list .cp-item').nth(1)).toContainText('表記を登録簿に揃える');
-    await page.locator('#cp-input').fill('Name audit');
-    // 旧 🔍 名前突合の名前で引くと、同じ事実を出す ▦ 突合ボードの 1 行に当たる。
-    await expect(page.locator('#cp-list .cp-item', { hasText: '突合ボード (表記揺れ' })).toHaveCount(1);
+    await page.locator('#cp-input').fill('部品名を一括置換');
+    await expect(page.locator('#cp-list .cp-item').first()).toContainText('部品名を一括置換する');
+    await expect(page.locator('#cp-list .cp-item', { hasText: '突合ボード' })).toHaveCount(0);
   });
-
 });

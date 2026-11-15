@@ -17,7 +17,9 @@ describe('ツールメニューの分類', function() {
   // 「渡す」1 か所に集めた (TICKET-owner-20261115-1828-prune で引き継ぎ・納品ごと外した)。
   test('design 7a の分類がこの順で並ぶ (渡す は Export ▾ へ移した)', function() {
     expect(tm.groups().map(function(g) { return g.title; }))
-      .toEqual(['図をつくる', '書き換える', '探す', '確かめる', 'レビュー']);
+      .toEqual(['図をつくる', '書き換える', '探す', 'レビュー']);
+    // 「確かめる」(図をまたぐ監査) は TICKET-owner-20261115-1841-prune で中身ごと外した。
+    expect(tm.menuIds().indexOf('btn-tab-cross')).toBe(-1);
     expect(tm.menuIds().indexOf('btn-tab-handoff')).toBe(-1);
     expect(tm.menuIds().indexOf('btn-tab-delivery')).toBe(-1);
   });
@@ -61,7 +63,8 @@ describe('タブ列の機能ボタンとの対応', function() {
     var re = /<button[^>]*class="tab-tool"[^>]*id="([^"]+)"/g;
     var m;
     while ((m = re.exec(html))) ids.push(m[1]);
-    expect(ids.length).toBeGreaterThan(20);
+    // 図をまたぐ監査を外して 20 個を切った (TICKET-owner-20261115-1841-prune)。畳む道具はまだ 10 個を超える。
+    expect(ids.length).toBeGreaterThan(10);
     var uncovered = ids.filter(function(id) {
       return id !== 'btn-tab-tools' && tm.keepIds().indexOf(id) < 0 && tm.groupOf(id) === null;
     });

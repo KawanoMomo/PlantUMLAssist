@@ -20,7 +20,7 @@ window.MA.writeHistory = (function() {
 
   var KINDS = {
     'rename': '⇄ 一括置換',
-    'unify': '表記統一 (登録簿へまとめて寄せる)',
+    'unify': '名前の揃え (登録簿へまとめて寄せる)',
     'glossary': '略語辞書の確定',
     'bulk-note': '◈ 依存グラフ (影響先へまとめて note)',
   };

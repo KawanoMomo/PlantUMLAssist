@@ -598,9 +598,9 @@ window.MA.modules.plantumlComponent = (function() {
   // 定石の依存チェック。
   // 判断は core/component-deps.js に置き、ここは並べて選ばせるだけ。
   // 候補は「この図に無いもの」しか来ないので、押した数だけ図が埋まる。
-  // 候補の出所。実績 (usage) は自分の他の図、定石 (catalog) は一般論、
-  // 他の図 (peer) は別部品の実績。どれを信じて押すかが分かれるので必ず出す。
-  var SOURCE_TAG = { usage: '実際の呼び出し', catalog: '定石', peer: '他の図' };
+  // 候補の出所。定石 (catalog) は一般論、他の図 (peer) は別部品の実績。
+  // どれを信じて押すかが分かれるので必ず出す。
+  var SOURCE_TAG = { catalog: '定石', peer: '他の図' };
 
   function _renderDepsCheck(parsedData, ctx) {
     var CD = window.MA.componentDeps;
@@ -618,7 +618,7 @@ window.MA.modules.plantumlComponent = (function() {
     // 選び直したらチェックリストも引き直す。
     var subjEl0 = document.getElementById('co-deps-subject');
     var subject = (subjEl0 && subjEl0.value) || CD.defaultSubject(dsl);
-    var res = CD.check(dsl, docs, activeId, subject);
+    var res = CD.check(dsl, docs, activeId, subject, { noUsage: true });
 
     sumEl.textContent = CD.summaryText(res);
     sumEl.setAttribute('data-missing', String(res.rows.length));

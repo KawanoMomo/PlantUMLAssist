@@ -1,6 +1,6 @@
 'use strict';
 // BLK-builder-20260924-1341-4 (design 9b): ツール ▾ の右列で小見出しが 2 度出ない。
-// 同じ小見出しの項目はまとまって並び、「確かめる」は 9b の右列と同じ順になる。
+// 同じ小見出しの項目はまとまって並ぶ。
 if (!global.window) {
   var jsdom = require('jsdom');
   var dom = new jsdom.JSDOM('<!DOCTYPE html><html><body></body></html>');
@@ -44,20 +44,14 @@ describe('右列の小見出しは各 1 回 (design 9b)', () => {
   });
 
   // 「渡す前に」(提出前チェック・引き継ぎチェックリスト) は TICKET-owner-20261115-1828-prune で外した。
-  test('確かめる は 名前と系統 → まとめて点検', () => {
-    expect(subsOf('check')).toEqual(['名前と系統', 'まとめて点検']);
+  // 「確かめる」分類 (系統チェック・系統マップ・トレース漏れ・突合ボード・観点一括) と
+  // 「表記を揃える」(🔤 表記統一) は TICKET-owner-20261115-1841-prune で外した。
+  test('確かめる の分類は無い', () => {
+    expect(TM.panelGroups().map(function(g) { return g.key; })).not.toContain('check');
   });
 
-  test('確かめる の項目は 9b の右列と同じ順', () => {
-    // BLK-owner-20260924-1332-prune: 「名前の表記揺れ」(🔍 名前突合) は ▦ 突合ボードの行に畳んだ。
-    expect(labelsOf('check')).toEqual([
-      '系統内の動作名のずれ', '系統マップの崩れ', '状態遷移のトレース漏れ',
-      '突合ボード (表記揺れ・宣言なし・メソッドも 1 画面で)', '1 つの観点で全図を棚卸し',
-    ]);
-  });
-
-  test('書き換える は まとめて直す → 表記を揃える (まとめて直す は 1 回)', () => {
-    expect(subsOf('edit')).toEqual(['まとめて直す', '表記を揃える']);
+  test('書き換える は まとめて直す だけ (1 回)', () => {
+    expect(subsOf('edit')).toEqual(['まとめて直す']);
   });
 
   test('小見出しを 1 行と数えた行数は 14 行以内のまま', () => {

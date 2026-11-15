@@ -396,7 +396,7 @@ describe('svgFreshness — 畳まれた DSL を根拠にした判定', () => {
   test('畳まれた DSL が今の puml と同じなら「内容一致」と言える (未刻印にしない)', () => {
     expect(SF.contentOf(EMB_MATCH, {})).toBe('match');
     expect(SF.contentBasisOf(EMB_MATCH, {})).toBe('embedded');
-    expect(SF.basisText('embedded')).toBe('SVG に畳まれた元の DSL の突合');
+    expect(SF.basisText('embedded')).toBe('SVG に畳まれた元の DSL の照合');
   });
 
   test('畳まれた DSL でのずれは、体裁差の逃げ道を作らず作り直しを言い切る', () => {
@@ -404,6 +404,6 @@ describe('svgFreshness — 畳まれた DSL を根拠にした判定', () => {
     var b = SF.contentBadge('differ', SF.contentBasisOf(EMB_DIFFER, {}));
     expect(b.mark).toBe('内容ずれ');
     expect(b.title).toContain('畳まれている元の DSL が、今の puml と違います');
-    expect(b.title).toContain('根拠: SVG に畳まれた元の DSL の突合');
+    expect(b.title).toContain('根拠: SVG に畳まれた元の DSL の照合');
   });
 });
