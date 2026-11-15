@@ -4,6 +4,7 @@
 // 期待 (principles.md「押した対象だけが変わる」「描ける」):
 //   - 1 回の「+ 追加」で本文は宣言 1 行だけ増え、ほかの行は動かない
 //   - 4 つの宣言は足した順に並び、描いた図に 4 者の名前が出る
+//   - 白紙のうちはプレビューに PlantUML の案内画面を出さず、「末尾に追加」から足せることを 1 行で言う。1 つ足せば図が出る
 const { test, expect } = require('@playwright/test');
 const H = require('./_helpers');
 
@@ -25,6 +26,13 @@ test('junior 手順1 新しいシーケンス図に、追加フォームから�
   const fresh = await H.getEditorText(page);
   expect(fresh).toContain('@startuml');
   expect(fresh).toContain('@enduml');
+  // TICKET-owner-20261115-1827-3: 白紙のプレビューは PlantUML の案内画面 (Welcome to PlantUML!) を描かず、
+  // 空のキャンバスと「末尾に追加」から足せることの 1 行を出す。本文は白紙のまま。
+  await expect(page.locator('#preview-svg svg[data-blank-canvas="1"]')).toHaveCount(1, { timeout: 20000 });
+  await expect(page.locator('#preview-svg .preview-blank-hint')).toContainText('末尾に追加');
+  await expect(page.locator('#preview-svg')).not.toContainText('Welcome to PlantUML');
+  await expect(page.locator('#preview-svg')).not.toContainText('plantuml.com');
+  expect(await H.getEditorText(page)).toBe(fresh);
 
   // 末尾に追加の「参加者」から 1 つずつ足す。
   for (const p of PARTS) {
@@ -37,6 +45,8 @@ test('junior 手順1 新しいシーケンス図に、追加フォームから�
     // 押した対象だけが変わる: 宣言 1 行が増えるだけ。
     expect(r.diffLines, 'diff lines for ' + p.name).toBe(1);
     expect(H.removedLines(r.before, r.after)).toEqual([]);
+    // 1 つ足せば白紙の案内は消え、今までどおり描く。
+    await expect(page.locator('#preview-svg .preview-blank-hint')).toHaveCount(0);
   }
 
   const dsl = await H.getEditorText(page);

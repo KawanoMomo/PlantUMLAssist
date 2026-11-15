@@ -30664,7 +30664,15 @@ function renderSvg() {
       throw detected;
     }
     clearRenderError();
-    previewSvgEl.innerHTML = svg;
+    // 白紙の図は PlantUML の案内画面 (Welcome to PlantUML!) を描かず、空のキャンバスと 1 行の案内にする。
+    var RE0 = window.MA.renderError;
+    if (RE0.isBlankWelcome && RE0.isBlankWelcome(svg, renderText)) {
+      previewSvgEl.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" data-blank-canvas="1" width="320" height="120" viewBox="0 0 320 120"></svg>'
+        + '<p class="preview-blank-hint" style="color:var(--text-secondary);padding:8px 20px;font-size:12px;margin:0;">'
+        + window.MA.htmlUtils.escHtml(RE0.BLANK_HINT) + '</p>';
+    } else {
+      previewSvgEl.innerHTML = svg;
+    }
     _previewOwnerId = (renderDocKey === _activeDocKey() && !_isPlantUmlWelcome(svg)) ? renderDocKey : false;
     var nse = window.MA.renderError.noStartEnd ? window.MA.renderError.noStartEnd(svg) : null;
     _setEngineVerdict(renderText, nse
