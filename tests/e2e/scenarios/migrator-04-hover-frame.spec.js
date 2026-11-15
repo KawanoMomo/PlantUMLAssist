@@ -4,7 +4,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { bootPlain, bootWithSaveDir, typeDsl, dirFor, absDirFor } = require('./_scenario');
+const { bootPlain, bootWithSaveDir, typeDsl, typeDslDrawn, dirFor, absDirFor } = require('./_scenario');
 
 const DSL = [
   '@startuml',
@@ -599,7 +599,7 @@ test('migrator 手順 4 — note across の紙の縁・本文のどこでも注�
     { note: ['rnote across : 四角の帯'], text: '四角の帯' },
   ];
   for (const c of cases) {
-    await typeDsl(page, ['@startuml', 'participant A', 'participant B', 'A -> B : req'].concat(c.note, ['B --> A : res', '@enduml']).join('\n'));
+    await typeDslDrawn(page, ['@startuml', 'participant A', 'participant B', 'A -> B : req'].concat(c.note, ['B --> A : res', '@enduml']).join('\n'));
     await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(2, { timeout: 20000 });
     await expect(page.locator('#overlay-layer rect[data-type="note"]')).toHaveCount(1);
     const t = await hoverHit(page, c.text);
@@ -1973,7 +1973,7 @@ test('migrator 手順 4 — !ifdef / !else の両枝にメッセージのある 
   expect((await hoverHit(page, 'done')).hit).toEqual({ type: 'message', line: '10', hover: true });
 
   for (const name of ['common-20-preproc-include-local-undef', 'seq-23-hide-unlinked-note-across']) {
-    await typeDsl(page, fx(name));
+    await typeDslDrawn(page, fx(name));
     await expect(page.locator('#overlay-layer rect[data-type="message"]').first()).toBeAttached({ timeout: 20000 });
     await page.waitForTimeout(600);
     await expect(page.locator('#overlay-warning'), name + ' で帯が出ない').toBeHidden();
@@ -2130,7 +2130,7 @@ test('migrator 手順 4 — 途中で create / ** / !! した参加者のある 
     ['seq-created-head-11', [['Session_Open()', '5'], ['internal_alloc()', '6'], ['handle', '7'], ['force_cleanup()', '9'],
       ['done', '11'], ['Session_Reopen()', '13']]],
   ]) {
-    await typeDsl(page, fx(name));
+    await typeDslDrawn(page, fx(name));
     await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(7, { timeout: 20000 });
     await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
     await expect(page.locator('#overlay-warning')).toBeHidden();
@@ -2380,7 +2380,8 @@ test('migrator 手順 4 — note に Creole の表・箇条書き・リンクを
   const words = ['Item', 'Status', 'WDT reset', 'ok', 'Brownout detect', 'NG', 'Checklist', 'Sub item A', 'Step 1', 'spec doc'];
   for (const [kind, head, noteLine] of cases) {
     const tail = kind === 'activity' ? ['stop'] : [];
-    await typeDsl(page, ['@startuml'].concat(head, NOTE, tail, ['@enduml']).join(String.fromCharCode(10)));
+    // 前の図種の同じ行番号の枠と文字が残っていても進まないよう、この図の描き直しを待つ (releaser 2220-1)
+    await typeDslDrawn(page, ['@startuml'].concat(head, NOTE, tail, ['@enduml']).join(String.fromCharCode(10)));
     await expect(page.locator('#preview-svg svg text').filter({ hasText: 'Brownout detect' })).toHaveCount(1, { timeout: 20000 });
     await expect(page.locator('#overlay-layer rect[data-line="' + noteLine + '"]')).not.toHaveCount(0, { timeout: 20000 });
     const got = [];
@@ -2432,7 +2433,7 @@ test('migrator 手順 4 — roundCorner を付けた図でも、6 図種とも�
     ['component', ['component C', 'note right of C'], [], 4],
   ];
   for (const [kind, head, tail, noteLine] of cases) {
-    await typeDsl(page, ['@startuml', 'skinparam roundCorner 8'].concat(head, NOTE, tail, ['@enduml']).join(String.fromCharCode(10)));
+    await typeDslDrawn(page, ['@startuml', 'skinparam roundCorner 8'].concat(head, NOTE, tail, ['@enduml']).join(String.fromCharCode(10)));
     await expect(page.locator('#preview-svg svg text').filter({ hasText: '見出し' })).toHaveCount(1, { timeout: 20000 });
     await expect(page.locator('#overlay-layer rect[data-line="' + noteLine + '"]')).not.toHaveCount(0, { timeout: 20000 });
     const got = [];
@@ -2595,7 +2596,7 @@ test('migrator 手順 4 — アクティビティ図の partition は 2 つ目�
       { '製造 工程': 3, '検査': 6 }],
   ];
   for (const [dsl, want] of cases) {
-    await typeDsl(page, dsl.join('\n'));
+    await typeDslDrawn(page, dsl.join('\n'));
     await expect(page.locator('#overlay-layer rect[data-src-kind="partition"][data-hit-kind="container"]'))
       .toHaveCount(Object.keys(want).length, { timeout: 20000 });
     const parts = await points();
@@ -2794,7 +2795,7 @@ test('migrator 手順 4 — メンバー・クラス・状態を指す note の�
     { dsl: ['@startuml', '[*] --> Idle', 'Idle --> Run', 'note right of Idle', '  待機', 'end note', '@enduml'], line: '4' },
   ];
   for (const c of cases) {
-    await typeDsl(page, c.dsl.join(String.fromCharCode(10)));
+    await typeDslDrawn(page, c.dsl.join(String.fromCharCode(10)));
     // 数えるのは当たりの枠 (selectable)。楔込みの見た目だけの枠 (rect.note-frame) は数えない。
     await expect(page.locator('#overlay-layer rect.selectable[data-type="note"]')).toHaveCount(1, { timeout: 20000 });
     // 紙の外形の path から、紙の矩形の外へ飛び出した頂点 (楔の先) と前後の縁の頂点を取る。
@@ -3000,7 +3001,7 @@ test('migrator 手順 4 — 手書き風のシーケンス図でも、参加者�
     }, p);
   };
   for (const opt of ['skinparam handwritten true', '!option handwritten true']) {
-    await typeDsl(page, [
+    await typeDslDrawn(page, [
       '@startuml',                        // 1
       opt,                                // 2
       'actor 幹事',                        // 3

@@ -190,6 +190,19 @@ async function typeDsl(page, text) {
   await page.waitForTimeout(400);
 }
 
+// 本文を流し込み、その本文の図が描き直されるまで待つ (1 枚の画面で図を次々に替える試験用)。
+// 負荷が高いと 400ms では描き直しが届かず、前の図の文字・枠 (同じ行番号の枠) を新しい図のものと取り違えて
+// 前の図の note を押していた。前の SVG に印を付け、印の無い SVG が出るのを待つ (枠は同じ処理の中で作り直される)。
+// 描けない本文 (前の図が残る) と、前と同じ本文 (描き直さない) には使わない。
+async function typeDslDrawn(page, text, timeout = 20000) {
+  await page.evaluate(() => {
+    const s = document.querySelector('#preview-svg > svg');
+    if (s) s.setAttribute('data-test-prev', '1');
+  });
+  await typeDsl(page, text);
+  await page.waitForSelector('#preview-svg > svg:not([data-test-prev])', { state: 'attached', timeout });
+}
+
 async function renameActive(page, name) {
   await page.evaluate((n) => {
     const ws = window.MA.workspace;
@@ -381,7 +394,7 @@ module.exports = {
   PRIMARY_DOCS, docFor,
   dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode, reopenApp,
   putDoc, readDoc, listDir, clearDir, clearTickets,
-  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, peekFolder, compareFolder, typeDsl, renameActive, runCommand, exportVia,
+  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, peekFolder, compareFolder, typeDsl, typeDslDrawn, renameActive, runCommand, exportVia,
   GPIO_STATE, GPIO_SEQ, IRQ_SEQ_FOLDED_DASH,
   messageClickPoints, selectedMessageLine, expectMessageHitUniform,
 };
