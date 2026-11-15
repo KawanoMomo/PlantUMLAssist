@@ -123,7 +123,10 @@ test.describe('BLK-reviewer-2043 名前突合 (▦ 突合ボードで見る)', (
     await expect(page.locator('#ab-modal')).toBeHidden();
     await expect(page.locator('#unify-panel')).toHaveClass(/open/);
     await expect(page.locator('#unify-entry')).toHaveValue('irqctrl');
-    await expect(page.locator('#unify-files .uf-name')).toContainText(['diagram2']);
+    // 直る図は CAN シーケンスの 1 枚だけ。新しい図の仮名 (diagramN) の番号は同じ試験サーバで
+    // 先に作られた図の数で変わるので、番号ではなく 1 枚であることを見る。
+    await expect(page.locator('#unify-files .uf-name')).toHaveCount(1);
+    await expect(page.locator('#unify-files .uf-name')).toHaveText([/^diagram\d+/]);
     // 登録簿に組が入った
     const reg = await page.evaluate(async (d) => (await (await fetch('/name-registry?dir=' + encodeURIComponent(d))).json()), DIR);
     const irq = reg.entries.find((e) => e.canonical === 'IRQCtrl');

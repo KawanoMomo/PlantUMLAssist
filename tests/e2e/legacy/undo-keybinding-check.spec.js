@@ -11,6 +11,10 @@ async function tailAddActor(page, alias) {
   await page.locator('#seq-tail-alias').fill(alias);
   await page.locator('#seq-tail-add').click();
   await page.waitForTimeout(400);
+  // 足した後はフォームが続けて打てるよう別名の欄に手を戻す。欄の中の Ctrl+Z は欄の
+  // ネイティブ undo に任せる約束 (app.js の history ルーター) なので、図の Undo を
+  // 確かめるこの spec では欄から手を離してから Ctrl+Z を押す。
+  await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
 }
 
 test.describe('Ctrl+Z / Ctrl+Y keybindings (userissue v1.2.4)', () => {

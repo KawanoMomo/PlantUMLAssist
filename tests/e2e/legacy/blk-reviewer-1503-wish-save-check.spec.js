@@ -85,8 +85,13 @@ test('直して保存すると帯は消え、解消したことが分かる', as
 
   await setDsl(page, CLEAN);
   await pressSave(page);
-  await expect(page.locator('#save-check-overlay')).toBeHidden();
-  await expect(page.locator('#status-save-result')).toContainText('解消');
+  // 保存時チェックは後から「出力物/SVG 無」(SVG を書き出していない) も見るようになった。
+  // この図は SVG を書き出していないのでその 1 件は残り、帯は消えないことがある。
+  // 直した Unused の件が帯から消え、解消したと出ることを見る。帯が残るときは帯の見出し
+  // (「未解消 1 件 / 解消 1 件」)、帯が消えるときは下の保存結果に「解消」が出る。
+  await expect(page.locator('#sck-list li:visible', { hasText: 'Unused' })).toHaveCount(0);
+  await expect(page.locator('#sck-summary:visible, #status-save-result')
+    .filter({ hasText: /(^|[^未])解消/ }).first()).toBeVisible();
 });
 
 test('帯は閉じられ、突合ボードへ移れる', async ({ page }) => {
