@@ -17,7 +17,7 @@ describe('ツールメニューの分類', function() {
   // 「渡す」1 か所に集めた (TICKET-owner-20261115-1828-prune で引き継ぎ・納品ごと外した)。
   test('design 7a の分類がこの順で並ぶ (渡す は Export ▾ へ移した)', function() {
     expect(tm.groups().map(function(g) { return g.title; }))
-      .toEqual(['図をつくる', '書き換える', 'レビュー']);
+      .toEqual(['図をつくる', '書き換える']);
     // 「探す」(図をまたぐ調べ物) は TICKET-owner-20261115-2140-prune で中身ごと外した。
     ['btn-tab-symptom', 'btn-tab-blame', 'btn-tab-xref', 'btn-tab-lineage'].forEach(function(id) {
       expect(tm.menuIds().indexOf(id)).toBe(-1);
@@ -45,7 +45,7 @@ describe('ツールメニューの分類', function() {
     expect(tm.keepIds()).toEqual(['btn-tab-new', 'btn-tab-folder', 'btn-open-file']);
     expect(tm.isFoldable('btn-tab-new')).toBe(false);
     expect(tm.isFoldable('btn-tab-folder')).toBe(false);
-    expect(tm.isFoldable('btn-tab-diff')).toBe(true);
+    expect(tm.isFoldable('btn-tab-lines')).toBe(true);
     // メニューに載っていない未知のボタンは畳まない (画面から消してしまわない)
     expect(tm.isFoldable('btn-tab-unknown')).toBe(false);
   });
@@ -53,8 +53,10 @@ describe('ツールメニューの分類', function() {
   test('分類と文言が id から引ける', function() {
     // 引き継ぎ zip・納品パッケージ (渡す) は TICKET-owner-20261115-1828-prune で外した。
     expect(tm.groupOf('btn-tab-handoff')).toBe(null);
-    expect(tm.groupOf('btn-tab-diff')).toBe('review');
-    expect(tm.labelOf('btn-tab-diff')).toBe('前回保存からの差分');
+    // 「レビュー」分類 (前回保存からの差分) は TICKET-owner-20261115-2141-prune で外した。
+    expect(tm.groupOf('btn-tab-diff')).toBe(null);
+    expect(tm.groupOf('btn-tab-lines')).toBe('edit');
+    expect(tm.labelOf('btn-tab-lines')).toBe('行を書き換える');
     expect(tm.groupOf('btn-tab-lineage')).toBe(null);
     expect(tm.groupOf('btn-tab-nope')).toBe(null);
   });
@@ -86,18 +88,19 @@ describe('メニューの HTML', function() {
   test('分類見出しと項目、Ctrl+K の注記が出る', function() {
     var out = tm.buildMenuHtml();
     expect(out).toContain('Ctrl+K でも引けます');
-    expect(out).toContain('>レビュー<');
-    expect(out).toContain('data-target="btn-tab-diff"');
-    expect(out).toContain('前回保存からの差分');
+    expect(out).toContain('>書き換える<');
+    expect(out).toContain('data-target="btn-tab-lines"');
+    expect(out).toContain('行を書き換える');
+    expect(out).not.toContain('>レビュー<');
   });
 
   test('件数を持つものだけ数字が付く', function() {
-    var out = tm.buildMenuHtml({ 'btn-tab-diff': '3' });
+    var out = tm.buildMenuHtml({ 'btn-tab-lines': '3' });
     expect(out).toContain('<span class="tool-menu-badge">3</span>');
     expect((out.match(/tool-menu-badge/g) || []).length).toBe(1);
   });
 
   test('文言はエスケープされる', function() {
-    expect(tm.buildMenuHtml({ 'btn-tab-diff': '<b>' })).toContain('&lt;b&gt;');
+    expect(tm.buildMenuHtml({ 'btn-tab-lines': '<b>' })).toContain('&lt;b&gt;');
   });
 });

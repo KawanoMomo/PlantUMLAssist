@@ -3574,8 +3574,7 @@ function init() {
   setupDocSets();
   setupBulkApply();
   setupTemplateNew();
-  setupDiffPanel();
-  setupLiveDiff();
+  renderDiffBadge();
   setupExportPick();
   setupComponentPack();
   setupMaterialExport();
@@ -3759,7 +3758,6 @@ function initCommandPalette() {
       // 部品を起こす・テンプレート・骨格・セット複製の 4 行を 1 行にした。何から起こすかは窓の上端で選ぶ。
       // 旧名はこの行を引く語に残す (別の行として並べない)。
       { id: 'tab-template', title: '既存の図や雛形から新しい図を起こす… / New from…', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい', 'テンプレートから作る', 'テンプレート', '部品を起こす', '6 図種まとめて', 'part', 'starter', 'new', 'ぶひん', 'おこす', 'したがき', '6', 'ろく', 'ずしゅ', '骨格から作る', '骨格', 'skeleton', 'こっかく', 'ひな形', 'セット複製', '系統ごと複製する', '系統ごと複製', 'set', 'clone', 'family', 'せっと'], button: 'btn-tab-template', run: function() { clickById('btn-tab-template'); } },
-      { id: 'tab-diff', title: '前回保存からの差分 / Diff', hint: 'Tabs', keywords: ['diff', 'change', 'さぶん', 'へんこう'], button: 'btn-tab-diff', run: function() { clickById('btn-tab-diff'); } },
       // design 7b: タブ列を畳むと Ctrl+K だけが手掛かりになるので、ツールメニューに
       // 載っている道具はすべてパレットからも引けなければならない。ここは
       // 「メニューにはあるがパレットに無かった」道具。題はメニューの言い換えに揃える。
@@ -3768,7 +3766,9 @@ function initCommandPalette() {
       // design 9a: 手元の .puml を開く入口は上部バーの Import ▾ へ移した。
       { id: 'import-clipboard', title: 'クリップボードの DSL から開く / Open from clipboard', hint: 'File', keywords: ['clipboard', 'paste', 'import', 'くりっぷ', 'はりつけ', 'ひらく'], run: function() { clickById('imp-clipboard'); } },
       // この図の履歴 を開く行は「この図の履歴を見る」1 行。旧名「変遷」は語に落とす。
-      { id: 'tab-versions', title: 'この図の履歴を見る / Version history', hint: 'Tabs', keywords: ['version', 'timeline', 'history', 'へんせん', 'りれき', '変遷', 'この図の変遷', '履歴', '保存した版'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
+      // 「前回保存からの差分」の行は TICKET-owner-20261115-2141-prune で外し、その語はこの行で引く
+      // (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。
+      { id: 'tab-versions', title: 'この図の履歴を見る / Version history', hint: 'Tabs', keywords: ['version', 'timeline', 'history', 'へんせん', 'りれき', '変遷', 'この図の変遷', '履歴', '保存した版', 'diff', 'さぶん', '差分', '前回保存', 'ぜんかいほぞん'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
       { id: 'settings', title: '設定を開く / Settings', hint: 'Ctrl', keywords: ['settings', 'config', 'せってい'], run: function() { clickById('btn-config'); } },
       { id: 'undo', title: '元に戻す / Undo', hint: 'Ctrl+Z', keywords: ['undo', 'もどす'], run: function() { clickById('btn-undo'); } },
       { id: 'redo', title: 'やり直す / Redo', hint: 'Ctrl+Y', keywords: ['redo', 'やりなおす'], run: function() { clickById('btn-redo'); } },
@@ -4920,14 +4920,9 @@ function renderTabs() {
     if (doc.preview) el.setAttribute('data-preview', '1');
     el.setAttribute('data-doc-name', doc.name);
     el.title = doc.name + ' (' + doc.diagramType.replace('plantuml-', '')
-      + ') — ダブルクリックで名前変更 / 右クリックで変更前後を見る';
-    // 会議で「この図、変わった?」と聞かれた所から
-    // 1 手で入れる入口。開く先は差分タブだが、そのまま見比べへ切り替えられる。
-    el.addEventListener('contextmenu', function(ev) {
-      ev.preventDefault();
-      switchToDoc(doc.id);
-      toggleCompareView(true, 'diff');
-    });
+      + ') — ダブルクリックで名前変更';
+    // タブの右クリックで ± 差分を開く入口は TICKET-owner-20261115-2141-prune で外した
+    // (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。
     // 前回保存時点から変わっている図にだけ印を付ける。
     var st = window.MA.saveDiff ? window.MA.saveDiff.statusOf(doc.name, doc.dsl) : 'same';
     if (st !== 'same') {
@@ -5090,26 +5085,19 @@ function syncTabDirtyMarks(docs) {
   });
 }
 
+// 未保存の印 (タブの ●/○・上部バーの保存ボタン・FILES ツリーの行) を今の中身に合わせ直す。
+// タブ列の「± 差分」ボタンとその一覧は TICKET-owner-20261115-2141-prune で外した
+// (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。印を合わせ直す役だけ残す。
 function renderDiffBadge() {
-  var btn = document.getElementById('btn-tab-diff');
   var SD = window.MA.saveDiff;
-  if (!btn || !SD) return null;
+  if (!SD) return null;
   var docs = _diffDocs();
   syncTabDirtyMarks(docs);
   // 上部バーの保存ボタンと FILES ツリーの印も
   // タブの印と同じ機会 (打つたび・保存のたび) に合わせ直す。
   try { updateTopSaveButton(); } catch (e) {}
   try { if (window.MA.filesPanel && window.MA.filesPanel.syncMarks) window.MA.filesPanel.syncMarks(); } catch (e) {}
-  var sum = SD.summary(docs);
-  btn.textContent = SD.badgeText(sum);
-  // 件数の描き直しで className を丸ごと入れ替えると、
-  // 「タブ列から畳む」で付けた tool-folded が消えて、畳んだはずのボタンが戻ってくる。
-  // 状態を表す 1 クラスだけを付け外しする (以下の件数ボタンも同じ)。
-  btn.classList.toggle('has-change', !!sum.hasChange);
-  btn.title = sum.hasChange
-    ? ('前回保存時点から変わった図: ' + sum.changed.concat(sum.added).join(', '))
-    : '前回保存時点から変わった図はない';
-  return sum;
+  return SD.summary(docs);
 }
 
 // ── 前回保存版といまの中身 ────────────────
@@ -5151,135 +5139,19 @@ function applyStatusBadge(el, name, count, tone) {
   el.appendChild(document.createTextNode(' ' + SB.label(name) + ' ' + String(n)));
 }
 
+// 下端の「● 前回保存版 ＋a −b」の札とタブ列の「± 差分」は TICKET-owner-20261115-2141-prune で外した
+// (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。消える向きの警告と
+// 「前回保存版に戻す」は ± 差分タブ (renderCompareDiffView) と保存時の帯 (save-swap) が持つ。
+// ここは打つたびに、開いている ± 差分タブだけを追従させる。
 function renderLiveDiffChip() {
-  var el = document.getElementById('status-livediff');
-  var LD = window.MA.liveDiff;
-  if (!el || !LD) return null;
-  var p = _liveDiffPair();
-  if (!p) {
-    el.setAttribute('data-livediff', 'none');
-    el.title = '開いている図がありません';
-    applyStatusBadge(el, '前回保存版', 0, 'ok');
-    return null;
-  }
-  var v = LD.verdict(p.before, p.now, p.has);
-  // 変わった行数 (増 + 減) を件数として出す。同じなら 0 件なので出ない。
-  var _ldText = LD.chipText(p.before, p.now, p.has);
-  var _ldN = 0;
-  if (v !== 'none' && v !== 'same') {
-    var _m = _ldText.match(/[0-9]+/g) || [];
-    _ldN = _m.reduce(function(a, b) { return a + parseInt(b, 10); }, 0) || 1;
-  }
-  applyStatusBadge(el, '前回保存版', _ldN, v === 'shrink' ? 'bad' : 'warn');
-  el.setAttribute('data-livediff', v);
-  el.classList.toggle('has-open', v === 'changed' || v === 'shrink');
-  el.classList.toggle('livediff-warn', v === 'shrink');
-  el.title = v === 'shrink'
-    ? LD.warnText(p.name, p.before, p.now)
-    : (v === 'none' ? 'この図はまだ保存していないので、比べる相手がありません'
-                    : '⇔ 並べて見る の ± 差分で前回保存版と並べる (押すと開きます)');
-  // ⇔ 並べて見る の ± 差分を開いたままなら、打つたびにそちらも追従させる
-  // (札と並べた画面が違うことを言わない)。
   var pane = document.getElementById('compare-pane');
   if (pane && !pane.hidden && _compareMode === 'diff') renderCompareDiffView();
-  return v;
+  return null;
 }
 
-// 下端の札は「前回保存版と今を並べる」ための入口で、
-// ⇔ 並べて見る の ± 差分タブと目的が同じだった。札は残し、押したときに開く画面を
-// ⇔ 並べて見る に寄せる (並べる画面の実体を増やさない)。全文で並べる・戻すは
-// そのタブの中でできる。
-function setupLiveDiff() {
-  var el = document.getElementById('status-livediff');
-  if (!el) return;
-  el.addEventListener('click', function() {
-    toggleSeniorPane(false);
-    toggleCompareView(true, 'diff');
-  });
-  renderLiveDiffChip();
-}
-
-// 「変更前 = 前回保存 (09/23 21:51)」。± 差分の窓・比較の枠の見出しで基準を言う。
+// 「変更前 = 前回保存 (09/23 21:51)」。± 差分タブ・比較の枠の見出しで基準を言う。
 function _savedHeadLabel(at) {
   return '変更前 = 前回保存 (' + String(at || '').replace('T', ' ').slice(0, 16) + ')';
-}
-
-function setupDiffPanel() {
-  var btn = document.getElementById('btn-tab-diff');
-  var panel = document.getElementById('diff-panel');
-  var SD = window.MA.saveDiff;
-  if (!btn || !panel || !SD) return;
-  var esc = window.MA.htmlUtils.escHtml;
-
-  function close() { panel.classList.remove('open'); }
-
-  function render() {
-    var docs = _diffDocs();
-    var sum = SD.summary(docs);
-    var html = '<div class="diff-head">' + esc(SD.badgeText(sum));
-    if (sum.markedAt) html += ' ・ ' + esc(_savedHeadLabel(sum.markedAt));
-    html += '</div>';
-    docs.forEach(function(d) {
-      var st = SD.statusOf(d.name, d.dsl);
-      var mark = st === 'same' ? '—' : (st === 'new' ? '新規' : '変更');
-      if (st === 'changed') {
-        var c = SD.changedLines(d.name, d.dsl);
-        mark += ' +' + c.added + ' −' + c.removed;
-      }
-      html += '<div class="diff-row' + (st === 'same' ? '' : ' changed') + '"'
-        + ' data-doc-id="' + esc(d.id) + '" data-diff-status="' + esc(st) + '">'
-        + '<span>' + esc(d.name) + '</span><span>' + esc(mark) + '</span></div>';
-    });
-    html += '<div class="diff-actions">'
-      // 会議中はここから参照ペインへ入り、
-      // 以降は「この図の前後」と「他の図と見比べ」をタブで行き来する。
-      + '<button type="button" id="diff-open-pane">ペインで見る (見比べと切替)</button>'
-      + '<button type="button" id="diff-mark-all">今の内容を基準にする</button></div>';
-    panel.innerHTML = html;
-
-    var rows = panel.querySelectorAll('.diff-row');
-    for (var i = 0; i < rows.length; i++) {
-      (function(row) {
-        row.addEventListener('click', function() {
-          close();
-          switchToDoc(row.getAttribute('data-doc-id'));
-        });
-      })(rows[i]);
-    }
-    var openPane = document.getElementById('diff-open-pane');
-    if (openPane) {
-      openPane.addEventListener('click', function() {
-        close();
-        toggleCompareView(true, 'diff');
-      });
-    }
-    var markAll = document.getElementById('diff-mark-all');
-    if (markAll) {
-      markAll.addEventListener('click', function() {
-        SD.markAll(_diffDocs());
-        renderTabs();
-        render();
-      });
-    }
-  }
-
-  btn.addEventListener('click', function() {
-    if (panel.classList.contains('open')) { close(); return; }
-    render();
-    panel.classList.add('open');
-    var rect = btn.getBoundingClientRect();
-    panel.style.left = Math.max(4, rect.right - 260) + 'px';
-    panel.style.top = (rect.bottom + 2) + 'px';
-  });
-
-  document.addEventListener('click', function(ev) {
-    if (!panel.classList.contains('open')) return;
-    if (panel.contains(ev.target) || ev.target === btn) return;
-    close();
-  });
-
-  renderDiffBadge();
-  try { renderLiveDiffChip(); } catch (e) {}
 }
 
 function _activeDocName() {
@@ -11910,9 +11782,9 @@ function renderOutline() {
   renderOutlineCompare(result);
 }
 
-// 先輩の図と「同じ形か」を、開いた瞬間に数で出す。
-// 参照図はタブから選ぶ (compare-view と同じ選び方)。選んだ相手は覚えておくので、
-// 図を直すたびに選び直さずに済む。
+// 前の版と「同じ形か」を、開いた瞬間に数で出す。
+// 相手は compare-view と同じ選び方 (この図の履歴の版だけ。別のタブの図は相手にしない:
+// TICKET-owner-20261115-2141-prune)。選んだ相手は覚えておくので、図を直すたびに選び直さずに済む。
 var _outlineCmpRefId = null;
 
 function renderOutlineCompare(result) {
@@ -11931,10 +11803,10 @@ function renderOutlineCompare(result) {
     _outlineCmpRefId = null;
     sel.disabled = true;
     var none = document.createElement('option');
-    none.textContent = '(他のタブがありません)';
+    none.textContent = '(前の版を開いていません)';
     sel.appendChild(none);
     out.className = '';
-    out.textContent = '＋ で先輩の図をもう 1 枚開くと、要素数・関係数を突き合わせます。';
+    out.textContent = '「この図の履歴」の行の「比較」で前の版を開くと、要素数・関係数を突き合わせます。';
     return;
   }
   sel.disabled = false;
@@ -12351,13 +12223,11 @@ function renderCompareView() {
     op.value = String(o.id);
     // 「変更前」の候補は図種を添えない。名前に既に (変更前) が入っており、
     // 図種まで並ぶと別の図と読み違える。
-    // 覗いた 1 枚も図種を添えない (名前が `primary / timer_state.puml` の形で、
-    // どこの図かは名前だけで読める)。
-    op.textContent = (o.isBefore || o.isPeek) ? o.name
+    op.textContent = o.isBefore ? o.name
       : o.name + ' (' + String(o.diagramType || '').replace('plantuml-', '') + ')';
     if (o.isBefore && !o.isHistory) op.setAttribute('data-before', '1');
     if (o.isHistory) op.setAttribute('data-hist', '1');
-    if (o.isPeek) op.setAttribute('data-peek', '1');
+    if (o.isVersion) op.setAttribute('data-version', '1');
     if (ref && o.id === ref.id) op.selected = true;
     sel.appendChild(op);
   });
@@ -12371,8 +12241,9 @@ function renderCompareView() {
     var msg = document.createElement('div');
     msg.id = 'compare-empty';
     msg.style.cssText = 'font-size:11px;color:var(--text-secondary);';
-    msg.textContent = '並べる図がありません。＋ で 2 枚目のタブを開くか、'
-      + '「他の保存フォルダを覗く」で手本を選んで「⇔ 自分の図と並べる」を押してください。';
+    // 2 枚を比べるのは「この図の履歴」の版との比較だけ (TICKET-owner-20261115-2141-prune)。
+    msg.textContent = '比べる版がありません。FILES のファイルを右クリック →「この図の履歴を表示」の行の'
+      + '「比較」で、前の版を右に並べます。';
     host.appendChild(msg);
     return;
   }
@@ -12388,9 +12259,7 @@ function renderCompareView() {
     if (!_compareOpen || _compareShownDsl !== dsl) return;
     host.innerHTML = svg;
     if (status) {
-      status.textContent = full.isBefore ? '変更前 (読むだけ)'
-        : full.isPeek ? '手本 ' + (full.folder || '他フォルダ') + ' (読むだけ)'
-        : '参照 (読むだけ)';
+      status.textContent = full.isBefore ? '変更前 (読むだけ)' : '前の版 (読むだけ)';
     }
   }).catch(function(err) {
     if (!_compareOpen || _compareShownDsl !== dsl) return;

@@ -39,7 +39,8 @@ describe('下端の並びと折り返し (plantuml-assist.html)', function() {
     expect(i('status-parse')).toBeLessThan(i('status-info'));
     expect(i('status-info')).toBeLessThan(i('status-autosave'));
     expect(i('status-autosave')).toBeLessThan(i('status-save-result'));
-    expect(i('status-save-result')).toBeLessThan(i('status-diff'));
+    // 件数の札 (± 差分) は TICKET-owner-20261115-2141-prune で外したので、保存状態の後は統一の札。
+    expect(i('status-save-result')).toBeLessThan(i('status-rename'));
   });
 
   test('項目の中で折り返さない (nowrap)、保存直後の 1 行は省略記号で縮む', function() {
