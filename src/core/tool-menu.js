@@ -43,10 +43,6 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-cross',          label: '突合ボード (表記揺れ・宣言なし・メソッドも 1 画面で)', group: 'まとめて点検',
         keywords: ['名前突合', '名前の表記揺れ', '表記ゆれ', 'name audit', 'メソッド突合'] },
       { id: 'btn-tab-pattern',        label: '1 つの観点で全図を棚卸し', group: 'まとめて点検' },
-      { id: 'btn-tab-submit',         label: '提出前チェック', group: '渡す前に' },
-      // 「渡してよいか」を数える突合。ここに載るまでは
-      // Ctrl+K でしか辿り着けず、同じ目的の 6 つで 1 つだけ入口が違っていた。
-      { id: 'btn-tab-handover',       label: '引き継ぎチェックリスト', group: '渡す前に' },
     ] },
     // 「2 つの版・2 枚の図を並べて違いを見る」入口を 2 つに絞る。
     // 前の回 は 5 つの入口をここに並べて名前だけ揃えたが、
@@ -68,20 +64,12 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-inbox',    label: '図をまたぐ指摘箱 (手で書いた指摘も出典で絞れる)', group: '指摘' },
       { id: 'btn-tab-diff',     label: '前回保存からの差分', group: '変更の履歴' },
       { id: 'btn-tab-lineage',  label: 'この図の継承元', group: '変更の履歴' },
-      { id: 'btn-tab-board',    label: '変更サマリ', group: '変更の履歴' },
     ] },
-    // 「渡す」(引き継ぎ zip / 納品パッケージ zip) はこのメニューに
-    // 出さない。zip にして渡す入口は Export ▾ の「渡す」1 か所に集めた。分類と言い換えは
-    // MOVED_TO_EXPORT に残すので、Ctrl+K では今まで通り「渡す」の分類・同じ名前で引ける。
+    // zip にして渡す入口は Export ▾ の「渡す」(資料セット) 1 か所。このメニューには出さない。
   ];
 
-  // メニューからは外したが、分類と言い換えは生きているもの (入口は Export ▾)。
-  var MOVED_TO_EXPORT = [
-    { key: 'give', title: '渡す', items: [
-      { id: 'btn-tab-handoff',  label: '引き継ぎ zip', group: 'zip にして渡す' },
-      { id: 'btn-tab-delivery', label: '納品パッケージ zip', group: 'zip にして渡す' },
-    ] },
-  ];
+  // メニューからは外したが、分類と言い換えは生きているもの (入口は Export ▾)。今は無い。
+  var MOVED_TO_EXPORT = [];
 
   // ファイル 1 枚に対する操作は FILES ツリーの
   // 右クリックに集めた。メニューには並べず案内 1 行に落とす。分類と言い換えは残すので、
@@ -116,7 +104,7 @@ window.MA.toolMenu = (function() {
 
   // メニューには載るが、タブ列のボタンではないもの (下端ステータスの札・モーダルの中の
   // ボタン)。畳む対象に数えると「他 N 件」の N が実際に消えた数とずれるので外す。
-  var NOT_IN_TAB_BAR = ['status-livediff', 'dp-review'];
+  var NOT_IN_TAB_BAR = ['status-livediff'];
 
   // design 9b: 絞り込み欄の右端に出す注記。パネルが 2 段になって幅が要るので短くする。
   var NOTE = 'Ctrl+K でも引けます';

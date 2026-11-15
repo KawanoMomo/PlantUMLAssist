@@ -47,8 +47,6 @@ async function seedThree(page) {
     // Changed だけ基準の後で中身が変わった
     const ch = ws.list().filter((d) => d.name === 'Changed')[0];
     ws.updateDoc(ch.id, { dsl: mk.Changed + '\nnote over ChangedDrv: after\n' });
-    // Fixed に [要修正] の印を 1 件
-    window.MA.reviewVerdicts.set('Fixed', 'add|note over FixedDrv: check', '要修正');
     ws.setActive(ws.list()[0].id);
   }, { Kept: dsl('Kept'), Changed: dsl('Changed'), Fixed: dsl('Fixed') });
   await page.reload();
@@ -85,7 +83,8 @@ test.describe('BLK-primary-1203-wish 提出用 zip の図選び', () => {
     await expect(page.locator('#expick-body label.expick-row')).toHaveCount(3);
     await expect(page.locator('#expick-count')).toHaveText('全部：3 / 3 枚を zip に詰めます');
     await expect(page.locator('#expick-body')).toContainText('変更あり');
-    await expect(page.locator('#expick-body')).toContainText('要修正 1');
+    // [要修正] の印 (変更サマリボード) は TICKET-owner-20261115-1828-prune で外した。
+    await expect(page.locator('#expick-body')).not.toContainText('要修正');
   });
 
   test('[変更図のみ] は基準から変わった図だけを残す', async ({ page }) => {
@@ -95,25 +94,6 @@ test.describe('BLK-primary-1203-wish 提出用 zip の図選び', () => {
     await page.locator('#expick-mode-changed').click();
     await expect(page.locator('#expick-count')).toHaveText('変更図のみ：1 / 3 枚を zip に詰めます');
     await expect(page.locator('#expick-body input.expick-check:checked')).toHaveCount(1);
-  });
-
-  test('[要修正のみ] で絞った図だけが zip に入る', async ({ page }) => {
-    test.setTimeout(150 * 1000);
-    await seedThree(page);
-    await openPicker(page);
-    await page.locator('#expick-mode-fix').click();
-    await expect(page.locator('#expick-count')).toHaveText('要修正のみ：1 / 3 枚を zip に詰めます');
-    expect(await savedNames(page, 120 * 1000)).toEqual(['Fixed.svg']);
-  });
-
-  test('絞り込んだ後に 1 枚だけ足せる', async ({ page }) => {
-    test.setTimeout(150 * 1000);
-    await seedThree(page);
-    await openPicker(page);
-    await page.locator('#expick-mode-fix').click();
-    await page.locator('#expick-body label.expick-row', { hasText: 'Changed' }).locator('input').check();
-    await expect(page.locator('#expick-count')).toHaveText('要修正のみ：2 / 3 枚を zip に詰めます');
-    expect(await savedNames(page, 120 * 1000)).toEqual(['Changed.svg', 'Fixed.svg']);
   });
 
   test('該当が 0 枚なら保存できないことが分かる', async ({ page }) => {
@@ -129,8 +109,8 @@ test.describe('BLK-primary-1203-wish 提出用 zip の図選び', () => {
     await page.reload();
     await page.waitForSelector('#preview-svg svg', { timeout: 20000 });
     await openPicker(page);
-    await page.locator('#expick-mode-fix').click();
-    await expect(page.locator('#expick-count')).toHaveText('要修正のみ：該当なし（0 / 1 枚）');
+    await page.locator('#expick-mode-changed').click();
+    await expect(page.locator('#expick-count')).toHaveText('変更図のみ：該当なし（0 / 1 枚）');
     await expect(page.locator('#expick-save')).toBeDisabled();
   });
 

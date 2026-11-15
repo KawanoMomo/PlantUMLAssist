@@ -100,11 +100,8 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `POST /name-registry` | `{dir, entries}` | 正式表記の登録簿を丸ごと置き換える |
 | `GET /cohort-ack` | `?dir=` | 保存フォルダの**親**にある確認済みの組の台帳 (`_cohort-ack.json`。ドメイン突合で内部揺れと確かめた組) |
 | `POST /cohort-ack` | `{dir, entries}` | 確認済みの組の台帳を丸ごと置き換える |
-| `GET /meeting-log` | `?dir=` | 保存フォルダの `_meetings.json` にある、会議セットで並べた日時の控え (古い順)。▤ 変更サマリボードの「変更前 = 前回の会議」が読む |
-| `POST /meeting-log` | `{dir, at}` | 会議セットで並べた日時を 1 つ足す (1 日 1 件。同じ日はその日の最後の時刻に置き換える) |
 | `POST /file-roles` | `{dir, roles}` | `_roles.json` を丸ごと置き換える |
 | `POST /export-zip` | `{dir, name, base64}` | 書き出した zip を保存フォルダに置き、書けたバイト数を返す |
-| `POST /export-log` | — | 書き出しの控えを 1 件足す |
 
 `GET /version-search` の `q` は空白区切りの語 (最大 6 語)。返りは
 `{terms, dir, scanned, files:[{name, versions:[{stamp, current, counts, lines}]}]}` で、
@@ -126,8 +123,6 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 
 | 窓口 | 要求 | 返り |
 | --- | --- | --- |
-| `GET /vault` | `?dir=` | 保管庫の中身 |
-| `POST /vault` | — | 保管庫へ入れる |
 | `GET /tickets` | `?dir=` | 変更チケットの一覧 |
 | `POST /tickets` | `{dir, ticket}` | 変更チケットを 1 枚書く (id ごと置き換え) |
 | `DELETE /tickets` | `?dir=&id=` | 変更チケットを 1 枚消す |

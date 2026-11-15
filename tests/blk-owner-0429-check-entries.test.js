@@ -22,33 +22,35 @@ function checkItems() {
 }
 
 describe('確かめる(突合)の入口は ツール ▾ の「確かめる」に揃う', () => {
-  test('台帳の 6 機能はすべて「確かめる」に並ぶ', () => {
+  test('台帳の確かめる機能はすべて「確かめる」に並ぶ', () => {
     var ids = checkItems();
-    // 突合ボード / 系統チェック / トレース / 提出前チェック / 引き継ぎチェックリスト
-    // (名前突合は BLK-owner-20260924-1332-prune で突合ボードの「名前/表記揺れ」に畳んだ)
-    ['btn-tab-cross', 'btn-tab-family', 'btn-tab-trace',
-      'btn-tab-submit', 'btn-tab-handover'].forEach(function(id) {
+    // 突合ボード / 系統チェック / トレース
+    // (名前突合は BLK-owner-20260924-1332-prune で突合ボードの「名前/表記揺れ」に畳んだ。
+    //  提出前チェック・引き継ぎチェックリストは TICKET-owner-20261115-1828-prune で外した)
+    ['btn-tab-cross', 'btn-tab-family', 'btn-tab-trace'].forEach(function(id) {
       expect(ids).toContain(id);
     });
+    expect(ids).not.toContain('btn-tab-submit');
+    expect(ids).not.toContain('btn-tab-handover');
   });
 
-  test('引き継ぎチェックリストは畳む対象で、分類は check', () => {
-    expect(TM.isFoldable('btn-tab-handover')).toBe(true);
-    expect(TM.groupOf('btn-tab-handover')).toBe('check');
-    expect(TM.labelOf('btn-tab-handover')).toBe('引き継ぎチェックリスト');
+  test('系統チェックは畳む対象で、分類は check', () => {
+    expect(TM.isFoldable('btn-tab-family')).toBe(true);
+    expect(TM.groupOf('btn-tab-family')).toBe('check');
+    expect(TM.labelOf('btn-tab-family')).toBe('系統内の動作名のずれ');
   });
 
   test('メニューの言い換えでも元の題でも Ctrl+K から引ける', () => {
     var items = CP.buildItems([
-      { id: 'handover-board', title: '引き継ぎチェックリスト（渡してよい図を数える）',
-        hint: 'Handover', keywords: ['handover', 'ひきつぎ'],
-        button: 'btn-tab-handover', run: function() {} },
+      { id: 'tab-family', title: '系統チェックを開く / Family check',
+        hint: 'Tabs', keywords: ['family', 'けいとう'],
+        button: 'btn-tab-family', run: function() {} },
     ], '');
     var it = items[0];
     expect(it.group).toBe('check');
     expect(it.badge).toBe('確かめる');
-    expect(CP.filter(items, '引き継ぎ').length).toBe(1);
-    expect(CP.filter(items, 'handover').length).toBe(1);
-    expect(CP.filter(items, '渡してよい図').length).toBe(1);
+    expect(CP.filter(items, '系統').length).toBe(1);
+    expect(CP.filter(items, 'family').length).toBe(1);
+    expect(CP.filter(items, '動作名のずれ').length).toBe(1);
   });
 });

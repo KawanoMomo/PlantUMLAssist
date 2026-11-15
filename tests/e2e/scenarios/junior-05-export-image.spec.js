@@ -120,8 +120,8 @@ test('手順5 資料化: シーケンス図を選ぶと PNG(透過背景)に切�
   expect(download).not.toBeNull();
   expect(download.suggestedFilename()).toBe('GPIOドライバ初期化シーケンス(資料用).png');
 
-  // BLK-junior-20260928-2255: 画面は「保存フォルダと提出物庫に入れました」と言うのに、PNG の実体はどちらにも
-  // 無かった。保存フォルダに PNG があり、庫にも同じ大きさの PNG が控えられ、画面はその大きさを言う。
+  // BLK-junior-20260928-2255: 画面は「保存フォルダに入れました」と言うのに、PNG の実体が無かった。
+  // 保存フォルダに PNG があり、画面はその大きさを言う (提出物庫は TICKET-owner-20261115-1828-prune で外した)。
   const fs = require('fs');
   const abs = S.absDirFor(__filename);
   const png = path.join(abs, 'GPIOドライバ初期化シーケンス(資料用).png');
@@ -131,12 +131,9 @@ test('手順5 資料化: シーケンス図を選ぶと PNG(透過背景)に切�
   expect(bytes.subarray(1, 4).toString('latin1')).toBe('PNG');
   expect(bytes.length).toBeGreaterThan(100);
   await expect(page.locator('#mexp-state')).toContainText(bytes.length + ' バイト');
-  await expect(page.locator('#mexp-state')).toContainText('保存フォルダと提出物庫');
+  await expect(page.locator('#mexp-state')).toContainText('保存フォルダに書き出しました');
+  await expect(page.locator('#mexp-state')).not.toContainText('提出物庫');
   await expect(page.locator('#mexp-result-text')).toContainText('も置けました');
-  const vault = path.join(abs, '_vault');
-  const vaultPngs = fs.readdirSync(vault).filter((f) => f.endsWith('.png'))
-    .map((f) => fs.statSync(path.join(vault, f)).size);
-  expect(vaultPngs).toContain(bytes.length);
 });
 
 // BLK-junior-20260929-0854: 部品と図種の 2 欄だけで元の図を決めていたので、同じ部品・図種に 2 枚あると

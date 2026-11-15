@@ -2,7 +2,7 @@
 window.MA = window.MA || {};
 
 // material-export — 「資料化」。部品名と図種を選ぶと、その図種に決まっている
-// 書き出し形式・題名の (資料用)・提出物庫への控え・一覧への反映までを 1 回で行う。
+// 書き出し形式・題名の (資料用)・保存フォルダへの保存・一覧への反映までを 1 回で行う。
 //
 // 設計書に貼る資料を作る場面は「題名に (資料用) を
 // 付けて保存」「図種に合わせた形式で Export」「保存先確認」「一覧から開き直す」の
@@ -232,15 +232,14 @@ window.MA.materialExport = (function() {
 
   // doneMessage(p) — 済んだあとに何が残ったかを言う。書き出しただけでは
   // 「保存フォルダにも入ったのか」が分からず、結局一覧を開いて確かめていた。
-  // done (runMaterialPlan の結果 { imageSize, vault }) があれば、書けたことを
-  // 確かめた所だけを言う。画像の大きさは保存フォルダに書けた後の実物の大きさ。庫に入れていなければ庫とは言わない。
+  // done (runMaterialPlan の結果 { imageSize }) があれば、書けたことを
+  // 確かめた所だけを言う。画像の大きさは保存フォルダに書けた後の実物の大きさ。
   function doneMessage(p, done) {
     if (!p) return '資料化できませんでした';
-    if (!done) return '' + p.title + ' を ' + p.formatLabel + ' で書き出し、保存フォルダと提出物庫に入れました';
-    var where = done.vault ? '保存フォルダと提出物庫' : '保存フォルダ';
+    if (!done) return '' + p.title + ' を ' + p.formatLabel + ' で書き出し、保存フォルダに入れました';
     var size = Number(done.imageSize);
     return '' + p.filename + '（' + p.formatLabel + (size > 0 ? '・' + size + ' バイト' : '') + '）を'
-      + where + 'に書き出しました';
+      + '保存フォルダに書き出しました';
   }
 
   // 画像の実体を書けなかったときの理由。「成功」とは言わず、どこに・なぜ書けなかったかを言う。

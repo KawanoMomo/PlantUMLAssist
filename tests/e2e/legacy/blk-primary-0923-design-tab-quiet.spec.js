@@ -24,8 +24,7 @@ test('既定のタブ列にはボタンが 1 つも無い (図のタブと ＋ /
   await expect(page.locator('#btn-tab-folder')).toBeVisible();
   await expect(page.locator('#btn-tab-tools')).toBeHidden();
   // 25 個の機能ボタンはどれも出ない。
-  for (const id of ['btn-tab-rename', 'btn-tab-board', 'btn-tab-xref',
-                    'btn-tab-handoff', 'btn-tab-delivery', 'btn-tab-diff']) {
+  for (const id of ['btn-tab-rename', 'btn-tab-xref', 'btn-tab-family', 'btn-tab-diff']) {
     await expect(page.locator('#' + id), id).toBeHidden();
   }
 });
@@ -50,12 +49,12 @@ test('件数を持つものは下端の状態表示に出て、押せばその�
 test('機能は Ctrl+K から引ける (ツールの分類メニューも Ctrl+K から開く)', async ({ page }) => {
   await open7b(page);
   await openToolMenu(page);
-  // BLK-human-20260923-1601 (design 9b): 分類は左列に 6 つ並ぶ。
+  // BLK-human-20260923-1601 (design 9b): 分類は左列に並ぶ (渡すは TICKET-owner-20261115-1828-prune で外した)。
   await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
-    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー', '渡す',
+    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー',
   ]);
-  await pickTool(page, 'btn-tab-board');
-  await expect(page.locator('#cb-modal')).toBeVisible();
+  await pickTool(page, 'btn-tab-diff');
+  await expect(page.locator('#diff-panel')).toHaveClass(/open/);
 });
 
 // BLK-builder-20260924-1815-3 (design 9b / 9a): 既定のパネルに「ツール ▾ をタブ列に出す」は出さない
@@ -70,7 +69,7 @@ test('以前に「ツール ▾ をタブ列に出す」を選んだ人は、パ
   await page.reload();
   await page.waitForSelector('#preview-svg');
   await expect(page.locator('#btn-tab-tools')).toBeVisible();
-  await expect(page.locator('#btn-tab-board')).toBeHidden();
+  await expect(page.locator('#btn-tab-diff')).toBeHidden();
 
   await page.locator('#btn-tab-tools').click();
   await expect(page.locator('#tool-menu-quiet')).toHaveText('ツール ▾ を右端へ戻す');

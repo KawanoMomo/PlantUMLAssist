@@ -13,22 +13,22 @@ var tm = W.MA.toolMenu;
 
 const html = fs.readFileSync(path.resolve(__dirname, '..', 'plantuml-assist.html'), 'utf8');
 
-describe('左列の 6 分類', function() {
-  test('渡す を含む 6 分類がこの順で並ぶ (入口は Export ▾ のまま)', function() {
+// 「渡す」(引き継ぎ zip・納品パッケージ) は TICKET-owner-20261115-1828-prune で外し、左列は 5 分類になった。
+describe('左列の分類', function() {
+  test('5 分類がこの順で並ぶ', function() {
     expect(tm.panelGroups().map(function(g) { return g.title; }))
-      .toEqual(['図をつくる', '書き換える', '探す', '確かめる', 'レビュー', '渡す']);
+      .toEqual(['図をつくる', '書き換える', '探す', '確かめる', 'レビュー']);
   });
 
   test('分類側に件数の合計が出る (確かめる 1 / レビュー 10)', function() {
     var counts = tm.groupCounts({
-      'btn-tab-submit': '1',
+      'btn-tab-cross': '1',
       'btn-tab-pins': '3', 'btn-tab-inbox': '5', 'btn-tab-diff': '2',
     });
     expect(counts.check).toBe(1);
     expect(counts.review).toBe(10);
     // 0 件の分類は数字を持たない (常に場所を取る 0 を出さない)
     expect(counts.make).toBe(undefined);
-    expect(counts.give).toBe(undefined);
   });
 
   test('どの分類も 14 行以内 (小見出しを 1 行と数える)', function() {
@@ -58,20 +58,20 @@ describe('右列の小見出し', function() {
     expect(subs).toEqual(['指摘', '変更の履歴']);
   });
 
-  test('確かめるは 名前と系統 / まとめて点検 / 渡す前に に分かれる', function() {
+  test('確かめるは 名前と系統 / まとめて点検 に分かれる', function() {
     var g = tm.panelGroups().filter(function(x) { return x.key === 'check'; })[0];
     var subs = [];
     g.items.forEach(function(it) {
       if (subs.indexOf(it.group) < 0) subs.push(it.group);
     });
-    expect(subs).toEqual(['名前と系統', 'まとめて点検', '渡す前に']);
+    expect(subs).toEqual(['名前と系統', 'まとめて点検']);
   });
 
   test('項目名は tool-menu.js のラベルそのまま (言い換えない)', function() {
     // BLK-owner-20260923-1509-prune: ⇔ 並べて見る は「並べて比較」の相手に畳まり、
     // メニューの項目ではなくなった。他の項目で同じ規則を見る。
     expect(tm.labelOf('btn-tab-peek')).toBe('このフォルダの図を調べる…');
-    expect(tm.labelOf('btn-tab-board')).toBe('変更サマリ');
+    expect(tm.labelOf('btn-tab-lineage')).toBe('この図の継承元');
   });
 });
 
@@ -83,12 +83,12 @@ describe('パネルの HTML', function() {
     expect(out).toContain('Ctrl+K でも引けます');
   });
 
-  test('左列は 6 つ、最初の分類だけが開いている', function() {
+  test('左列は 5 つ、最初の分類だけが開いている', function() {
     var out = tm.buildMenuHtml();
-    expect((out.match(/class="tool-menu-cat"/g) || []).length).toBe(6);
+    expect((out.match(/class="tool-menu-cat"/g) || []).length).toBe(5);
     expect((out.match(/aria-selected="true"/g) || []).length).toBe(1);
-    // 6 分類のうち 5 つは畳んだ状態で出す (1 画面に収める)
-    expect((out.match(/class="tool-menu-group" data-group="[a-z]+" hidden/g) || []).length).toBe(5);
+    // 5 分類のうち 4 つは畳んだ状態で出す (1 画面に収める)
+    expect((out.match(/class="tool-menu-group" data-group="[a-z]+" hidden/g) || []).length).toBe(4);
   });
 
   test('分類の合計は項目の件数と別の印にする (件数の数え方を壊さない)', function() {
@@ -106,14 +106,15 @@ describe('パネルの HTML', function() {
 
 describe('絞り込み', function() {
   test('全分類を横断して当たる', function() {
-    var hits = tm.filterItems('zip');
-    expect(hits.length).toBe(2);
-    expect(hits.map(function(h) { return h.groupKey; })).toEqual(['give', 'give']);
+    var hits = tm.filterItems('部品名');
+    expect(hits.length).toBe(3);
+    expect(hits.map(function(h) { return h.groupKey; })).toEqual(['edit', 'find', 'find']);
   });
 
   test('小見出し・分類名でも引ける', function() {
     // BLK-human-20260923-1701 (design 10b): 「この図の変遷」は FILES の右クリックへ移したので 4 → 3。
-    expect(tm.filterItems('変更の履歴').length).toBe(3);
+    // TICKET-owner-20261115-1828-prune: 変更サマリを外したので 3 → 2。
+    expect(tm.filterItems('変更の履歴').length).toBe(2);
     expect(tm.filterItems('探す').length >= 3).toBe(true);
   });
 
@@ -124,9 +125,9 @@ describe('絞り込み', function() {
   });
 
   test('候補の HTML は分類名を添えて出し、当たりが無ければそう言う', function() {
-    var out = tm.buildHitsHtml('zip', {});
-    expect(out).toContain('data-target="btn-tab-handoff"');
-    expect(out).toContain('渡す');
+    var out = tm.buildHitsHtml('部品名', {});
+    expect(out).toContain('data-target="btn-tab-blame"');
+    expect(out).toContain('探す');
     expect(tm.buildHitsHtml('そんなものは無い', {})).toContain('該当なし');
   });
 

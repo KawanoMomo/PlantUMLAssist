@@ -210,7 +210,7 @@ window.MA.materialBoard = (function() {
     var ok = rs.filter(function(r) { return r && r.ok; });
     var ng = rs.filter(function(r) { return !r || !r.ok; });
     if (!rs.length) return '資料化する図種が選ばれていません';
-    if (!ng.length) return '' + ok.length + ' 図種を資料化しました（保存フォルダと提出物庫にも入れました）';
+    if (!ng.length) return '' + ok.length + ' 図種を資料化しました（保存フォルダにも入れました）';
     var names = ng.map(function(r) { return (r && r.kind) ? r.kind : '不明'; }).join('・');
     return '' + ok.length + ' 図種を資料化しましたが、' + ng.length + ' 図種が失敗しました：' + names;
   }

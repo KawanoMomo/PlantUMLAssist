@@ -41,14 +41,16 @@ describe('ツールメニューの分類', function() {
     expect(tm.isFoldable('btn-tab-new')).toBe(false);
     expect(tm.isFoldable('btn-tab-folder')).toBe(false);
     expect(tm.isFoldable('btn-tab-senior')).toBe(false);
-    expect(tm.isFoldable('btn-tab-board')).toBe(true);
+    expect(tm.isFoldable('btn-tab-diff')).toBe(true);
     // メニューに載っていない未知のボタンは畳まない (画面から消してしまわない)
     expect(tm.isFoldable('btn-tab-unknown')).toBe(false);
   });
 
   test('分類と文言が id から引ける', function() {
-    expect(tm.groupOf('btn-tab-handoff')).toBe('give');
-    expect(tm.labelOf('btn-tab-handoff')).toBe('引き継ぎ zip');
+    // 引き継ぎ zip・納品パッケージ (渡す) は TICKET-owner-20261115-1828-prune で外した。
+    expect(tm.groupOf('btn-tab-handoff')).toBe(null);
+    expect(tm.groupOf('btn-tab-lineage')).toBe('review');
+    expect(tm.labelOf('btn-tab-lineage')).toBe('この図の継承元');
     expect(tm.groupOf('btn-tab-nope')).toBe(null);
   });
 });
@@ -78,8 +80,8 @@ describe('メニューの HTML', function() {
     var out = tm.buildMenuHtml();
     expect(out).toContain('Ctrl+K でも引けます');
     expect(out).toContain('>レビュー<');
-    expect(out).toContain('data-target="btn-tab-board"');
-    expect(out).toContain('変更サマリ');
+    expect(out).toContain('data-target="btn-tab-diff"');
+    expect(out).toContain('前回保存からの差分');
   });
 
   test('件数を持つものだけ数字が付く', function() {

@@ -23,8 +23,8 @@ test('既定ではタブ列に機能ボタンが出ない', async ({ page }) => 
   await gotoApp(page, { foldedTools: true });
   await expect(page.locator('#tab-bar')).toHaveClass(/tools-folded/);
   await expect(page.locator('#btn-tab-compare')).toBeHidden();
-  await expect(page.locator('#btn-tab-board')).toBeHidden();
-  await expect(page.locator('#btn-tab-handoff')).toBeHidden();
+  await expect(page.locator('#btn-tab-diff')).toBeHidden();
+  await expect(page.locator('#btn-tab-family')).toBeHidden();
   // 図の出し入れだけが残る (7b: ツール ▾ も置かない)。
   await expect(page.locator('#btn-tab-new')).toBeVisible();
   await expect(page.locator('#btn-tab-folder')).toBeVisible();
