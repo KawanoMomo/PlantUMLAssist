@@ -487,15 +487,26 @@ test('手順8 ファイルを別の部品のフォルダへドラッグすると
   // 同じメニューの中に行き先 (今いる部品以外の部品のフォルダ → 隣の保存フォルダ → パスを入力…) を並べる。
   await treeFile(page, 'spi_init_sequence').click({ button: 'right' });
   const menu = page.locator('#files-ctx-menu');
-  await menu.locator('[data-action="move"]').click();
+  await expect(menu).toBeVisible();
+  // TICKET-builder-20261115-1635-1: 行き先の一覧はメニューの同じ場所に描き替わるので、マウスで「移動…」を押すと
+  // 指の下に来た行に手が乗る (全体実行では隣の保存フォルダが並んで一覧が長く、そこへ移して赤になっていた)。
+  // キーボードだけで「移動…」へ進んで開き、マウスは一覧の外に置く。
+  await page.mouse.move(1, 1);
+  const moveItem = menu.locator('[data-action="move"]');
+  for (let i = 0; i < 30 && !(await moveItem.evaluate((b) => b.classList.contains('is-active'))); i++) {
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(moveItem).toHaveClass(/is-active/);
+  await page.keyboard.press('Enter');
   await expect(menu).toBeVisible();
   await expect(menu.locator('.files-ctx-title')).toHaveText('spi_init_sequence の移動先');
   await expect(menu.locator('[data-action="move-part"] .files-ctx-label')).toHaveText(['ADC']);
   await expect(menu.locator('.files-ctx-item').last()).toHaveAttribute('data-action', 'move-path');
   // 先頭の行き先 (ADC) に手が乗っていて、Enter でドラッグと同じ移し方になる。
+  await expect(menu.locator('[data-action="move-part"]')).toHaveClass(/is-active/);
   await page.keyboard.press('Enter');
   await expect(menu).toBeHidden();
-  await expect.poll(async () => (await S.readDoc(page, DIR, 'adc_init_sequence')) || '').toContain('@startuml');
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'adc_init_sequence')) || '', { timeout: 20000 }).toContain('@startuml');
   expect(await S.readDoc(page, DIR, 'spi_init_sequence')).toBeNull();
 });
 
