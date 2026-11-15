@@ -147,11 +147,18 @@ const BIG_CLASS = ['@startuml', 'title driver_common_class'].concat(
     .map((c) => `class ${c}_Regs {\n  +Init()\n  +DeInit()\n  +Read()\n}`)
 ).concat(['@enduml']).join('\n');
 
+// 保存先 (フォルダ) を決めてある回は、保存先の図も直したその場でファイルへ書く
+// (TICKET-owner-20261115-1829-prune で「上書きしますか」の窓を外した。窓に答えるまでの間だけ「保存前」があった)。
+// 「保存を押す前」が残るのは保存先を決めていない (ダウンロード保存の) 回なので、そこで見る。
 test('手順5 前回保存版から何行消えるかが、保存を押す前に状態バーに出ている', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.clearDir(page, DIR);
-  await S.putDoc(page, DIR, 'driver_common_class', BIG_CLASS);
-  await S.openFolderItem(page, 'driver_common_class');
+  await S.bootDownloadMode(page, DIR + '-dl');
+  await S.renameActive(page, 'driver_common_class');
+  await S.typeDsl(page, BIG_CLASS);
+  await page.locator('#editor').click();
+  const dl = page.waitForEvent('download');
+  await page.keyboard.press('Control+s');
+  await dl;
+  await expect(page.locator('#top-save')).toHaveAttribute('data-save-state', 'saved', { timeout: 10000 });
 
   const chip = page.locator('#status-livediff');
   // 到達条件その1: 開いた直後は前回保存版と同じ。

@@ -75,16 +75,18 @@ test('手順5.5 見比べのために開いただけの図は、一括置換の�
   await S.runCommand(page, '一括置換');
   const allDocs = page.locator('#rename-all-docs');
   if (await allDocs.count() && !(await allDocs.isChecked())) await allDocs.check();
-  await page.locator('#rename-from').fill('Can_Driver');
-  await page.locator('#rename-to').fill('Can_Ctrl');
+  // 置換するのは can_init_sequence にだけある語 (共通クラス図には無い)。窓を外した後は、置換が当たった図は
+  // 開いた図でもそのまま書くので、「当たっていない図を書かない」をこの語で見る。
+  await page.locator('#rename-from').fill('Hw_Ctrl');
+  await page.locator('#rename-to').fill('Hw_Reg');
   await page.waitForTimeout(1200);
   await expect(page.locator('#btn-rename-apply')).toBeEnabled();
   await page.locator('#btn-rename-apply').click();
   await page.waitForTimeout(1800);
 
   // 到達条件その1: 置換が当たった図には反映される。
-  expect(await S.readDoc(page, LOCK_DIR, 'can_init_sequence')).toContain('Can_Ctrl');
-  // 到達条件その2: 開いただけの図は、後始末でも書き換わらない (中身は置いたときのまま)。
+  expect(await S.readDoc(page, LOCK_DIR, 'can_init_sequence')).toContain('Hw_Reg');
+  // 到達条件その2: 開いただけで置換が当たらなかった図は、後始末でも書き換わらない (中身は置いたときのまま)。
   const kept = await S.readDoc(page, LOCK_DIR, 'driver_common_class');
   expect(kept).toBe(opened);
 });
@@ -883,6 +885,8 @@ test('手順5.5 並べて比較の対応表で部品名を手で結び、揃え�
 
   // 比較相手 = 別のフォルダ (junior)。相手は同名ファイルでなく、同じ部品 (spi)・同じ図種の spi_sequence。
   await S.compareFolder(page, 'junior');
+  // 開くのに使った中央の保存先の一覧を閉じてから比較の入口を押す (一覧が手前に残ると押せない)。
+  await S.closeFolderList(page);
   if (await page.locator('#senior-pane').isHidden()) await page.locator('#btn-tab-senior').click();
   await page.locator('#senior-target-tabs').click();
   await page.waitForSelector('#compare-pane:not([hidden])');

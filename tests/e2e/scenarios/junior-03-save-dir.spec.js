@@ -195,8 +195,10 @@ test('手順3 起動すると保存先の一覧が開いていて、読むだけ
 
 // BLK-builder-20260924-1741-2 (design 9a / 10a): 未保存の印はタブ・上部バーの保存ボタン・FILES ツリーの行で
 // 同じ判定・同じ時に出る。以前はタブにだけ ● が出て、ツリーには出ず、上部バーは「保存済み」のままだった。
-// 保存先から開いた図も、ほかの図と同じく自動保存が書くまでは未保存のまま。
-test('手順3 保存先の図を直すとタブ・上部バー・FILES ツリーに同時に未保存の印が出て、書き込むと揃って消える', async ({ page }) => {
+// 保存先から開いた図も、ほかの図と同じく直したその場でそのファイルへ書く (TICKET-owner-20261115-1829-prune で
+// 「上書きしますか」の窓を外した。窓に答えるまで印が残っていた)。書けた後は 3 か所とも印が残らない。
+// 印が揃って出ること自体は、書き先の無いダウンロード保存の test (下の「保存先が未設定」) で見る。
+test('手順3 保存先の図を直すと窓を出さずにそのファイルへ書かれ、タブ・上部バー・FILES ツリーに未保存の印が残らない', async ({ page }) => {
   await S.bootWithSaveDir(page, DIR);
   await S.clearDir(page, DIR);
   await S.putDoc(page, DIR, 'spi_state', ['@startuml', '[*] --> Idle', '@enduml'].join('\n'));
@@ -224,19 +226,16 @@ test('手順3 保存先の図を直すとタブ・上部バー・FILES ツリー
   await page.keyboard.press('Control+End');
   await page.keyboard.press('Home');
   await page.keyboard.type('Idle --> Run\n');
-  await expect(tabDot).toHaveText('●');
-  await expect(save).toHaveAttribute('data-save-state', 'dirty');
-  await expect(save).toContainText('● 保存');
-  await expect(openMark).toHaveText('●');
-  await expect(fileMark).toHaveText('●');
 
-  // 自動保存がそのファイルへ書くと (窓は出ない)、3 か所の印が揃って消える。
+  // 窓は出ず、そのファイルへ書かれる。書けた後は 3 か所の印が揃って無い。
+  await expect.poll(async () => (await S.readDoc(page, DIR, 'spi_state')) || '', { timeout: 10000 }).toContain('Idle --> Run');
+  await expect(page.locator('#source-lock-modal')).toHaveCount(0);
   await expect(save).toHaveAttribute('data-save-state', 'saved', { timeout: 10000 });
   await expect(save).toHaveText('保存済み');
   await expect(tabDot).toHaveCount(0);
   await expect(openMark).toHaveCount(0);
   await expect(fileMark).toHaveCount(0);
-  expect(await S.readDoc(page, DIR, 'spi_state')).toContain('Idle --> Run');
+  expect(await S.listDir(page, DIR)).toEqual(['spi_state']);
 });
 
 // BLK-owner-20260930-0311-1: ＋ で開いたシーケンス図に「参加者」で actor を先に 1 人足し、続けて participant を足すと、
