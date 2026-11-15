@@ -73,7 +73,10 @@ test('primary 手順5 CRLF の図を直して保存しても CRLF・字下げ・
   const declLine = rm.after.split('\n').findIndex((l) => /^participant SpiDrv$/.test(l)) + 1;
   expect(declLine).toBeGreaterThan(0);
   const rr = await H.measure(page, testInfo, async () => {
-    await page.locator('#seq-tail-kind-chip-participant').click();
+    // 直前に矢印を替えたメッセージが選ばれたままなら、右は編集パネルで「末尾に追加」は出ていない
+    // (参加者を押せばそのまま選び替わる)。出ているときだけ種類を「参加者」へ切り替えて離れる。
+    const chip = page.locator('#seq-tail-kind-chip-participant');
+    if (await chip.isVisible()) await chip.click();
     await clickOverlayByLine(page, declLine);
     await expect(page.locator('#seq-edit-alias')).toHaveValue(OLD);
     await expect(page.locator('#seq-edit-rename-refs')).toBeChecked();

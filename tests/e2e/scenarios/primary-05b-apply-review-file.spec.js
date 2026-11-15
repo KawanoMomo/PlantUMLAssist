@@ -885,8 +885,6 @@ test('手順5.5 並べて比較の対応表で部品名を手で結び、揃え�
 
   // 比較相手 = 別のフォルダ (junior)。相手は同名ファイルでなく、同じ部品 (spi)・同じ図種の spi_sequence。
   await S.compareFolder(page, 'junior');
-  // 開くのに使った中央の保存先の一覧を閉じてから比較の入口を押す (一覧が手前に残ると押せない)。
-  await S.closeFolderList(page);
   if (await page.locator('#senior-pane').isHidden()) await page.locator('#btn-tab-senior').click();
   await page.locator('#senior-target-tabs').click();
   await page.waitForSelector('#compare-pane:not([hidden])');
