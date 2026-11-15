@@ -1177,6 +1177,22 @@ function init() {
   // Overlay click → selection (Phase A: selection-router へ移譲)
   var overlayEl = document.getElementById('overlay-layer');
   if (overlayEl) {
+    // 枠が今の本文より古い (打った直後で描き直しが届いていない) 間は、押した枠をその場で使わない。
+    // 枠の id は前の本文の順番なので、今の本文で引くと押していない要素に当たる
+    // (TICKET-owner-20261116-0121-1)。押した枠の行は憶え、描き直しが届いたら同じ行を選ぶ。
+    // ほかのどの手 (ドラッグ・帯への挿入・囲むの終点) よりも先に取る (capture で最初に登録)。
+    var _staleOverlayGuard = function(e) {
+      var SO = window.MA.staleOverlay;
+      if (!SO || !SO.isStale(_overlayBuiltFrom, mmdText)) return;
+      e.stopImmediatePropagation();
+      // mousedown の既定 (本文の欄から焦点を外す) は残す。残さないと、続けて押した Delete が本文の 1 字を消す。
+      if (e.type !== 'mousedown') e.preventDefault();
+      if (e.type !== 'click') return;
+      _noteStaleOverlayClick(e);
+    };
+    ['mousedown', 'click', 'dblclick', 'contextmenu'].forEach(function(t) {
+      overlayEl.addEventListener(t, _staleOverlayGuard, true);
+    });
     // drag suppress: participant drag 直後の click は無視 (capture phase で先取り)
     overlayEl.addEventListener('click', function(e) {
       if (Date.now() - justDraggedAt < DRAG_CLICK_SUPPRESS_MS) {
@@ -30160,6 +30176,48 @@ function _setEngineVerdict(text, v) {
   try { renderUnsupportedPanel(); } catch (e) {}
 }
 
+// 図の上の枠 (overlay) をどの本文から作ったか。今の本文 (mmdText) と違う間は枠が古い。
+// 枠を作っていない (焦点中・描けていない) 間は null。
+var _overlayBuiltFrom = null;
+// 古い枠を押した回の憶え ({ type, line, text, shiftKey, at })。描き直しが届いたら引き当てる。
+var _staleOverlayClick = null;
+var STALE_CLICK_KEEP_MS = 15000;
+
+function _noteStaleOverlayClick(e) {
+  var SO = window.MA.staleOverlay;
+  var t = e.target;
+  var type = t && t.getAttribute ? t.getAttribute('data-type') : null;
+  var p = (SO && type) ? SO.remember(_overlayBuiltFrom, type, t.getAttribute('data-line')) : null;
+  // 押した要素はまだ選ばない。前の選択も、行がずれた本文に向けて使わせないよう外す。
+  try { if (window.MA.selection && window.MA.selection.clearSelection) window.MA.selection.clearSelection(); } catch (err) {}
+  if (!p) { _staleOverlayClick = null; return; }
+  p.shiftKey = !!e.shiftKey;
+  p.at = Date.now();
+  _staleOverlayClick = p;
+  if (window.MA.toast) window.MA.toast.show('図を描き直しています。届いたら押した要素を選びます');
+}
+
+// 描き直しが届いた直後に呼ぶ。押した枠と同じ種類・同じ中身の行の枠を押し直す (当たらなければ選ばない)。
+function _resolveStaleOverlayClick(overlayEl) {
+  var p = _staleOverlayClick;
+  if (!p || !overlayEl) return;
+  var SO = window.MA.staleOverlay;
+  if (!SO || SO.isStale(_overlayBuiltFrom, mmdText)) return;   // まだ古い (次の描き直しを待つ)
+  _staleOverlayClick = null;
+  if (Date.now() - p.at > STALE_CLICK_KEEP_MS) return;
+  var rects = Array.prototype.filter.call(overlayEl.querySelectorAll('[data-type][data-line]'), function(r) {
+    return r.getAttribute('data-type') === p.type;
+  });
+  var i = SO.pick(p, mmdText, rects.map(function(r) {
+    return { type: r.getAttribute('data-type'), line: r.getAttribute('data-line') };
+  }));
+  if (i < 0) {
+    if (window.MA.toast) window.MA.toast.show('押した要素は描き直した図に無かったので、選んでいません');
+    return;
+  }
+  rects[i].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: p.shiftKey }));
+}
+
 function renderSvg() {
   var mode = document.getElementById('render-mode').value || 'local';
   renderStatusEl.textContent = 'Rendering\u2026';
@@ -30263,12 +30321,16 @@ function renderSvg() {
     if (overlayEl) {
       while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
     }
+    _overlayBuiltFrom = null;
     if (warnEl) { warnEl.style.display = 'none'; warnEl.textContent = ''; warnEl.title = ''; }
     if (svgEl && !focusDsl) _adoptExpansion();
     if (svgEl && !focusDsl) _reconcileKindWithSvg(svgEl);
     if (svgEl && !focusDsl && currentModule && currentModule.buildOverlay) {
       syncOverlayOrigin();
       var report = currentModule.buildOverlay(svgEl, currentParsed, overlayEl, mmdText);
+      // 図はこの回の本文 (renderText) の絵。描いている間に本文が変わっていれば、枠は絵と本文が食い違う
+      // ので古い扱いにする (次の描き直しで作り直す)。
+      _overlayBuiltFrom = renderText;
       // title / header / footer / caption / legend は図種を問わず同じ当て方で枠を置く。
       try { if (window.MA.overlayBuilder.addDocumentChrome) window.MA.overlayBuilder.addDocumentChrome(svgEl, overlayEl, mmdText); } catch (e) {}
       // 図種のモジュールが枠を置けなかった note の紙と接続線に、note 自身の行で枠を置く (図種を問わず 1 か所)。
@@ -30293,6 +30355,8 @@ function renderSvg() {
         var sel = window.MA.selection.getSelected() || [];
         window.MA.selectionRouter.applyHighlight(overlayEl, sel);
       }
+      // 描き直しの前に押されていた枠を、この回の枠で押し直す。
+      try { _resolveStaleOverlayClick(overlayEl); } catch (e) {}
       // 指摘の付いた行に印を置く。
       try { drawPinMarkers(overlayEl); } catch (e) {}
       // overlay は描画のたびに作り直されるので、
