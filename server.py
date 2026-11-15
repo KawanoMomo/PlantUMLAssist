@@ -68,6 +68,21 @@ JAR_MIN_SAFE_VERSION = '1.2026.7'
 JAVA_DOWNLOAD_URL = 'https://adoptium.net/temurin/releases/'
 PORT = int(os.environ.get('PUA_PORT', '8766'))
 AUTOSAVE_DEFAULT_DIR = DATA_ROOT / 'autosave'
+# TICKET-owner-20261115-1827-1: 保存先 (利用者の Git 作業木) には .puml (と押した書き出し) だけを書く。
+# 図種の控え (_kinds.json)・最後の保存 (_meta.json)・版の控え (_versions/) は設定の置き場の下に
+# 保存先ごとに分けて持つ。保存先に前からある控えは読むだけ (消さない・動かさない)。
+FOLDER_STATE_ROOT = DATA_ROOT / 'folders'
+
+
+def folder_state_dir(save_dir):
+    """保存先 1 つ分の控えの置き場 (DATA_ROOT/folders/<保存先の絶対パスの sha1 先頭 16 桁>)。"""
+    try:
+        key = str(Path(save_dir).resolve())
+    except OSError:
+        key = str(save_dir)
+    if os.name == 'nt':
+        key = key.lower()
+    return FOLDER_STATE_ROOT / hashlib.sha1(key.encode('utf-8')).hexdigest()[:16]
 
 # app.py (pywebview 版) が差し込むネイティブのファイルダイアログ。
 # Web 版では None のままで、保存はブラウザのダウンロードに落ちる。
@@ -1989,8 +2004,18 @@ class Handler(BaseHTTPRequestHandler):
         """Return True if dt is a safe filename component."""
         return is_safe_autosave_name(dt)
 
+    @staticmethod
+    def _state_path(save_dir, name):
+        """保存先 1 つ分の控えのファイル。書く前に置き場を作る (保存先には作らない)。"""
+        d = folder_state_dir(save_dir)
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+        return d / name
+
     def _autosave_meta_path(self, save_dir):
-        return save_dir / '_meta.json'
+        return self._state_path(save_dir, '_meta.json')
 
     def _roles_path(self, save_dir):
         """BLK-reviewer-20260908-0203-wish: ファイルが実データかテンプレかの宣言。
@@ -2007,11 +2032,14 @@ class Handler(BaseHTTPRequestHandler):
         (actor を持ち、ラベルに括弧の付くシーケンスはユースケースに見える)。
         保存した側が知っている図種をフォルダの属性として残し、開くときはこれを使う。
         図の本文には足さない (puml をバイトで突き合わせるレビューを濁らせないため)。
+        TICKET-owner-20261115-1827-1: 保存先ではなく設定の置き場に持つ (保存先の _kinds.json は読むだけ)。
         """
-        return save_dir / '_kinds.json'
+        return self._state_path(save_dir, '_kinds.json')
 
     def _read_saved_kinds(self, save_dir):
         p = self._kinds_path(save_dir)
+        if not p.exists():
+            p = Path(save_dir) / '_kinds.json'   # 前からある保存先の控え (読むだけ)
         if not p.exists():
             return {}
         try:
@@ -2161,9 +2189,27 @@ class Handler(BaseHTTPRequestHandler):
     VERSION_SEP = '--'      # {name}--{YYYYMMDD-HHMMSS}.puml
 
     def _versions_dir(self, save_dir):
-        return save_dir / self.VERSIONS_DIRNAME
+        """版の控えを書く置き場。TICKET-owner-20261115-1827-1: 保存先ではなく設定の置き場の下。"""
+        return folder_state_dir(save_dir) / self.VERSIONS_DIRNAME
+
+    def _legacy_versions_dir(self, save_dir):
+        """前に保存先へ書いていた版の控え。読むだけ (足さない・捨てない)。"""
+        return Path(save_dir) / self.VERSIONS_DIRNAME
+
+    def _version_dirs(self, save_dir):
+        return [self._versions_dir(save_dir), self._legacy_versions_dir(save_dir)]
 
     def _version_path(self, save_dir, dt, stamp):
+        """読む版の在りか。新しい置き場に無ければ、保存先に前からある控えを見る。"""
+        name = dt + self.VERSION_SEP + stamp + '.puml'
+        p = self._versions_dir(save_dir) / name
+        if p.exists():
+            return p
+        legacy = self._legacy_versions_dir(save_dir) / name
+        return legacy if legacy.exists() else p
+
+    def _own_version_path(self, save_dir, dt, stamp):
+        """書く・捨てる版の在りか (新しい置き場だけ)。"""
         return self._versions_dir(save_dir) / (dt + self.VERSION_SEP + stamp + '.puml')
 
     @staticmethod
@@ -2183,31 +2229,38 @@ class Handler(BaseHTTPRequestHandler):
             n = 0
         return (base, n)
 
-    def _version_stamps(self, save_dir, dt):
-        """`dt` の過去版の刻印を新しい順に返す。無ければ空リスト。"""
-        vdir = self._versions_dir(save_dir)
+    def _version_stamps(self, save_dir, dt, own_only=False):
+        """`dt` の過去版の刻印を新しい順に返す。無ければ空リスト。
+
+        既定は新しい置き場と保存先に前からある控えの両方。own_only は新しい置き場だけ
+        (上限で捨てる版を選ぶとき。保存先の控えは捨てない)。
+        """
+        dirs = [self._versions_dir(save_dir)] if own_only else self._version_dirs(save_dir)
         prefix = dt + self.VERSION_SEP
-        stamps = []
-        try:
-            for p in vdir.glob('*.puml'):
-                if p.stem.startswith(prefix):
-                    stamps.append(p.stem[len(prefix):])
-        except OSError:
-            return []
-        stamps.sort(key=self._stamp_key, reverse=True)
-        return stamps
+        stamps = set()
+        for vdir in dirs:
+            try:
+                for p in vdir.glob('*.puml'):
+                    if p.stem.startswith(prefix):
+                        stamps.add(p.stem[len(prefix):])
+            except OSError:
+                continue
+        return sorted(stamps, key=self._stamp_key, reverse=True)
 
     def _version_counts(self, save_dir):
         """図名 → 控えてある版の数。一覧に「履歴 N」を出すために 1 回だけ数える。"""
+        seen = set()
         counts = {}
-        try:
-            for p in self._versions_dir(save_dir).glob('*.puml'):
-                head = p.stem.rsplit(self.VERSION_SEP, 1)
-                if len(head) != 2:
-                    continue
-                counts[head[0]] = counts.get(head[0], 0) + 1
-        except OSError:
-            pass
+        for vdir in self._version_dirs(save_dir):
+            try:
+                for p in vdir.glob('*.puml'):
+                    head = p.stem.rsplit(self.VERSION_SEP, 1)
+                    if len(head) != 2 or p.name in seen:
+                        continue
+                    seen.add(p.name)
+                    counts[head[0]] = counts.get(head[0], 0) + 1
+            except OSError:
+                continue
         return counts
 
     # 1 版あたりに一覧へ載せる本文の上限。これを超える控えは差分の材料に
@@ -2294,8 +2347,11 @@ class Handler(BaseHTTPRequestHandler):
         return mtime <= at - self.ORIGIN_GAP
 
     def _versions_to_drop(self, save_dir, dt):
-        """上限を超えた版のうち捨てる刻印。元の版が上限の内に 1 つも無ければ、最新の元の版は残す。"""
-        stamps = self._version_stamps(save_dir, dt)
+        """上限を超えた版のうち捨てる刻印。元の版が上限の内に 1 つも無ければ、最新の元の版は残す。
+
+        数えて捨てるのは新しい置き場の版だけ (保存先に前からある控えは捨てない)。
+        """
+        stamps = self._version_stamps(save_dir, dt, own_only=True)
         if len(stamps) <= self.VERSIONS_KEEP:
             return []
         keep = stamps[:self.VERSIONS_KEEP]
@@ -2342,17 +2398,19 @@ class Handler(BaseHTTPRequestHandler):
         try:
             vdir.mkdir(parents=True, exist_ok=True)
             stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
-            target = self._version_path(save_dir, dt, stamp)
             # 同じ秒に 2 回保存しても前の退避を潰さない (末尾に連番を足す)。
             # 連番は同じ秒の一番大きい番号の次から (上限で捨てた番号を使い直すと、新しい版が古い版に並ぶ)。
+            # 刻印の重なりは保存先に前からある控えとも見る (同じ名前の版を 2 か所に作らない)。
             n = 1
-            if target.exists():
+            use = stamp
+            if self._version_path(save_dir, dt, use).exists():
                 same = [self._stamp_key(s)[1] for s in self._version_stamps(save_dir, dt)
                         if str(s).partition('.')[0] == stamp]
                 n = max(same + [0]) + 1
-            while target.exists():
-                target = self._version_path(save_dir, dt, '%s.%d' % (stamp, n))
+            while self._version_path(save_dir, dt, use).exists():
+                use = '%s.%d' % (stamp, n)
                 n += 1
+            target = self._own_version_path(save_dir, dt, use)
             _atomic_write_text(target, old)
             if origin:
                 at = self._stamp_epoch(stamp)
@@ -2364,7 +2422,7 @@ class Handler(BaseHTTPRequestHandler):
         # 上限を超えた分は古い方から捨てる (元の版の最新 1 つは残す)。
         for old_stamp in self._versions_to_drop(save_dir, dt):
             try:
-                self._version_path(save_dir, dt, old_stamp).unlink()
+                self._own_version_path(save_dir, dt, old_stamp).unlink()
             except OSError:
                 pass
 
@@ -3115,6 +3173,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _autosave_read_meta(self, save_dir):
         p = self._autosave_meta_path(save_dir)
+        if not p.exists():
+            p = Path(save_dir) / '_meta.json'   # 前からある保存先の控え (読むだけ)
         if not p.exists():
             return None
         try:
@@ -3870,7 +3930,9 @@ class Handler(BaseHTTPRequestHandler):
             # BLK-reviewer-20260908-0203-wish: 図を全部消したら「これはテンプレだ」の
             # 宣言も一緒に消す。図が無いのに宣言だけ残ると、同じ名前で作り直した
             # 別物が前の baseline と比べられ、身に覚えのない汚染として赤くなる。
-            for side in (self._autosave_meta_path(save_dir), self._roles_path(save_dir)):
+            # 「図を全部消す」は利用者が押す片付けなので、保存先に前からある控えも今までどおり消す。
+            for side in (self._autosave_meta_path(save_dir), save_dir / '_meta.json',
+                         self._roles_path(save_dir)):
                 if side.exists():
                     try:
                         side.unlink()
@@ -3878,16 +3940,16 @@ class Handler(BaseHTTPRequestHandler):
                         pass
             # BLK-junior-20260908-2003: 図を全部消すなら過去版も一緒に消す。
             # 残すと、消したはずの図が「履歴」から出続けることになる。
-            vdir = self._versions_dir(save_dir)
-            try:
-                for p in vdir.glob('*.puml'):
-                    try:
-                        p.unlink()
-                    except OSError:
-                        pass
-                vdir.rmdir()
-            except OSError:
-                pass
+            for vdir in self._version_dirs(save_dir):
+                try:
+                    for p in vdir.glob('*.puml'):
+                        try:
+                            p.unlink()
+                        except OSError:
+                            pass
+                    vdir.rmdir()
+                except OSError:
+                    pass
             # 変更チケットも同じ理由で残す。仕様変更は図を作り直しても続いている
             # ので、作業ファイルを片付けたら進捗が消えるのでは持ち越せていない。
             if params.get('tickets') == '1':
