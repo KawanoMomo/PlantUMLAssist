@@ -1,3 +1,4 @@
+- TICKET-human-20261115-0900-1: 入口 `scripts/build.ps1` `test.ps1` `verify.ps1` (summary.json に scenario ごとの合否・描画までの ms・差分行数) と、台本の scenario `tests/scenarios/` (junior-1-s1・primary-2-s1・reviewer-3) で準備・unit・実機の操作をまとめて確かめられる
 - BLK-owner-20260930-0711-1: クラス図・コンポーネント図・ユースケース図の境界 (package / rectangle / cloud など) の中を通る関係を、線・矢じり・ラベルを押して選べる。境界は中の空所・枠線・見出しの札で選ぶ
 ## v4.0 (2026-10-07) 仕上げ期間を終えたメジャー。v3.0 以降の機能一覧は loop/releases/v4.0.md
 - BLK-human-20261006-2020-1: Ctrl+S / 「● 保存」で書けたら、タブ・上部バー・FILES の行の未保存の印をその場で消し (見本のままのタブ・ダウンロード保存も)、保存ボタンの隣に「✓ 時刻 フォルダ/名前.puml に保存」を数秒出す。

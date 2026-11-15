@@ -1,0 +1,13 @@
+@startuml
+title SPI 初期化シーケンス
+participant App
+participant Spi_Driver
+participant Hw
+
+App -> Spi_Driver : Spi_Init()
+Spi_Driver -> Hw : WriteReg(CTRL)
+Hw --> Spi_Driver : ack
+Spi_Driver -> Hw : WriteReg(BAUD)
+Hw --> Spi_Driver : ack2
+Spi_Driver --> App : E_OK
+@enduml

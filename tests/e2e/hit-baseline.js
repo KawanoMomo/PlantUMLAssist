@@ -102,6 +102,14 @@ function corpusAvailable(corpusDir) {
   return fs.existsSync(path.join(corpusDir || CORPUS_DIR, 'progress.md'));
 }
 
+// TICKET-human-20261115-0900-1: 本文が URL の !include / !define を持つ図は、描くたびに PlantUML がネットから取りに行き、
+// 取れたかどうかで描画と当たりが変わる (aws-icons の usecase で 33 点中 3 点が基準と食い違った)。
+// 試験はネットを使わないので、この図は当て方の基準から外す (測らない・比べない)。
+const NETWORK_INCLUDE_RE = /^[ \t]*!(include\w*|import|theme|define)\b[^\n]*\bhttps?:\/\//mi;
+function usesNetwork(absPath) {
+  try { return NETWORK_INCLUDE_RE.test(fs.readFileSync(absPath, 'utf8')); } catch (e) { return false; }
+}
+
 // 基準と今回の測定を比べる。基準で枠が出ていた点 (値が '-' 以外) が
 //   - 枠なし ('-') になった              → lost (赤)
 //   - 別の要素・行の枠になった          → changed (赤)
@@ -247,5 +255,5 @@ function watchRenders() {
 module.exports = {
   watchRenders,
   CORPUS_DIR, BASELINE_DIR, baselinePath, readBaseline, latestOtherBaseline,
-  okNamesFromProgress, resolveNames, corpusAvailable, compare, formatReport, writeBaseline, probeInPage,
+  okNamesFromProgress, resolveNames, corpusAvailable, usesNetwork, compare, formatReport, writeBaseline, probeInPage,
 };
