@@ -2078,69 +2078,6 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #diff-panel .diff-row.changed { color: var(--accent); }
 #diff-panel .diff-head { color: var(--text-primary); padding: 2px 4px 4px 4px; }
 #diff-panel .diff-actions { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
-/* ── レビュー机 ───────────────────────────── */
-/* 指摘が 0 でないことは書いた本人には見えないので、ボタンの側で言い切る。 */
-#btn-tab-review.has-finding { color: var(--accent-orange); border-color: var(--accent-orange); }
-
-#review-panel {
-  display: none;
-  position: absolute;
-  z-index: 42;
-  max-height: 340px;
-  overflow-y: auto;
-  min-width: 340px;
-  max-width: 460px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 6px;
-  font-size: 11px;
-}
-#review-panel.open { display: block; }
-#review-panel .rv-head { color: var(--text-primary); padding: 2px 4px 6px 4px; }
-#review-panel .rv-head[data-review="clean"] { color: var(--accent-green); }
-#review-panel .rv-head[data-review="dirty"] { color: var(--accent-orange); }
-#review-panel .rv-base {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 6px;
-  margin-bottom: 4px;
-  color: var(--text-secondary);
-}
-#review-panel select {
-  flex: 1;
-  min-width: 0;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  border-radius: 3px;
-  padding: 3px 4px;
-  font-size: 11px;
-}
-#review-panel .rv-row {
-  display: flex;
-  gap: 6px;
-  padding: 3px 4px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-primary);
-  cursor: pointer;
-}
-#review-panel .rv-row:hover { background: var(--bg-secondary); }
-#review-panel .rv-kind {
-  flex: 0 0 auto;
-  color: var(--bg-primary);
-  background: var(--accent);
-  border-radius: 3px;
-  padding: 0 5px;
-  font-size: 10px;
-  line-height: 1.6;
-}
-#review-panel .rv-row[data-review-kind="dup"] .rv-kind { background: var(--accent-orange); }
-#review-panel .rv-no { flex: 0 0 auto; color: var(--text-secondary); font-family: var(--font-mono); }
-#review-panel .rv-msg { flex: 1; }
-#review-panel .rv-empty { color: var(--text-secondary); padding: 6px 4px; }
 
 
 
@@ -5945,8 +5882,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-versions" title="この図が保存のたびにどう変わったかを通しで並べる。前の版に戻った「往復」には印が付く">⟲ 変遷 −</button>
         <!-- 変わった図の変更前後をまとめて 1 画面に並べる -->
         <!-- レビューの指摘を図の該当行に貼り、未読/既読で追う -->
-        <!-- 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
-        <button class="tab-tool" id="btn-tab-review" title="型の基準にした図と突き合わせて、この図のずれと図種特有の間違いを出す">レビュー −</button>
         <!-- 引き継ぎに要る確認結果と図を 1 つの zip に固める -->
         <!-- 図の束を 1 プロジェクトとして、部品名で辿れるように渡す -->
         <!-- 📦 引き継ぎ / 📦 納品パッケージ はタブ列から外し、
@@ -5955,7 +5890,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <!-- ツールを 6 分類で縦に並べるパネル -->
       <div id="tool-menu" role="menu" aria-label="ツール" hidden></div>
       <div id="diff-panel"></div>
-      <div id="review-panel"></div>
       <!-- 開いている図をまたいで部品名を一括置換する -->
       <div id="rename-panel">
         <label for="rename-from">置換前 (部品名)</label>
@@ -6671,7 +6605,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/component-deps.js"></script>
 <script src="src/core/component-starter.js"></script>
 <script src="src/core/usecase-source.js"></script>
-<script src="src/core/review-desk.js"></script>
 <script src="src/core/scaffold-notice.js"></script>
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/state-transition.js"></script>

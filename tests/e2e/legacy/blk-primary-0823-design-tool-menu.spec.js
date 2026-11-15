@@ -73,11 +73,12 @@ test('タブ列から畳むと機能ボタンが消え、次に開いても畳�
 
 // BLK-builder-20260908-0858-2: パネル類 (外側 click で閉じる作りのもの) をメニューから開くと、
 // 選んだ click がそのまま document へ上がって開いた直後に閉じていた。
-// (この図の指摘 は TICKET-owner-20261115-1840-prune で外したので、同じ作りの「基準の図との指摘」で見る)
-test('メニューから「基準の図との指摘」を開くと、パネルが開いたまま残る', async ({ page }) => {
+// (この図の指摘 は 1840-prune、基準の図との指摘 は TICKET-owner-20261115-2141-prune で外したので、
+// 同じ作りの「前回保存からの差分」で見る)
+test('メニューから「前回保存からの差分」を開くと、パネルが開いたまま残る', async ({ page }) => {
   await page.locator('#btn-tab-tools').click();
-  await pickTool(page, 'btn-tab-review');
-  await expect(page.locator('#review-panel')).toHaveClass(/open/);
+  await pickTool(page, 'btn-tab-diff');
+  await expect(page.locator('#diff-panel')).toHaveClass(/open/);
 });
 
 // BLK-human-20260923-1601 (design 9b): 左 6 分類・右小見出しの 2 段パネル。
@@ -99,7 +100,7 @@ test('分類はホバーで切り替わり、どの分類もパネル内をス�
   // 小見出しで区切って出る (BLK-owner-20260924-1836-prune: 「見比べる」の「他の保存フォルダを覗く」は
   // FILES「読むだけ」の右クリックへ移し、パネル下端の案内 1 行に落とした)
   await expect(page.locator('.tool-menu-group[data-group="review"] .tool-menu-sub'))
-    .toHaveText(['指摘', '変更の履歴']);
+    .toHaveText(['変更の履歴']);   // 「指摘」は 2141-prune で外した
   await expect(page.locator('#tool-menu-files-note')).toContainText('FILES の読むだけ');
 
   // パネルの中は溢れない (1 画面に収まる)
@@ -119,9 +120,10 @@ test('絞り込み欄は全分類を横断し、キーボードだけで実行�
   await expect(page.locator('.tool-menu-note')).toHaveText('Ctrl+K でも引けます');
 
   // 「図をつくる」の項目も「レビュー」の項目も、分類を開かずに候補へ出る
+  // (「図」で当たるのは 図をつくる の 1 行。基準の図との指摘 は 2141-prune で外した)
   await filter.fill('図');
   const hits = page.locator('.tool-menu-hits .tool-menu-item');
-  await expect(hits).toHaveCount(2);
+  await expect(hits).toHaveCount(1);
   await filter.fill('前回保存からの差分');
   await expect(page.locator('.tool-menu-hits [data-target="btn-tab-diff"]')).toBeVisible();
 
@@ -140,11 +142,8 @@ test('←→ で分類、↑↓ で項目を選び、Enter で開く', async ({ 
   await expect(page.locator('.tool-menu-group[data-group="review"]')).toBeVisible();
 
   // レビューの先頭の項目 (⇔ 並べて見る は 1509-prune で、他の保存フォルダを覗く は 1836-prune でレビューから外れた)
+  // (この図の継承元 は 2140-prune、基準の図との指摘 は 2141-prune で外し、残るのは前回保存からの差分)
   await page.keyboard.press('ArrowDown');
-  await expect(page.locator('.tool-menu-item[data-target="btn-tab-review"]'))
-    .toHaveAttribute('aria-current', 'true');
-  // 先頭から ↑ で末尾 (前回保存からの差分。この図の継承元 は 2140-prune で外した)
-  await page.keyboard.press('ArrowUp');
   await expect(page.locator('.tool-menu-item[data-target="btn-tab-diff"]'))
     .toHaveAttribute('aria-current', 'true');
   await page.keyboard.press('Enter');

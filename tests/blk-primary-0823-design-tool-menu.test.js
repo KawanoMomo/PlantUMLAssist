@@ -68,8 +68,9 @@ describe('タブ列の機能ボタンとの対応', function() {
     var re = /<button[^>]*class="tab-tool"[^>]*id="([^"]+)"/g;
     var m;
     while ((m = re.exec(html))) ids.push(m[1]);
-    // 図をまたぐ監査を外して 20 個を切った (TICKET-owner-20261115-1841-prune)。畳む道具はまだ 10 個を超える。
-    expect(ids.length).toBeGreaterThan(10);
+    // 図をまたぐ監査を外して 20 個を切った (TICKET-owner-20261115-1841-prune)。
+    // 探す (2140-prune)・基準の図との指摘 (2141-prune) を外しても、畳む道具は 5 個を超える。
+    expect(ids.length).toBeGreaterThan(5);
     var uncovered = ids.filter(function(id) {
       return id !== 'btn-tab-tools' && tm.keepIds().indexOf(id) < 0 && tm.groupOf(id) === null;
     });

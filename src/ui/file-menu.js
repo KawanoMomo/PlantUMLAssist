@@ -148,8 +148,8 @@ window.MA.fileMenuUi = (function() {
   function renameFile(name) {
     var ws = WS();
     var d = findDoc(name);
-    // 開いている図は、タブのダブルクリックと同じ道を通す (レビューの基準・
-    // 前の名前のファイルの付け替えまで同じ 1 本で済ませる)。
+    // 開いている図は、タブのダブルクリックと同じ道を通す (前の名前のファイルの
+    // 付け替えまで同じ 1 本で済ませる)。
     if (d) {
       var tab = document.querySelector('#tab-bar .tab[data-doc-id="' + d.id + '"]');
       if (tab) {
@@ -170,7 +170,6 @@ window.MA.fileMenuUi = (function() {
     if (!next) return Promise.resolve(false);
     return fileOp({ op: 'rename', dir: _dir(), name: name, to: next }).then(function(r) {
       if (!r.ok) { toast('名前を変えられませんでした: ' + (r.data.error || r.status)); return false; }
-      if (window.MA.reviewDesk) { try { window.MA.reviewDesk.renameBaseline(name, next); } catch (e) {} }
       toast('「' + name + '」を「' + next + '」に変えました');
       refreshLists();
       return true;

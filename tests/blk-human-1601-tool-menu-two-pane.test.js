@@ -26,14 +26,14 @@ describe('左列の分類', function() {
     expect(tm.panelGroups().filter(function(x) { return x.key === 'find'; }).length).toBe(0);
   });
 
-  // TICKET-owner-20261115-1840-prune: ピン留めと指摘箱を外したので、レビューの件数は差分と基準の図の分だけ。
-  test('分類側に件数の合計が出る (書き換える 1 / レビュー 6)', function() {
+  // TICKET-owner-20261115-1840-prune: ピン留めと指摘箱を外した。2141-prune で基準の図の指摘も外したので、レビューの件数は差分の分だけ。
+  test('分類側に件数の合計が出る (書き換える 1 / レビュー 2)', function() {
     var counts = tm.groupCounts({
       'btn-tab-rename': '1',
       'btn-tab-review': '4', 'btn-tab-diff': '2',
     });
     expect(counts.edit).toBe(1);
-    expect(counts.review).toBe(6);
+    expect(counts.review).toBe(2);
     // 0 件の分類は数字を持たない (常に場所を取る 0 を出さない)
     expect(counts.make).toBe(undefined);
   });
@@ -56,13 +56,14 @@ describe('右列の小見出し', function() {
   });
 
   // BLK-owner-20260924-1836-prune: 覗く窓の入口は FILES「読むだけ」の右クリックへ移し、ツール ▾ からは案内 1 行に落とした。
-  test('レビューは 指摘 / 変更の履歴 に分かれる', function() {
+  // TICKET-owner-20261115-2141-prune: 「指摘」(基準の図との指摘) を外したので 変更の履歴 だけ。
+  test('レビューは 変更の履歴 だけになる', function() {
     var g = tm.panelGroups().filter(function(x) { return x.key === 'review'; })[0];
     var subs = [];
     g.items.forEach(function(it) {
       if (subs.indexOf(it.group) < 0) subs.push(it.group);
     });
-    expect(subs).toEqual(['指摘', '変更の履歴']);
+    expect(subs).toEqual(['変更の履歴']);
   });
 
   test('確かめる の分類は無い', function() {
@@ -102,13 +103,16 @@ describe('パネルの HTML', function() {
   test('小見出しは分類ごとに出て、同じ見出しを繰り返さない', function() {
     var out = tm.buildMenuHtml();
     expect((out.match(/class="tool-menu-sub">変更の履歴</g) || []).length).toBe(1);
-    expect((out.match(/class="tool-menu-sub">指摘</g) || []).length).toBe(1);
+    // 「指摘」の小見出しは 2141-prune で外した (基準の図との指摘が無くなった)。
+    expect((out.match(/class="tool-menu-sub">指摘</g) || []).length).toBe(0);
+    expect((out.match(/class="tool-menu-sub">起こす</g) || []).length).toBe(1);
   });
 });
 
 describe('絞り込み', function() {
   test('全分類を横断して当たる', function() {
-    var hits = tm.filterItems('図');
+    // 「図」は 図をつくる、「差分」は レビュー (基準の図との指摘 は 2141-prune で外した)。
+    var hits = tm.filterItems('図').concat(tm.filterItems('差分'));
     expect(hits.map(function(h) { return h.groupKey; })).toEqual(['make', 'review']);
   });
 
