@@ -186,6 +186,16 @@ function updateTopSaveButton() {
   btn.appendChild(keyEl);
 }
 
+// ── Ctrl+Z の行き先 (TICKET-owner-20261115-1900-1) ──────────────────
+// 「末尾に追加」で足した直後、欄にまだ打っていない間の Ctrl+Z / Ctrl+Y は図の履歴へ。判定は undo-route。
+var _undoRouteState = window.MA.undoRoute ? window.MA.undoRoute.create() : null;
+
+// 右パネル (追加フォーム・図の設定) の中か。
+function _inPropsPane(el) {
+  var pane = document.getElementById('props-pane');
+  return !!(pane && el && el !== document.body && pane.contains(el));
+}
+
 // ── 開いたファイルの錠 ──────────────────
 // 一覧から開いて眺めるだけの回 (本文が開いたときのまま) は書き戻さない。確認の窓は出さない。
 
@@ -1307,6 +1317,14 @@ function init() {
   // 上書きで壊れるため、 アプリ全体で 1 系統の history に統一する。
   // 右パネルのフォーム入力 (Title/Alias 等) では native undo を温存したいので
   // activeElement が editor 以外の input/textarea/select の時はスルー。
+  // ただし「末尾に追加」で足した直後 (欄にまだ 1 字も打っていない間) は図の履歴に回す
+  // (TICKET-owner-20261115-1900-1。判定は src/core/undo-route.js)。
+  document.addEventListener('input', function(e) {
+    var t = e.target;
+    if (!t || t === editorEl) return;
+    var UR = window.MA.undoRoute;
+    if (UR) UR.onFieldInput(_undoRouteState);
+  }, true);
   document.addEventListener('keydown', function(e) {
     if (e.isComposing) return;
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
@@ -1315,10 +1333,15 @@ function init() {
     var isRedo = key === 'y' || (key === 'z' && e.shiftKey);
     if (!isUndo && !isRedo) return;
     var ae = document.activeElement;
-    if (ae && ae !== editorEl) {
-      var tag = ae.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ae.isContentEditable) return;
-    }
+    var tag = ae ? ae.tagName : '';
+    var ctx = {
+      inEditor: !!ae && ae === editorEl,
+      inField: !!ae && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !!ae.isContentEditable),
+      inForm: _inPropsPane(ae),
+    };
+    var UR = window.MA.undoRoute;
+    var where = UR ? UR.route(_undoRouteState, ctx) : ((ctx.inEditor || !ctx.inField) ? 'history' : 'native');
+    if (where !== 'history') return;
     e.preventDefault();
     if (isUndo) window.MA.history.undo();
     else window.MA.history.redo();
@@ -3506,6 +3529,11 @@ function init() {
   });
 
   window.MA.history.init({
+    // Ctrl+Z の行き先の判定 (undo-route) に「この操作は右パネルから来たか」を控える。
+    onPush: function() {
+      var UR = window.MA.undoRoute;
+      if (UR) UR.onPush(_undoRouteState, _inPropsPane(document.activeElement));
+    },
     getMmdText: function() { return mmdText; },
     setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; scheduleRefresh(); },
     onUpdate: function() { updateUndoRedoButtons(); },

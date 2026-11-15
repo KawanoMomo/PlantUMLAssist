@@ -11,10 +11,8 @@ async function tailAddActor(page, alias) {
   await page.locator('#seq-tail-alias').fill(alias);
   await page.locator('#seq-tail-add').click();
   await page.waitForTimeout(400);
-  // 足した後はフォームが続けて打てるよう別名の欄に手を戻す。欄の中の Ctrl+Z は欄の
-  // ネイティブ undo に任せる約束 (app.js の history ルーター) なので、図の Undo を
-  // 確かめるこの spec では欄から手を離してから Ctrl+Z を押す。
-  await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+  // 足した後はフォームが続けて打てるよう別名の欄に手が戻る。欄にまだ打っていない間の
+  // Ctrl+Z / Ctrl+Y は図の履歴に回る (TICKET-owner-20261115-1900-1)。欄から手は離さない。
 }
 
 test.describe('Ctrl+Z / Ctrl+Y keybindings (userissue v1.2.4)', () => {
@@ -25,7 +23,7 @@ test.describe('Ctrl+Z / Ctrl+Y keybindings (userissue v1.2.4)', () => {
     await tailAddActor(page, 'Bob');
     const after = await getEditorText(page);
     expect(after).toContain('actor Bob');
-    await page.locator('body').press('Control+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(400);
     const undone = await getEditorText(page);
     expect(undone).toBe(before);
@@ -36,9 +34,9 @@ test.describe('Ctrl+Z / Ctrl+Y keybindings (userissue v1.2.4)', () => {
     await gotoApp(page);
     await tailAddActor(page, 'Carol');
     const after = await getEditorText(page);
-    await page.locator('body').press('Control+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(400);
-    await page.locator('body').press('Control+y');
+    await page.keyboard.press('Control+y');
     await page.waitForTimeout(400);
     const redone = await getEditorText(page);
     expect(redone).toBe(after);
@@ -49,9 +47,9 @@ test.describe('Ctrl+Z / Ctrl+Y keybindings (userissue v1.2.4)', () => {
     await gotoApp(page);
     await tailAddActor(page, 'Dave');
     const after = await getEditorText(page);
-    await page.locator('body').press('Control+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(400);
-    await page.locator('body').press('Control+Shift+z');
+    await page.keyboard.press('Control+Shift+z');
     await page.waitForTimeout(400);
     const redone = await getEditorText(page);
     expect(redone).toBe(after);
@@ -68,11 +66,11 @@ test.describe('Ctrl+Z / Ctrl+Y keybindings (userissue v1.2.4)', () => {
     expect(step2).toContain('actor E1');
     expect(step2).toContain('actor E2');
     // Undo: step2 → step1
-    await page.locator('body').press('Control+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(400);
     expect(await getEditorText(page)).toBe(step1);
     // Undo: step1 → before
-    await page.locator('body').press('Control+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(400);
     expect(await getEditorText(page)).toBe(before);
   });

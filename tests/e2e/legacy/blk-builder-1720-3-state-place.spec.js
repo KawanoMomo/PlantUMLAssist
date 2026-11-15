@@ -116,9 +116,8 @@ test.describe('BLK-builder-1720-3 State の追加する位置 (design 4c)', () =
     await page.locator('#st-tail-add').click();
     await page.waitForTimeout(400);
 
-    // 足した後は続けて打てるよう名前の欄に手が戻る。欄の中の Ctrl+Z は欄の
-    // ネイティブ undo に任せる約束 (app.js の history ルーター) なので、欄から手を離して押す。
-    await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+    // 足した後は続けて打てるよう名前の欄に手が戻る。欄にまだ打っていない間の Ctrl+Z は
+    // 図の履歴に回る (TICKET-owner-20261115-1900-1)。欄から手は離さない。
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(400);
     const t = await getEditorText(page);
