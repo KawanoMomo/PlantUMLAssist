@@ -6080,44 +6080,10 @@ function renderSeniorSliceRow() {
   }
 }
 
-// いま開いている図に当たる先輩の図へ入れ替える。図を切り替えるたびに呼ぶ。
-// 下端の「👀 先輩」。枠を開いていなくても、いま横に出る図が読める。
-// design 7b: 件数を持つものはタブ列に置かず下端に寄せ、押せばそのパネルが開く。
+// 比較の相手が替わったら「読むだけ」節の印を描き直す。
+// 下端の「● 並べて比較」の札は TICKET-owner-20261115-2141-prune で外した。
 function renderSeniorStatus() {
   try { renderReadonlyTree(); } catch (e) {}
-  var SP = window.MA.seniorPane;
-  var btn = document.getElementById('status-senior');
-  if (!btn || !SP) return;
-  var open = !(_seniorEls().pane || {}).hidden;
-  var PS = window.MA.peerSample;
-  var sample = PS && PS.statusText(_seniorPick);
-  var txt = sample
-    || SP.statusText(_seniorPick, { ready: !!(_seniorPick && _seniorNames.length) });
-  // 見本を名指ししている回は候補の数に関わらず 1 件 (横に出る図が決まっている)。
-  var n = sample ? Math.max(1, Number(txt.count) || 0) : (Number(txt.count) || 0);
-  btn.title = txt.title;
-  btn.setAttribute('data-count', String(n));
-  btn.setAttribute('aria-pressed', open ? 'true' : 'false');
-  btn.className = open ? 'on' : '';
-  // 相手が決まっていない (0 件) ときは出さない。
-  // 出すときは他の件数表示と同じ「● 名前」の 1 種類の形 (枠なし、色は点だけ)。
-  // 入口は FILES ツリーの「読むだけ」の ⇔ が持つ。
-  var SB = window.MA.statusBadges;
-  var shown = SB ? SB.namedText(txt.label, n) : (n > 0 ? txt.label : '');
-  if (!shown) {
-    btn.hidden = true;
-    btn.textContent = '';
-    btn.removeAttribute('data-dot');
-    return;
-  }
-  btn.hidden = false;
-  btn.setAttribute('data-dot', 'ok');
-  var dot = document.createElement('span');
-  dot.className = 'sb-dot';
-  dot.textContent = SB ? SB.DOT : '●';
-  btn.textContent = '';
-  btn.appendChild(dot);
-  btn.appendChild(document.createTextNode(shown.replace(/^●/, '')));
 }
 
 // 枠を閉じていても相手は決めておく (下端に出すのがこの直しの的なので、
@@ -6464,16 +6430,6 @@ function setupSeniorPane() {
   if (el.modeOnce) el.modeOnce.addEventListener('click', function() { setSeniorMode('once'); });
   renderSeniorModeRow();
   renderCompareTargetRow();
-  // 下端の札。札の名前はそのままで、押すと同じ 1 つの面がその相手で開く
-  // どの札がどの相手かは compare-entry が持つ。
-  var CE = window.MA.compareEntry;
-  var status = document.getElementById('status-senior');
-  if (status) status.addEventListener('click', function() {
-    var want = CE ? CE.targetForBadge('status-senior') : '';
-    if (want && !el.pane.hidden && compareTarget() === want) { toggleSeniorPane(false); return; }
-    if (want) { openCompareTarget(want); return; }
-    toggleSeniorPane(el.pane.hidden);
-  });
   // 前回開いたままなら、次に開いたときも開いたままにする (据え置きが値打ちなので)。
   if (_seniorState().open) toggleSeniorPane(true);
   else _seniorPrime();

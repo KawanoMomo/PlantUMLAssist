@@ -106,8 +106,8 @@ window.MA.compareEntry = (function() {
   }
 
   // 下端の札から開くときの相手。札の名前は変えずに、押すと同じ 1 つの枠が開く。
+  // (「● 並べて比較」の札 status-senior は TICKET-owner-20261115-2141-prune で外した)
   var BADGES = {
-    'status-senior': 'folder',
     'status-livediff': 'before',
   };
 

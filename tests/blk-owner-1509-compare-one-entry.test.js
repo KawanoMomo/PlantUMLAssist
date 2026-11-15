@@ -97,7 +97,8 @@ describe('たたんだ入口と、下端の札', function() {
   });
 
   test('下端の札は名前のまま、押すと同じ枠がその相手で開く', function() {
-    expect(CE.targetForBadge('status-senior')).toBe('folder');
+    // 下端の「並べて比較」の札 (status-senior) は TICKET-owner-20261115-2141-prune で外した。
+    expect(CE.targetForBadge('status-senior')).toBe('');
     expect(CE.targetForBadge('status-livediff')).toBe('before');
     expect(CE.targetForBadge('status-pins')).toBe('');
   });

@@ -13,10 +13,9 @@ test('手順9 比較相手の枠は既定で出ず、並べて比較で開き、
   await S.bootWithSaveDir(page, DIR);
 
   const pane = page.locator('#senior-pane');
-  // BLK-builder-20260924-1716-4 (design 9c / 10a): 相手が決まるまで下端の札は出ない (0 件は出さない)。
-  // 入口は FILES ツリーの「読むだけ」の ⇔。
+  // 下端の「並べて比較」の札は TICKET-owner-20261115-2141-prune で外した。入口は FILES ツリーの「読むだけ」の ⇔。
   const entry = page.locator('#btn-tab-senior');
-  await expect(page.locator('#status-senior')).toBeHidden();
+  await expect(page.locator('#status-senior')).toHaveCount(0);
 
   // 到達条件その1: 起動直後は枠が無い (自分の図とプレビューだけが見えている)。
   await expect(pane).toBeHidden();
