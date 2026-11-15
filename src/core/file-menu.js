@@ -17,11 +17,9 @@ window.MA.fileMenu = (function() {
   // 「過去のコミットと比較…」は保存先が Git のときだけ押せる (10c)。
   var FILE_ITEMS = [
     { id: 'open', label: '開く', key: 'Enter' },
-    { id: 'open-side', label: '右に並べて開く' },
+    // 「右に並べて開く」と比較の 3 行 (読むだけ / 前回保存版 / 過去のコミット) は
+    // TICKET-owner-20261115-2141-prune で外した。前の版と比べるのは「この図の履歴」の行から。
     { sep: true },
-    { id: 'cmp-readonly', label: '読むだけのフォルダの同じ図と比較' },
-    { id: 'cmp-saved', label: '前回保存版と比較' },
-    { id: 'cmp-commit', label: '過去のコミットと比較…', tag: 'Git', needsGit: true },
     { id: 'history', label: 'この図の履歴を表示' },
     { sep: true },
     { id: 'rename', label: '名前を変更', key: 'F2' },

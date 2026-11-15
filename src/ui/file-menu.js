@@ -130,20 +130,6 @@ window.MA.fileMenuUi = (function() {
   }
 
   // ── ファイルの操作 ───────────────────────────────────────────────────
-  function openSide(name) {
-    var ws = WS();
-    var prev = ws && ws.getActiveId ? ws.getActiveId() : null;
-    return ensureOpen(name).then(function(ok) {
-      var d = findDoc(name);
-      if (!ok || !d) return;
-      if (prev != null && prev !== d.id && typeof window.switchToDoc === 'function') {
-        window.switchToDoc(prev);
-      }
-      if (prev == null || prev === d.id) return;
-      window._compareRefId = d.id;
-      if (typeof window.toggleCompareView === 'function') window.toggleCompareView(true, 'ref');
-    });
-  }
 
   function renameFile(name) {
     var ws = WS();
@@ -355,18 +341,8 @@ window.MA.fileMenuUi = (function() {
   function runFile(action, name) {
     switch (action) {
       case 'open': return ensureOpen(name);
-      case 'open-side': return openSide(name);
-      case 'cmp-readonly':
-        return ensureOpen(name).then(function() { if (typeof window.openCompareTarget === 'function') window.openCompareTarget('folder'); });
-      case 'cmp-saved':
-        return ensureOpen(name).then(function() { if (typeof window.openCompareTarget === 'function') window.openCompareTarget('before'); });
       case 'history':
         return ensureOpen(name).then(function() { clickId('btn-tab-versions'); });
-      case 'cmp-commit':
-        return ensureOpen(name).then(function() {
-          var g = window.MA.gitUi;
-          if (g && g.openPicker) g.openPicker(document.getElementById('files-sec-git'));
-        });
       case 'rename': return renameFile(name);
       case 'copy': return copyFile(name);
       case 'move': return moveFile(name);

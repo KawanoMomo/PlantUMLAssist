@@ -14,8 +14,9 @@ function ids(items) {
 describe('ファイルの右クリック (design 10b)', function() {
   test('10b のモックどおりの並びと区切り', function() {
     expect(ids(FM.fileItems({}))).toEqual([
-      'open', 'open-side', '-',
-      'cmp-readonly', 'cmp-saved', 'cmp-commit', 'history', '-',
+      // 右に並べて開く・比較の 3 行は TICKET-owner-20261115-2141-prune で外した。
+      'open', '-',
+      'history', '-',
       'rename', 'copy', 'move', 'draft', '-',
       'export-svg', 'reveal', '-',
       'delete',
@@ -30,12 +31,11 @@ describe('ファイルの右クリック (design 10b)', function() {
     expect(by['delete'].key).toBe('Delete');
   });
 
-  test('過去のコミットと比較 は Git のときだけ押せる (印は Git)', function() {
-    var off = FM.fileItems({ git: false }).filter(function(it) { return it.id === 'cmp-commit'; })[0];
-    var on = FM.fileItems({ git: true }).filter(function(it) { return it.id === 'cmp-commit'; })[0];
-    expect(off.disabled).toBe(true);
-    expect(off.tag).toBe('Git');
-    expect(!!on.disabled).toBe(false);
+  test('比較の行 (読むだけ / 前回保存版 / 過去のコミット) と 右に並べて開く は無い', function() {
+    var got = FM.fileItems({ git: true }).map(function(it) { return it.id; });
+    ['open-side', 'cmp-readonly', 'cmp-saved', 'cmp-commit'].forEach(function(id) {
+      expect(got.indexOf(id)).toBe(-1);
+    });
   });
 
   test('一時控えは今の状態で言い換える', function() {
@@ -81,9 +81,12 @@ describe('キーボード', function() {
     var items = FM.fileItems({ git: false });
     var first = FM.nextIndex(items, -1, 1);
     expect(items[first].id).toBe('open');
-    // cmp-saved の次は押せない cmp-commit を飛ばして history。
-    var saved = items.map(function(i) { return i.id; }).indexOf('cmp-saved');
-    expect(items[FM.nextIndex(items, saved, 1)].id).toBe('history');
+    // open の次は区切りを飛ばして history。
+    expect(items[FM.nextIndex(items, first, 1)].id).toBe('history');
+    // 押せない行は飛ばす (読むだけのフォルダの「読むだけにする」は押せない)。
+    var ro = FM.folderItems({ kind: 'readonly' });
+    var tgt = ro.map(function(i) { return i.id; }).indexOf('set-target');
+    expect(ro[FM.nextIndex(ro, tgt, 1)].id).toBe('compare');
     // 先頭から ↑ で末尾 (削除) へ回る。
     expect(items[FM.nextIndex(items, first, -1)].id).toBe('delete');
     expect(FM.nextIndex([], 0, 1)).toBe(-1);
