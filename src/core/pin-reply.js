@@ -1,12 +1,12 @@
 'use strict';
 window.MA = window.MA || {};
 
-// pin-reply — 指摘に「直す側の応答」を返す (BLK-reviewer-20260908-1303-wish)。
+// pin-reply — 指摘に「直す側の応答」を返す。
 //
 // 指摘は reviewer から primary への一方通行だった。指摘ピン (review-pins) には
 // 未読 / 既読 / 対応済み の 3 状態しかなく、「読んだが今回は直さない」「別件待ちで
-// 保留」を書く場所が無い。書けないので primary は何も返さず、reviewer は次の tick で
-// また同じ 7 枚を render API で調べ直す。3 tick 連続で同じ指摘を書き直したのがそれ。
+// 保留」を書く場所が無い。書けないので primary は何も返さず、reviewer は次の回 で
+// また同じ 7 枚を render API で調べ直す。3 回 連続で同じ指摘を書き直したのがそれ。
 //
 // 応答は指摘そのものとは別の行に書く。指摘の書式 (id|state|author|at|anchor|text|before)
 // を増やすと、その書式を読む既存の道具が全部影響を受ける。応答は指摘 id を指す
@@ -17,7 +17,7 @@ window.MA = window.MA || {};
 //   done    — 直した。reviewer は「本当に直ったか」だけ抜き打ちで裏取りすればよい
 //   held    — 今は直さないが直す。理由が要る (いつ・何待ちか)
 //   wontfix — 直さないと決めた。理由が要る (仕様である・別図が正しい など)
-// 理由を必須にするのは、理由の無い「保留」は次の tick で結局ゼロから確かめ直しになるため。
+// 理由を必須にするのは、理由の無い「保留」は次の回 で結局ゼロから確かめ直しになるため。
 //
 // ここは DOM にもサーバにも触らない純関数だけを置き、描画と結線は app.js。
 window.MA.pinReply = (function() {
@@ -134,7 +134,7 @@ window.MA.pinReply = (function() {
   }
 
   // 応答を書けるか。理由が要る種類で理由が空なら書かせない
-  // (理由の無い保留は、次の tick でゼロから調べ直すことになるため)。
+  // (理由の無い保留は、次の回 でゼロから調べ直すことになるため)。
   function canReply(verdict, text) {
     if (VERDICTS.indexOf(_t(verdict)) < 0) return false;
     if (needsReason(verdict) && _t(text) === '') return false;

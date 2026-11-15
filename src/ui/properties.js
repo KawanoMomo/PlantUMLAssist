@@ -270,7 +270,7 @@ window.MA.properties = (function() {
     '</div>';
   }
 
-  // colorPaletteHtml / bindColorPalette: BLK-builder-20260907-1306-2 (design 5d)。
+  // colorPaletteHtml / bindColorPalette:。
   // State のように「関係の設定」を丸ごとは持たないが色だけは畳んで置きたいところ用に、
   // 色見本の一列と、それを包む「その他… ▾」を切り出したもの。
   // 現在値が既定 (色なし) から外れていれば開いた状態で出す — 3c の流儀と同じ。
@@ -337,7 +337,7 @@ window.MA.properties = (function() {
     }
   }
 
-  // linkNoteHtml / bindLinkNote: BLK-builder-20260907-1737-2 (design 4c)。
+  // linkNoteHtml / bindLinkNote:。
   // 「この線にノートを添える」は relationOptionsHtml の中にしか無かったので、
   // 「その他の設定」を丸ごとは持たない State の遷移でも同じことができるように切り出す。
   // チェックを外すとノートを消すところまで含めて 1 つの操作なので、
@@ -491,7 +491,7 @@ window.MA.properties = (function() {
     '</div>';
   }
 
-  // BLK-owner-20260926-0550-5: 選択パネルの見出しは図種をまたいで「{種類} · N 行目」の 1 形
+  // 選択パネルの見出しは図種をまたいで「{種類} · N 行目」の 1 形
   // (design 1a / 4a〜4c の「Class · 6 行目」「Transition · 4 行目」)。範囲を持つもの
   // (境界・ブロック・囲み) は「2–5 行目」。文字だけ返す (囲む要素と色は各パネルが持つ)。
   function lineHead(kind, line, endLine) {
@@ -551,7 +551,7 @@ window.MA.properties = (function() {
     return '<button id="' + id + '" style="width:100%;background:var(--accent-red);color:#fff;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:12px;margin-top:8px;">' + escHtml(label) + '</button>';
   }
 
-  // ── 名前帳 (BLK-junior-20260915-0406-wish) ───────────────────────────────
+  // ── 名前帳 ───────────────────────────────
   // 同じ部品の 6 図種に出てくる名前を、入力欄のすぐ下にチップで並べる。
   // 押せばその欄が埋まるので、手順が「先輩の図を開いて名前を探して手で打つ」から
   // 「一覧から選ぶ」に変わる。名前帳そのものは partVocab が 1 箇所で持つ。
@@ -559,7 +559,7 @@ window.MA.properties = (function() {
   // opts: { roles, limit, placeholder, vocab }
   //   roles … 'method' か ['method','event']。その欄に入れてよい役割だけを出す
   //   limit … 先に出す件数 (既定 10)。残りは「＋残り N」で開く
-  // ── 正式表記の登録簿 (BLK-reviewer-20260915-0506-wish) ─────────────────
+  // ── 正式表記の登録簿 ─────────────────
   // reviewer が 1 度決めた「揃える先」を、junior/primary が名前を打つ場所で出す。
   // 型 (participant / class) の欄にだけ出す — 登録簿が持つのは部品名なので、
   // メソッド名・状態名の欄に混ぜると、揃える先でないものを揃える先に見せる。
@@ -594,7 +594,7 @@ window.MA.properties = (function() {
     if (!PV) return '';
     var vocab = o.vocab !== undefined ? o.vocab : PV.current();
     var items = (vocab && vocab.items.length) ? PV.suggest(vocab, o.roles, {}) : [];
-    // BLK-reviewer-20260915-0506-wish: 登録簿の正式表記も同じ並びに出す。
+    // 登録簿の正式表記も同じ並びに出す。
     // 名前帳はこの部品の図に「今ある」綴りなので、揃える先が決まっていても
     // 図がまだ揺れたままなら揺れた綴りしか出ない。決まっている綴りは先に出す。
     var regChips = registryChips(o);
@@ -640,7 +640,7 @@ window.MA.properties = (function() {
       + '</div>';
   }
 
-  // BLK-junior-20260915-0606: 自由文の欄 (活動図のアクション本文) では、チップで
+  // 自由文の欄 (活動図のアクション本文) では、チップで
   // 欄ごと置き換えると打ちかけの文が消える。カーソル位置に差し込み、続けて打てるようにする。
   // 複数行をまとめて打つ欄では、選んだ名前が既に書いた行を巻き込まないのが要件。
   function insertAtCaret(el, text) {

@@ -1,7 +1,7 @@
 'use strict';
 window.MA = window.MA || {};
 
-// state-collapse — 連なった遷移を 1 本にまとめる (BLK-primary-20260908-1403)。
+// state-collapse — 連なった遷移を 1 本にまとめる。
 //
 // レビュー指摘「dma_state.puml だけ 1 メッセージが 4 遷移に分解されている。
 // Idle→Configured→SrcDstSet→DmaReqEnabled→Transferring_Active を 1 遷移

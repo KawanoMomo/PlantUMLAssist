@@ -2,7 +2,7 @@
 
 // audit-board — プロジェクト 1 つ分の突合結果を「1 画面の指摘一覧」にする。
 //
-// BLK-reviewer-20260908-1403-wish: 突合そのものは name-audit / consistency /
+// 突合そのものは name-audit / consistency /
 // family-audit / trace-coverage / svg-freshness / manual-findings が既に持っている。
 // ただし出口が別々のモーダルに分かれているので、13 枚を 1 プロジェクトとして
 // 横断で見るには reviewer が node で audit.js を叩き、JSON をその場のスクリプトで
@@ -48,7 +48,7 @@
 
   function _list(v) { return Array.isArray(v) ? v : []; }
 
-  // BLK-reviewer-20260914-2206 (差し戻し 1 回目): 行 1 件の「実体 id」。
+  // 行 1 件の「実体 id」。
   // 同じ欠陥が別の図に出ても、カテゴリの箱が移っても同じ文字列になる id は
   // audit-timeline が既に持っており (findings.js の継続追跡もこれで数える)、
   // 同一性の正はそちら。ここで行に貼っておくと、前回の突合結果と今回を
@@ -93,7 +93,7 @@
       // 「読み直さなくてよい」と分かっている手動指摘。件数からは外して数える
       // (0 件になったのか、見ないことにしただけなのかを潰さない)。
       keep: !!(ref && ref.keep),
-      // BLK-reviewer-20260923-2012-wish (差し戻し 1 回目): note の自由文で答えてある組の印。
+      // note の自由文で答えてある組の印。
       // --board が「継続」ではなく「タグ化待ち」に別掲するのに使う。
       noteReply: ref && ref.item && ref.item.noteReply ? ref.item.noteReply : null,
     };
@@ -113,7 +113,7 @@
       var r = _row('name.variants', _oneDoc(docs), _s(v.suggested),
         names.join(' / ') + ' が同じ物を指しています。多数派は ' + _s(v.suggested), docs,
         { item: v });
-      // BLK-owner-20260924-1332-prune: 揃える先を選んで 🔤 表記統一へ渡すための綴りの一覧。
+      // 揃える先を選んで 🔤 表記統一へ渡すための綴りの一覧。
       r.names = names.filter(function(n) { return n !== ''; });
       out.push(r);
     });
@@ -124,7 +124,7 @@
     });
   }
 
-  // BLK-reviewer-20260923-2012-wish: タグは無いが note の自由文で答えている組
+  // タグは無いが note の自由文で答えている組
   // (omit-method.markNotes が noteReply を付けたもの) は、どの note で答えたかを
   // 理由の後ろに書く。reviewer が puml を開いて note を読み直さずに済むように。
   function _noteSuffix(it) {
@@ -193,7 +193,7 @@
     });
   }
 
-  // BLK-owner-20260924-1332-prune: 🔍 名前突合の画面を畳んだので、メソッド突合の中身
+  // 🔍 名前突合の画面を畳んだので、メソッド突合の中身
   // (「Timer_Init() を呼んでいるが、Timer のクラスがどの図にも無い」) はこの行で読む。
   // 言い方は methodAudit.describe が正 (2 つの言い方を持たない)。読めないときだけ従来の短い文。
   function _methodDescribe(i) {
@@ -218,7 +218,7 @@
     });
   }
 
-  // BLK-reviewer-20260915-0606: 内容で追いついていると分かった図 (一致 / 体裁差) は
+  // 内容で追いついていると分かった図 (一致 / 体裁差) は
   // 作り直しが要らないので、mtime が古くても指摘にしない (svg-freshness.isSettled と
   // 同じ線。ここは MA に依存しないモジュールなので、判定の言葉だけを写す)。
   function _settled(content) { return content === 'match' || content === 'format'; }
@@ -269,7 +269,7 @@
     if (!_ok(a.consistency) && _ok(a.family)) _fromFamily(a.family.result, rows);
     if (_ok(a.trace)) _fromTrace(a.trace.result, rows);
     // メソッドは consistency/methods と重なる。consistency を見ているなら出さない。
-    // BLK-owner-20260924-1332-prune: 画面 (methodDetail) は 🔍 名前突合を畳んだので、メソッド突合の
+    // 画面 (methodDetail) は 🔍 名前突合を畳んだので、メソッド突合の
     // 全件 (クラス無し・引数違い・写しにだけ宣言 …) をここで出す。consistency と同じ (クラス, メソッド)
     // の行は言い方の細かいメソッド突合の側を残し、2 行にしない。CLI の --board は従来どおり。
     if (inp.methodDetail && _ok(a.consistency) && _ok(a.method)) {
@@ -384,7 +384,7 @@
     return out.join('\n');
   }
 
-  // BLK-owner-20260924-1332-prune: 旧 🔍 名前突合の画面は畳み、ボードをカテゴリで絞って開く。
+  // 旧 🔍 名前突合の画面は畳み、ボードをカテゴリで絞って開く。
   // ツール ▾ の絞り込みや Ctrl+K に打った語から、最初に絞るカテゴリを決める。
   // 当たらなければ '' (絞らずに開く)。語は小文字で比べる。
   var QUERY_KINDS = [

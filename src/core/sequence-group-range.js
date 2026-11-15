@@ -1,5 +1,5 @@
 'use strict';
-// BLK-human-20260916-0901: シーケンス図の alt/loop/opt/par で「どこからどこまで」を囲む範囲の計算。
+// シーケンス図の alt/loop/opt/par で「どこからどこまで」を囲む範囲の計算。
 //   - wrapRange:  選んだ行範囲を、帯 (activate〜deactivate)・既存ブロック・複数行 note を
 //                 途中で切らない形へ丸める (丸めたらその旨の文を返す)
 //   - moveEdge:   囲んだ後のブロックの始点 / 終点を「1 本ずつ」伸縮する (end 行・開始行を動かす)

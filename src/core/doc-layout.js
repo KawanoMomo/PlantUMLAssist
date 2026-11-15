@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // doc-layout — 資料セットを「貼る前の 1 枚物」として組む。
 //
-// BLK-primary-20260916-0100-wish: 資料セットは登録して zip で書き出すところまでは
+// 資料セットは登録して zip で書き出すところまでは
 // GUI で完結するが、実際に提案書やレビュー資料へ貼るときに要る
 // 「どの順で並べるか」「各図にどんな見出し・1 行説明を添えるか」は zip を
 // 開いた後に資料側のツールで手作業だった。順序を変えたい・説明を足したいと
@@ -102,7 +102,7 @@ window.MA.docLayout = (function() {
     });
     var missing = entries.filter(function(e) { return !e.present; });
     var blank = entries.filter(function(e) { return e.present && !e.note; });
-    // BLK-primary-20260917-0423-wish: 「見出しが図名のまま」は 1 枚ずつ開いて
+    // 「見出しが図名のまま」は 1 枚ずつ開いて
     // 見比べる以外に分からなかった。書き出しの後 (doc-proof) だけが言うのでは
     // 出し直しになるので、貼る前の一覧でも同じことを言う。
     var untitled = entries.filter(function(e) { return e.present && !e.titled; });

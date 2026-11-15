@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // fix-walk — 影響が届く図の一覧を「1 枚ずつ順に手当てする列」として持つ。
 //
-// BLK-primary-20260914-2206-wish: 依存グラフの各行から図は開けるが、開いた瞬間に
+// 依存グラフの各行から図は開けるが、開いた瞬間に
 // モーダルが閉じて一覧が消える。6 図あれば「◈依存グラフを開く → 行を探す → 開く」を
 // 6 回繰り返すことになり、確認 (依存グラフ) と反映 (図の編集) の経路が分断されたままだった。
 // ここが持つのは並び・今どこ・直した印だけで、図を開く手段も DOM も持たない (描画は app.js)。
@@ -20,7 +20,7 @@ window.MA.fixWalk = (function() {
       hop: (r && typeof r.hop === 'number') ? r.hop : 0,
       via: (r && Array.isArray(r.via)) ? r.via.slice() : [],
       done: !!(r && r.done),
-      // BLK-primary-20260925-1732-wish: 届き方の代わりに帯へ出す一言 (症状検索の列は「関連度 N · 当たった語」)。
+      // 届き方の代わりに帯へ出す一言 (症状検索の列は「関連度 N · 当たった語」)。
       note: _s(r && r.note),
     };
   }
@@ -42,12 +42,12 @@ window.MA.fixWalk = (function() {
       items: list,
       index: list.length ? idx : -1,
       ticketId: _s(o.ticketId),
-      // BLK-primary-20260924-1132-wish: 札から始めた列は札の名前 (何の変更か) を持つ。
+      // 札から始めた列は札の名前 (何の変更か) を持つ。
       // 帯に出さないと、11 枚を直している途中で「何を直しているのか」が帯から読めない。
       title: _s(o.title),
       hops: (typeof o.hops === 'number') ? o.hops : 2,
       saved: '',
-      // BLK-primary-20260925-1732-wish: どこから始めた列か ('' = 影響を見る / 変更チケット、'symptom' = 症状検索)。
+      // どこから始めた列か ('' = 影響を見る / 変更チケット、'symptom' = 症状検索)。
       // 症状検索の列は、貼った症状文 (query) で開いた図の当たった語を光らせる。
       origin: _s(o.origin),
       query: _s(o.query),
@@ -127,7 +127,7 @@ window.MA.fixWalk = (function() {
     return at < 0 ? next : _with(next, at);
   }
 
-  // BLK-primary-20260924-1132-wish: 今の図を保存した。印は付けない (保存は直し終えた
+  // 今の図を保存した。印は付けない (保存は直し終えた
   // 印ではない) — 帯の「✓ 直した · 次へ」を目立たせる合図にだけ使う。
   // 図名は .puml の有無を問わない (列は拡張子なし、タブ名は拡張子付きのことがある)。
   function _base(n) { return _s(n).replace(/\.puml$/i, ''); }

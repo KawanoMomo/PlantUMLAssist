@@ -1,10 +1,10 @@
 'use strict';
 window.MA = window.MA || {};
 
-// cross-ref-diff — 別のフォルダ (他ペルソナの保存先) にある同種の図を相手に選び、
+// cross-ref-diff — 別のフォルダ (他の人の保存先) にある同種の図を相手に選び、
 // 「相手にしかない要素 / 自分にしかない要素」を出す。
 //
-// BLK-junior-20260908-0723-wish: 先輩版と自分版の同種図を見比べる場面で、GUI は
+// 先輩版と自分版の同種図を見比べる場面で、GUI は
 // 「開いているタブどうし」しか並べられなかった。先輩の図を読むには自分の保存先設定を
 // 一時的に先輩のフォルダへ替え、開いて内容を憶え、設定を自分へ戻してから記憶を頼りに
 // 打ち直す、という往復になっていた。さらに ⚖ 整合チェックが見るのは並び・語尾・打ち間違いで、
@@ -74,7 +74,7 @@ window.MA.crossRefDiff = (function() {
 
   // 相手フォルダの名前一覧を、今の図に近い順に並べる。近さが付かない名前も
   // 末尾に残す (対応が機械には見えなくても、人には分かることがある)。
-  // BLK-junior-20260917-0423: 相手の一覧は {name, kind} でも文字列でもよい。
+  // 相手の一覧は {name, kind} でも文字列でもよい。
   // 図種が分かっている相手は、自分と違う図種なら「対応する図」ではない。
   // クラス図の相手にシーケンス図を当てると、全要素が「片方にしか無い」に
   // なって「先輩が全部書き換えた」と見分けが付かなくなる。
@@ -94,7 +94,7 @@ window.MA.crossRefDiff = (function() {
       // 図種が両方分かっていて食い違うときだけ外す。分からない相手は今までどおり。
       var mismatch = want !== '' && kind !== '' && kind !== want;
       var d = mismatch ? null : nameDistance(name, selfName);
-      // BLK-junior-20260917-0523-friction: 図種が合っても自分の部品名を含まない候補には印を付ける
+      // 図種が合っても自分の部品名を含まない候補には印を付ける
       // (一覧の時点で「TIMER 用ではない」と分かり、開いて読まなくてよい)。
       var part = partOf(selfName);
       var partMismatch = !mismatch && part !== '' && !_cpHasPart(name, part);
@@ -122,7 +122,7 @@ window.MA.crossRefDiff = (function() {
     return null;
   }
 
-  // 相手のフォルダを読んだ結果を 1 つの答えにする (BLK-junior-20260917-0423)。
+  // 相手のフォルダを読んだ結果を 1 つの答えにする。
   // 「先輩の図を開いて見比べる」手順は、相手に対応する図が無いときも答えが要る。
   // 無いことが画面に出ないと、フォルダを人が目で走査して「無い」を確かめ直す
   // ことになり、手順そのものが止まる。
@@ -174,7 +174,7 @@ window.MA.crossRefDiff = (function() {
           + '比較元が無いので、先輩側の増分は無しとして先へ進めます',
       };
     }
-    // BLK-junior-20260917-0523-wish: 図種は合っても部品名が違う図 (TIMER の図に対する
+    // 図種は合っても部品名が違う図 (TIMER の図に対する
     // driver_common_class) は相手ではない。同じ図種の中に部品名を含む候補が 1 枚も
     // 無ければ、選ばせずに「その部品の図は無い」と言い切る。
     var part = partOf(selfName);
@@ -248,7 +248,7 @@ window.MA.crossRefDiff = (function() {
 
   // 同じ要素と見なす鍵。種別 + 入れ子の道筋 + 名前 + 文言。
   // 空白の詰め方と大文字小文字は無視する。
-  // BLK-junior-20260917-0323-wish: 親の中の `Idle` とトップレベルの `Idle` は
+  // 親の中の `Idle` とトップレベルの `Idle` は
   // 別の状態なので、道筋を鍵に入れないと「親の中に増えた子」が共通に落ちる。
   function keyOf(node) {
     return [_s(node && node.kind), _norm(node && node.parent),
@@ -301,7 +301,7 @@ window.MA.crossRefDiff = (function() {
   }
 
   // ── 突き合わせが成り立っているか ─────────────────────────────────────
-  // BLK-junior-20260908-0823: 名前が 1 つも一致しない 2 枚 (電気的な出力状態で
+  // 名前が 1 つも一致しない 2 枚 (電気的な出力状態で
   // 描いた図と、Uninit/Busy/Error の抽象度で描いた図) を突き合わせると、
   // 全要素が「相手にしかない」に落ちる。これを「先輩が後から足した差分」として
   // 出すと、利用者は取り込む 1 個を選べないまま数字だけ信じることになる。
@@ -359,7 +359,7 @@ window.MA.crossRefDiff = (function() {
   }
 
   // 一覧の 1 行に出す名前。親の中の要素は道筋ごと出す。
-  // BLK-junior-20260917-0323-wish: 「状態 Idle」とだけ出ると、それが
+  // 「状態 Idle」とだけ出ると、それが
   // トップレベルに増えたのか親の中に増えたのかが行から読めない。
   function entryLabel(entry) {
     var e = entry || {};
@@ -420,7 +420,7 @@ window.MA.crossRefDiff = (function() {
   }
 
   // ── 骨格は同じで、語だけが違う 2 枚 ──────────────────────────────────
-  // BLK-junior-20260908-1303: 同じ台本から起こした 2 枚 (UART 版と CAN 版) は、
+  // 同じ台本から起こした 2 枚 (UART 版と CAN 版) は、
   // start → 4 アクション → if → stop まで並びが完全に同じで、違うのはドメインの語
   // (UART クロック有効化 / CAN クロック有効化) だけ。名前が 1 つも一致しないので
   // 「対応する要素が 1 つもない = 別の粒度」と診断されるが、実際は逆で、
@@ -458,7 +458,7 @@ window.MA.crossRefDiff = (function() {
   var REPHRASE_RATIO = 0.25;
 
   // 逆に、位置ごとの語が 1 つも共通しないときは「同じ骨格の言い換え」とは言えない。
-  // BLK-junior-20260908-0823 の 2 枚 (電気的な出力状態 / ドライバの生死) は
+  // の 2 枚 (電気的な出力状態 / ドライバの生死) は
   // たまたま状態も遷移も同数なので並びは揃うが、共有する語が 1 つも無く、
   // 実際には別の粒度で描かれている。共通の語が 1 つ以上あることを条件にする。
   function isRephrase(par) {
@@ -498,7 +498,7 @@ window.MA.crossRefDiff = (function() {
   var DECL_RE = /^\s*(participant|actor|boundary|control|entity|database|collections|queue|class|abstract\s+class|interface|enum|state|component|node|package|folder|rectangle|cloud|storage|usecase)\b/i;
 
   // 入れ子の道筋を持つ要素 (`state Configured {` の中の `Idle`) は、親の中へ入れる。
-  // BLK-junior-20260917-0323-wish: 親の外へ足すと、子状態がトップレベルの兄弟に
+  // 親の外へ足すと、子状態がトップレベルの兄弟に
   // なって図の意味が変わる。取り込んだ側は形が崩れてから気付くことになる。
   function _parents(entry) {
     return _s(entry && entry.parent).split(PARENT_SEP)
@@ -609,7 +609,7 @@ window.MA.crossRefDiff = (function() {
   }
 
   // ── 入れる前に「どこへ入るか」を見せる ───────────────────────────────
-  // BLK-junior-20260917-0223-wish: 取り込みは 1 行ずつで、押すまで入る場所が
+  // 取り込みは 1 行ずつで、押すまで入る場所が
   // 分からなかった。押すと一覧が出し直されカーソルも飛ぶので、次の 1 行を
   // 探し直すことになる。入る場所を先に 1 行で見せ、まとめて入れられるようにする。
   function planText(selfDsl, entry) {

@@ -58,7 +58,7 @@ window.MA.autoSave = (function() {
     try { return window.localStorage.getItem(key); } catch (e) { return null; }
   }
 
-  // BLK-owner-20260924-2232-1: 元に戻す / やり直しで入れた本文の保存は、図種の判定が替わっても
+  // 元に戻す / やり直しで入れた本文の保存は、図種の判定が替わっても
   // server に別名 (`{名前}_{図種}`) へ回させない。1 回の書き込みで消える印。
   var _keepNames = {};
   function keepNameOnce(name) { if (name) _keepNames[String(name)] = true; }
@@ -71,10 +71,10 @@ window.MA.autoSave = (function() {
     try {
       var payload = { type: diagramType, dsl: dsl, dir: fileDir || './autosave' };
       if (_keepNames[diagramType]) { payload.keepName = true; delete _keepNames[diagramType]; }
-      // BLK-owner-20260929-1111-1: まだ 1 度も書いていない新しい図の印。保存先に同じ名前の
+      // まだ 1 度も書いていない新しい図の印。保存先に同じ名前の
       // 別の図があれば server は書かずに 409 を返す。
       if (freshId) payload.freshId = String(freshId);
-      // BLK-owner-20260930-0311-1: 書いたタブの印。自分で書いた続きは、図種の読みが替わっても別名へ回さない。
+      // 書いたタブの印。自分で書いた続きは、図種の読みが替わっても別名へ回さない。
       if (docId) payload.docId = String(docId);
       var body = JSON.stringify(payload);
       var req = window.fetch('/autosave', {
@@ -91,7 +91,7 @@ window.MA.autoSave = (function() {
           return r.json ? r.json().then(clash, function() { return clash(null); }) : clash(null);
         }
         if (r && r.ok && freshId) _notifyFreshWritten({ name: diagramType, id: String(freshId) });
-        // BLK-junior-20260908-2003: 図種が変わる保存は server が別ファイルへ回す。
+        // 図種が変わる保存は server が別ファイルへ回す。
         // 回された先を知らせないと、画面の図名と書かれたファイルがずれたまま
         // 次の保存も同じように回り続ける (図名を直すのは app.js)。
         if (!r || !r.ok || !r.json) return null;
@@ -109,7 +109,7 @@ window.MA.autoSave = (function() {
     } catch (e) { /* fetch may not exist in test sandbox; localStorage still works */ }
   }
 
-  // BLK-junior-20260925-1732-friction: 書きに出た途中の保存。改名の後始末 (rename-sweep) は
+  // 書きに出た途中の保存。改名の後始末 (rename-sweep) は
   // 前の名前のファイルを読んで今の図と比べるので、書き終わる前に読むと古い中身と比べてしまう。
   var _inflight = [];
   function _trackWrite(req) {
@@ -170,7 +170,7 @@ window.MA.autoSave = (function() {
       if ('fileDir' in partial) merged.fileDir = partial.fileDir;
     }
     _writeJson(KEY_CONFIG, merged);
-    // BLK-junior-20260907-0843: 保存先はブラウザではなくマシンの設定なので、
+    // 保存先はブラウザではなくマシンの設定なので、
     // 新しいタブ・別プロファイルでも引き継げるよう server 側にも書き写す。
     if (window.MA.savePrefs) window.MA.savePrefs.save(merged);
     return getConfig();
@@ -195,7 +195,7 @@ window.MA.autoSave = (function() {
     });
   }
 
-  // ── 書き込みを止める門 (BLK-junior-20260908-1803) ────────────────────────
+  // ── 書き込みを止める門 ────────────────────────
   // ディスクへ写す前に「この名前に書いてよいか」を聞く。答えるのは app.js
   // (保存フォルダの役割宣言を知っているのはあちら)。ここは知らないまま止められる形にする。
   var _fileGuard = null;      // function(diagramType) -> 理由の文字列 / null
@@ -238,7 +238,7 @@ window.MA.autoSave = (function() {
     if (typeof listener === 'function') _blockedListeners.push(listener);
   }
 
-  // ── 新しい図が保存先の別の図と同じ名前だったとき (BLK-owner-20260929-1111-1) ──
+  // ── 新しい図が保存先の別の図と同じ名前だったとき ──
   // server は書かずに 409 を返す。状態バーは「書かなかった」にし、画面 (app.js) に名前を選ばせる。
   var _conflictListeners = [];
   var _freshWrittenListeners = [];
@@ -274,7 +274,7 @@ window.MA.autoSave = (function() {
     if (typeof listener === 'function') _freshWrittenListeners.push(listener);
   }
 
-  // ── 図種が変わって別ファイルへ回されたとき (BLK-junior-20260908-2003) ────
+  // ── 図種が変わって別ファイルへ回されたとき ────
   var _renamedListeners = [];
 
   function _notifyRenamed(info) {
@@ -300,7 +300,7 @@ window.MA.autoSave = (function() {
     else delete _blockedSeen[diagramType];
   }
 
-  // ── ディスクへ書く名前を決める門 (BLK-primary-20260913-0306) ─────────────
+  // ── ディスクへ書く名前を決める門 ─────────────
   // localStorage の鍵は図種 (plantuml-sequence 等) でよいが、保存フォルダの
   // ファイル名は「図の名前」でなければならない。図種を鍵にしたまま写すと、
   // diagram1 を打つたびに plantuml-sequence.puml が diagram1 の中身で
@@ -316,8 +316,8 @@ window.MA.autoSave = (function() {
   // 返り値: { name: 書くべきファイル名 / null (= ディスクへは書かない), reason: 書かない訳 / null }
   // 解決器は名前の文字列だけを返してもよい (従来どおり)。書かない訳まで知らせたいときは
   // { name: '', reason: 'ask' } の形で返す —— 訳が分かると、画面は「まだディスクに
-  // 書いていない」と「書く必要が無い」を言い分けられる (BLK-primary-20260914-2206)。
-  // dsl — 書こうとしている本文 (BLK-owner-20260925-0312-2: 見本・白紙のままなら書かないと決めるのに使う)。
+  // 書いていない」と「書く必要が無い」を言い分けられる。
+  // dsl — 書こうとしている本文 (見本・白紙のままなら書かないと決めるのに使う)。
   function _fileNameFor(diagramType, dsl) {
     if (!_fileNameResolver) return { name: diagramType, reason: null };
     var r;
@@ -333,7 +333,7 @@ window.MA.autoSave = (function() {
     }
     else n = r;
     n = (n == null) ? '' : String(n);
-    // BLK-human-20260925-1150: dir はそのタブの書き先のフォルダ (保存先を替える前に開いたタブは
+    // dir はそのタブの書き先のフォルダ (保存先を替える前に開いたタブは
     // 開いたフォルダ)。打った時点で名前と一緒に決める (debounce の間に保存先が替わっても流れない)。
     var out = { name: n ? n : null, reason: n ? null : (why || 'no-name') };
     if (dir) out.dir = dir;
@@ -401,7 +401,7 @@ window.MA.autoSave = (function() {
         where = 'deferred';
         reason = (fileInfo && fileInfo.reason) || 'no-name';
       } else {
-        // BLK-junior-20260908-1803: 書いてはいけないファイル (テンプレ宣言済み) には
+        // 書いてはいけないファイル (テンプレ宣言済み) には
         // ディスクへ写さない。localStorage 側は残すので、編集内容は失われず、
         // 図名を変えればそのまま新しいファイルに保存される。
         var block = _blockedBy(fileName);
@@ -442,7 +442,7 @@ window.MA.autoSave = (function() {
   }
 
   // settle() — 待っている保存 (debounce 中) を今すぐ書き、書きに出た保存が届くまで待つ Promise。
-  // BLK-junior-20260925-1732-friction: タイトル欄を変えた直後 (1 秒の debounce の間) にタブ名を変えると、
+  // タイトル欄を変えた直後 (1 秒の debounce の間) にタブ名を変えると、
   // 待っていた保存は打った時点の名前 (= 前の名前) で後から書かれ、改名の後始末が済んだ後に
   // 前の名前のファイルが今の図と同じ中身で作り直されていた。改名の前にここで書き切らせる。
   function settle() {

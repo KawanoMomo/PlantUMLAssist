@@ -134,7 +134,7 @@ window.MA.relationKindCards = (function() {
   }
 
   // mountForSelect: 末尾に追加の「関係」フォームの種類プルダウン ({selectId}) を、選択パネルと同じ
-  // 名称と意味のカードに置き換える (BLK-owner-20260923-2332-prune: 同じ選択を図種・場所で別の部品にしない)。
+  // 名称と意味のカードに置き換える (同じ選択を図種・場所で別の部品にしない)。
   // select は値の持ち主のまま残して隠す (各図種の分岐と change の聞き手をそのまま使う)。
   function mountForSelect(selectId, diagram) {
     var sel = document.getElementById(selectId);

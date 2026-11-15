@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // kind-mismatch — 「そのファイルが名乗っている図種」と「本文が実際に描く図種」の
 // 食い違いを機械的に言う。
 //
-// BLK-reviewer-20260914-1406-wish: `plantuml-usecase.puml` の中身が丸ごと
+// `plantuml-usecase.puml` の中身が丸ごと
 // `dma_transfer_sequence.puml` と同じになっている事故を見つけたのは、reviewer が
 // 31 枚の DSL を 1 枚ずつ読んだ結果だった。GUI の一覧にも tools/audit.js にも
 // 「名乗り vs 本文」を突き合わせる口が無く、複製・貼り間違いは全文を読むまで出ない。

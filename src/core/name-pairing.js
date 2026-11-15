@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // name-pairing — 2 つのフォルダの部品名を「対応する組」に並べ、表記揺れだけを残す。
 //
-// BLK-reviewer-20260914-1706-wish: 突合 (domain-cohort) は片方にしか無い名前を
+// 突合 (domain-cohort) は片方にしか無い名前を
 // 「primary だけ / junior だけ」の 2 列に出すところまでで、`IRQCtrl` と `Irq_Ctrl` が
 // 同じ部品の別表記であることは読む側が目で結び直していた。reviewer は
 // `tools/audit.js -p a,b` で件数を得た後、どの名前がどの名前に対応するかを

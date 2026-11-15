@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // svg-visual-diff — 保存中の SVG と、今の puml を描き直した SVG を、
 // 「目に見えるもの」だけで突き合わせる。
 //
-// BLK-reviewer-20260914-2106-wish: stale (印の不一致) が出た図について、
+// stale (印の不一致) が出た図について、
 // 可視内容が本当にずれているのか、コメント行の追加や埋め込みソースの符号化差分
 // だけの見かけ上の stale なのかを、reviewer が 1 枚ずつ /render を叩いて
 // `<?plantuml-src …?>` を取り除いた文字列 diff で裏取りしていた。

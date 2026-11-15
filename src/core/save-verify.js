@@ -2,7 +2,6 @@
 window.MA = window.MA || {};
 
 // save-verify — 「保存した」ではなく「保存先ファイルの中身が実際に変わったか」を持つ台帳
-// (BLK-primary-20260914-1406-wish)。
 //
 // 今の画面は保存操作をしたことしか言わない。実際には錠 (source-lock) の問いに答えて
 // いない・テンプレ宣言で書き込みを止めている・保存先がダウンロードのまま、のどれかで
@@ -23,7 +22,7 @@ window.MA.saveVerify = (function() {
   //   skipped  — 開いたときのまま。書く必要が無い (ディスクは既にこの内容)
   //   download — 保存先がファイルではないので、そもそもディスクに書かれない
   //   untouched — タブがまだ見本・白紙のまま。書く中身が無いので書かない
-  //               (BLK-primary-20260914-2106: 見本で既存の図を潰さない)
+  //               (見本で既存の図を潰さない)
   var OUTCOMES = ['written', 'asked', 'blocked', 'skipped', 'download', 'untouched'];
 
   var REASON = {

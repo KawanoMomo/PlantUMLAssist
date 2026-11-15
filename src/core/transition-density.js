@@ -64,7 +64,7 @@ window.MA.transitionDensity = (function() {
     return fa ? fa.actionsOf(dsl) : [];
   }
 
-  // ---- 分母が状態機械と同じ粒度かを確かめる (BLK-reviewer-20260908-1603) ----
+  // ---- 分母が状態機械と同じ粒度かを確かめる ----
   //
   // 密度は「遷移数 / メッセージ数」だが、この 2 つは同じものを数えているとは限らない。
   // 実際の corpus では uart_init_sequence の 6 メッセージは Uart_Init() の**中身**
@@ -197,7 +197,7 @@ window.MA.transitionDensity = (function() {
   }
 
   // 担当外の遷移しか無くて数えられなかった系統。黙って落とすと「揃っています」に
-  // 見えるので、summaryLine で件数を言う (BLK-reviewer-20260908-1603)。
+  // 見えるので、summaryLine で件数を言う。
   function _unscoped(result) {
     return (result && result.rows ? result.rows : []).filter(function(r) {
       return r.density == null && r.messages > 0 && r.stateDocs.length && !r.sameGrain;

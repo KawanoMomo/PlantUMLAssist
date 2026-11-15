@@ -1,7 +1,7 @@
 'use strict';
 window.MA = window.MA || {};
 
-// update-check — 設定 → 情報 の「更新を確認」(BLK-human-20260917-0900)。
+// update-check — 設定 → 情報 の「更新を確認」。
 //
 // GitHub Releases の latest と今の版を比べ、新しければ版番号・変更点へのリンク・インストーラの URL を返す。
 // 自動では落とさない・実行しない。起動時の自動確認は設定で切れ、既定は切 (社内 PC で勝手に通信しない)。

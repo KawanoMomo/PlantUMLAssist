@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // seq-to-activity — シーケンス図の呼び出し列から、アクティビティ図のたたき台を起こす。
 //
-// BLK-junior-20260909-0203-wish: 「設計書に貼る資料」でアクティビティ図を描くとき、
+// 「設計書に貼る資料」でアクティビティ図を描くとき、
 // 処理順 (EnableClock → WriteConfig → EnableIrq → InitDone) は先輩の
 // gpio_init_sequence.puml に既にメッセージとして書かれている。それでも
 // アクティビティ図側にはそれを取り込む口が無く、シーケンス図を見ながら同じ順序の

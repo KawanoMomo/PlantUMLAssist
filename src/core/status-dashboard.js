@@ -2,10 +2,10 @@
 
 // status-dashboard — 図 1 枚を 1 行にして、整合状態を 1 枚の表に横に並べる。
 //
-// BLK-reviewer-20260915-0606-wish: 突合の結果は既に各所にある
+// 突合の結果は既に各所にある
 // (findings.js の継続追跡 / pins.js の着手状況 / svg-freshness の内容判定 /
 //  name-registry の要決定 / audit-scope.diffFiles の前回控えとの差分)。
-// ただし出口が 6 本の別コマンドに分かれているので、reviewer は毎 tick それぞれを
+// ただし出口が 6 本の別コマンドに分かれているので、reviewer は毎回 それぞれを
 // 叩いて結果を頭の中で突き合わせ、指摘.md にまとめていた。CLI 同士が食い違う場合
 // (`--board` が「SVG 内容ずれ」と言い、`/verify-svg` は体裁差だけと言う) も、
 // 別々の出力を目で見比べて初めて気づける。

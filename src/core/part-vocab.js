@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // part-vocab — 1 つの部品 (SPI) の 6 図種に散らばっている名前を 1 冊の名前帳にする。
 //
-// BLK-junior-20260915-0406-wish: 先輩の図を手本に SPI の状態遷移図を打ち直すとき、
+// 先輩の図を手本に SPI の状態遷移図を打ち直すとき、
 // `Spi_Init` `Spi_Transmit` `TransferComplete` `Fault` `Spi_Reset` は先輩の
 // シーケンス図 (spi_init_sequence) にも出てくるはずだが、GUI は図ごとに独立して
 // いて名前の対応を教えてくれない。合っているかは先輩の図を別に開いて目で見比べる
@@ -201,7 +201,7 @@ window.MA.partVocab = (function() {
       var name = _s(d.name);
       var dsl = _s(d.text != null ? d.text : d.dsl);
       if (!dsl.trim()) return;
-      // BLK-junior-20260915-0606: 名前を持っているのがファイル名に部品名の無い
+      // 名前を持っているのがファイル名に部品名の無い
       // 相乗り図 (`driver_common_class.puml` に 8 部品) のことがある。ファイル名だけで
       // 弾くと、活動図に打つ実在メソッド (Spi_Init / Spi_Reset / …) が名前帳に
       // 1 語も入らず、junior はその図を別タブで開いて絞って控えるしかなくなる。

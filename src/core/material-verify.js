@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // material-verify — 資料化した 1 枚が「保存先に本当に置けたか」を、資料化した
 // その場で言う。
 //
-// BLK-junior-20260915-0007: 「1 枚を資料化…」は実行するとモーダルが自動で閉じ、
+// 「1 枚を資料化…」は実行するとモーダルが自動で閉じ、
 // 根拠は一瞬出るトーストだけだった。見落とせば、保存先に置けたかを確かめる手段は
 // モーダル内に何も残らず、📂一覧を開き直して名前で探すまで確信が持てない
 // (フォルダタブ → フィルタ入力 → クリック、が資料化 1 枚ごとに付く)。
@@ -62,7 +62,7 @@ window.MA.materialVerify = (function() {
   //   plan:  { docName, filename, formatLabel, source }
   //   info:  workspace.listFolder() の返り値 ({ entries, dir, exists })
   // status は 'ok' (置けた) / 'missing' (一覧に無い) / 'unknown' (一覧を読めなかった)。
-  // done (任意): runMaterialPlan の結果 { imageSize }。画像の実体を保存先に書けた大きさ (BLK-junior-20260928-2255)。
+  // done (任意): runMaterialPlan の結果 { imageSize }。画像の実体を保存先に書けた大きさ。
   function verdict(info, plan, done) {
     var p = plan || {};
     var docName = _s(p.docName);

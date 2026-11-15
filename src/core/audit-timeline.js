@@ -3,7 +3,7 @@
 // audit-timeline — 監査の指摘を「欠陥の実体」で追い、run をまたいで
 // どのカテゴリに分類されていたかを 1 本の帯に並べる。
 //
-// BLK-reviewer-20260907-2303-wish: audit-diff は指摘 1 件に安定 id を与えたが、
+// audit-diff は指摘 1 件に安定 id を与えたが、
 // その id はカテゴリごとに形が違う (メソッドは `no-method:Adc.Adc_Ack`、粒度は
 // `adc:Adc_Ack@...`)。監査ツール側が同じ欠陥を別カテゴリへ移すと、
 // 「メソッドから 4 件消えて粒度に 4 件増えた」= 解消 4 件・新規 4 件に見える。
@@ -29,16 +29,16 @@
     'consistency.events': '整合/イベント',
     'family.mismatches': '系統/食い違い',
     'trace.missing': 'トレース/漏れ',
-    // BLK-reviewer-20260907-2303: 「除外した」も 1 つのカテゴリとして数える。
+    // 「除外した」も 1 つのカテゴリとして数える。
     // 除外は指摘を消すことではなく別の箱へ移すことなので、箱を数えていないと
     // 「移った」が「解消した」に見え、件数表を見た側が図を疑う羽目になる。
     'consistency.methodReplies': '整合/メソッド(応答として除外)',
     'trace.outOfScope': 'トレース/除外',
-    // BLK-reviewer-20260908-0823-wish: DSL ではなく出力物の欠落。直し方が
+    // DSL ではなく出力物の欠落。直し方が
     // 「図を直す」ではなく「書き出す」なので、指摘とは別カテゴリで数える。
     'svg.missing': '出力物/SVG 無',
     'svg.stale': '出力物/SVG 古',
-    // BLK-reviewer-20260915-0406-wish: 「SVG 古」は mtime だけを見た答えなので、
+    // 「SVG 古」は mtime だけを見た答えなので、
     // 保存し直しただけで中身は今の puml と一致している図も同じ箱に入る。
     // 実データでは 9 枚がこれで、reviewer は 1 枚ずつ render API で描き直して
     // バイト比較し「作り直し不要」を自分で確かめ直していた。中身まで見て
@@ -51,7 +51,7 @@
     'consistency.methodReplies': true,
     'trace.outOfScope': true,
     // mtime だけが古く、中身は今の puml と一致している図。直す物ではないので
-    // 既定の一覧からは外すが、行は残す (消すと次の tick で「再発」に見える)。
+    // 既定の一覧からは外すが、行は残す (消すと次の回 で「再発」に見える)。
     'svg.staleSettled': true,
   };
 
@@ -59,7 +59,7 @@
   var REASON = {
     grain: '粒度違い',
     declared: '宣言により対象外',
-    // BLK-reviewer-20260915-0406-wish: 「SVG 古」から内容一致の箱へ移った理由。
+    // 「SVG 古」から内容一致の箱へ移った理由。
     // 箱が移った回に「なぜ外れたか」が差分の行に出る。
     same: '中身は今の puml と一致',
   };
@@ -182,7 +182,7 @@
 
   // ---- 対象ファイル --------------------------------------------------------
 
-  // BLK-reviewer-20260914-1306-wish: 指摘 1 件が「どの図の話か」は、カテゴリごとに
+  // 指摘 1 件が「どの図の話か」は、カテゴリごとに
   // doc / docs / onlyIn / name と別々の項目に入っている。ここで 1 つの形に均す。
   // 行番号は監査結果が持っていないので、ここでは出さない (本文を持つ側で引く)。
   function docsOf(kind, item) {
@@ -295,7 +295,7 @@
       (a.svg.result.rows || []).forEach(function(r) {
         if (r.status === 'missing') push('svg.missing', [{ name: r.name }]);
         else if (r.status === 'stale') {
-          // BLK-reviewer-20260915-0406-wish: mtime が古いだけの図と、中身まで
+          // mtime が古いだけの図と、中身まで
           // 古い図を分ける。根拠は 2 つあり、どちらも「描き直さずに言える」もの:
           //   staleReasons[name] === 'same' — svg に畳まれた元の DSL と可視行が一致
           //   isSettled(row.content)        — 印 (@pua-source-sha1) か控えで一致

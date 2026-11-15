@@ -53,7 +53,7 @@ window.MA.activityInsert = (function() {
     if (idx < 0 || idx >= lines.length) return false;
     // 候補は「この行の後ろ」を指すので、stop / end の行そのものは本体の外。
     if (TERM_RE.test(lines[idx])) return false;
-    // BLK-owner-20260925-0312-4: start の行の後ろ (start の直後) は流れの先頭 = 本体。
+    // start の行の後ろ (start の直後) は流れの先頭 = 本体。
     // start の「前」は候補の position: 'before' が表し、allowedKinds がフローの外として扱う。
     if (START_RE.test(lines[idx])) return true;
     var sawStart = false;
@@ -103,7 +103,7 @@ window.MA.activityInsert = (function() {
   }
 
 
-  // ── 開始・停止・終了の置き場所の知らせ (BLK-owner-20260925-0312-4) ──────────────
+  // ── 開始・停止・終了の置き場所の知らせ ──────────────
   // start / stop / end はどこに書いても PlantUML は描く (2 つ目の start、stop の後の start も通る)ので止めない。
   // ただ、流れの外や 2 つ目になるのは読み手の意図とずれやすいので、足した後の本文 (after) を見て橙で知らせる。
   // before → after で 1 行だけ入った前提。知らせることが無ければ ''。
@@ -157,7 +157,7 @@ window.MA.activityInsert = (function() {
     return '';
   }
 
-  // ── 位置の読める説明 (BLK-junior-20260908-0103) ─────────────────────────────
+  // ── 位置の読める説明 ─────────────────────────────
   // 「位置」の候補が行番号と DSL の生コード (例: `8: if (初期化失敗時?) then (異常) の後`)
   // でしか出ていなかったため、どちらが異常側の行かを PlantUML の構文から自分で
   // 判断する必要があった。DSL を 1 度なぞって「どの分岐の どちら側 の中か」を持ち、
@@ -249,7 +249,7 @@ window.MA.activityInsert = (function() {
       } else if ((m = t.match(L_SWIMLANE))) {
         self = 'レーン' + _q(m[1]) + 'のはじめ';
       } else if (START_RE.test(t)) {
-        // BLK-owner-20260925-0312-4: 同じ行を指す「前」と「直後」を、何が起きるかで呼び分ける。
+        // 同じ行を指す「前」と「直後」を、何が起きるかで呼び分ける。
         self = 'start の直後';
       } else if (TERM_RE.test(t)) {
         self = t + ' の後 (フローの外)';

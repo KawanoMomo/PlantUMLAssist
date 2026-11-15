@@ -52,7 +52,7 @@ window.MA.stateTable = (function() {
     return cols;
   }
 
-  // BLK-human-20260923-2001: 入れ子 (`state P { state C ... }`) の子は parse() で `P.C` の
+  // 入れ子 (`state P { state C ... }`) の子は parse で `P.C` の
   // id を持つが、遷移の行には `C` と素の名前で書かれる。遷移が書かれた複合状態 (scope)
   // の中から引き、無ければ同じ素の名前の状態を探す。`[*]` は scope ごとに別の開始・終了。
   function _bare(id) { var t = _s(id); return t.indexOf('.') >= 0 ? t.split('.').pop() : t; }
@@ -73,7 +73,7 @@ window.MA.stateTable = (function() {
     if (map[n]) return n;
     var list = states || [];
     for (var i = 0; i < list.length; i++) if (_bare(list[i].id) === n) return list[i].id;
-    // BLK-owner-20260923-2332-1: `親.子` と修飾して書かれた端 (他ツールや手書きの図の記法)。
+    // `親.子` と修飾して書かれた端 (他ツールや手書きの図の記法)。
     // 入れ子の途中を省いた書き方 (`子.孫`) も、id の後ろが一致すれば同じ状態として引く。
     if (n.indexOf('.') >= 0) {
       for (var j = 0; j < list.length; j++) {

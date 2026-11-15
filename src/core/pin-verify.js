@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // pin-verify — 指摘 1 件を「puml で何が変わったか」+「それが SVG に出ているか」の
 // 1 つの判定にまとめる。
 //
-// BLK-reviewer-20260908-1903-wish: 依頼が本当に直ったかを確かめるのに、
+// 依頼が本当に直ったかを確かめるのに、
 // puml の差分・label-position 監査・/render 再描画・/verify-svg の labels/shape 突合を
 // 別々に回し、最後にその 4 つを自分で結び付けて「この依頼はもう直った」と判定していた。
 // 指摘の文面 (自然文) と機械監査が別々の入口にあることが、pin-progress の札が付いても
@@ -75,7 +75,7 @@ window.MA.pinVerify = (function() {
   //
   // 体裁だけの差で「SVG 未反映」と言わない。書き出し経路が違うだけの図を
   // 作り直させると、reviewer は毎回同じ figure を作り直して確かめ直すことになる
-  // (それが BLK-reviewer-20260908-0103 の「differ 誤答」で起きていたこと)。
+  // (それが の「differ 誤答」で起きていたこと)。
   function svgSide(res, diff) {
     var st = res ? _s(res.status) : '';
     if (st === 'match') {

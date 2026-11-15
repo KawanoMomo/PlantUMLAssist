@@ -1,7 +1,7 @@
 'use strict';
 window.MA = window.MA || {};
 
-// class-map — 2 枚のクラス図の「対応表」を作る (BLK-junior-20260908-1203-wish)。
+// class-map — 2 枚のクラス図の「対応表」を作る。
 //
 // 状態遷移図には対応表があり、橙の行から「＋この図にも足す」で先輩の変更を
 // 1 クリックで取り込めるようになった。クラス図にはそれが無く、先輩版と読み比べて
@@ -41,7 +41,6 @@ window.MA.classMap = (function() {
 
   // 関係の種類ごとの呼び名 (親/子・全体/部分) と矢印は relation-roles が持つ。
   // フォームの見出しと対応表の行で同じ言葉を使うため、表はここに二重に置かない
-  // (BLK-junior-20260908-1203)。
   function relInfo(kind) { return window.MA.relationRoles.of(kind); }
 
   function elementName(el) {
@@ -226,7 +225,7 @@ window.MA.classMap = (function() {
     return rows;
   }
 
-  // ── メンバー (BLK-junior-20260914-1606) ──────────────────────────────
+  // ── メンバー ──────────────────────────────
   // クラスと関係が揃っていても、先輩が同じクラスにメソッドを足した回は行が 1 つも
   // 出ず、「IRQCtrl が 2 メソッド多い」と分かった後は先輩の画面を見ながら
   // `+ TransferComplete() : void` を手で打ち直すしかなかった。記法を憶えていない

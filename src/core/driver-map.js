@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // driver-map — 図と図の対応関係 (どのシーケンス図がどの状態遷移図・クラス図の相手か) を
 // 「系統」として宣言し、プロジェクトとして持ち続ける。
 //
-// BLK-reviewer-20260908-0103-wish: spi_init_sequence → spi_state、
+// spi_init_sequence → spi_state、
 // dma_transfer_sequence → dma_state のように、対応関係は現場では固定なのに、
 // GUI はそれをどこにも持っていなかった。⇉ 系統チェックは毎回名前の頭から系統を
 // 推測し直し、語彙が重ならない組は「粒度が違う」として黙って外す。つまり

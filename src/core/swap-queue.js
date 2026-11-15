@@ -3,7 +3,7 @@ if (typeof window !== 'undefined') window.MA = window.MA || {};
 
 // swap-queue — 下書き (`{name}-編集中.puml`) と本体の「差し替え待ちキュー」。
 //
-// BLK-reviewer-20260914-1806-wish: reviewer は手順1・5・7 で `-編集中` の付いた
+// reviewer は手順1・5・7 で `-編集中` の付いた
 // ファイルを ls して目で拾い、どれが本体反映待ちでどれがもう要らない残骸かを
 // 毎回 diff を取って判断していた。sync-state は「反映漏れがある図」を名指しするが、
 // 名指ししない図 (下書きと本体の中身が同じ = もう消してよい下書き) は一覧から

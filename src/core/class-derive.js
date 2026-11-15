@@ -1,7 +1,7 @@
 'use strict';
 window.MA = window.MA || {};
 
-// class-derive — BLK-junior-20260909-0703-wish
+// class-derive —
 // 「手本のクラス図の親から、派生クラスを 1 つ作る」。
 //
 // 新人は先輩の共通クラス図 (親 + 6 部品分の派生) を見ながら、必要な行の名前と
@@ -173,7 +173,7 @@ window.MA.classDerive = (function() {
     if (!_s(spec && spec.name)) errors.push('派生クラス名を入れてください');
     if (errors.length) return { ok: false, errors: errors, warnings: [] };
     var base = CS().validate(toScaffoldSpec(spec), text);
-    // BLK-human-20260923-1330: 同名のクラスが既にあっても DSL は書ける
+    // 同名のクラスが既にあっても DSL は書ける
     // (そのクラスにメンバが足される)。意図と違うことは多いので警告として出す。
     var warnings = (base.warnings || []).slice();
     if (CS().existingIds(text)[_s(spec.name)]) {

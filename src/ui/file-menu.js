@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // file-menu (UI) — FILES ツリーの右クリック・キーボード・ドラッグ (design 10b)。
 //
-// BLK-human-20260923-1701: ファイル 1 枚に対する操作 (一時控え・並べて比較・前回保存版・
+// ファイル 1 枚に対する操作 (一時控え・並べて比較・前回保存版・
 // 変遷・名前変更・削除…) がタブ列・ツール ▾・下端の札に散らばっていた。ツリーの
 // ファイルを右クリックすれば全部そこにある、を作る。中身 (どの操作を並べるか・キーの
 // 読み替え・名前の組み立て) は src/core/file-menu.js、ここは DOM と結線だけ。
@@ -61,7 +61,7 @@ window.MA.fileMenuUi = (function() {
     if (part) return { kind: 'part', part: part.getAttribute('data-part') || '', el: part };
     var target = el.closest('#btn-tab-folder, #top-save-target');
     if (target) return { kind: 'target', el: target };
-    // design 10a (BLK-builder-20260924-1749-3): 読むだけの節の中のフォルダの行 (と、その中の図の行)。
+    // design 10a: 読むだけの節の中のフォルダの行 (と、その中の図の行)。
     var roRow = el.closest('.files-ro-folder, .files-ro-file');
     if (roRow) {
       return { kind: 'readonly', dir: roRow.getAttribute('data-ro-dir') || '',
@@ -158,7 +158,7 @@ window.MA.fileMenuUi = (function() {
         return Promise.resolve();
       }
     }
-    // design 10b (BLK-builder-20260924-1917-1): 開いていない図は、ツリーのその行の名前がその場で入力欄になる
+    // design 10b: 開いていない図は、ツリーのその行の名前がその場で入力欄になる
     // (エクスプローラの F2 と同じ)。以前はブラウザの入力窓が画面の上端に出て、どの行を直しているか読めなかった。
     var row = treeFileRow(name);
     if (row) return renameInline(row, name);
@@ -281,7 +281,7 @@ window.MA.fileMenuUi = (function() {
     });
   }
 
-  // BLK-builder-20260924-1831-2 (design 10b): 移動の行き先の一覧から選んだ隣の保存フォルダへ移す。
+  // 移動の行き先の一覧から選んだ隣の保存フォルダへ移す。
   function moveToDir(name, dir) {
     if (!dir) return Promise.resolve();
     return fileOp({ op: 'move', dir: _dir(), name: name, toDir: dir }).then(function(r) {
@@ -398,7 +398,7 @@ window.MA.fileMenuUi = (function() {
         break;
       case 'new-doc': clickId('btn-tab-new'); break;
       case 'new-part':
-        // BLK-owner-20260924-2337-prune: 「既存の図や雛形から新しい図を起こす」窓を「部品名だけ」で開く。
+        // 「既存の図や雛形から新しい図を起こす」窓を「部品名だけ」で開く。
         if (typeof window.openNewFrom === 'function') window.openNewFrom('part');
         else clickId('btn-tab-template');
         // 部品のフォルダから起こすときは、部品名を打ち直させない。
@@ -416,7 +416,7 @@ window.MA.fileMenuUi = (function() {
       case 'change-target':
         if (typeof window.openChangeTarget === 'function') window.openChangeTarget();
         break;
-      // BLK-owner-20260924-1836-prune: 読むだけのフォルダの道具 (部品ビュー・指摘から選ぶ…) は、
+      // 読むだけのフォルダの道具 (部品ビュー・指摘から選ぶ…) は、
       // ツリーで選んだそのフォルダを開いた状態で覗く窓に出す。窓の中でフォルダを選び直させない。
       case 'peek':
         if (typeof window.openPeekFolder === 'function') window.openPeekFolder({ dir: folder && folder.dir });
@@ -504,7 +504,7 @@ window.MA.fileMenuUi = (function() {
       b.addEventListener('click', function(ev) {
         ev.stopPropagation();
         var c = menuCtx;
-        // design 10b (BLK-builder-20260924-1831-2): 「別のフォルダへ移動…」は閉じずに、
+        // design 10b: 「別のフォルダへ移動…」は閉じずに、
         // 同じメニューの中を行き先の一覧に替える (パスを打たせる前に、見えている行き先を選ばせる)。
         if (c && c.type === 'file' && it.id === 'move') {
           openMenu({ type: 'move', name: c.name, row: c.row },

@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // save-redirect — 押した保存が「開いている図とは別のファイル」に書かれたことを、
 // 保存したその場で言い、1 押しで本体へ書き直せるようにする。
 //
-// BLK-primary-20260914-1406: 保存先をファイル (file backend) にして 💾 保存を押しても、
+// 保存先をファイル (file backend) にして 💾 保存を押しても、
 // plantuml-usecase / diagram1 / Fig1 / SpiInit の中身がディスクで変わらない、という
 // 詰まりが 3 周続いた。`/autosave` は 200 を返しており、書かれてはいた ——
 // 書かれた先が `{名前}-編集中.puml` だった。source-lock の確認 (「元ファイルは

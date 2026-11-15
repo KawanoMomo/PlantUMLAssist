@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // note-intent — 「呼び先をクラス図に足すか、意図的な省略である旨を明記するか」の
 // 後者を、指摘の行から当てられる形にする。
 //
-// BLK-primary-20260915-0007-friction: reviewer の依頼2 は「クラス図への追加、または
+// reviewer の依頼2 は「クラス図への追加、または
 // irq_init_sequence.puml の note のように意図的省略である旨を明記してほしい」という
 // 二択で来る。前者 (クラス追加 / メソッド追加) は [適用] 1 押しで当たるのに、後者を
 // 選ぶと primary は図を開き、#editor の末尾へカーソルを運び、
@@ -77,7 +77,7 @@ window.MA.noteIntent = (function() {
     return 'note top of ' + cls + ' : ' + body;
   }
 
-  // 既に同じクラス宛の note が書かれていれば足さない (tick のたびに同じ行が積まれる)。
+  // 既に同じクラス宛の note が書かれていれば足さない (開くたびに同じ行が積まれる)。
   function hasNoteFor(dsl, cls) {
     var want = _s(cls);
     if (!want) return false;

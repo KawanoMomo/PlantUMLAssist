@@ -224,7 +224,7 @@ window.MA.symptomSearch = (function() {
     return { terms: termList, docs: rows.length, missed: missed };
   }
 
-  // BLK-primary-20260925-1732-wish: 症状検索から開いた図で、図の上に光らせる行。
+  // 症状検索から開いた図で、図の上に光らせる行。
   // 症状文の語が当たる行 (名前・矢印ラベル・title・note のどれでも。関連度の計算と違い、
   // 語ごとに最も効いた 1 行だけでなく当たった行を全部) と、「流れ」で対応の無い名前
   // (Can_Transmit / EnableIrq() など。names で渡す) が書かれた行。

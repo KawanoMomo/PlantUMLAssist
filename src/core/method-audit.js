@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // method-audit — シーケンス図で呼んでいるメソッドと、クラス図の宣言を突き合わせる。
 //
-// BLK-reviewer-20260907-0143: name-audit は participant / class の「名前」までしか
+// name-audit は participant / class の「名前」までしか
 // 見ておらず、`Spi_Init()` のようなメッセージが driver_common_class に宣言されて
 // いるか、引数の個数が合っているかは grep して目視で突合するしかなかった。
 // 図が増えるたびに (UART → Timer → ADC) 同じ欠落が繰り返し起票されている。
@@ -16,11 +16,11 @@ window.MA.methodAudit = (function() {
   // 日本語の本文は呼び出しとして数えない。
   var CALL_RE = /([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)/;
   // 1 = 左、2 = 矢印、3 = 右、4 = 本文。呼ばれる側は矢印の向きで決まる
-  // (BLK-primary-20260907-1303: 接頭辞を持たない呼び出しの持ち主は受け手)。
+  // (接頭辞を持たない呼び出しの持ち主は受け手)。
   var MSG_RE = /^\s*("[^"]+"|[A-Za-z0-9_][A-Za-z0-9_.-]*)\s*(-+>+|<-+|-+\\|\/-+)\s*("[^"]+"|[A-Za-z0-9_][A-Za-z0-9_.-]*)\s*:\s*(.+)$/;
 
   // クラス本体の開始行 `class Spi_Driver {` と、外置きの `Spi_Driver : +Spi_Init()`。
-  // BLK-reviewer-20260907-0943: state の遷移ラベルは `Idle --> Busy : Timer_StartConv`
+  // state の遷移ラベルは `Idle --> Busy : Timer_StartConv`
   // のように丸括弧を持たない。CALL_RE は括弧を要求するので、この形は今まで
   // 突合の網に 1 件も掛からず、adc_state.puml を接頭辞だけ替えて複製した
   // timer_state.puml のイベント名が どのクラスにも無いことに誰も気付けなかった。
@@ -34,7 +34,7 @@ window.MA.methodAudit = (function() {
     return String(s == null ? '' : s).toLowerCase().replace(/[_\-.\s]/g, '');
   }
 
-  // BLK-reviewer-20260907-1203: 保存された .puml は CRLF が普通なので、行末に \r が
+  // 保存された .puml は CRLF が普通なので、行末に \r が
   // 残る。上の正規表現はどれも末尾が `(.+)$` で、JS の `.` は \r に当たらないため、
   // CRLF の図では遷移ラベルが 1 件も拾えず「問題なし」を返していた。
   // 行を渡す入口で必ずここを通し、改行の種類を突合の結果に影響させない。
@@ -164,7 +164,7 @@ window.MA.methodAudit = (function() {
     return /^\s*\[\*\]\s*-/m.test(dsl) || /^\s*state\s+/m.test(dsl);
   }
 
-  // BLK-primary-20260907-1303: 遷移ラベルには 2 種類が混ざっている。
+  // 遷移ラベルには 2 種類が混ざっている。
   //   (a) UML のイベント名 … `Tick` `Fault` `Reset` `Ack` `TransferComplete`。
   //       「何が起きたら遷移するか」であって、誰かのメソッドを呼ぶ話ではない。
   //   (b) ドライバ API の名前 … `Timer_StartConv` `Gpio_SetHigh`。
@@ -186,7 +186,7 @@ window.MA.methodAudit = (function() {
     return (m && m.length) ? m : COPY_MARKS;
   }
 
-  // BLK-reviewer-20260914-1406 (追記): 宣言を本体ではなく `-編集中` の写しにだけ
+  // 宣言を本体ではなく `-編集中` の写しにだけ
   // 足しても、監査は保存フォルダを丸ごと読むので指摘は消える。本体は未修正のまま
   // 件数が「改善」するので、控えとの sha1 比較でしか気付けなかった。
   function isCopyDoc(name) {
@@ -320,7 +320,7 @@ window.MA.methodAudit = (function() {
       issues.push(issue);
     });
 
-    // BLK-reviewer-20260914-1406: 「クラスを足せば指摘が消える」だけを見ていると、
+    // 「クラスを足せば指摘が消える」だけを見ていると、
     // メソッド名をそのままクラスとして宣言した行 (`class WriteConfig`) でも件数が
     // 減り、数値からは誤りに気付けない。中身を 1 行も持たないクラス宣言が
     // 呼び出し・遷移イベントと同じ名前なら、宣言の付け方の誤りとして名指しする。

@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // export-select — 提出用 zip に詰める図を、その場で絞り込んで選ぶ。
 //
-// BLK-primary-20260908-1203-wish: 「全図をSVGで保存（zip）」は開いている図を無条件に
+// 「全図をSVGで保存（zip）」は開いている図を無条件に
 // 全部詰めるだけで、▤ 変更サマリボードで付けた [要修正] の印も「前回提出後に変わったか」も
 // 使われない。見比べた結果をいったん頭か別メモに落としてから Export に戻って選び直す、
 // という二度手間になっていた。
@@ -25,7 +25,7 @@ window.MA.exportSelect = (function() {
   // deps.statusOf(name, dsl) は save-diff の statusOf ('new' / 'changed' / 'same')。
   // deps.sinceStatusOf(name, dsl) は export-log の statusOf (前回この zip を
   // 書き出した時点との差)。save-diff の「前回保存から」とは基準が違う
-  // (BLK-primary-20260909-0003-wish: 客先に出した版からの差でなければ、
+  // (客先に出した版からの差でなければ、
   //  出し直す図を絞れない)。
   // deps.fixCountOf(name) は review-verdicts の [要修正] 件数。どれも無ければ
   // 「基準が分からない」ものとして status='new'、fix=0 として扱う (絞り込みで
@@ -54,7 +54,7 @@ window.MA.exportSelect = (function() {
         sinceChanged: since !== 'same',
         changed: status !== 'same',
         fix: fix < 0 ? 0 : fix,
-        // BLK-primary-20260925-1032-wish: 保存先にだけある図は、開いたときには印を付けない
+        // 保存先にだけある図は、開いたときには印を付けない
         // (「今回だけこの 3 枚」を選ぶ場面で、保存先の全図が最初から入っていると外す手間になる)。
         selected: origin !== 'folder',
       });
@@ -63,7 +63,7 @@ window.MA.exportSelect = (function() {
   }
 
   // withFolder(openDocs, fileDocs) — 「図を選ぶ」の候補。開いているタブの図に、保存先 (保存フォルダ) の図を足す。
-  // BLK-primary-20260925-1032-wish: 候補がタブの図だけだと、保存フォルダに 24 枚あっても一覧は開いた枚数しか出ず、
+  // 候補がタブの図だけだと、保存フォルダに 24 枚あっても一覧は開いた枚数しか出ず、
   // 3 枚を選ぶためにまずタブで開き直す往復が要った。会議セットの「会議で見せる図を選ぶ欄」(meeting-set.docOptions)
   // と同じ出し方: 同名は開いている方だけ (未保存の編集を含む方)、保存先の図は名前順で後ろに並ぶ。
   // 保存先の図は書き出す時点のディスクの本文で描く (タブは開かない)。
@@ -190,7 +190,7 @@ window.MA.exportSelect = (function() {
 
   // menuLabel(list, mode) — Export メニューに直接置く 1 行。
   //
-  // BLK-primary-20260908-1903-friction: 「指摘で名指しされた数枚だけ」を出すのに
+  // 「指摘で名指しされた数枚だけ」を出すのに
   // 図を 1 枚ずつ開いて Export する (図の数だけ 3 クリック) か、全部詰めるかの
   // 二択になっていた。絞り込みの画面は既にあるが、Export メニューからは
   // 「全部」しか見えないので指摘対応の場面で見つからない。何枚該当するのかを

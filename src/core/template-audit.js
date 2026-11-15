@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // template-audit — ⧉ テンプレート複製の「この内容で作る」を押す前に、
 // これから作る図の中身がクラスの宣言と噛み合っているかをその場で見る。
 //
-// BLK-primary-20260907-1203-wish: timer_state.puml は adc_state.puml を複製して
+// timer_state.puml は adc_state.puml を複製して
 // 接頭辞だけ Adc → Timer に替えて作られたが、Timer_Driver に conv 系のメソッドが
 // 無いため、中身が実態 (周期タイマ) と食い違ったまま保存された。
 // 「🔍 名前突合」は開いている図をまとめて後から見る道具なので、気づいたのは

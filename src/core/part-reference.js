@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // part-reference — 「部品を起こす」の下書きを、汎用ひな形ではなく先輩の実図から写す。
 //
-// BLK-junior-20260915-0307-wish: SPI を起こすと 6 図種とも決まった汎用 DSL
+// SPI を起こすと 6 図種とも決まった汎用 DSL
 // (init/config/read/write/irqSetup/irqNotify の並び) で埋まる。だが先輩 (primary) の
 // 保存フォルダには SPI のシーケンス図 (spi_init_sequence.puml) が既にあり、参加者も
 // 処理の並びも汎用ひな形とは違う。結局、下書きを全部消して先輩の図を手で打ち直す

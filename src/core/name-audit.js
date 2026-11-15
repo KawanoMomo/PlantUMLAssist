@@ -46,7 +46,7 @@ window.MA.nameAudit = (function() {
 
   // docs: [{ id, name, dsl }] → [{ name, kind, key, docs: [図名], declared, refs, at }]
   // name の昇順。declared=false は矢印にだけ出てきた名前。
-  // BLK-reviewer-20260914-1706: at は出現の実位置 [{ doc, line, text, declared }]。
+  // at は出現の実位置 [{ doc, line, text, declared }]。
   // 「どの図のどの行の綴りか」を持たないと、表記揺れを見た側は毎回 grep し直すことになる。
   function collect(docs) {
     var byName = {};
@@ -121,7 +121,7 @@ window.MA.nameAudit = (function() {
     return out;
   }
 
-  // BLK-reviewer-20260914-1706: 「表記揺れ N 組」と正規化キーだけでは、どの綴りが
+  // 「表記揺れ N 組」と正規化キーだけでは、どの綴りが
   // どの綴りと対応するのか・それがどのファイルの何行目なのかが出ず、読む側は毎回
   // ソースを grep し直していた。出現位置を 1 行にする文面はここが持つ
   // (画面と CLI で同じ言葉にする)。宣言行を優先して出す — 直す先は宣言だから。

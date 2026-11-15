@@ -3,10 +3,10 @@ window.MA = window.MA || {};
 
 // export-target — 書き出す前に「何を対象にしているか」を確定させる。
 //
-// BLK-primary-20260908-2303-wish: 📦引き継ぎ は開いているタブだけを対象にして
+// 📦引き継ぎ は開いているタブだけを対象にして
 // zip を作る。保存フォルダに 14 枚あってもタブが 2 枚なら 2 枚しか入らず、
 // 受け取った新人が zip を開いて初めて欠落に気づく (同じ対象漏れは 📦納品でも
-// 起きた: BLK-primary-20260908-1903)。書き出し系のボタンで共通に使える
+// 起きた:)。書き出し系のボタンで共通に使える
 // 「対象確認」の判定をここに置き、機能ごとの作り込みを増やさない。
 //
 // ここが答えるのは 3 つ:
@@ -20,7 +20,7 @@ window.MA.exportTarget = (function() {
   var MODE_OPEN = 'open';
   var MODE_FOLDER = 'folder';
 
-  // BLK-primary-20260909-0403-wish: 保存フォルダには「-編集中」のような、まだ確定して
+  // 保存フォルダには「-編集中」のような、まだ確定して
   // いない作業用ファイルが残る。名前だけでは正式版と見分けが付かないので、渡された
   // 新人はどちらを読めばいいか判断できない。ここで命名規則から「未確定」を見分け、
   // 既定で対象から外す (入れたいときは呼び出し側が includeScratch を立てる)。
@@ -90,7 +90,7 @@ window.MA.exportTarget = (function() {
 
     // テンプレは渡す相手の成果物ではないので、どちらの的でも外す。
     var deliverable = all.filter(function(d) { return d.deliverable; });
-    // BLK-releaser-20261006-2054-1: 保存先フォルダが未設定 (localStorage 運用) なら、
+    // 保存先フォルダが未設定 (localStorage 運用) なら、
     // 対象のすべては開いているタブ。サーバの既定の置き場に残る図を読めていても、
     // それを「対象から外れた図」「未確定」「テンプレ」として数えない (偽の警告を出さない)。
     // 行の頭で利用者が入れた図は、従来どおり的に載る。
@@ -100,7 +100,7 @@ window.MA.exportTarget = (function() {
     var scratchDocs = deliverable.filter(function(d) { return d.scratch && scoped(d); });
     var pool = includeScratch ? deliverable : deliverable.filter(function(d) { return !d.scratch; });
     var targets = mode === MODE_FOLDER ? pool : pool.filter(function(d) { return d.open; });
-    // BLK-owner-20260925-0235-prune: 行ごとの入る / 入らない (チェックリストの行の頭で切り替える)。
+    // 行ごとの入る / 入らない (チェックリストの行の頭で切り替える)。
     // 的と未確定の既定を決めた後に、利用者が押した行だけを上書きする。並びは候補の順のまま。
     var ov = (o.overrides && typeof o.overrides === 'object') ? o.overrides : {};
     if (Object.keys(ov).length) {

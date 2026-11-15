@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // files-panel — レール右の FILES ツリーを結線する (design 10a)。
 //
-// BLK-human-20260923-1700: 「保存先チップ」「📂 一覧」「📄 開く」「⇔ 先輩」の 4 つが
+// 「保存先チップ」「📂 一覧」「📄 開く」「⇔ 先輩」の 4 つが
 // 別々の入口になっていて、どこに何があるかを入口ごとに覚え直していた。
 // ここはその 4 つを 1 本のツリーに畳んだ後の、節の開閉・絞り込み・件数・
 // 「開いている図」の行を受け持つ。
@@ -62,7 +62,7 @@ window.MA.filesPanel = (function() {
     _set(KEY_SEC + id, on ? '1' : '0');
   }
 
-  // design 10a (BLK-builder-20260924-1923-4): 保存先のフォルダの行の ▾ / ▸。
+  // design 10a: 保存先のフォルダの行の ▾ / ▸。
   // その下の部品のフォルダ・直下の図をまとめて畳む / 開く。開閉は次回も覚える。
   function setTargetParts(on) {
     var host = $('files-parts');
@@ -108,7 +108,7 @@ window.MA.filesPanel = (function() {
   }
 
   // 未保存 ● / 指摘が未反映 / 一時控え。印の内容は 📂 一覧のバッジと同じものを読む。
-  // BLK-builder-20260924-1741-2 (design 9a / 10a): 未保存の印はタブと同じ判定 (app.js の docSaveStatus) を読む。
+  // 未保存の印はタブと同じ判定 (app.js の docSaveStatus) を読む。
   // 以前は doc.dirty を読んでいたが、この値はどこでも立たず、ツリーに ● が出たことが無かった。
   function _saveMark(doc) {
     var f = window.MA.docSaveStatus;
@@ -147,7 +147,7 @@ window.MA.filesPanel = (function() {
     else renderOpen();
   }
 
-  // BLK-builder-20260924-2316-3 (design 10b): 描き直しで、フォーカスのあった行が作り直されても
+  // 描き直しで、フォーカスのあった行が作り直されても
   // 同じ行へフォーカスを戻す (図を Enter / クリックで開いた後も、続けて ↑↓ → ← Enter F2 が効く)。
   // 描き直す前にフォーカスが host の中の行に無ければ何もしない (利用者が他所を押した後に奪わない)。
   function _focusKeep(host) {
@@ -194,12 +194,12 @@ window.MA.filesPanel = (function() {
       b.className = 'files-row' + (doc.id === activeId ? ' is-active' : '');
       b.setAttribute('data-doc-id', String(doc.id));
       b.setAttribute('data-file-name', String(doc.name || ''));
-      // design 10a (BLK-builder-20260924-1701-1): 仮のタブの図は、行の名前もタブと同じく斜体で出す。
+      // design 10a: 仮のタブの図は、行の名前もタブと同じく斜体で出す。
       if (doc.preview) b.setAttribute('data-preview', '1');
       b.appendChild(_glyphEl(doc.diagramType));
       var name = document.createElement('span');
       name.className = 'files-row-name';
-      // design 10a (BLK-builder-20260924-1636-1): 開いている図はタブ・上部バーと同じファイル名 ({name}.puml) で出す。
+      // design 10a: 開いている図はタブ・上部バーと同じファイル名 ({name}.puml) で出す。
       var TS = window.MA.topStatus;
       name.textContent = doc.name && TS && TS.fileName ? TS.fileName(String(doc.name)) : String(doc.name || '(無題)');
       b.appendChild(name);
@@ -218,7 +218,7 @@ window.MA.filesPanel = (function() {
     });
     var c = $('files-count-open');
     if (c) c.textContent = docs.length ? String(docs.length) : '';
-    // design 10a (BLK-builder-20260924-1350-3): 見出しは「開いている図」+ 右端の件数の 1 回だけ。
+    // design 10a: 見出しは「開いている図」+ 右端の件数の 1 回だけ。
     // 名前に括弧で同じ数を足さない (「開いている図（1）  1」と 2 回出ていた)。
   }
 
@@ -234,7 +234,7 @@ window.MA.filesPanel = (function() {
   // 一覧の実体は #folder-panel が持っているので、束ねるのもそこから読む
   // (同じ図を 2 か所から数えると、片方だけが古くなる)。
   // 6 図種の済/未の表そのものは 🧩 部品ビューの職掌なので
-  // (BLK-owner-20260918-0049-prune)、ここは `SPI 4 / 6` と未作成の件数まで。
+  // ここは `SPI 4 / 6` と未作成の件数まで。
   var KEY_PART = 'pua.files.part.';
 
   function _folderNames() {
@@ -254,7 +254,7 @@ window.MA.filesPanel = (function() {
     return '#folder-panel .folder-item[data-file-name="' + q + '"]';
   }
 
-  // BLK-owner-20260924-0637-1: ツリーのファイル行の札。保存先の一覧の行のバッジと同じ事実を読む
+  // ツリーのファイル行の札。保存先の一覧の行のバッジと同じ事実を読む
   // (数える所を 2 つにしない)。開いている図の未保存 ● は作業中のタブから読む。
   function _fileState(name) {
     var st = { dirty: false, unapplied: false, draft: false, svgStale: false };
@@ -273,7 +273,7 @@ window.MA.filesPanel = (function() {
       if (rb && rb.getAttribute('data-review-state') !== 'applied') st.unapplied = true;
       if (row.classList && row.classList.contains('folder-row-draft')) st.draft = true;
       if (it.querySelector('[data-svg-status="stale"], .folder-svg-content-badge[data-svg-content="differ"]')) st.svgStale = true;
-      // BLK-junior-20260924-1632-wish: 指摘.md の反映状況の札。確かめられない指摘がある図だけ
+      // 指摘.md の反映状況の札。確かめられない指摘がある図だけ
       // (対象外・反映済みの図には札を出さない)。語・見出しは保存先の一覧の行のものをそのまま読む。
       var nb = row.querySelector ? row.querySelector('.folder-note-badge[data-note-status="todo"]') : null;
       if (nb) {
@@ -350,7 +350,7 @@ window.MA.filesPanel = (function() {
     }
     if (st.note) b.appendChild(_noteEl(f.name, st.note));
     b.addEventListener('click', function() { _clickFolderItem(f.name); });
-    // design 10a (BLK-builder-20260924-1743-1): ダブルクリックでタブとして固定する。1 回押しは仮のタブのまま。
+    // design 10a: ダブルクリックでタブとして固定する。1 回押しは仮のタブのまま。
     // 固定の道は保存先の一覧の行のダブルクリックと同じ 1 本 (その行へ渡す)。
     b.addEventListener('dblclick', function() { _dblclickFolderItem(f.name); });
     return b;
@@ -361,7 +361,7 @@ window.MA.filesPanel = (function() {
     if (it) it.click();
   }
 
-  // design 10a (BLK-builder-20260924-1735-3): 「＋ 未作成 2 図種（UC・ACT）」。
+  // design 10a: 「＋ 未作成 2 図種（UC・ACT）」。
   // 「展開すると、まだ作っていない図種が薄い文字で出て、押すとその場で作れます」。
   // 前は行を押すと 🧩 部品ビュー (読むだけの他フォルダの比較枠) が開くだけで、作るには
   // ➕ 部品を起こす で部品名を打ち直していた。略号を押せばその図種を、＋ で未作成をまとめて作る。
@@ -440,7 +440,7 @@ window.MA.filesPanel = (function() {
     var entries = _folderNames();
     if (!FT || !entries.length) {
       host.textContent = '';
-      // BLK-owner-20260926-0550-3: 最後の 1 枚が消えた後も前の件数が見出しに残らないように消す。
+      // 最後の 1 枚が消えた後も前の件数が見出しに残らないように消す。
       var c0 = $('files-count-target');
       if (c0) c0.textContent = '';
       _syncTargetRow();
@@ -469,7 +469,7 @@ window.MA.filesPanel = (function() {
       lab.className = 'files-part-label';
       lab.textContent = g.countLabel;
       head.appendChild(lab);
-      // BLK-junior-20260924-1632-wish: 部品のフォルダにも、札の付いた図の数を同じ語で出す
+      // 部品のフォルダにも、札の付いた図の数を同じ語で出す
       // (畳んだままでも、どの部品に開く図があるかが読める)。
       var pn = _partNotes(g.files);
       if (pn) {
@@ -505,11 +505,11 @@ window.MA.filesPanel = (function() {
     if (c) c.textContent = entries.length ? String(entries.length) : '';
     refreshSummary();
     _gitMarks();
-    // 上部バーのパンくずの部品の段は、このツリーの束ね方を読む (BLK-builder-20260924-1715-1)。
+    // 上部バーのパンくずの部品の段は、このツリーの束ね方を読む。
     if (typeof window.MA.refreshTopCrumbs === 'function') window.MA.refreshTopCrumbs();
   }
 
-  // ── パンくずから見せる (design 10a、BLK-builder-20260924-1715-1) ──────────
+  // ── パンくずから見せる (design 10a) ──────────
   // kind: 'target' = 保存先のフォルダの行 / 'part' = 部品のフォルダの見出し。
   // パネルと保存先の節が畳まれていれば開き、部品のフォルダは中身まで開いて、行へ移して縁取る。
   function reveal(kind, part, _retried) {
@@ -548,7 +548,7 @@ window.MA.filesPanel = (function() {
     if (c && FT) c.textContent = FT.readonlyCountLabel(comparing, total);
   }
 
-  // ── 読むだけのフォルダ (design 10a、BLK-builder-20260924-1749-3) ─────────
+  // ── 読むだけのフォルダ (design 10a) ─────────
   // 「読むだけのフォルダ（先輩・過去の版）は下に分けて置き、右クリックから「並べて比較」できます」
   // 「右の枠に並べている間は「比較中」と出ます。編集はできません」。
   // 前は節を開いても説明の 1 行だけで、隣の保存フォルダが 1 行も並ばず、見出しに件数も出なかった。

@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // svg-freshness — 保存フォルダの {name}.svg が {name}.puml に追いついているか。
 //
-// BLK-reviewer-20260908-0103: 図を読む前に「この SVG は今の puml から作られたものか」を
+// 図を読む前に「この SVG は今の puml から作られたものか」を
 // 確かめるのに、`ls -l` で puml と svg のタイムスタンプを 1 枚ずつ突き合わせていた。
 // 22 枚ぶん目で比べる作業なので、1 枚見落とすと「古いレイアウトを今の図として読む」
 // ことに気付けない。判定はここに置き、一覧が答えを出せるようにする。
@@ -32,7 +32,7 @@ window.MA.svgFreshness = (function() {
     return svg >= puml ? 'fresh' : 'stale';
   }
 
-  // ── 内容での判定 (BLK-reviewer-20260908-1103) ─────────────────────────────
+  // ── 内容での判定 ─────────────────────────────
   // mtime の比較は「puml が svg より後に触られたか」しか見ていない。保存し直しただけで
   // 中身は追いついている図と、前々回の編集から追いついていない図が、同じ「古い」に見える。
   // 実際、mtime が古いと出た 16 枚のうち中身まで食い違っていたのは 7 枚だけで、
@@ -44,13 +44,13 @@ window.MA.svgFreshness = (function() {
   //   missing    — svg が無い
   //   unverified — 印が無い。印を刻む前に書き出した svg なので内容では言えない
   //
-  // BLK-reviewer-20260908-1103-wish: 印は「書き出した側の申告」なので、印を刻む前に
+  // 印は「書き出した側の申告」なので、印を刻む前に
   // 置かれた svg (実データの 22 枚がそれ) については何も言えず、作り直して上書きしない限り
   // 未確認のままだった。作り直すと「今そう見える」だけで「保存されていた絵が正しかったか」は
   // 分からなくなる。そこで、上書きせずに 1 回描き直してバイト比較した結果 (records) も
   // 根拠として受け取る。records は {name: {pumlHash, svgHash, result}} で、
   // 突き合わせた 2 つの指紋が今のものと一致している間だけ有効。
-  // BLK-reviewer-20260908-1103 (2103 差し戻し): 印は「どの puml バイト列から書き出したか」
+  // 印は「どの puml バイト列から書き出したか」
   // しか言わないので、puml をヘッダの書式だけ書き換えて保存し直した図も印は食い違い、
   // 描かれる中身は同じなのに「内容ずれ」と名指しされる。reviewer は同じ 6 枚を毎回
   // /render + labels 突合で切り分け直していた。描き直して比べた控え (records) の方が
@@ -63,7 +63,7 @@ window.MA.svgFreshness = (function() {
     return _fromResult(r.result) === 'unverified' ? null : r;
   }
 
-  // BLK-reviewer-20260915-0606: 印 (と、印の代わりに畳まれた DSL から取った指紋) は
+  // 印 (と、印の代わりに畳まれた DSL から取った指紋) は
   // どちらも「どのバイト列から書き出したか」しか言わないので、コメントや体裁だけを
   // 書き換えて保存し直した図も食い違う。server の /verify-svg はそれを描き直して
   // differ-format (描かれる中身は一致) と答えるが、指紋の突合だけで出す側は同じ図を
@@ -91,7 +91,7 @@ window.MA.svgFreshness = (function() {
     return stamped ? 'differ' : 'unverified';
   }
 
-  // BLK-reviewer-20260908-0103 (1903 追記): server の突合結果は 3 通りになった。
+  // server の突合結果は 3 通りになった。
   //   match          — バイトまで一致
   //   differ-format  — 描かれる中身は一致。体裁 (ヘッダ属性・XML 宣言) だけが違う
   //   differ-content — 描かれるものが違う
@@ -110,7 +110,7 @@ window.MA.svgFreshness = (function() {
   // 一致と体裁差はどちらも読める (作り直しの対象にしない)。
   function isSettled(content) { return content === 'match' || content === 'format'; }
 
-  // BLK-reviewer-20260908-0103 (1403 追記): 同じ「一致 / ずれ」でも、根拠は 2 通りある。
+  // 同じ「一致 / ずれ」でも、根拠は 2 通りある。
   //   stamp    — svg 末尾の印 (@pua-source-sha1) と今の puml の sha1 の突合
   //   rerender — 上書きせずに 1 回描き直してバイト比較した結果
   // どちらで出た答えかが画面に出ていないため、reviewer は「印の突合である」ことを
@@ -126,7 +126,7 @@ window.MA.svgFreshness = (function() {
     if (_validRecord(entry, records)) return 'rerender';
     var stamp = entry.svgSource;
     var stamped = typeof stamp === 'string' && stamp !== '';
-    // BLK-reviewer-20260914-0906: 印が無い svg でも、PlantUML が svg に畳んだ
+    // 印が無い svg でも、PlantUML が svg に畳んだ
     // 元の DSL から持ち主が分かる。印の突合と混ぜて出すと「印があった」と
     // 読めてしまうので、根拠は別の名前で言う。
     var stampBasis = entry.svgSourceFrom === 'embedded' ? 'embedded' : 'stamp';
@@ -139,7 +139,7 @@ window.MA.svgFreshness = (function() {
     stamp: '印 (@pua-source-sha1) の突合',
     embedded: 'SVG に畳まれた元の DSL の突合',
     rerender: '描き直してのバイト比較',
-    // BLK-reviewer-20260915-0606: 指紋ではなく「描かれる行」で比べた結果。
+    // 指紋ではなく「描かれる行」で比べた結果。
     visible: 'SVG に畳まれた元の DSL と今の puml の、描かれる行の突合',
   };
 
@@ -151,7 +151,7 @@ window.MA.svgFreshness = (function() {
       + '違うのは書き出し経路による体裁 (ヘッダ属性・XML 宣言の書式) だけなので、作り直さなくても読めます' },
     differ: { mark: '内容ずれ', title: 'この SVG は別の内容の puml から作られています。作り直しが要ります' },
     missing: { mark: 'SVG 無', title: 'この図の SVG が保存フォルダにありません' },
-    // BLK-reviewer-20260908-2003-wish: 「内容未確認」では、確かめ損ねたのか、そもそも
+    // 「内容未確認」では、確かめ損ねたのか、そもそも
     // 印が無くて確かめようが無いのかが読めない。実データでこの状態になるのは
     // 「印を刻む前に保存された svg」だけなので、その事実をそのまま印にする。
     unverified: { mark: '未刻印', title: '印を刻む前に保存された SVG です。元の puml の印が無いので、'
@@ -194,7 +194,7 @@ window.MA.svgFreshness = (function() {
     return BADGES[status] || BADGES.unknown;
   }
 
-  // BLK-reviewer-20260915-0406-wish: mtime では古いが、中身は今の puml と一致した図。
+  // mtime では古いが、中身は今の puml と一致した図。
   // ここまでは行から印が全部消えていたので、「確かめた結果 追いついていた」のか
   // 「そもそも古くなかった」のかが画面から読めず、reviewer は指摘.md を書く前に
   // 9 枚ぶん render API で描き直してバイト比較する裏取りを毎回やり直していた。
@@ -242,7 +242,7 @@ window.MA.svgFreshness = (function() {
       // unknown は作り直しても「分からない」が消える保証が無いが、作り直せば
       // 必ず今の内容になるので対象に入れる。
       // 内容で一致が取れている図は、mtime が古くても作り直す必要が無いので外す
-      // (BLK-reviewer-20260908-1103: ここで 16 枚が 7 枚に減る)。
+      // (ここで 16 枚が 7 枚に減る)。
       needsRender: rows.filter(function(r) { return r.status !== 'fresh' && !isSettled(r.content); })
         .map(function(r) { return r.name; }),
       // 内容で言い切るために作り直しが要る図。印の無い図も入る。
@@ -250,14 +250,14 @@ window.MA.svgFreshness = (function() {
         .map(function(r) { return r.name; }),
       // 上書きせずに確かめられる図 (svg があって、まだ内容で言い切れていないもの)。
       // 作り直しと違い、保存されていた絵をそのまま残したまま白黒が付く。
-      // BLK-reviewer-20260908-1103 (2103 差し戻し): 印だけで「ずれ」と出た図もここに入れる。
+      // 印だけで「ずれ」と出た図もここに入れる。
       // 印は体裁だけの差でも食い違うので、確かめるまでは作り直しが要るかが決まらない。
       // 対象から外していた間、reviewer はその図を GUI からは確かめられず、
       // 毎回 /render + labels 突合を手でやり直していた。
       needsVerify: rows.filter(function(r) {
         return r.content === 'unverified' || (r.content === 'differ' && r.basis === 'stamp');
       }).map(function(r) { return r.name; }),
-      // BLK-reviewer-20260908-1203: 内容ずれと分かっている図。印 (svgSource) だけで
+      // 内容ずれと分かっている図。印 (svgSource) だけで
       // ずれが分かった図は、確かめ直していないので「何が食い違うか」の材料が手元に無い。
       // 中身を言うために server にもう一度突き合わせてもらう対象。
       needsDiff: rows.filter(function(r) { return r.content === 'differ'; })
@@ -271,7 +271,7 @@ window.MA.svgFreshness = (function() {
     return out;
   }
 
-  // BLK-primary-20260908-1303: 集計行が mtime だけを見て「SVG: 古い 2 枚」と言う一方、
+  // 集計行が mtime だけを見て「SVG: 古い 2 枚」と言う一方、
   // 同じ画面の「古い SVG を作り直す」は内容一致まで見て「古い SVG はありません」と
   // 押せなかった。基準が 2 つあると、見出しからは「本当に古いのか」が分からず、
   // 「内容はすべて確かめてあります」まで開いて確かめる 1 手間が毎回要る。
@@ -298,7 +298,7 @@ window.MA.svgFreshness = (function() {
     return 'SVG: ' + parts.join(' / ') + note;
   }
 
-  // BLK-reviewer-20260908-0823-wish: 「無い N 枚」だけでは、どの図を書き出し忘れたかを
+  // 「無い N 枚」だけでは、どの図を書き出し忘れたかを
   // 一覧の行から目で探すことになる (17 枚の突合で 1 枚見つけた、が偶然だった原因)。
   // 直し方ごとに名前を束ねて返し、一覧がそのまま名前を出せるようにする。
   // fresh と unknown は入れない — 前者は直す必要が無く、後者は名前を出しても
@@ -332,7 +332,7 @@ window.MA.svgFreshness = (function() {
     return out;
   }
 
-  // BLK-reviewer-20260908-2003-wish: 印の無い図は、要約の「未確認 N 枚」に件数としてしか
+  // 印の無い図は、要約の「未確認 N 枚」に件数としてしか
   // 出ておらず、どの 1 枚かは 22 行を目で探すか audit.js を回して突き止めるしかなかった
   // (実データでは 22 枚中 1 枚。5 枚は印だけで即座に片が付くのに、その 1 枚を名指しする
   // 表示が無いために毎回全図を確かめ直していた)。名前をここで束ねて返す。
@@ -381,7 +381,7 @@ window.MA.svgFreshness = (function() {
     return '内容: ' + parts.join(' / ');
   }
 
-  // BLK-reviewer-20260908-0103 (1403 追記): 「内容: 一致 17 枚」が何を見た答えかを
+  // 「内容: 一致 17 枚」が何を見た答えかを
   // 画面で言う。ここが無いと、同じ判定を自分でやろうとした人が /render の応答と
   // 保存中の svg をバイト比較し、印のぶんだけ必ず食い違って全件ずれに見える。
   var STAMP_NOTE = '保存した SVG の末尾にだけ印が付くので、/render の応答と'
@@ -391,10 +391,10 @@ window.MA.svgFreshness = (function() {
     if (!scanned || !scanned.rows.length) return '';
     var b = scanned.basisCounts || { stamp: 0, embedded: 0, rerender: 0, visible: 0 };
     var parts = [];
-    // BLK-reviewer-20260915-0606: 指紋ではなく描かれる行で比べた枚数。
+    // 指紋ではなく描かれる行で比べた枚数。
     if (b.visible) parts.push(basisText('visible') + ' ' + b.visible + ' 枚');
     if (b.stamp) parts.push('印 (@pua-source-sha1) の突合 ' + b.stamp + ' 枚');
-    // BLK-reviewer-20260914-0906: 印の無い svg は、PlantUML が畳んだ元の DSL で判定する。
+    // 印の無い svg は、PlantUML が畳んだ元の DSL で判定する。
     if (b.embedded) parts.push('SVG に畳まれた元の DSL の突合 ' + b.embedded + ' 枚');
     if (b.rerender) parts.push('描き直してのバイト比較 ' + b.rerender + ' 枚');
     if (!parts.length) return '判定の根拠: まだ 1 枚も内容で判定していません (印が無く、確かめてもいない)';
@@ -408,7 +408,7 @@ window.MA.svgFreshness = (function() {
     return n === 0 ? '中身を確かめる SVG はありません' : 'SVG の中身を確かめる（' + n + ' 枚）';
   }
 
-  // 食い違いの中身を調べるボタンの文言 (BLK-reviewer-20260908-1203)。
+  // 食い違いの中身を調べるボタンの文言。
   // 対象は「ずれ」と分かっている図のうち、まだ中身を出していないもの。
   function diffLabel(pending) {
     var n = (pending && pending.length) || 0;
@@ -420,7 +420,7 @@ window.MA.svgFreshness = (function() {
     return n === 0 ? '内容はすべて確かめてあります' : '内容を確かめる（' + n + ' 枚を作り直す）';
   }
 
-  // BLK-primary-20260908-1203: 「古い SVG を作り直す」は古い・無い・内容ずれを
+  // 「古い SVG を作り直す」は古い・無い・内容ずれを
   // まとめて作り直すので、reviewer に名指しされた 5 枚だけを狙えず、1 枚ずつ開いて
   // ⟳Render → Export▾ → SVG を 5 回繰り返すことになっていた。
   // 名前の行 (SVG が無い / SVG が古い / SVG の内容が古い) ごとに、その行の図だけを

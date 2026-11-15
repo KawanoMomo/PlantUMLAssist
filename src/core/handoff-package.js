@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // handoff-package — 引き継ぎに要る確認結果を 1 つのスナップショットに固める。
 //
-// BLK-primary-20260907-1303-wish: 新人に引き継ぐとき、⇉系統チェック・🔍名前突合・
+// 新人に引き継ぐとき、⇉系統チェック・🔍名前突合・
 // ▤変更サマリを別々のタブで開いて中身を見せ、「問題なし」を口頭で伝えていた。
 // 引き継ぎのたびに 3 つのタブを開いて見せ回す必要があり、渡された側は後から同じ
 // 状態を再現できない (見た人の記憶に依存する)。
@@ -98,7 +98,7 @@ window.MA.handoffPackage = (function() {
   //   docs   = [{ id, name, diagramType, dsl }] (workspace.list() の形)
   //   svgs   = { <doc id>: '<svg …>' }。無い図は「書き出せませんでした」と出す
   //   notes  = handoverNotes.list() の形。渡す時点で申し送りをチェックリストに固定する
-  //            (BLK-primary-20260908-1803-wish。差分が消えた後も項目は残る)
+  //            (。差分が消えた後も項目は残る)
   function buildSnapshot(input) {
     var o = input || {};
     var docs = Array.isArray(o.docs) ? o.docs : [];
@@ -120,7 +120,7 @@ window.MA.handoffPackage = (function() {
     var HC = window.MA.handoverChecklist;
     var checklist = HC ? HC.build(o.notes, o.checklistAt) : { createdAt: '', items: [] };
     var failed = diagrams.filter(function(d) { return !d.rendered; }).length;
-    // BLK-primary-20260914-1906-wish: 材料の前に「今日どの図の何を・なぜ直したか」を置く。
+    // 材料の前に「今日どの図の何を・なぜ直したか」を置く。
     var HS = window.MA.handoffSummary;
     var summary = HS ? HS.build({ diagrams: diagrams, board: o.board, verdicts: o.verdicts }) : null;
     return {
@@ -227,7 +227,7 @@ window.MA.handoffPackage = (function() {
     return out || '<p class="muted">図がありません。</p>';
   }
 
-  // BLK-primary-20260914-1906-wish: 材料の前に置く「今日どの図の何を・なぜ直したか」。
+  // 材料の前に置く「今日どの図の何を・なぜ直したか」。
   // 1 枚につき 変更点 → なぜ (反映した指摘) → 図 の順で、同じ塊に並べる。
   // 新人はここを上から読むだけで済み、渡す側の口頭説明が要らなくなる。
   function _summaryHtml(sum) {
@@ -300,7 +300,7 @@ window.MA.handoffPackage = (function() {
     return html;
   }
 
-  // BLK-primary-20260915-2346-wish: 受け取る側が辿る順。材料の節より前に置く。
+  // 受け取る側が辿る順。材料の節より前に置く。
   function _routeHtml(snapshot) {
     var HR = window.MA.handoffRoute;
     if (!HR) return '<p class="muted">辿る順を組めませんでした。</p>';

@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // dsl-visible-diff — 2 つの DSL の差が「描かれるもの」に届いているかを言う。
 //
-// BLK-reviewer-20260914-2106: `diagram1.puml` に `domain-verdict` コメント行が
+// `diagram1.puml` に `domain-verdict` コメント行が
 // 復元されただけで `diagram1.svg` の sha1 スタンプが不一致になり、stale と出た。
 // これが「コメント追加による埋め込みソースの符号化差分だけ」なのか
 // 「participant / 矢印 / ラベルの可視内容が実際にずれている」のかは、

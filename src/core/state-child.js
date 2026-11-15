@@ -1,7 +1,7 @@
 'use strict';
 window.MA = window.MA || {};
 
-// state-child — 状態の中に子状態を足す (BLK-human-20260915-1206)。
+// state-child — 状態の中に子状態を足す。
 //
 // 中身を持つ状態 (`state A { ... }`) は前からあったが、GUI から作る道は
 // 「+ Convert to composite」→「末尾に state を足す」→「Move into: A」の

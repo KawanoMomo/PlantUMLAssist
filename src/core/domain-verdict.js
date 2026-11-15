@@ -1,11 +1,11 @@
 'use strict';
 window.MA = window.MA || {};
 
-// domain-verdict — 同じドメインの図がフォルダ (ペルソナ) 間で食い違っていたとき、
+// domain-verdict — 同じドメインの図がフォルダ (人) 間で食い違っていたとき、
 // その場で「共有ドメインとして統一する」か「別物として title に明示する」かを
 // 決めて、自分の図にだけ書き戻す。
 //
-// BLK-primary-20260909-0503-wish: レビュー指摘「junior の GPIO 図と primary の
+// レビュー指摘「junior の GPIO 図と primary の
 // GPIO 図が別物」を反映するとき、domain-cohort の突合で差分は見えるようになったが、
 // 見えた後にできることが無かった。統一するなら綴りの違う部品名を自分の図で
 // 手で打ち替え、別物とするなら title を手で書き足すしかなく、しかも「この食い違いは
@@ -158,7 +158,7 @@ window.MA.domainVerdict = (function() {
     return "' domain-verdict: " + _s(kind) + ' ' + _s(domain) + ' vs ' + _s(otherFolder);
   }
 
-  // BLK-reviewer-20260909-0703-wish: 印は 1 本だけ読めればよい、ではなくなった。
+  // 印は 1 本だけ読めればよい、ではなくなった。
   // reviewer は突合のたびに「この組は宣言済みか」を全部の相手について知りたい。
   // 図 1 枚が持っている宣言を、書いてある順に全部返す。
   function listMarks(dsl) {

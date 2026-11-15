@@ -31,7 +31,7 @@ window.MA.familyAudit = (function() {
   // 系統キー。図の名前の頭の 1 語 (Adc_Init / adc-state / AdcClass はすべて adc)。
   // camelCase の 2 語目以降は落とす。区切りも語境界も無ければ名前全体を系統とする。
   //
-  // BLK-reviewer-20260907-1803: 名前がフォルダ付き (`primary/adc_state.puml`) で
+  // 名前がフォルダ付き (`primary/adc_state.puml`) で
   // 渡ると頭の 1 語がフォルダ名になり、そのフォルダの図が全部 1 系統に落ちていた。
   // adc の初期化手順と uart の状態遷移が同じ系統として突き合わされ、
   // 「片方にしか無い動作名」が全件出る。系統はファイル名だけで決める。
@@ -102,7 +102,7 @@ window.MA.familyAudit = (function() {
         row.present[di] = true;
       });
     });
-    // BLK-reviewer-20260907-1803: 同じ系統でも、初期化手順のシーケンス
+    // 同じ系統でも、初期化手順のシーケンス
     // (EnableClock() / WriteConfig() のレジスタ操作単位) と初期化後の状態遷移
     // (Idle / Configured / Sampling 単位) は意図して粒度が違う。語彙が 1 つも
     // 重ならない 2 枚は「書き漏らし」ではなく「別の粒度」なので、突き合わせない。

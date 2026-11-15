@@ -2,7 +2,6 @@
 window.MA = window.MA || {};
 
 // rename-pairs — 「過去に打った置換の組」を保存フォルダ側の持ち物にする
-// (BLK-primary-20260914-1306-friction)。
 //
 // 組の記憶は localStorage の改名履歴にしか無かった。履歴は置換が当たったとき
 // (docs が 1 枚以上) にだけ増えるので、
@@ -24,7 +23,7 @@ window.MA.renamePairs = (function() {
 
   // normalize(pairs) — server から来た組を、履歴と同じ形 {from, to, at} にする。
   // from か to が欠けたものは組ではないので落とす。
-  // appliedAt は [置換] で当てた最後の日時 (BLK-primary-20260914-1106-friction)。
+  // appliedAt は [置換] で当てた最後の日時。
   // 打っただけで当てなかった組は空のまま。server の applied_at も同じ意味で読む。
   function normalize(pairs) {
     return (Array.isArray(pairs) ? pairs : []).map(function(p) {

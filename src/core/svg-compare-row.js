@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // svg-compare-row — 図一覧の 1 行に「puml 変更 / SVG 書き出し / labels 一致」を並べ、
 // 印 (@pua-source-sha1) を持たない図に「未刻印」を出す。
 //
-// BLK-reviewer-20260908-2003-wish: 「puml は直っているが SVG だけ古い」を見分けるのに、
+// 「puml は直っているが SVG だけ古い」を見分けるのに、
 // 一覧の札 (SVG 古 / 内容ずれ / 内容未確認) だけでは「いつ書き出した SVG か」「文字は
 // 一致しているのか」が行に並んでおらず、毎回 render し直して labels を手で突き合わせて
 // いた。判定の材料は svg-freshness が持っているのに、行に出ているのは puml の時刻だけ。

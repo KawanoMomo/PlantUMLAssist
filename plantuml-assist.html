@@ -118,7 +118,7 @@ html, body {
 }
 #files-panel .files-sec-headrow button.files-sec-act .files-act-glyph { display: block; }
 #files-panel .files-sec-body[hidden] { display: none; }
-/* design 10a (BLK-builder-20260924-1749-3): 読むだけのフォルダの行 (senior 比較中 / release_v1.2)。
+/* design 10a: 読むだけのフォルダの行 (senior 比較中 / release_v1.2)。
    押すと開閉してそのフォルダの図が並ぶ。右の枠に並べている相手には「比較中」。 */
 #files-panel .files-ro-folder {
   display: flex; align-items: center; gap: 4px; width: 100%;
@@ -154,17 +154,17 @@ html, body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 #files-panel .files-part-file:hover { background: var(--bg-tertiary); }
-/* design 10b (BLK-builder-20260924-1917-1): F2 / 右クリック「名前を変更」で、行の名前がその場で入力欄になる */
+/* design 10b: F2 / 右クリック「名前を変更」で、行の名前がその場で入力欄になる */
 #files-panel .files-rename-box { padding: 1px 8px 2px 24px; }
 #files-panel .files-rename-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 11px; padding: 1px 4px; color: var(--text-primary); background: var(--bg-primary); border: 1px solid var(--accent); border-radius: 2px; outline: none; }
 #files-panel .files-rename-note { font-size: 10px; line-height: 1.4; color: var(--accent-red); padding-top: 2px; white-space: normal; }
 /* 未作成は薄い文字 (design 10a「＋ 未作成 2 図種（UC・ACT）」)。略号を押すとその図種を、
-   行頭の ＋ で未作成をまとめて、その場で作る (BLK-builder-20260924-1735-3)。 */
+   行頭の ＋ で未作成をまとめて、その場で作る。 */
 #files-panel .files-part-missing {
   display: block; width: 100%; box-sizing: border-box;
   padding: 2px 8px 2px 36px; text-indent: -14px; font-size: 11px;
   color: var(--text-muted, var(--text-secondary)); opacity: .7;
-  /* 切り詰めない: 未作成が 4 図種以上でも後ろの略号が隠れず押せる (BLK-builder-20260924-1803-3)。
+  /* 切り詰めない: 未作成が 4 図種以上でも後ろの略号が隠れず押せる。
      折り返した 2 行目は ＋ の右にそろえる。 */
   text-align: left; white-space: normal; line-height: 1.5;
 }
@@ -183,11 +183,11 @@ html, body {
 }
 #files-panel button.files-row:hover { background: var(--bg-tertiary); }
 #files-panel button.files-row.is-active { color: var(--accent); }
-/* design 10a (BLK-builder-20260924-1701-1): 仮のタブの図はタブと同じく斜体。ダブルクリックで固定すると戻る */
+/* design 10a: 仮のタブの図はタブと同じく斜体。ダブルクリックで固定すると戻る */
 #files-panel button.files-row[data-preview="1"] .files-row-name { font-style: italic; opacity: 0.85; }
 #files-panel .files-row-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #files-panel .files-row-mark { flex: 0 0 auto; font-size: 9px; color: var(--accent); white-space: nowrap; }
-/* BLK-junior-20260924-1632-wish: 指摘.md の反映状況の札 (確かめられない指摘がある図だけ)。押すと図を開いて指摘の語を選ぶ */
+/* 指摘.md の反映状況の札 (確かめられない指摘がある図だけ)。押すと図を開いて指摘の語を選ぶ */
 #files-panel .files-row-note {
   flex: 0 0 auto; margin-left: 4px; font-size: 9px; color: var(--accent-orange, #f59e0b);
   white-space: nowrap; cursor: pointer; border-bottom: 1px dotted currentColor;
@@ -208,7 +208,7 @@ html, body {
   display: flex; width: 100%; box-sizing: border-box; text-align: left;
   border: none; background: none; padding: 3px 6px 3px 16px; cursor: pointer;
 }
-/* design 10a (BLK-builder-20260924-1923-4): 「▾ junior 保存先」の行。その下の部品のフォルダ・図は 1 段下げて中身にする。 */
+/* design 10a: 「▾ junior 保存先」の行。その下の部品のフォルダ・図は 1 段下げて中身にする。 */
 #files-panel .files-target-row { display: flex; align-items: center; }
 #files-panel .files-target-row #top-save-target { flex: 1 1 auto; min-width: 0; padding-left: 2px; }
 #files-panel .files-target-caret {
@@ -223,9 +223,9 @@ html, body {
 #files-panel #files-parts .files-part-file.files-loose-file { padding-left: 30px; }
 #files-panel #files-parts .files-part-missing { padding-left: 50px; }
 /* ツリーに入れた #folder-panel は浮かせず、節の中身としてそのまま流す。 */
-/* BLK-human-20260923-1702 (design 10c): GIT 欄・この図の履歴・比較する相手を選ぶ */
+/* GIT 欄・この図の履歴・比較する相手を選ぶ */
 #files-panel [data-files-section="git"][hidden] { display: none; }
-/* BLK-builder-20260924-1808-1 (design 10a / 10c): #files-panel .files-sec-body の padding 0 に負けないよう #files-panel を付け、
+/* #files-panel .files-sec-body の padding 0 に負けないよう #files-panel を付け、
    中身をツリーの行 (保存先の行と同じ 16px) の字下げに揃える。以前は枠の左端に 0px で貼り付いていた。 */
 #files-panel #files-body-git { padding: 2px 8px 6px 16px; font-size: 11px; }
 #files-body-git .git-head-row, #files-body-git .git-ops, #files-body-git .git-history-bar { display: flex; align-items: center; gap: 4px; margin: 2px 0; }
@@ -241,7 +241,7 @@ html, body {
 #files-body-git button.git-mini { flex: 0 0 auto; white-space: nowrap; }
 #files-body-git .git-change { display: flex; gap: 6px; padding: 1px 0; min-width: 0; }
 #files-body-git .git-change-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* BLK-builder-20260924-2344-3 (design 10c): 開ける変更の行は押せる (ツリーの行と同じ見た目で、手を置くと下地が付く) */
+/* 開ける変更の行は押せる (ツリーの行と同じ見た目で、手を置くと下地が付く) */
 #files-body-git button.git-change { width: 100%; box-sizing: border-box; align-items: center; background: none; border: none; border-radius: 2px; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 #files-body-git button.git-change:hover, #files-body-git button.git-change:focus-visible { background: var(--bg-tertiary); outline: none; }
 #files-body-git .git-code { flex: 0 0 auto; font-weight: 600; margin-left: auto; padding-left: 6px; }
@@ -254,7 +254,7 @@ html, body {
 #files-body-git #git-commit:disabled { opacity: 0.45; cursor: default; }
 #files-body-git #git-result { color: var(--text-secondary); }
 #files-body-git #git-result.bad { color: #f85149; }
-/* design 10c (BLK-builder-20260924-1835-1): この図の履歴は 1 行 1 コミット。右端の日付の位置に、手を置いた行だけ「比較」が出る */
+/* design 10c: この図の履歴は 1 行 1 コミット。右端の日付の位置に、手を置いた行だけ「比較」が出る */
 #files-body-git .git-commit-row { display: flex; align-items: center; gap: 4px; padding: 2px 0; min-height: 20px; }
 #files-body-git .git-commit-row.is-compared .git-commit-msg { color: var(--accent); }
 #files-body-git .git-commit-msg { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -264,7 +264,7 @@ html, body {
 #files-body-git .git-history-compare { position: absolute; right: 0; top: 50%; transform: translateY(-50%); opacity: 0; font-size: 10px; padding: 1px 6px; background: var(--bg-secondary, transparent); color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; cursor: pointer; }
 #files-body-git .git-commit-row:hover .git-history-compare, #files-body-git .git-commit-row:focus-within .git-history-compare, #files-body-git .git-commit-row.is-compared .git-history-compare { opacity: 1; }
 #files-body-git .git-commit-row:hover .git-commit-date, #files-body-git .git-commit-row:focus-within .git-commit-date, #files-body-git .git-commit-row.is-compared .git-commit-date { visibility: hidden; }
-/* BLK-owner-20260924-2157-prune: 控え (server の _versions) の行も同じ一覧に混ぜる。手を置いた行だけ「比較」「戻す」が日付の位置に出る */
+/* 控え (server の _versions) の行も同じ一覧に混ぜる。手を置いた行だけ「比較」「戻す」が日付の位置に出る */
 #files-body-git .git-commit-row.is-version .git-commit-msg { color: var(--text-secondary); }
 #files-body-git .git-history-acts { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; gap: 3px; opacity: 0; }
 #files-body-git .git-history-acts .git-history-compare { position: static; transform: none; opacity: 1; white-space: nowrap; }
@@ -289,14 +289,14 @@ html, body {
 #git-pick-modal .git-pick-row:hover { background: var(--bg-tertiary); }
 #git-pick-modal .git-pick-body { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
 #git-pick-modal .git-pick-meta { color: var(--text-secondary); font-size: 10px; }
-/* BLK-builder-20260924-2246-1 (design 10c): タグはメッセージの横の札 (GIT 欄の「この図の履歴」の行と同じ形) */
+/* タグはメッセージの横の札 (GIT 欄の「この図の履歴」の行と同じ形) */
 #git-pick-modal .git-pick-tag { display: inline-block; margin-left: 6px; font-size: 9px; line-height: 13px; padding: 0 4px; border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary); vertical-align: 1px; }
 #git-pick-modal .git-pick-stat { flex: 0 0 auto; color: var(--text-secondary); font-size: 10px; }
 #senior-git { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; min-width: 0; padding: 2px 6px; }
 #senior-git[hidden], #senior-mode[hidden], #senior-dir[hidden] { display: none; }
 #senior-git #senior-git-pick { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #senior-git #senior-git-sides { font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
-/* BLK-builder-20260924-1836-2 (design 10c): 差分だけ / 並べて比較 の 2 択。#senior-mode (据え置く / 1 回だけ) と同じ形 */
+/* 差分だけ / 並べて比較 の 2 択。#senior-mode (据え置く / 1 回だけ) と同じ形 */
 #senior-git #senior-git-view { display: inline-flex; flex-shrink: 0; }
 #senior-git #senior-git-view button {
   font-size: 11px; padding: 1px 6px; border-radius: 0;
@@ -305,7 +305,7 @@ html, body {
 }
 #senior-git #senior-git-view button + button { border-left: none; }
 #senior-git #senior-git-view button[aria-pressed="true"] { background: var(--bg-primary); color: var(--text-primary); }
-/* BLK-builder-20260924-1823-2 (design 10c): コミットと比較している間、図の上に差の色を付ける。
+/* コミットと比較している間、図の上に差の色を付ける。
    左のプレビュー = このコミットの後に増えた・変わった文字 (緑)、右の枠 = このコミットにだけある文字 (赤) */
 #senior-git #senior-git-legend { flex-basis: 100%; font-size: 10px; color: var(--text-secondary); white-space: normal; }
 #senior-git #senior-git-legend:empty { display: none; }
@@ -314,14 +314,14 @@ html, body {
 #senior-dsl .sg-line { white-space: pre; }
 #senior-dsl .sg-del { background: rgba(248,81,73,.18); color: #f85149; }
 #senior-dsl .sg-add { background: rgba(63,185,80,.18); color: #3fb950; }
-/* BLK-human-20260923-1701 (design 10b): ファイル・フォルダの右クリック */
+/* ファイル・フォルダの右クリック */
 #files-ctx-menu {
   position: fixed; z-index: 1200; min-width: 232px; max-width: 320px; padding: 4px 0;
   background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.35); font-size: 12px;
 }
 #files-ctx-menu[hidden] { display: none; }
-/* BLK-primary-20260925-0232-design: 別のフォルダを保存先にする窓 (保存先の右クリック / Ctrl+K「保存先を変える」) */
+/* 別のフォルダを保存先にする窓 (保存先の右クリック / Ctrl+K「保存先を変える」) */
 #target-pick { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; background: rgba(0,0,0,0.35); }
 #target-pick .target-pick-box { width: min(520px, 92vw); background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,0.45); font-size: 13px; }
 #target-pick .target-pick-title { font-weight: 600; margin-bottom: 4px; }
@@ -354,7 +354,7 @@ html, body {
 #files-ctx-menu .files-ctx-sep { height: 1px; margin: 4px 0; background: var(--border); }
 #files-panel.is-drop { outline: 2px dashed var(--accent); outline-offset: -3px; }
 #files-panel .files-part-head.is-drop { background: var(--bg-tertiary); outline: 1px solid var(--accent); }
-/* BLK-human-20260923-2000: 遷移フォームの候補 (打ち始めで絞り、上下キーと Enter で選ぶ) */
+/* 遷移フォームの候補 (打ち始めで絞り、上下キーと Enter で選ぶ) */
 .st-tx-sugg { margin: -4px 0 6px 0; border: 1px solid var(--border); border-radius: 3px; background: var(--bg-secondary); max-height: 160px; overflow-y: auto; }
 .st-tx-sugg[hidden] { display: none; }
 .st-tx-sugg-item { padding: 2px 6px; font-size: 11px; font-family: var(--font-mono), Consolas, monospace; cursor: pointer; color: var(--text-primary); }
@@ -364,7 +364,7 @@ html, body {
   width: 100%; box-sizing: border-box;
   border: none; border-radius: 0; background: none; padding: 0;
 }
-/* BLK-builder-20260923-1849-3: 幅 208px の節ではファイル名を読めるようにする。行は折り返し、名前の箱が
+/* 幅 208px の節ではファイル名を読めるようにする。行は折り返し、名前の箱が
    1 行目の残り (印と役割のボタンの横) を取る。箱の中も折り返し、名前は 1 行目に下限付きで置き、
    印 (SVG 無・書込中?・時刻…) は次の行へ送る。操作のボタン (差分・対象にする・控えにする・) は行の下段へ。 */
 #files-panel #folder-panel .folder-row { flex-wrap: wrap; row-gap: 1px; }
@@ -377,7 +377,7 @@ html, body {
 #files-panel #folder-panel .folder-vault-bar { flex-wrap: wrap; }
 #files-panel #folder-panel .folder-row > button:not(.folder-item):not(.folder-role),
 #files-panel #folder-panel .folder-row > .folder-kind { width: auto; flex: 0 0 auto; }
-/* BLK-owner-20260924-0637-1 (design 10a): 「保存先」節の中はツリー (部品のフォルダ → ファイルの行と札) だけ。
+/* 「保存先」節の中はツリー (部品のフォルダ → ファイルの行と札) だけ。
    旧 一覧 (#folder-panel) は節の中では出さず、ツリーの束ね元として DOM にだけ置く。
    保存先の右クリック「保存先の一覧を開く」(is-list) で中央の枠に浮かせて開く。幅 208px には押し込まない。 */
 #files-panel #folder-panel.open:not(.is-list) { display: none; }
@@ -522,7 +522,7 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* BLK-junior-20260907-2009: 保存先が設定済みかどうかを上部バーに常時出す */
+/* 保存先が設定済みかどうかを上部バーに常時出す */
 #top-save-target {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -539,7 +539,7 @@ html, body {
   text-overflow: ellipsis;
 }
 #top-save-target:hover { color: var(--text-primary); border-color: var(--accent); }
-/* 保存ボタン (BLK-junior-20260913-0306)。保存先チップと同じ形にして隣に置く。 */
+/* 保存ボタン。保存先チップと同じ形にして隣に置く。 */
 #top-save {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -554,7 +554,7 @@ html, body {
 }
 #top-save:hover { border-color: var(--accent); color: var(--accent); }
 #top-save-target.configured { color: var(--accent); border-color: var(--accent); }
-/* BLK-human-20260923-1600 (design 9a): 上部バー左はパンくず 1 本。フォルダ名は
+/* 上部バー左はパンくず 1 本。フォルダ名は
    枠なしの文字にして、「/」で繋いだファイル名と 1 つの並びに見せる。 */
 #top-save-target {
   border: none;
@@ -676,7 +676,7 @@ html, body {
   border-color: transparent;
 }
 
-/* コマンドパレット (BLK-builder-20260907-0803-1 / design 1a) */
+/* コマンドパレット (design 1a) */
 #btn-command-palette {
   display: flex;
   align-items: center;
@@ -696,10 +696,10 @@ html, body {
   padding: 0 4px;
   color: var(--text-secondary);
 }
-/* BLK-junior-20260908-1803-wish: 開いた元ファイルを書き換える前の一度きりの確認 */
+/* 開いた元ファイルを書き換える前の一度きりの確認 */
 /* 画面を塞がない。見比べのために別の図を開く・一覧を出すといった作業を
    止めずに、答えるまで元ファイルへの書き込みだけを保留する。 */
-/* BLK-human-20260923-1700: 上部バー (#toolbar, 38px + 境界線) の下から出す。
+/* 上部バー (#toolbar, 38px + 境界線) の下から出す。
    top:8px だと札が上部バーに被り、答えようとしている当人が「保存」を押せない
    (FILES ツリーが幅を取って #top-save が札の真下に来ると必ず塞がる)。
    「画面を塞がない」は、上部バーの操作も止めないということ。 */
@@ -734,7 +734,7 @@ html, body {
   text-align: left;
 }
 #source-lock-panel button:hover { border-color: var(--accent); color: var(--accent); }
-/* BLK-junior-20260915-2240: 二択が同格に見えると、直した本文を元ファイルへ入れる
+/* 二択が同格に見えると、直した本文を元ファイルへ入れる
    つもりの人が「保つ」を押して、直した表記が元ファイルに入らないまま進んでしまう。
    主 (書き換える) と副 (保つ) を見た目で分ける。強調は主の側にだけ付ける。 */
 #source-lock-overwrite {
@@ -745,7 +745,7 @@ html, body {
 }
 #source-lock-overwrite:hover { filter: brightness(1.1); color: var(--bg-primary) !important; }
 #source-lock-keep { color: var(--text-secondary); }
-/* BLK-junior-20260916-0046: まとめて当てる道は二択の「どちらか」ではなく、
+/* まとめて当てる道は二択の「どちらか」ではなく、
    同じ直しが何枚も続く回の逃がし道。二択と並べず、区切ってから下に置く。 */
 #source-lock-bulk {
   color: var(--text-secondary);
@@ -855,7 +855,7 @@ html, body {
   position: relative;
 }
 
-/* BLK-builder-20260924-1736-2 (design 9a): Import ▾ / Export ▾ は上部バーの右端にあるので、ボタンの右端にそろえて左へ開く
+/* Import ▾ / Export ▾ は上部バーの右端にあるので、ボタンの右端にそろえて左へ開く
    (左端から右へ開くと窓の外へはみ出し、Ctrl+O の札や項目の右半分が切れていた)。 */
 #export-menu {
   display: none;
@@ -872,7 +872,7 @@ html, body {
 }
 #export-menu.open { display: block; }
 
-/* BLK-human-20260923-1600 (design 9a): Import ▾ は Export ▾ と同じ形にする。 */
+/* Import ▾ は Export ▾ と同じ形にする。 */
 #import-menu {
   display: none;
   position: absolute;
@@ -925,7 +925,7 @@ html, body {
 }
 #export-menu button:hover { background: var(--bg-tertiary); }
 
-/* BLK-owner-20260918-0329-prune: メニュー内のまとまりの見出し (押せない) */
+/* メニュー内のまとまりの見出し (押せない) */
 #export-menu .exp-group-title {
   padding: 6px 14px 2px 14px;
   font-size: 10px;
@@ -972,7 +972,7 @@ html, body {
   cursor: pointer;
 }
 #diagram-type:focus, #render-mode:focus { outline: none; border-color: var(--accent); }
-/* BLK-builder-20260924-1706-3 (design 7a / 9a): 図種は左レール (SEQ … ST)・Ctrl+K・ショートカットが選ぶ。
+/* 図種は左レール (SEQ … ST)・Ctrl+K・ショートカットが選ぶ。
  * 上部バーの「Sequence ▾」は同じ選択の 2 つ目の入口なので画面から外す。値の持ち主 (change を
  * 各所が聞いている) なので要素は残し、見えない・押せない・Tab で止まらない形にする。 */
 #diagram-type {
@@ -1005,7 +1005,7 @@ html, body {
 #editor-pane {
   display: flex;
   flex-direction: column;
-  /* BLK-primary-20260908-0823-design: ツールメニューをタブ列の直下に浮かせる */
+  /* ツールメニューをタブ列の直下に浮かせる */
   position: relative;
   width: 30%;
   min-width: 180px;
@@ -1062,7 +1062,7 @@ html, body {
   cursor: pointer;
   font-size: 11px;
   padding: 2px 6px;
-  /* BLK-primary-20260907-0923: エディタペインが design 1a の左レールぶん狭くなり、
+  /* エディタペインが design 1a の左レールぶん狭くなり、
      flex の既定 (shrink 可) だとラベルが 1 文字ずつ縦に折り返されて読めなくなる。
      縮めずに #tab-bar 側の overflow-x で横スクロールさせる。 */
   white-space: nowrap;
@@ -1076,7 +1076,7 @@ html, body {
 }
 #tab-bar .tab-tool.tab-tool-plain:hover { color: var(--accent); }
 #tab-bar .tab { flex-shrink: 0; }
-/* BLK-primary-20260907-2303-wish: 図を開いた人にその図の申し送りを出す帯 */
+/* 図を開いた人にその図の申し送りを出す帯 */
 #hn-banner {
   display: none;
   align-items: center;
@@ -1108,7 +1108,7 @@ html, body {
   display: none;
   position: absolute;
   z-index: 40;
-  /* BLK-junior-20260908-2003-wish: 240px では見出し・絞り込み・対象set で埋まり、
+  /* 240px では見出し・絞り込み・対象set で埋まり、
      棚卸しの 8 行が窓の外に出ていた。画面の高さに合わせて伸ばす。 */
   max-height: min(70vh, 620px);
   overflow-y: auto;
@@ -1132,14 +1132,14 @@ html, body {
   cursor: pointer;
 }
 #folder-panel button:hover { background: var(--bg-secondary); }
-/* 前回見た版からの差 (BLK-reviewer-20260907-1403) */
+/* 前回見た版からの差 */
 #folder-panel { min-width: 260px; }
-/* BLK-owner-20260925-0416-prune: 参照タブ列の跡。隣のフォルダを読む入口 (FILES「読むだけ」節) への案内 1 行。 */
+/* 参照タブ列の跡。隣のフォルダを読む入口 (FILES「読むだけ」節) への案内 1 行。 */
 #folder-panel button.folder-ro-hint {
   display: block; width: 100%; text-align: left; border: none; border-bottom: 1px solid var(--border);
   background: transparent; color: var(--accent); font-family: inherit; font-size: 11px; padding: 4px 6px;
 }
-/* 最近開いた図 (BLK-junior-20260915-2346)。同じ図への出戻りは一覧を目で探さず
+/* 最近開いた図。同じ図への出戻りは一覧を目で探さず
    上端のこの行から 1 クリックで戻る。履歴が空なら行ごと出ないので、普段の一覧は今までのまま。 */
 #folder-panel .folder-recent-bar {
   display: flex;
@@ -1167,7 +1167,7 @@ html, body {
   white-space: nowrap;
 }
 #folder-panel button.folder-recent-item:hover { background: var(--bg-tertiary); }
-/* 名前での絞り込み (BLK-junior-20260908-1103) */
+/* 名前での絞り込み */
 #folder-panel .folder-filterbar {
   display: flex;
   align-items: center;
@@ -1187,7 +1187,7 @@ html, body {
 }
 #folder-panel input.folder-filter:focus { outline: none; border-color: var(--accent); }
 #folder-panel .folder-filter-state { color: var(--accent); font-size: 10px; white-space: nowrap; }
-/* BLK-junior-20260916-0546: 読むだけの他フォルダの入口。探して 0 枚のときだけ urged で強く出る。 */
+/* 読むだけの他フォルダの入口。探して 0 枚のときだけ urged で強く出る。 */
 #folder-panel .folder-peek-open {
   font-size: 10px;
   padding: 2px 8px;
@@ -1217,7 +1217,7 @@ html, body {
   border-bottom: 1px solid var(--border);
   margin-bottom: 3px;
 }
-/* 対象 set との突合 (BLK-primary-20260908-1703) */
+/* 対象 set との突合 */
 #folder-panel .folder-target-summary {
   font-size: 10px;
   padding: 3px 6px;
@@ -1248,7 +1248,7 @@ html, body {
   cursor: pointer;
 }
 #folder-panel button.folder-target.folder-target-on { border-color: var(--accent); color: var(--accent); }
-/* BLK-owner-20260918-0049-prune: 棚卸しは 🧩 部品ビューへの導線だけ */
+/* 棚卸しは 🧩 部品ビューへの導線だけ */
 #folder-panel button.folder-board-link {
   display: block; width: calc(100% - 12px); margin: 3px 6px; font-size: 11px; text-align: left;
   border: 1px solid var(--border); border-radius: 3px; background: transparent;
@@ -1256,7 +1256,7 @@ html, body {
 }
 #peek-board .pc-todo { font-size: 10px; padding: 1px 6px 3px; color: var(--text-secondary); }
 #peek-board .pc-todo .has-todo { color: var(--accent-red); margin-right: 8px; }
-/* 上書きされる前の版 (BLK-junior-20260908-2003)。行の末尾に付き、押すと
+/* 上書きされる前の版。行の末尾に付き、押すと
    すぐ下に版が開く。版のある図にしか出ないので、普段の一覧は今までのまま。 */
 #folder-panel button.folder-versions {
   flex: 0 0 auto;
@@ -1276,7 +1276,7 @@ html, body {
   gap: 2px;
   font-size: 10px;
   color: var(--text-secondary);
-  /* BLK-primary-20260916-0100 (差し戻し 1 回目): 一覧の行は横に長く、パネルは
+  /* 一覧の行は横に長く、パネルは
      横にもスクロールする (実測 scrollWidth 896 / clientWidth 608)。[履歴] は行の右端に
      あるので、押すとパネルが右へ 288px スクロールし、左端から始まるこの一覧は
      画面の外 (x=-62) へ出る。戻す先を名指しする 1 行もろとも読めなくなっていた。
@@ -1284,7 +1284,7 @@ html, body {
   position: sticky;
   left: 0;
 }
-/* 中身が減ったまま保存された図に出す、戻す先の名指し (BLK-primary-20260916-0100)。
+/* 中身が減ったまま保存された図に出す、戻す先の名指し。
    20 行ぜんぶ同じ見た目の一覧から「どれに戻せば直るか」を当てさせない。 */
 #folder-panel .folder-version-shrink {
   display: flex;
@@ -1321,7 +1321,7 @@ html, body {
   overflow-wrap: anywhere;
   font-weight: 600;
 }
-/* 減っていないときに出す 1 行 (BLK-primary-20260916-0100)。名指しの警告ではないので
+/* 減っていないときに出す 1 行。名指しの警告ではないので
    枠も色も付けず、行数だけを静かに言う。 */
 #folder-panel .folder-version-status {
   font-size: 10px;
@@ -1333,7 +1333,7 @@ html, body {
   overflow-wrap: anywhere;
 }
 #folder-panel button.folder-version[data-version-best="1"] { border-color: var(--accent); }
-/* 版 1 本ぶんの行。「開く」と「戻す」を横に並べる (BLK-primary-20260913-0306-friction) */
+/* 版 1 本ぶんの行。「開く」と「戻す」を横に並べる */
 #folder-panel .folder-version-row { display: flex; gap: 2px; align-items: stretch; }
 #folder-panel button.folder-version-restore {
   flex: 0 0 auto;
@@ -1355,7 +1355,7 @@ html, body {
   background: transparent;
   color: var(--text-primary);
 }
-/* 図種のバッジと要約 (BLK-junior-20260908-2003)。名前が diagram1 のままでも
+/* 図種のバッジと要約。名前が diagram1 のままでも
    何の図かが行で分かり、要約の 0 で「その図種は 1 枚も無い」が分かる。 */
 #folder-panel .folder-kind {
   flex: 0 0 auto;
@@ -1367,7 +1367,7 @@ html, body {
   color: var(--text-secondary);
 }
 #folder-panel .folder-kinds { color: var(--text-secondary); }
-/* 名乗り (ファイル名の図種) と本文の図種の食い違い (BLK-reviewer-20260914-1406-wish)。
+/* 名乗り (ファイル名の図種) と本文の図種の食い違い。
    中身が別の図で塗り潰される事故は、これまで全文を読むまで誰にも見えなかった。
    赤はファイル名と食い違った図だけに付け、保存時の控えとの差は橙に留める
    (控えとの差は「紛らわしい書き方」で普通に出るので、赤にすると印が効かなくなる)。 */
@@ -1391,7 +1391,7 @@ html, body {
   padding: 2px 6px;
 }
 #folder-panel .folder-kind-mismatch-bad { color: var(--accent-red); }
-/* 版のバッジと、選んでいる指摘が指す版の光り (BLK-junior-20260914-1106-wish)。
+/* 版のバッジと、選んでいる指摘が指す版の光り。
    資料用・編集中・旧版が同じ図種の枠に並んでも、名前の末尾を読み比べずに済む。 */
 #folder-panel .folder-variant {
   flex: 0 0 auto;
@@ -1416,7 +1416,7 @@ html, body {
   background: transparent;
   border: none;
 }
-/* 実データ / テンプレの分類 (BLK-reviewer-20260908-0203-wish) */
+/* 実データ / テンプレの分類 */
 #folder-panel button.folder-role {
   flex: 0 0 auto;
   width: auto;
@@ -1454,7 +1454,7 @@ html, body {
   padding: 2px 6px;
 }
 #folder-panel .folder-role-summary.has-dirty { color: var(--accent-red); }
-/* レビュー指摘の反映状態 (BLK-junior-20260908-0630-wish)。
+/* レビュー指摘の反映状態。
    名前の右に置き、「(レビュー反映)」という別名保存の代わりにする */
 #folder-panel .folder-review-badge {
   font-size: 9px;
@@ -1479,7 +1479,7 @@ html, body {
   color: var(--text-secondary);
   padding: 2px 6px;
 }
-/* 指摘.md から見た 1 枚の立場 (BLK-junior-20260914-1206-wish)。
+/* 指摘.md から見た 1 枚の立場。
    対象外もはっきり出す — 印が無いだけだと「まだ読めていない」と区別できず、
    開かずに飛ばす根拠にならない */
 #folder-panel .folder-note-badge {
@@ -1510,7 +1510,7 @@ html, body {
   color: var(--text-secondary);
   padding: 2px 6px;
 }
-/* SVG が puml に追いついているか (BLK-reviewer-20260908-0103) */
+/* SVG が puml に追いついているか */
 #folder-panel .folder-svg-badge {
   font-size: 9px;
   border: 1px solid var(--accent-red);
@@ -1520,12 +1520,12 @@ html, body {
   white-space: nowrap;
 }
 #folder-panel .folder-svg-badge.svg-unknown { border-color: var(--text-secondary); color: var(--text-secondary); }
-/* mtime だけが古く、中身は追いついている図 (BLK-reviewer-20260915-0406-wish)。
+/* mtime だけが古く、中身は追いついている図。
    作り直しの催促ではないので、赤ではなく控えめな色で出す。 */
 #folder-panel .folder-svg-badge.svg-stale-settled {
   border-color: var(--text-secondary); color: var(--text-secondary); font-weight: normal;
 }
-/* 内容での判定 (BLK-reviewer-20260908-1103)。mtime の「古い」より強い印 —
+/* 内容での判定。mtime の「古い」より強い印 —
    こちらは中身を突き合わせた結果なので、作り直しが要ることが確実に分かる。 */
 #folder-panel .folder-svg-badge.svg-differ {
   border-color: var(--accent-red); color: var(--accent-red); font-weight: bold;
@@ -1538,7 +1538,7 @@ html, body {
   padding: 2px 6px;
 }
 #folder-panel .folder-svg-summary.has-stale { color: var(--accent-red); }
-/* 書き出し漏れ・作り直しが要る図の名前 (BLK-reviewer-20260908-0823-wish) */
+/* 書き出し漏れ・作り直しが要る図の名前 */
 #folder-panel .folder-svg-names {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
   font-size: 10px; padding: 1px 6px 3px;
@@ -1551,21 +1551,21 @@ html, body {
 }
 #folder-panel .folder-svg-names.svg-missing button.folder-svg-name { border-color: var(--accent-red); }
 #folder-panel button.folder-svg-name:hover { border-color: var(--accent); }
-/* その行の図だけを作り直す (BLK-primary-20260908-1203) */
+/* その行の図だけを作り直す */
 #folder-panel button.folder-svg-names-render {
   border: 1px solid var(--accent); border-radius: 3px; background: var(--bg-tertiary);
   color: var(--accent); font-size: 10px; padding: 0 6px; width: auto; cursor: pointer;
   margin-left: auto; white-space: nowrap;
 }
 #folder-panel button.folder-svg-names-render:disabled { border-color: var(--border); color: var(--text-secondary); cursor: default; }
-/* 内容での 1 行と、内容を確かめるボタン (BLK-reviewer-20260908-1103) */
+/* 内容での 1 行と、内容を確かめるボタン */
 #folder-panel .folder-svg-content {
   font-size: 10px;
   color: var(--text-secondary);
   padding: 0 6px 2px;
 }
 #folder-panel .folder-svg-content.has-stale { color: var(--accent-red); }
-/* 判定の根拠 (BLK-reviewer-20260908-0103 の 1403 追記)。上の 1 行より一段弱く出す */
+/* 判定の根拠 (の 1403 追記)。上の 1 行より一段弱く出す */
 #folder-panel .folder-svg-basis {
   font-size: 9px;
   color: var(--text-secondary);
@@ -1583,14 +1583,14 @@ html, body {
   white-space: nowrap;
 }
 /* 未刻印 / 体裁差のみ は「直せ」ではなく「この一覧では言えない」なので赤にしない
-   (BLK-reviewer-20260908-2003-wish) */
+ */
 #folder-panel .folder-svg-content-badge[data-svg-content="unverified"],
 #folder-panel .folder-svg-content-badge[data-svg-content="format"] {
   border-color: var(--border);
   color: var(--text-secondary);
   font-weight: normal;
 }
-/* 未刻印の図だけを確かめる (BLK-reviewer-20260908-2003-wish) */
+/* 未刻印の図だけを確かめる */
 #folder-panel button.folder-svg-names-verify {
   border: 1px solid var(--border); border-radius: 3px; background: var(--bg-tertiary);
   color: var(--text-primary); font-size: 10px; padding: 0 6px; width: auto; cursor: pointer;
@@ -1598,7 +1598,7 @@ html, body {
 }
 #folder-panel button.folder-svg-names-verify:disabled { color: var(--text-secondary); cursor: default; }
 #folder-panel .folder-svg-mtime { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); opacity: 0.85; }
-/* puml 変更 / SVG 書き出し と並べる labels の突合結果 (BLK-reviewer-20260908-2003-wish)。
+/* puml 変更 / SVG 書き出し と並べる labels の突合結果。
    時刻の隣に置くので、時刻と同じ大きさで、色だけで一致・不一致を分ける。 */
 #folder-panel .folder-svg-labels {
   flex: 0 0 auto; font-size: 9px; white-space: nowrap;
@@ -1611,7 +1611,7 @@ html, body {
   font-size: 10px; color: var(--text-secondary); padding: 0 6px 2px;
 }
 #folder-panel .folder-svg-labels-summary.has-stale { color: var(--accent-red); }
-/* 出力先のクロス (BLK-reviewer-20260914-0906-wish)。「内容ずれ」より強い断定なので、
+/* 出力先のクロス。「内容ずれ」より強い断定なので、
    行の中でいちばん目に付く印にする — 相手の名前は title に入れる。 */
 #folder-panel .folder-svg-cross {
   flex: 0 0 auto; font-size: 9px; white-space: nowrap; font-weight: bold;
@@ -1621,7 +1621,7 @@ html, body {
 #folder-panel .folder-svg-cross-summary {
   font-size: 10px; color: var(--accent-red); font-weight: bold; padding: 0 6px 2px;
 }
-/* この周の保存が効いたか (BLK-primary-20260914-1406-wish)。引き継ぐ前に見る行なので、
+/* この周の保存が効いたか。引き継ぐ前に見る行なので、
    効かなかった図があるときだけ赤くする。 */
 #folder-panel .folder-save-verify {
   font-size: 10px; color: var(--text-secondary); padding: 2px 6px;
@@ -1642,7 +1642,7 @@ html, body {
 }
 #folder-panel .folder-save-verify-name { font-size: 10px; color: var(--text-secondary); }
 #folder-panel .folder-save-verify-name.is-bad { color: var(--accent-red); }
-/* 中身が同じ図の統合と 1 枚削除 (BLK-primary-20260914-1306-wish)。
+/* 中身が同じ図の統合と 1 枚削除。
    重複が 0 組なら行ごと出さないので、普段の一覧は今までのまま。 */
 #folder-panel .folder-dupe-summary {
   font-size: 10px; color: var(--accent); padding: 2px 6px;
@@ -1668,7 +1668,7 @@ html, body {
 #folder-panel button.folder-delete.folder-delete-armed {
   border-color: var(--accent-red); color: var(--accent-red); font-weight: bold;
 }
-/* 本体 / 編集中 / SVG の反映状況 (BLK-reviewer-20260914-1506-wish)。
+/* 本体 / 編集中 / SVG の反映状況。
    反映漏れが 0 枚でも見出しの 1 行は出す (節が無いことを「揃っている」と読ませない)。 */
 #folder-panel .folder-sync-summary {
   font-size: 10px; color: var(--text-secondary); padding: 2px 6px;
@@ -1706,7 +1706,7 @@ html, body {
 #folder-panel .folder-sync-badge-base-ahead, #folder-panel .folder-sync-badge-unknown {
   color: var(--text-secondary);
 }
-/* 宛先の書かれていない指摘 (BLK-junior-20260914-1306)。
+/* 宛先の書かれていない指摘。
    自分宛だけを目立たせる。他の人宛・宛先不明も隠さない (隠すと指摘が落ちる)。 */
 #folder-panel .folder-unaddr { padding: 0 6px 3px; }
 #folder-panel button.folder-unaddr-head {
@@ -1722,7 +1722,7 @@ html, body {
   border: 1px solid var(--border); border-top: 0; border-radius: 0 0 3px 3px;
   padding: 3px 5px; max-height: 160px; overflow: auto;
 }
-/* 下書き ↔ 本体の差し替え待ちキュー (BLK-reviewer-20260914-1806-wish)。
+/* 下書き ↔ 本体の差し替え待ちキュー。
    反映漏れの節が「食い違う図」だけを出すのに対し、ここは下書きの全部を台帳にする。
    削除予定は落ち着いた色にする (消してよい行が赤く並ぶと、直す行と見分けられない)。 */
 #folder-panel .folder-swapq-summary {
@@ -1751,7 +1751,7 @@ html, body {
 }
 #folder-panel .folder-swapq-badge { font-size: 9px; margin-left: 3px; white-space: nowrap; color: var(--text-secondary); }
 #folder-panel .folder-swapq-badge-apply, #folder-panel .folder-swapq-badge-restore { color: var(--accent); }
-/* 部品ごとの突合 (BLK-reviewer-20260914-1106-wish)。audit.js の JSON を読む代わりに
+/* 部品ごとの突合。audit.js の JSON を読む代わりに
    一覧の頭で読む行なので、欠落は赤字で、束ねた図はその場で開けるボタンにする。 */
 #folder-panel .folder-part-cross-summary {
   font-size: 10px; color: var(--text-secondary); padding: 0 6px 2px;
@@ -1779,7 +1779,7 @@ html, body {
   margin: 2px 6px 4px;
   width: auto;
 }
-/* 上書きせずに中身を確かめるボタン (BLK-reviewer-20260908-1103-wish) */
+/* 上書きせずに中身を確かめるボタン */
 #folder-panel button.folder-svg-verify-btn {
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -1787,7 +1787,7 @@ html, body {
   width: auto;
 }
 #folder-panel .folder-svg-verify-note { color: var(--text-primary); }
-/* 食い違いの中身 (BLK-reviewer-20260908-1203-wish) */
+/* 食い違いの中身 */
 #folder-panel .folder-svg-diff {
   margin: 0 6px 4px;
   border: 1px solid var(--accent-red);
@@ -1801,7 +1801,7 @@ html, body {
 #folder-panel .folder-svg-diff-row { padding-left: 8px; white-space: normal; word-break: break-all; }
 #folder-panel .folder-svg-diff-row.diff-missing::before { content: '欠落 '; color: var(--accent-red); }
 #folder-panel .folder-svg-diff-row.diff-leftover::before { content: '残存 '; color: var(--accent); }
-/* BLK-reviewer-20260908-1303: 文字に現れない差 (図形の数・並び順)。 */
+/* 文字に現れない差 (図形の数・並び順)。 */
 #folder-panel .folder-svg-diff-row.diff-structural::before { content: '構造 '; color: var(--accent-orange, var(--accent)); }
 #folder-panel textarea.folder-svg-diff-report {
   width: calc(100% - 12px);
@@ -1826,7 +1826,7 @@ html, body {
   margin: 0 6px 4px;
   width: auto;
 }
-/* 他のペルソナが今も書き込み中かもしれない図 (BLK-reviewer-20260908-0923-wish) */
+/* 他の人が今も書き込み中かもしれない図 */
 #folder-panel .folder-write-badge {
   font-size: 9px;
   border: 1px solid var(--accent);
@@ -1867,7 +1867,7 @@ html, body {
 #folder-panel .folder-badge { flex: 0 0 auto; font-size: 9px; line-height: 1; }
 #folder-panel .folder-badge-changed { color: var(--accent); }
 #folder-panel .folder-badge-new { color: var(--accent); font-weight: 700; }
-/* BLK-reviewer-20260916-0426-wish: 前回控えから変わっていない図の印。
+/* 前回控えから変わっていない図の印。
    読み飛ばしてよい行なので、変更の ● より弱い色で置く。 */
 #folder-panel .folder-stamp {
   flex: 0 0 auto; font-size: 9px; line-height: 1; padding: 1px 4px;
@@ -1882,7 +1882,7 @@ html, body {
 #folder-panel .folder-mtime { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); }
 #folder-panel button[data-review-status="unchanged"] .folder-name { color: var(--text-secondary); }
 #folder-panel .folder-gone { color: var(--text-secondary); font-style: italic; }
-/* 変更図の旧DSL/新DSL を並べて読む (BLK-reviewer-20260907-1803-wish) */
+/* 変更図の旧DSL/新DSL を並べて読む */
 #folder-panel button.folder-diff {
   flex: 0 0 auto;
   width: auto;
@@ -1954,7 +1954,7 @@ html, body {
   cursor: pointer;
 }
 #rd-foot button:hover, #rd-head .rd-close:hover { background: var(--bg-secondary); }
-/* 一時控え (BLK-junior-20260907-2009-wish): 成果物と控えを一覧で分ける */
+/* 一時控え: 成果物と控えを一覧で分ける */
 #folder-panel button.folder-draft {
   flex: 0 0 auto;
   width: auto;
@@ -1980,13 +1980,13 @@ html, body {
 #folder-panel .folder-row-draft .folder-name { color: var(--text-secondary); font-style: italic; }
 #tab-bar .tab-tool.tab-tool-on { color: var(--accent); }
 
-/* BLK-primary-20260908-0823-design (7a): 機能ボタンを「ツール」1 か所に畳む。
+/* 機能ボタンを「ツール」1 か所に畳む。
    畳んだ状態では機能ボタンがタブ列から消え、6 分類のメニューから選ぶ。 */
 #tab-bar.tools-folded .tab-tool.tool-folded { display: none; }
-/* BLK-human-20260917-0901: 手元の .puml を開く入口・ドロップ・未対応記法の一覧 */
+/* 手元の .puml を開く入口・ドロップ・未対応記法の一覧 */
 .folder-open-file { display: block; width: 100%; margin: 0 0 6px; padding: 6px 8px; text-align: left; font-size: 12px; cursor: pointer;
   background: var(--bg-tertiary, #2d333b); color: var(--text-primary, #e6edf3); border: 1px solid var(--accent, #58a6ff); border-radius: 4px; }
-/* BLK-builder-20260924-1415-4 (design 7a / 9a): 入口は残すが図の上に重ねない。
+/* 入口は残すが図の上に重ねない。
    プレビューの流れの中で図 (#preview-svg) のすぐ下に置く (見本の図の下段を隠さない) */
 #open-empty-hint { position: relative; display: block; width: fit-content; max-width: calc(100% - 8px); box-sizing: border-box;
   margin: 16px 0 0; z-index: 5; text-align: center;
@@ -2000,11 +2000,11 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #unsupported-summary { padding-right: 275px; }
 #unsupported-panel ul { margin: 4px 0 0 16px; padding: 0; }
 #unsupported-panel button { font-size: 11px; margin-right: 6px; }
-/* BLK-primary-20260908-0923-design (7b): タブ列にはボタンを 1 つも置かない。
+/* タブ列にはボタンを 1 つも置かない。
    「ツール ▾」も消し、機能の入口は Ctrl+K だけにする。 */
 #tab-bar.tools-hide-tool-btn #btn-tab-tools { display: none; }
 #btn-tab-tools[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
-/* BLK-primary-20260908-1803: 「ツール ▾」を出さないときの入口 (右端の「ツール ▾」)。
+/* 「ツール ▾」を出さないときの入口 (右端の「ツール ▾」)。
    タブ列を静かに保ったまま、畳んだ機能の一覧を 1 クリックで開けるようにする。 */
 #tab-bar.tools-hide-mini-btn #btn-tab-tools-mini { display: none; }
 /* design 7a / 9a / 10a: 入口は枠付きの「ツール ▾」をタブ列の右端に置く。図のタブが増えて
@@ -2068,7 +2068,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   padding: 3px 8px;
 }
 .tool-menu-filter:focus { outline: none; border-color: var(--accent); }
-/* BLK-human-20260923-1701 (design 10b): ファイル単位の操作は FILES の右クリックへ、の案内 */
+/* ファイル単位の操作は FILES の右クリックへ、の案内 */
 .tool-menu-files-note {
   padding: 6px 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary);
 }
@@ -2161,7 +2161,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   color: var(--accent-orange);
   font-size: 10px;
 }
-/* 単独キーを持つツールの割り当て (BLK-primary-20260909-0303)。件数の badge と
+/* 単独キーを持つツールの割り当て。件数の badge と
    同じ右端に寄せるが、色は控えめにして件数と読み違えないようにする。 */
 .tool-menu-key {
   margin-left: auto;
@@ -2177,7 +2177,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   font-size: 10px;
   text-align: center;
 }
-/* まとめて開く (BLK-primary-20260907-1703): 印の欄と名前を 1 行に並べる */
+/* まとめて開く: 印の欄と名前を 1 行に並べる */
 #folder-panel .folder-row { display: flex; align-items: center; gap: 6px; }
 #folder-panel .folder-row .folder-item { flex: 1 1 auto; min-width: 0; }
 #folder-panel [data-exact="1"] { outline: 1px solid var(--accent); border-radius: 4px; }
@@ -2217,7 +2217,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   cursor: default;
 }
 #folder-panel button.folder-open-many:disabled:hover { background: transparent; }
-/* 印を付けた図を開かずに zip にする (BLK-primary-20260914-1806-wish)。
+/* 印を付けた図を開かずに zip にする。
    「開く」と同じ列に並べる —— どちらも印を付けた図をどうするかのボタン。 */
 #folder-panel button.folder-export-svg {
   flex: 1 1 auto;
@@ -2268,7 +2268,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #diff-panel .diff-row.changed { color: var(--accent); }
 #diff-panel .diff-head { color: var(--text-primary); padding: 2px 4px 4px 4px; }
 #diff-panel .diff-actions { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
-/* ── レビュー机 (BLK-junior-20260907-1403-wish) ───────────────────────────── */
+/* ── レビュー机 ───────────────────────────── */
 /* 指摘が 0 でないことは書いた本人には見えないので、ボタンの側で言い切る。 */
 #btn-tab-review.has-finding { color: var(--accent-orange); border-color: var(--accent-orange); }
 
@@ -2356,7 +2356,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #pin-panel .pin-row .pin-where { cursor: pointer; color: var(--accent); }
 #pin-panel .pin-row.stale .pin-where { color: var(--accent-red); cursor: default; }
 #pin-panel .pin-row.read { opacity: 0.65; }
-/* 対応済み (BLK-junior-20260908-0103-wish)。読んだだけの指摘と見分けが付く色にする */
+/* 対応済み。読んだだけの指摘と見分けが付く色にする */
 #pin-panel .pin-row.done { opacity: 0.8; border-left: 2px solid var(--accent-green); padding-left: 4px; }
 #pin-panel .pin-row .pin-state { color: var(--text-secondary); margin-left: 6px; }
 #pin-panel .pin-row.done .pin-state { color: var(--accent-green); }
@@ -2380,7 +2380,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #pin-panel .pin-row .pin-jump[disabled] { opacity: 0.45; cursor: default; border-color: var(--border); color: var(--text-secondary); }
 #pin-panel .pin-jump-bar { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px; }
 #pin-panel #pin-jump-note { color: var(--text-secondary); padding: 4px 2px 0 2px; }
-/* 直す側の応答 (BLK-reviewer-20260908-1303-wish)。指摘の下にぶら下げる。 */
+/* 直す側の応答。指摘の下にぶら下げる。 */
 #pin-panel .pin-reply-head { color: var(--text-secondary); padding: 0 4px 4px 4px; }
 #pin-panel .pin-row .pin-reply {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
@@ -2433,7 +2433,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 }
 #inbox-panel .ib-filter button { cursor: pointer; }
 #inbox-panel .ib-empty { color: var(--text-secondary); padding: 6px 4px; }
-/* 根拠が崩れた指摘 (BLK-reviewer-20260908-0003)。読み直す対象を名指しで先頭に出す */
+/* 根拠が崩れた指摘。読み直す対象を名指しで先頭に出す */
 #inbox-panel .ib-claims {
   margin: 2px 0 4px 0;
   padding: 3px 4px;
@@ -2452,13 +2452,13 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #inbox-panel .ib-row .ib-where { color: var(--accent); font-family: var(--font-mono); }
 #inbox-panel .ib-row.stale .ib-where { color: var(--accent-red); }
 #inbox-panel .ib-row.read { opacity: 0.65; }
-/* 直す側の応答 (BLK-reviewer-20260908-1303-wish) */
+/* 直す側の応答 */
 #inbox-panel .ib-row .ib-reply { display: block; padding-left: 12px; }
 #inbox-panel .ib-row .ib-reply.none { color: var(--text-secondary); opacity: 0.7; }
 #inbox-panel .ib-row[data-verdict="done"] .ib-reply { color: var(--accent-green); }
 #inbox-panel .ib-row[data-verdict="held"] .ib-reply { color: var(--accent-orange); }
 
-/* 着手状況 (BLK-reviewer-20260908-1603-wish) */
+/* 着手状況 */
 #inbox-panel .ib-progress {
   padding: 3px 6px; border-bottom: 1px solid var(--border-color);
   color: var(--text-secondary); font-size: 11px;
@@ -2471,7 +2471,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #inbox-panel .ib-row .ib-prog.started { color: var(--accent-orange); border-color: var(--accent-orange); }
 #inbox-panel .ib-row .ib-prog.resolved { color: var(--accent-green); border-color: var(--accent-green); }
 
-/* 反映の判定 (BLK-reviewer-20260908-1903-wish) */
+/* 反映の判定 */
 #inbox-panel .ib-verify-head {
   padding: 3px 6px; border-bottom: 1px solid var(--border-color);
   color: var(--text-secondary); font-size: 11px;
@@ -2584,15 +2584,15 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #peek-dirs .peek-dir.selected, #peek-files .peek-file.selected { border-color: var(--accent); }
 #peek-dirs .peek-dir.current { color: var(--text-secondary); }
 #peek-dirs .peek-head, #peek-files .peek-head { color: var(--text-secondary); padding: 2px 6px 6px; }
-/* BLK-reviewer-20260909-0603-wish: 覗いたフォルダの一覧にも SVG の鮮度を出す。
+/* 覗いたフォルダの一覧にも SVG の鮮度を出す。
    行の印は一致にも出す (無印を「確かめてある」と読ませない)。 */
 #peek-files .peek-file { display: flex; align-items: center; gap: 6px; }
 #peek-files .peek-file .peek-file-name {
   flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* BLK-junior-20260912-2206: 覗き一覧にも図種の印と内訳を出す
+/* 覗き一覧にも図種の印と内訳を出す
    (名前の語尾から図種を推測しながら 30 行読む手を無くす)。 */
-/* 確認の結論の控え (BLK-junior-20260914-1706-wish)。相手に 0 枚の図種にだけ出る。 */
+/* 確認の結論の控え。相手に 0 枚の図種にだけ出る。 */
 #peek-files .peek-verdict-row {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 1px 6px 3px;
 }
@@ -2672,7 +2672,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   overflow-x: auto;
   margin: 10px 0 0;
 }
-/* BLK-reviewer-20260909-0403-wish: フォルダ横断のドメイン突合。
+/* フォルダ横断のドメイン突合。
    共通 / 片方だけ を色で分ける (どちらのフォルダの側かは接頭辞で言う)。 */
 #peek-cohort { padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
 #peek-cohort .cohort-head { font-size: 12px; font-weight: 600; padding-bottom: 6px; }
@@ -2702,7 +2702,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #peek-cohort .cohort-only-a { border-color: #d08770; color: #d08770; }
 #peek-cohort .cohort-only-b { border-color: #5e81ac; color: #5e81ac; }
 #peek-cohort .cohort-none { color: var(--text-secondary); opacity: 0.7; }
-/* 部品名の対応表 (BLK-reviewer-20260914-1706-wish)。2 列の「片方だけ」を結び直す
+/* 部品名の対応表。2 列の「片方だけ」を結び直す
    代わりに、揺れている組だけを 1 行ずつ出す。 */
 #peek-cohort .cohort-pairs { padding: 4px 0 2px; }
 #peek-cohort .cohort-pairs-head { font-size: 10px; color: var(--text-secondary); padding-bottom: 2px; }
@@ -2735,14 +2735,14 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 }
 #peek-cohort .cohort-verdict-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-/* BLK-reviewer-20260912-2206-wish: 同名ファイルを左右に並べて読む。
+/* 同名ファイルを左右に並べて読む。
    食い違う語だけに色を置き、揃っている語は本文と同じ色のままにする
    (全部光ると、どこを見ればよいかが本文を読み直さないと決まらない)。 */
-/* 指摘.md を 1 件ずつ並べる (BLK-junior-20260913-0306-wish) */
+/* 指摘.md を 1 件ずつ並べる */
 #peek-note { padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
 #peek-note .note-head { font-size: 12px; font-weight: 600; padding-bottom: 2px; }
 #peek-note .note-summary { font-size: 11px; color: var(--text-secondary); padding-bottom: 6px; }
-/* 表記揺れの自動突合 (BLK-junior-20260917-0023-wish) */
+/* 表記揺れの自動突合 */
 #peek-note .vocab-band { border: 1px solid var(--border); border-radius: 4px; padding: 5px 6px; margin-bottom: 8px; }
 #peek-note .vocab-band[data-vocab-state="hit"] { border-color: var(--accent); }
 #peek-note .vocab-sum { font-size: 11px; font-weight: 600; padding-bottom: 3px; }
@@ -2752,13 +2752,13 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #peek-note .vocab-no { color: var(--text-secondary); padding-right: 6px; }
 #peek-note .vocab-hit { background: #ffe08a; color: #3a2c00; border-radius: 2px; }
 #peek-note .vocab-more { font-size: 11px; color: var(--text-secondary); padding-top: 2px; }
-/* 表記揺れの統一先 (BLK-junior-20260917-0123-wish) */
+/* 表記揺れの統一先 */
 #peek-note .vocab-canon-sum { font-size: 11px; font-weight: 600; padding-top: 4px; }
 #peek-note .vocab-canon { font-size: 11px; padding: 2px 0 0 0; }
 #peek-note .vocab-canon-head { color: var(--text-primary); }
 #peek-note .vocab-canon[data-canon-source="unknown"] .vocab-canon-head { color: var(--text-secondary); }
 #peek-note .vocab-canon-src { color: var(--text-secondary); padding-left: 8px; }
-/* 前回保存版と今回保存版を並べる (BLK-reviewer-20260917-0123-wish) */
+/* 前回保存版と今回保存版を並べる */
 #peek-ba { border: 1px solid var(--border); border-radius: 4px; padding: 6px; margin-bottom: 8px; }
 #peek-ba .ba-summary { font-size: 12px; font-weight: 600; padding-bottom: 4px; }
 #peek-ba .ba-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -2790,14 +2790,14 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #peek-note .note-finding:hover { border-color: var(--accent); }
 #peek-note .note-finding.selected { border-color: var(--accent); color: var(--accent); }
 #peek-note .note-finding[data-note-ready="0"] { opacity: 0.62; cursor: default; }
-/* 提案アクションと [適用] (BLK-primary-20260914-1006-wish)。
+/* 提案アクションと [適用]。
    指摘の行のすぐ下に置き、当てる操作と対象図を読んでから押せるようにする。 */
 #peek-note .note-action-row {
   display: flex; align-items: center; gap: 6px; margin: -2px 0 8px 0; padding: 0 7px 0 9px;
   font-size: 11px; line-height: 1.5; color: var(--text-secondary);
 }
 #peek-note .note-action-text { flex: 1 1 auto; }
-/* 対象の図種・版 1 行 (BLK-junior-20260914-1106-wish)。指摘の行のすぐ下に置き、
+/* 対象の図種・版 1 行。指摘の行のすぐ下に置き、
    押す前に「どの版が開くのか」を読めるようにする。 */
 #peek-note .note-target-row {
   margin: -2px 0 2px 0; padding: 0 7px 0 9px;
@@ -2814,7 +2814,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   background: var(--bg-secondary); border: 1px solid var(--accent); color: var(--accent);
 }
 #peek-note .note-apply:disabled { border-color: var(--border); color: var(--text-secondary); cursor: default; opacity: 0.6; }
-/* 二択の指摘のもう一方 (BLK-primary-20260915-0007-friction)。本手と並べるが、
+/* 二択の指摘のもう一方。本手と並べるが、
    どちらが既定かは決めない — 枠だけ控えめにして 2 つ目だと分かるようにする。 */
 #peek-note .note-apply-alt { margin-left: 4px; border-color: var(--border); color: var(--text-secondary); }
 #peek-note .note-mark {
@@ -2852,13 +2852,13 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 }
 #peek-sbs .sbs-align-btn:hover { border-color: var(--accent); color: var(--accent); }
 #peek-sbs-toggle.on { border-color: var(--accent); color: var(--accent); }
-/* BLK-junior-20260915-0606-wish: 部品ビュー。6 図種 × (先輩 / 自分) を 1 画面に。 */
+/* 部品ビュー。6 図種 × (先輩 / 自分) を 1 画面に。 */
 #peek-board-toggle.on { border-color: var(--accent); color: var(--accent); }
 #peek-board { padding: 6px; font-size: 11px; }
 #peek-board .pb-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 6px; }
 #peek-board-summary { color: var(--text-secondary); }
 #peek-board-summary.has-todo { color: var(--accent-red); font-weight: bold; }
-/* BLK-junior-20260915-2346-wish: 部品カードの帯。6 図種を 1 まとまりとして
+/* 部品カードの帯。6 図種を 1 まとまりとして
    「何枚済んだか」と「どの図がまだ先輩に合っていないか」を本文より先に出す。 */
 #peek-card {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -2891,7 +2891,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #peek-board .pb-row[data-editing="1"] .pb-mine-text { border-color: var(--accent); }
 #peek-board .pb-row[data-state="mine-missing"] .pb-kind { color: var(--accent-red); }
 #peek-board .pb-col-head { font-size: 10px; color: var(--text-secondary); padding-bottom: 2px; }
-/* BLK-junior-20260924-0704-wish: 共通の図から絞った手本の出典 1 行。 */
+/* 共通の図から絞った手本の出典 1 行。 */
 #peek-board .pb-shared-note { font-size: 10px; color: var(--accent); padding-bottom: 2px; }
 #peek-board .pb-ref-text, #peek-board .pb-mine-text {
   width: 100%; max-height: 150px; min-height: 90px; overflow: auto; box-sizing: border-box;
@@ -2919,7 +2919,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 }
 #peek-parts .peek-part-chip:hover { border-color: var(--accent); color: var(--accent); }
 #peek-parts .peek-part-chip.selected { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-/* BLK-junior-20260915-0506-wish: 相乗り図の部品フィルタ。 */
+/* 相乗り図の部品フィルタ。 */
 #peek-focus { padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
 #peek-focus .peek-focus-head { font-size: 11px; color: var(--text-secondary); padding-bottom: 4px; }
 #peek-focus .peek-focus-chip, #peek-focus .peek-focus-mode {
@@ -2934,7 +2934,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #peek-focus .peek-focus-label { font-size: 11px; color: var(--accent); padding-top: 4px; }
 #peek-dsl .peek-dsl-dim { opacity: 0.35; }
 #peek-dsl .peek-dsl-keep { color: var(--text-primary); font-weight: 600; }
-/* ── 突合ダッシュボード (BLK-reviewer-20260908-1403-wish) ────────────
+/* ── 突合ダッシュボード ────────────
    別々のモーダルに分かれていた突合の出口を 1 枚の表にまとめる。 */
 #ab-modal-content {
   background: var(--bg-secondary);
@@ -2959,7 +2959,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #ab-tools { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 #ab-body { flex: 1; overflow: auto; padding: 10px 14px; }
 .ab-empty { color: var(--text-secondary); font-size: 12px; padding: 12px 0; }
-/* BLK-reviewer-20260915-2240-wish: 出典ごとに畳んだ表。出典の組み合わせが
+/* 出典ごとに畳んだ表。出典の組み合わせが
    1 つの塊で、その中に指摘が並ぶ。出口の名前は本文と見分けが付く印にする。 */
 .fo-group { margin-bottom: 14px; }
 .fo-group-head { font-size: 11px; font-weight: bold; color: var(--accent); padding: 4px 0; border-bottom: 1px solid var(--border); }
@@ -2983,7 +2983,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 .ab-doc { white-space: nowrap; font-family: var(--font-mono); }
 .ab-title { font-family: var(--font-mono); }
 .ab-detail { color: var(--text-secondary); }
-/* BLK-owner-20260924-1332-prune: 表記揺れの行から揃える先を選んで 🔤 表記統一へ渡す */
+/* 表記揺れの行から揃える先を選んで 🔤 表記統一へ渡す */
 .ab-note { font-size: 11px; color: var(--text-secondary); margin: 0 0 6px 0; }
 .ab-unify { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; }
 .ab-unify-lead { font-size: 11px; color: var(--text-secondary); }
@@ -2993,7 +2993,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 }
 .ab-unify-to:hover { border-color: var(--accent); }
 
-/* ── 継承元 (BLK-junior-20260908-1603-wish) ─────────────────────────────────
+/* ── 継承元 ─────────────────────────────────
    この図がどの図の後継かを 1 回登録し、継承元の更新を差分の行数で見せる。 */
 #lg-modal-content {
   background: var(--bg-secondary);
@@ -3039,7 +3039,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 .lg-diff .lg-d-add { color: var(--accent-green, #4caf50); display: block; }
 .lg-diff .lg-d-del { color: var(--accent-red); display: block; }
 
-/* ── 変遷履歴 (BLK-reviewer-20260908-0723-wish) ─────────────────────────────
+/* ── 変遷履歴 ─────────────────────────────
    1 図の版を新しい順に並べ、前の版に戻った版 (往復) を目で拾えるようにする。 */
 #vt-modal-content {
   background: var(--bg-secondary);
@@ -3086,7 +3086,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   font-size: 11px;
 }
 .vt-row.vt-revisit { border-color: var(--accent-orange); }
-/* BLK-owner-20260923-2312-prune: 保存した版の行 (開く・比較・この版に戻す) も「この図の履歴」の見た目で並べる */
+/* 保存した版の行 (開く・比較・この版に戻す) も「この図の履歴」の見た目で並べる */
 #vt-body .folder-version-row { display: flex; align-items: center; gap: 8px; }
 #vt-body .folder-version-row button {
   background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border);
@@ -3112,8 +3112,8 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 .vt-diff .vt-d-add { color: var(--accent-green, #4caf50); display: block; }
 .vt-diff .vt-d-del { color: var(--accent-red); display: block; }
 .vt-empty { font-size: 11px; color: var(--text-secondary); padding: 10px 0; }
-/* 提出用 zip の図選び (BLK-primary-20260908-1203-wish) */
-/* BLK-reviewer-20260917-0323-wish: 呼び出しグラフ */
+/* 提出用 zip の図選び */
+/* 呼び出しグラフ */
 #cg-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -3164,7 +3164,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 .cg-ref .cg-text { flex: 1 1 auto; word-break: break-all; }
 .cg-ref[data-kind="transition"] .cg-where { color: var(--accent); }
 #cg-empty { color: var(--text-secondary); padding: 10px 2px; }
-/* BLK-primary-20260917-0323-wish: 引き継ぎチェックリスト */
+/* 引き継ぎチェックリスト */
 #hb-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -3184,7 +3184,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #hb-peer-wrap { color: var(--text-secondary); font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
 #hb-peer { font-size: 12px; max-width: 220px; }
 #hb-table button.hb-peer-go { border: none; background: none; color: inherit; cursor: pointer; font: inherit; padding: 0; text-align: left; text-decoration: underline dotted; }
-/* BLK-primary-20260924-2332-wish: 食い違う要素を全部チップで出し、同じ食い違い方の図の枚数を添える */
+/* 食い違う要素を全部チップで出し、同じ食い違い方の図の枚数を添える */
 #hb-table td.hb-peer { white-space: normal; min-width: 180px; }
 #hb-table .hb-chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
 #hb-table button.hb-chip, #hb-table button.hb-chip-more {
@@ -3222,7 +3222,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer;
 }
 #hb-empty { color: var(--text-secondary); font-size: 12px; padding: 10px 2px; }
-/* BLK-owner-20260925-0235-prune: 引き継ぎ zip の対象と書き出しをチェックリストの窓に畳む */
+/* 引き継ぎ zip の対象と書き出しをチェックリストの窓に畳む */
 #hb-et { padding: 8px 14px 0; font-size: 12px; color: var(--text-primary); }
 #hb-et #et-line.is-warn { color: var(--warning, #d98b00); }
 #hb-et #et-hint { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
@@ -3251,7 +3251,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   font-size: 12px; padding: 6px 14px; color: var(--danger, #d05050);
 }
 #docset-handover[data-blocked="0"] { display: none; }
-/* BLK-primary-20260914-2006-wish: 資料セット */
+/* 資料セット */
 #docset-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -3304,9 +3304,9 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 .ds-row .ds-sum.ds-short { color: var(--warning, #d08a30); }
 .ds-row .ds-sum.ds-ready { color: var(--accent); }
 #docset-empty { padding: 14px; font-size: 12px; color: var(--text-secondary); }
-/* BLK-primary-20260916-0100-wish: 資料の体裁と貼り込みプレビュー */
+/* 資料の体裁と貼り込みプレビュー */
 #docset-layout { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-/* BLK-primary-20260917-0423-wish: 14 枚の見出し・注記の有無を行の頭で ○× にする */
+/* 14 枚の見出し・注記の有無を行の頭で ○× にする */
 .dl-row .dl-mark {
   flex: 0 0 auto;
   min-width: 11em;
@@ -3355,7 +3355,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #dl-sheet .dl-fig-note { color: var(--text-secondary); }
 #dl-sheet .dl-fig-file { color: var(--text-secondary); font-size: 11px; }
 #dl-sheet .dl-gone { color: var(--warning, #d08a30); }
-/* BLK-primary-20260916-0426-wish: 書き出した資料を客先の体裁で見返す (納品プレビュー) */
+/* 書き出した資料を客先の体裁で見返す (納品プレビュー) */
 #docset-proof { display: flex; flex-direction: column; min-height: 0; flex: 1; }
 #dp-head {
   display: flex; align-items: center; gap: 12px;
@@ -3479,7 +3479,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #expick-body label.expick-row .expick-mark { color: var(--text-secondary); font-size: 11px; }
 #expick-body label.expick-row .expick-mark.fix { color: var(--accent); }
 #expick-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
-/* 部品まとめ資料化 (BLK-junior-20260908-1903-wish) */
+/* 部品まとめ資料化 */
 #cpack-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -3513,7 +3513,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #cpack-preview { padding: 6px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); max-height: 22vh; overflow-y: auto; }
 #cpack-preview div { padding: 1px 0; }
 #cpack-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
-/* 1 枚を資料化 (BLK-junior-20260908-2303-wish) */
+/* 1 枚を資料化 */
 #mexp-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -3543,7 +3543,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   flex: 1; background: var(--bg-tertiary); color: var(--text-primary);
   border: 1px solid var(--border); border-radius: 3px; font-size: 12px; padding: 3px 6px;
 }
-/* 資料化の残り (部品 × 図種) — BLK-junior-20260914-2006-wish */
+/* 資料化の残り (部品 × 図種) — */
 #mexp-matrix-summary { padding: 8px 14px 4px; font-size: 11px; color: var(--text-primary); }
 #mexp-matrix-wrap { max-height: 34vh; overflow: auto; padding: 0 14px; }
 #mexp-matrix { border-collapse: collapse; font-size: 11px; width: 100%; }
@@ -3559,7 +3559,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #mexp-matrix tr.mexp-mrow[data-picked="1"] td { background: var(--bg-tertiary); }
 #mexp-matrix td.mexp-mcomp { cursor: pointer; }
 #mexp-matrix-legend { padding: 3px 14px 6px; font-size: 10px; color: var(--text-secondary); }
-/* 行まるごとの一括資料化 (BLK-junior-20260915-0106-wish) */
+/* 行まるごとの一括資料化 */
 #mexp-matrix td.mexp-mrun { padding: 1px 4px; }
 #mexp-matrix button.mexp-row-run {
   background: var(--bg-tertiary); border: 1px solid var(--accent); color: var(--accent);
@@ -3568,7 +3568,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #mexp-matrix button.mexp-row-run[disabled] {
   border-color: var(--border); color: var(--text-secondary); opacity: 0.6; cursor: default;
 }
-/* 貼付先の見出し (BLK-junior-20260914-2106-wish) */
+/* 貼付先の見出し */
 #mexp-matrix td.mexp-cell[data-anchored="1"] { text-decoration: underline; text-underline-offset: 2px; }
 #mexp-anchor-bar { display: flex; align-items: center; gap: 10px; padding: 0 14px 6px; font-size: 11px; color: var(--text-secondary); }
 #mexp-anchor-bar button {
@@ -3576,7 +3576,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   color: var(--text-primary); border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer;
 }
 #mexp-anchor-bar button#mexp-summary-toggle { margin-left: 0; }
-/* 部品サマリカード (BLK-junior-20260915-0206-wish) */
+/* 部品サマリカード */
 #mexp-summary { padding: 0 14px 8px; max-height: 40vh; overflow: auto; }
 #mexp-summary[hidden] { display: none; }
 #mexp-summary-head { display: flex; align-items: baseline; gap: 10px; font-size: 11px; color: var(--text-primary); padding: 2px 0; }
@@ -3614,7 +3614,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #mexp-lookup-table td.mexp-lfile { color: var(--text-secondary); }
 #mexp-plan { padding: 6px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); }
 #mexp-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
-/* 資料化の根拠 (BLK-junior-20260915-0007)。実行しても閉じずにここに残る。 */
+/* 資料化の根拠。実行しても閉じずにここに残る。 */
 #mexp-result {
   display: flex; align-items: center; gap: 10px; padding: 8px 14px;
   border-top: 1px solid var(--border); font-size: 11px; color: var(--text-primary);
@@ -3626,7 +3626,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   margin-left: auto; flex: none; background: var(--bg-tertiary); border: 1px solid var(--border);
   color: var(--text-primary); border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer;
 }
-/* 保存先から読み直した本文 (BLK-junior-20260915-0106)。開き直さずに中身を読む。 */
+/* 保存先から読み直した本文。開き直さずに中身を読む。 */
 #mexp-readback { border-top: 1px solid var(--border); padding: 6px 14px 10px; }
 #mexp-readback[hidden] { display: none; }
 #mexp-readback-head {
@@ -3644,7 +3644,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   padding: 6px 8px; font-family: monospace; font-size: 11px; color: var(--text-primary);
 }
 #mexp-readback-body .mexp-rb-hit { background: rgba(217, 138, 42, 0.25); }
-/* 要求ID対応 (BLK-junior-20260909-0103-wish) */
+/* 要求ID対応 */
 #req-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -3681,7 +3681,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 tr.req-row[data-status="none"] td.req-kind { color: #d19a66; }
 tr.req-row[data-status="orphan"] td.req-element { color: #e06c75; }
 #req-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
-/* 部品の資料一式 (BLK-junior-20260909-0003-wish) */
+/* 部品の資料一式 */
 #mboard-modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -3724,7 +3724,7 @@ tr.mboard-row[data-status="none"] td.mboard-status { color: #e06c75; }
 tr.mboard-row[data-status="stale"] td.mboard-status { color: #d19a66; }
 tr.mboard-row[data-status="fresh"] td.mboard-status { color: #98c379; }
 #mboard-state { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); min-height: 16px; }
-/* 会議セット (BLK-primary-20260918-0249-wish)。選んだ図だけを選んだ順に並べ、
+/* 会議セット。選んだ図だけを選んだ順に並べ、
    1 枚ずつ 変更前 / 変更後 / 差分 をタブで切り替えて見せる。 */
 #cb-meeting[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 #cb-meeting-state { color: var(--accent); }
@@ -3747,14 +3747,14 @@ pre.cb-side-dsl {
   max-height: 46vh; overflow: auto; white-space: pre-wrap; word-break: break-all;
   color: var(--text-primary);
 }
-/* 変わった行と文字は ± 差分 (変更サマリボードの行差分) と同じ色 (BLK-primary-20260925-0637-wish) */
+/* 変わった行と文字は ± 差分 (変更サマリボードの行差分) と同じ色 */
 pre.cb-side-dsl .cb-line-add { background: rgba(80, 180, 110, 0.16); }
 pre.cb-side-dsl .cb-line-del { background: rgba(220, 80, 80, 0.16); }
 pre.cb-side-dsl mark.cb-ch-add { background: rgba(80, 180, 110, 0.45); color: inherit; border-radius: 2px; }
 pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inherit; border-radius: 2px; }
 .cb-side-empty { color: var(--text-secondary); font-size: 11px; padding: 6px 8px; }
 .diff-board .cb-entry-head .cb-nobase { color: var(--accent-red); font-size: 11px; font-weight: normal; }
-/* 変更サマリボード (BLK-primary-20260907-0923-wish) */
+/* 変更サマリボード */
 .board-modal {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -3769,7 +3769,7 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
   display: flex;
   align-items: center;
   /* 道具が増えると 1 行に収まらず、見出しの文字が 1 文字ずつ縦に潰れていた。
-     入り切らない分は次の行に送る (BLK-primary-20260913-0306-wish)。 */
+     入り切らない分は次の行に送る。 */
   flex-wrap: wrap;
   gap: 12px;
   padding: 10px 14px;
@@ -3779,7 +3779,7 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
 }
 .board-head > * { flex: none; }   /* 幅が足りなくても縮めず、次の行に送る */
 #cb-summary, #ri-summary, #dg-summary, #vault-summary, #ct-summary { color: var(--accent); }
-/* 変更チケット (BLK-primary-20260909-0603-wish)。
+/* 変更チケット。
    残りが一目で分かることだけが要件なので、済んだ行は沈めて未チェックを前に出す。 */
 #ct-body { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
 #ct-body .ct-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 10px; }
@@ -3806,7 +3806,7 @@ table.ct-table button.ct-open {
   border-radius: 3px; font-size: 10px; padding: 1px 8px; cursor: pointer; white-space: nowrap;
 }
 table.ct-table button.ct-open:hover { border-color: var(--accent); }
-/* 提出物庫 (BLK-junior-20260908-2203-wish) */
+/* 提出物庫 */
 table.vault-table { width: 100%; border-collapse: collapse; font-size: 11px; }
 table.vault-table th {
   text-align: left; padding: 3px 8px; color: var(--text-secondary);
@@ -3829,11 +3829,11 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 }
 .folder-vault-bar .folder-vault-open:hover { border-color: var(--accent); }
 .folder-vault-bar .folder-vault-state { color: var(--text-secondary); }
-/* 部品名の依存グラフ (BLK-primary-20260908-2003-wish)。
+/* 部品名の依存グラフ。
    上が矢印の絵、下が影響の届く図の一覧。絵だけでは「開いて直す図」を数えられない。 */
-/* 名前で図を探す (BLK-primary-20260917-0523-wish)。
+/* 名前で図を探す。
    1 行 = 1 図。押せばその図のその行へ運ぶので、一覧から開き直す手順が要らない。
-   BLK-owner-20260923-1949-prune: ▤ 影響を見る の下段 (置換後が空のときの出現箇所の一覧)。 */
+   ▤ 影響を見る の下段 (置換後が空のときの出現箇所の一覧)。 */
 #ri-occ { padding: 6px 14px 14px 14px; }
 #ri-occ .ri-occ-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 12px; margin-bottom: 6px; }
 #ns-summary { color: var(--accent); }
@@ -3859,7 +3859,7 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #ns-rows .ns-chain-head { color: var(--text-secondary); font-size: 11px; padding: 8px 2px 4px; border-top: 1px dashed var(--border); margin-top: 6px; }
 #ns-rows .ns-row.ns-chain { border-style: dashed; }
 #ns-hint .ns-top-name { cursor: pointer; text-decoration: underline; margin-right: 8px; }
-/* BLK-owner-20260924-0852-prune: 旧 🕸 参照関係の左列。名前が空のまま開いたときの下段は
+/* 旧 🕸 参照関係の左列。名前が空のまま開いたときの下段は
    「図をまたぐ部品名」(名前と枚数)。押すとその名前で引き直す。 */
 #ri-xref-head { color: var(--text-secondary); font-size: 11px; padding: 2px 2px 4px 2px; }
 #ri-xref-names { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px; }
@@ -3875,7 +3875,7 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #ri-links-box > summary { cursor: pointer; color: var(--text-secondary); }
 #ri-links { max-height: 160px; overflow-y: auto; padding: 4px 0 0 12px; color: var(--text-secondary); }
 #ri-links .ri-link { font-family: var(--font-mono); padding: 1px 0; }
-/* BLK-owner-20260923-1949-prune: 依存グラフは ▤ 影響を見る の上段。上段と出現行を 1 本の縦スクロールにまとめる。 */
+/* 依存グラフは ▤ 影響を見る の上段。上段と出現行を 1 本の縦スクロールにまとめる。 */
 #ri-scroll { flex: 1; overflow-y: auto; min-height: 0; }
 #ri-scroll #ri-body, #ri-scroll #dg-body { flex: none; overflow: visible; }
 #ri-refs { border-bottom: 1px solid var(--border); }
@@ -3908,13 +3908,13 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 #dg-impact td.dg-via { color: var(--text-secondary); word-break: break-all; }
 #dg-impact tr.dg-doc[data-hop="0"] td.dg-hop { color: var(--accent); }
 #dg-impact tr.dg-doc[data-hop] td.dg-hop { white-space: nowrap; }
-/* BLK-primary-20260926-1708-wish: 影響先の行を押すと下段「出てくる行」がその図の当たり行に絞られる */
+/* 影響先の行を押すと下段「出てくる行」がその図の当たり行に絞られる */
 #dg-impact tr.dg-doc { cursor: pointer; }
 #dg-impact tr.dg-doc:hover td { background: var(--bg-tertiary); }
 #dg-impact tr.dg-doc[data-focus="1"] td { background: var(--bg-tertiary); box-shadow: inset 0 -1px 0 var(--accent); }
-/* 影響先へのまとめ note (BLK-primary-20260915-0007)。一覧のすぐ下に出す
+/* 影響先へのまとめ note。一覧のすぐ下に出す
    (見た一覧と打つ先が同じ画面にないと、結局 1 枚ずつ開き直すことになる)。 */
-/* BLK-primary-20260917-0123-wish: 影響先の版履歴を症状の語で探す欄。 */
+/* 影響先の版履歴を症状の語で探す欄。 */
 #dg-ver { margin-top: 12px; border: 1px solid var(--border); border-radius: 4px; }
 #dg-ver .dg-ver-head {
   display: flex; align-items: center; gap: 10px; font-size: 12px;
@@ -3951,7 +3951,7 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 .board-tools { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .board-tools > * { flex: none; }   /* 文字が 1 文字ずつ縦に潰れないようにする */
 /* 道具の列そのものは見出しの残り幅に収め、入り切らない道具を次の行に送る。列ごと縮めずに
-   置くと 1280px 幅で「閉じる」が画面の外に出ていた (BLK-primary-20260924-1332-wish)。 */
+   置くと 1280px 幅で「閉じる」が画面の外に出ていた。 */
 .board-head > .board-tools { flex: 1 1 0; min-width: 240px; justify-content: flex-end; }
 #cb-base { max-width: 16em; }
 .board-tools label { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); cursor: pointer; }
@@ -3964,17 +3964,17 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   font-size: 11px;
   padding: 3px 10px;
 }
-/* 会議メモの書き出し (BLK-primary-20260908-0923-wish) */
+/* 会議メモの書き出し */
 .board-tools button, .board-tools label { white-space: nowrap; }
 #cb-summary, #ri-summary { min-width: 0; }
 .board-tools #cb-minutes { border-color: var(--accent); color: var(--accent); }
 #cb-minutes-state { color: var(--text-secondary); font-size: 11px; max-width: 320px; }
-/* 申し送りチェックリストの行 (BLK-primary-20260908-1803-wish) */
+/* 申し送りチェックリストの行 */
 #cb-handover-bar { gap: 6px; flex-wrap: wrap; font-size: 11px; }
 #cb-handover-bar input[type="text"] { flex: 1; min-width: 180px; }
 #cb-checklist-state, #cb-note-add-state { color: var(--text-secondary); font-size: 11px; }
 .tab-tool.has-handover-followup { border-color: var(--accent); }
-/* 要修正のみの絞り込み (BLK-primary-20260908-1103-wish) */
+/* 要修正のみの絞り込み */
 #cb-filter-state { color: var(--accent); font-size: 11px; white-space: nowrap; }
 .diff-board { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
 .diff-board .cb-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 4px; }
@@ -4018,7 +4018,7 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 .diff-board table.cb-diff tr.cb-del td { background: rgba(220, 80, 80, 0.16); }
 .diff-board table.cb-diff tr.cb-add td { background: rgba(80, 180, 110, 0.16); }
 .diff-board table.cb-diff tr.cb-gap td { color: var(--text-secondary); text-align: center; padding: 2px 6px; }
-/* 差分行のレビュー結果 (BLK-primary-20260908-0823-wish) */
+/* 差分行のレビュー結果 */
 .diff-board table.cb-diff td.cb-verdict { width: 88px; white-space: nowrap; text-align: right; padding: 0 6px; }
 .diff-board table.cb-diff td.cb-verdict button {
   border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary);
@@ -4028,12 +4028,12 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 .diff-board table.cb-diff td.cb-verdict button[aria-pressed="true"] {
   color: var(--text-primary); border-color: var(--accent); background: var(--bg-tertiary); font-weight: bold;
 }
-/* 顧客に見せる画面 (BLK-primary-20260913-0306-wish)。
+/* 顧客に見せる画面。
    DSL を出さず、描いた図だけを変更前後で並べる / 片側だけ大きく出す。 */
 .diff-board .cb-show { display: flex; gap: 10px; padding: 8px 10px 12px 10px; align-items: flex-start; }
 .diff-board .cb-show .cb-pane { flex: 1; min-width: 0; }
 .diff-board .cb-show .cb-pane[hidden] { display: none; }
-/* 切替の「重ねる」(BLK-primary-20260924-1332-wish、旧 🔍 提出前レビューの重ね表示)。
+/* 切替の「重ねる」(旧 🔍 提出前レビューの重ね表示)。
    変更前を薄い赤で下に敷き、変更後を同じ位置に重ねる。SVG は触らず包む側で染める。 */
 .diff-board .cb-show[data-side="overlay"] { display: block; position: relative; }
 .diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="before"] {
@@ -4071,7 +4071,7 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
 .diff-board .cb-entry-head .cb-flip:hover { border-color: var(--accent); }
 .diff-board table.cb-diff tr[data-verdict="要修正"] td { background: rgba(220, 80, 80, 0.28); }
 .diff-board table.cb-diff tr[data-verdict="済"] td { opacity: 0.55; }
-/* 指摘と変更の対応表 (BLK-primary-20260908-1703-wish) */
+/* 指摘と変更の対応表 */
 .diff-board .cb-map { margin: 4px 0 0 0; border: 1px solid var(--accent); border-radius: 4px; }
 .diff-board .cb-map-head {
   display: flex; align-items: center; gap: 10px; padding: 4px 10px; font-size: 12px;
@@ -4450,7 +4450,7 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   color: var(--text-primary);
 }
 #symptom-results .sym-kind { color: var(--text-secondary); white-space: nowrap; margin-left: auto; }
-/* BLK-primary-20260925-1732-wish: 影響を見るの行と同じ「ここから順に直す」 */
+/* 影響を見るの行と同じ「ここから順に直す」 */
 #symptom-results .sym-walk {
   border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);
   border-radius: 3px; cursor: pointer; font-size: 10px; padding: 0 5px; white-space: nowrap;
@@ -4555,7 +4555,7 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   word-break: break-all;
   line-height: 1.5;
 }
-/* 表記統一パネル (BLK-junior-20260916-0046-wish)。見た目は一括置換と同じ枠に
+/* 表記統一パネル。見た目は一括置換と同じ枠に
    揃える — 同じ「図をまたいで名前を直す」道具が 2 通りに見えないようにする。 */
 #unify-panel {
   display: none;
@@ -4652,7 +4652,7 @@ table.vault-table button.vault-open:hover { border-color: var(--accent); }
   font-size: 10px;
   white-space: nowrap;
 }
-/* 過去の置換の組 (BLK-primary-20260914-1106-friction) */
+/* 過去の置換の組 */
 #rename-redo { font-size: 10px; margin-top: 6px; }
 #rename-redo:not(:empty) { border-top: 1px solid var(--border); padding-top: 4px; }
 #rename-redo .rr-summary { padding: 3px 0; color: var(--text-secondary); }
@@ -4702,7 +4702,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 }
 #rename-hits .hit { display: flex; justify-content: space-between; padding: 1px 0; }
 #rename-hits .hit.zero { opacity: 0.45; }
-/* 改名履歴タイムライン (BLK-primary-20260908-2103-wish) */
+/* 改名履歴タイムライン */
 #rename-history { margin-top: 6px; font-size: 10px; }
 #rename-history .rh-head {
   display: flex;
@@ -4792,7 +4792,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 #rename-impact .impact-line-no { min-width: 2.5em; text-align: right; opacity: 0.7; }
 #rename-impact .impact-line-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* BLK-primary-20260917-0223: 置換の影響ボードに並べる 変更前 / 変更後 (仮適用) の図。
+/* 置換の影響ボードに並べる 変更前 / 変更後 (仮適用) の図。
    会議ではこの一覧をそのまま映し、質問の出た図だけを押して原寸にする。 */
 #ri-svg-state { color: var(--text-secondary); font-size: 11px; }
 .ri-thumbs { display: flex; gap: 8px; margin: 4px 0 6px; }
@@ -5099,14 +5099,14 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
   color: var(--accent);
   font-weight: bold;
 }
-/* BLK-primary-20260908-1603: 行番号は「対応する図形を指す」取っ手になった */
+/* 行番号は「対応する図形を指す」取っ手になった */
 #line-numbers .ln { cursor: default; }
 #line-numbers .ln.ln-peek {
   color: rgb(255, 190, 90);
   font-weight: bold;
 }
 
-/* BLK-owner-20260930-0111-1: 図で選んだ部品の行。本文欄の上に重ねる帯と、行番号の色 */
+/* 図で選んだ部品の行。本文欄の上に重ねる帯と、行番号の色 */
 #editor-jump-band {
   position: absolute;
   pointer-events: none;
@@ -5289,7 +5289,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 }
 #compare-svg svg { max-width: none; }
 
-/* 整合チェック (BLK-junior-20260907-0843-wish) */
+/* 整合チェック */
 #check-bar {
   display: flex;
   align-items: center;
@@ -5324,7 +5324,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 }
 #check-list[hidden] { display: none; }
 
-/* 対応表 (BLK-junior-20260908-0823-wish) */
+/* 対応表 */
 #map-bar {
   display: flex;
   align-items: center;
@@ -5367,7 +5367,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
   flex-shrink: 0;
 }
 #map-list[hidden] { display: none; }
-/* BLK-primary-20260925-0932-wish: 対応表で組になった綴り違いを、相手の綴りに揃える行。
+/* 対応表で組になった綴り違いを、相手の綴りに揃える行。
    機械が組んだ組も、手で結んだ組も同じ行に並び、チェックした組を 1 回で当てる。 */
 #map-align {
   padding: 4px 8px;
@@ -5427,7 +5427,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 .map-row .map-ref { color: var(--text-primary); }
 /* クラス図の関係は「継承: 親 A ← 子 B」と長い。1 行に詰めて末尾を切ると、
    肝心の子の名前が読めなくなるので、関係の行だけ折り返す
-   (BLK-junior-20260908-1203-wish)。 */
+。 */
 .map-row[data-map-type="relation"] { align-items: flex-start; }
 .map-row[data-map-type="relation"] .map-ref,
 .map-row[data-map-type="relation"] .map-mine {
@@ -5437,7 +5437,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
   word-break: break-word;
 }
 /* メンバーの行は `+ TransferComplete() : void` が丸ごと読めないと写す判断が
-   できない (BLK-junior-20260914-1606)。関係の行と同じく折り返して全部出す。 */
+   できない。関係の行と同じく折り返して全部出す。 */
 .map-row[data-map-type="member"] { align-items: flex-start; }
 .map-row[data-map-type="member"] .map-ref,
 .map-row[data-map-type="member"] .map-mine {
@@ -5448,7 +5448,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 }
 .map-row .map-mine { color: var(--text-secondary); }
 #map-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
-/* 雛形との差分 (BLK-junior-20260908-1303-wish)。対応表と同じ並びにする。 */
+/* 雛形との差分。対応表と同じ並びにする。 */
 #tr-bar {
   display: flex;
   align-items: center;
@@ -5549,7 +5549,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 .td-row[data-td-kind="added"], .td-row[data-td-kind="removed"] { background: var(--bg-secondary); }
 .td-row .td-text { flex: 1; min-width: 0; font-family: var(--font-mono); word-break: break-all; }
 #td-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
-/* 系統ぜんぶと比べる (BLK-junior-20260908-1403)。雛形との差分と同じ並びにする。 */
+/* 系統ぜんぶと比べる。雛形との差分と同じ並びにする。 */
 #tc-bar {
   display: flex;
   align-items: center;
@@ -5619,7 +5619,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 #tc-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
 /* 状態遷移のトレース漏れの表 (#tc-table) の行は表の行のまま (上の .tc-row は比べる欄の一覧用) */
 #tc-table tr.tc-row { display: table-row; padding: 0; }
-/* 橙の行から自分の図へ足す (BLK-junior-20260908-1103-wish) */
+/* 橙の行から自分の図へ足す */
 .map-row .map-take {
   flex-shrink: 0;
   border: 1px solid var(--accent-orange);
@@ -5632,7 +5632,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
   white-space: nowrap;
 }
 .map-row .map-take:hover { background: var(--bg-tertiary); }
-/* 不一致の行を先輩・reviewer に預ける (BLK-junior-20260908-0923-wish)。
+/* 不一致の行を先輩・reviewer に預ける。
    「足す」と並ぶので、自分で決める橙とは別の色にして押し間違えないようにする。 */
 .map-row .map-ask {
   flex-shrink: 0;
@@ -5653,7 +5653,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
   color: var(--text-secondary);
 }
 #map-asked[hidden] { display: none; }
-/* BLK-junior-20260908-0823: 対応をどこまで決めたか */
+/* 対応をどこまで決めたか */
 #map-decision {
   display: flex;
   align-items: center;
@@ -5735,7 +5735,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 }
 .map-confirm-ok { border-color: var(--accent-orange); color: var(--accent-orange); }
 
-/* 他の人のフォルダの図と突き合わせる (BLK-junior-20260908-0723-wish) */
+/* 他の人のフォルダの図と突き合わせる */
 #xf-bar {
   display: flex;
   align-items: center;
@@ -5795,7 +5795,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
   flex-shrink: 0;
 }
 #xf-list[hidden] { display: none; }
-/* BLK-junior-20260908-0823: 名前で対応が付かないときの、形の見比べ */
+/* 名前で対応が付かないときの、形の見比べ */
 #xf-shape, #xf-parallel { padding: 6px 8px; border-top: 1px solid var(--border); }
 #xf-shape[hidden], #xf-parallel[hidden] { display: none; }
 .xf-parallel-row.differs td { color: var(--accent-orange); }
@@ -5827,7 +5827,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 /* 相手にしかない = 取り込める。自分にしかない = 相手に無い。色で役割を分ける */
 .xf-row.only-ref .xf-side { color: var(--accent-orange); }
 .xf-row.only-self .xf-side { color: var(--text-secondary); }
-/* BLK-junior-20260917-0323-wish: 親の中 (入れ子) に増えた要素はその親を行に出す */
+/* 親の中 (入れ子) に増えた要素はその親を行に出す */
 .xf-row .xf-nest {
   flex-shrink: 0;
   font-size: 10px;
@@ -5862,7 +5862,7 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
   flex-shrink: 0;
 }
 .xf-row .xf-take:hover { background: var(--bg-tertiary); }
-/* BLK-junior-20260917-0223-wish: 取り込む分のチェックと、入る位置の提案 */
+/* 取り込む分のチェックと、入る位置の提案 */
 .xf-row .xf-pick-row { flex-shrink: 0; margin: 0; cursor: pointer; }
 .xf-row .xf-where {
   color: var(--text-secondary);
@@ -6155,7 +6155,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   padding: 4px 0 0 0;
 }
 
-/* ── State hierarchy tree (BLK-junior-20260916-0526-wish) ───────────── */
+/* ── State hierarchy tree ───────────── */
 /* 状態遷移表と同じくキャンバスの上に畳んで置く。入れ子は図を見ながら
    辿るものなので、右ペインではなく図の真上に置く。 */
 #state-tree-panel {
@@ -6260,7 +6260,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   box-shadow: 0 2px 10px rgba(0,0,0,0.35);
-  /* BLK-migrator-20260923-1909: 帯は図の上端に重なる。押せるのはボタンだけにし、帯の地
+  /* 帯は図の上端に重なる。押せるのはボタンだけにし、帯の地
      (図種名・倍率の文字) の下にある要素にはホバーの枠と選択が届くようにする。 */
   pointer-events: none;
 }
@@ -6347,7 +6347,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   white-space: pre-wrap;
 }
 
-/* BLK-migrator-20260925-0752: 右上に浮くズーム帯 (#zoom-hud) が帯の頭の高さに重なる。右上だけを空け
+/* 右上に浮くズーム帯 (#zoom-hud) が帯の頭の高さに重なる。右上だけを空け
    (浮かせた空きの箱に文字を回り込ませる)、「PlantUML {版} がこの行を読めません: N 行目」の頭を帯の下に隠さない。
    2 行目より下は幅いっぱいに使う。 */
 #render-error-overlay::before {
@@ -6357,10 +6357,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   height: 40px;
 }
 
-/* BLK-reviewer-20260912-2103-wish: 中身の入れ替わりは「読めるが間違っている」
+/* 中身の入れ替わりは「読めるが間違っている」
    状態なので、突合の警告より強い色 (エラー寄り) で出す。 */
 
-/* BLK-primary-20260914-2206: 保存フォルダへまだ書けていない回 (錠の返事待ち) は、
+/* 保存フォルダへまだ書けていない回 (錠の返事待ち) は、
    を灰色の「たった今」のままにせず、押せる警告として出す。 */
 #status-autosave.autosave-pending {
   color: #ffd79a; background: rgba(60, 40, 14, 0.96);
@@ -6431,7 +6431,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #overlay-layer > * {
   pointer-events: auto;
 }
-/* BLK-human-20260916-0901: 「⌗ 囲む…」の終点待ち。選べるメッセージは点線、始点は実線 */
+/* 「⌗ 囲む…」の終点待ち。選べるメッセージは点線、始点は実線 */
 #overlay-layer rect.selectable.seq-wrap-pickable {
   fill: rgba(124, 140, 248, 0.10) !important;
   stroke: var(--accent) !important;
@@ -6452,7 +6452,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   stroke: rgba(80, 160, 255, 0.65);
   stroke-width: 1.5;
 }
-/* BLK-owner-20260930-0711-1: 境界の 4 辺の帯・見出しの札 (framebelt) は当たりだけ。選択・ホバーの枠は境界全体の rect が出す */
+/* 境界の 4 辺の帯・見出しの札 (framebelt) は当たりだけ。選択・ホバーの枠は境界全体の rect が出す */
 #overlay-layer rect.selectable.selected[data-hit-kind="framebelt"],
 #overlay-layer rect.selectable.peek[data-hit-kind="framebelt"]:not(.selected),
 #overlay-layer rect.selectable[data-type][data-hit-kind="framebelt"]:hover:not(.selected):not(.peek):not(.lg-mark),
@@ -6463,23 +6463,23 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #overlay-layer rect.selectable:hover:not(.selected) {
   fill: rgba(255, 255, 255, 0.05);
 }
-/* BLK-human-20260912-0900: シーケンスのメッセージは矢印からラベル・番号・
+/* シーケンスのメッセージは矢印からラベル・番号・
    ステレオタイプまでが 1 つの当たり判定。どこまで押せば同じメッセージを選べるかが
    見て分かるよう、hover で範囲を青の破線で囲う (選択の青の実線とは見分けが付く)
-   BLK-human-20260912-2130: 同じ見た目を全図種の要素・関係に広げる。
+   同じ見た目を全図種の要素・関係に広げる。
    data-type を持つ当たり判定は全部この枠を出す (peek / lg-mark は別の印なので除く) */
 #overlay-layer rect.selectable[data-type]:hover:not(.selected):not(.peek):not(.lg-mark),
 /* 同じ要素・関係の当たり判定が複数の rect に分かれるとき (関係の箱とラベルの箱) は
    app.js が .hit-hover をまとめて付ける。枠 = 当たり判定の範囲、を崩さないため */
 #overlay-layer rect.selectable[data-type].hit-hover:not(.selected):not(.peek):not(.lg-mark),
-/* BLK-migrator-20260929-1611: 楔を持つ note は、紙の枠の代わりに楔込みの見た目だけの枠 (rect.note-frame) を光らせる */
+/* 楔を持つ note は、紙の枠の代わりに楔込みの見た目だけの枠 (rect.note-frame) を光らせる */
 #overlay-layer rect.note-frame.hit-hover {
   fill: rgba(80, 160, 255, 0.10);
   stroke: rgba(80, 160, 255, 0.55);
   stroke-width: 1;
   stroke-dasharray: 3 3;
 }
-/* BLK-primary-20260908-1603: 選ぶ前の対応表示。DSL のキャレット行・行番号に
+/* 選ぶ前の対応表示。DSL のキャレット行・行番号に
    マウスが乗った行に対応する図形を薄く光らせる。選択 (青の実線) と見分けが
    付くよう、破線の琥珀にする */
 #overlay-layer rect.selectable.peek:not(.selected) {
@@ -6488,7 +6488,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
 }
-/* BLK-primary-20260925-1732-wish: 症状検索の列で開いた図の、当たった語と「流れ」で対応の無い名前の行。
+/* 症状検索の列で開いた図の、当たった語と「流れ」で対応の無い名前の行。
    DSL と図の相互ジャンプ (キャレット行の対応表示 peek) と同じ琥珀の破線 */
 #overlay-layer rect.selectable.sym-mark:not(.selected) {
   fill: rgba(255, 190, 90, 0.16);
@@ -6496,7 +6496,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
 }
-/* BLK-junior-20260908-1703-wish: 継承元の差分に対応する図形。peek (琥珀の破線) と
+/* 継承元の差分に対応する図形。peek (琥珀の破線) と
    選択 (青) のどちらとも見分けが付くよう、緑の実線で太く囲う */
 #overlay-layer rect.selectable.lg-mark:not(.selected) {
   fill: rgba(90, 220, 140, 0.18);
@@ -6523,7 +6523,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #lgm-list li { list-style: disc; }
 
 /* ── Properties Pane ───────────────────────────────────────────────────────── */
-/* ── 先輩の図の枠 (BLK-junior-20260914-1406-wish) ───────────────────────────
+/* ── 先輩の図の枠 ───────────────────────────
    モーダルではなく据え置きの 2 枠目。左で自分の図を編集したまま、右に
    先輩の同じ図が読み専用で残る。 */
 #senior-pane {
@@ -6536,7 +6536,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   flex-shrink: 0;
   overflow: hidden;
 }
-/* BLK-human-20260915-1203: `display: flex` は `hidden` 属性より強いので、
+/* `display: flex` は `hidden` 属性より強いので、
    これが無いと × を押しても枠が消えず、既定でも出たままになる。 */
 #senior-pane[hidden] { display: none; }
 #senior-first-note {
@@ -6545,7 +6545,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   background: var(--bg-tertiary);
 }
 #senior-first-note[hidden] { display: none; }
-/* BLK-junior-20260915-2240-wish: 先輩がこの図種を持っていないときだけ出る行。 */
+/* 先輩がこの図種を持っていないときだけ出る行。 */
 #senior-draft-row {
   padding: 6px 8px; font-size: 11px; line-height: 1.5;
   border-bottom: 1px solid var(--border); background: var(--bg-tertiary);
@@ -6567,7 +6567,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   display: flex; align-items: center; gap: 6px;
   padding: 6px 8px; border-bottom: 1px solid var(--border);
   font-size: 12px; color: var(--text-primary);
-  /* BLK-builder-20260924-1801-2 (design 9a / 10c): 枠が狭いときは相手選びを次の行へ回し、
+  /* 枠が狭いときは相手選びを次の行へ回し、
      見出し「比較相手」を押し縮めない (「比較相 / 手」と 2 行に折れていた)。 */
   flex-wrap: wrap;
   position: relative; padding-right: 30px;
@@ -6575,10 +6575,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #senior-head > strong { flex-shrink: 0; white-space: nowrap; }
 /* 閉じる × は折り返しても枠の右上に留める (折り返した行の頭に 1 つだけ落ちない)。 */
 #senior-head > #senior-close { position: absolute; top: 6px; right: 8px; }
-#senior-head select { flex: 1 1 120px; min-width: 120px; font-size: 11px; }  /* 折り返すときは潰れず次の行へ (BLK-builder-20260924-1801-2) */
+#senior-head select { flex: 1 1 120px; min-width: 120px; font-size: 11px; }  /* 折り返すときは潰れず次の行へ */
 /* design 9a: 据え置く / 1 回だけ。押している方だけを地色で示す 2 択 */
 #senior-mode { display: inline-flex; flex-shrink: 0; }
-/* BLK-owner-20260923-1509-prune: 相手を選ぶ列。据え置きの切替と同じ見た目で、
+/* 相手を選ぶ列。据え置きの切替と同じ見た目で、
    枠の中で 1 つの組として読めるようにする。 */
 #senior-target { display: inline-flex; flex-shrink: 0; }
 #compare-target-row { display: flex; align-items: center; gap: 6px; padding: 4px 8px 0 8px; font-size: 11px; }
@@ -6612,7 +6612,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 #senior-head button { border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
 #senior-notice { padding: 4px 8px; font-size: 11px; color: var(--text-secondary); }
-/* BLK-junior-20260924-0704-wish: 相手が無いと言い切った行から部品ビューへ。 */
+/* 相手が無いと言い切った行から部品ビューへ。 */
 #senior-notice .senior-to-board { font-size: 11px; padding: 1px 6px; margin-left: 4px; cursor: pointer; }
 #senior-slice { padding: 0 8px 4px 8px; display: flex; align-items: center; gap: 4px; font-size: 11px; }
 /* display 指定は hidden 属性より強い。共通図の抜き出し以外 (見本・1:1 の相手) では
@@ -6670,7 +6670,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 .props-tab:hover { color: var(--text-primary); }
 .props-tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
 
-/* BLK-human-20260916-0903: 設定ダイアログはタブを切り替えても大きさを変えない。
+/* 設定ダイアログはタブを切り替えても大きさを変えない。
    幅と高さを固定し (小さい画面では画面に合わせて縮む)、はみ出す中身は #cfg-panes だけが縦に流す。 */
 #cfg-modal-content {
   box-sizing: border-box;
@@ -6953,7 +6953,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 
 #cfg-sc-hint { font-size: 10px; color: var(--text-secondary); }
 
-/* ── テンプレート複製の突合 (BLK-primary-20260907-1203-wish) ─────────────── */
+/* ── テンプレート複製の突合 ─────────────── */
 /* 見出しの色で結果を言い切る。作れなくはしないので、赤は「読んでから押せ」の意。 */
 #tpl-audit-head[data-audit="ok"]      { color: var(--accent-green); }
 #tpl-audit-head[data-audit="ng"]      { color: var(--accent-red); }
@@ -6992,7 +6992,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   margin-bottom: 4px;
 }
 #diagram-settings-content .ds-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-/* BLK-junior-20260908-1603: 図名とファイル名の対応、名前を変えたあとの知らせ */
+/* 図名とファイル名の対応、名前を変えたあとの知らせ */
 #diagram-settings-content .ds-note {
   font-size: 10px;
   color: var(--text-secondary);
@@ -7063,7 +7063,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 
 /* ── Status Bar ────────────────────────────────────────────────────────────── */
-/* BLK-primary-20260914-2206-wish: 影響の手当て列。状態バーの上に細く残し、
+/* 影響の手当て列。状態バーの上に細く残し、
    図を開いている間も「何枚目 / 残り何枚」と次への送りが手元にある */
 #fw-bar {
   display: flex;
@@ -7103,7 +7103,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   border-color: #b00020;
   font-weight: 600;
 }
-/* BLK-primary-20260924-1332-wish: ボードの 🖼 表示で図の下に出す見た目の差 (旧 🔍 提出前レビュー) */
+/* ボードの 🖼 表示で図の下に出す見た目の差 (旧 🔍 提出前レビュー) */
 .cb-svg-diff { font-size: 11px; color: var(--text-primary); margin: 4px 0 0 0; }
 .cb-svg-diff:empty { display: none; }
 .cb-svg-diff-line { color: var(--text-secondary); }
@@ -7121,13 +7121,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   font-size: 11px;
 }
 
-/* BLK-builder-20260924-1759-1 (design 9c): 色は点だけ。文字は件数の札と同じ色で、正常は緑・書き損じは赤の点 */
+/* 色は点だけ。文字は件数の札と同じ色で、正常は緑・書き損じは赤の点 */
 #status-parse { color: var(--text-secondary); }
 #status-parse[data-dot]::before { content: '●'; font-size: 9px; vertical-align: 1px; margin-right: 6px; }
 #status-parse[data-dot="ok"]::before { color: var(--accent-green); }
 #status-parse[data-dot="bad"]::before { color: var(--accent-red); }
 #status-info  { color: var(--text-secondary); }
-/* BLK-builder-20260924-1413-2 (design 7a / 9c): 下端はどの幅でも 1 行。項目の中で折り返さず、
+/* 下端はどの幅でも 1 行。項目の中で折り返さず、
    入りきらない分は保存直後の 1 行 (#status-save-result) が省略記号で縮む (全文は title)。 */
 #statusbar { overflow: hidden; min-width: 0; }
 #statusbar > * { white-space: nowrap; flex-shrink: 0; }
@@ -7140,7 +7140,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
 }
 
-/* 下端の件数表示は 1 種類の形 (design 9c / BLK-human-20260923-1602)。
+/* 下端の件数表示は 1 種類の形 (design 9c)。
    文字色は全部同じで、色を持つのは点だけ。枠は付けない。
    0 件の項目は app.js が hidden にするので場所を取らない。 */
 #statusbar button[data-dot] {
@@ -7160,7 +7160,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #statusbar button[data-dot="warn"] .sb-dot { color: var(--accent-orange); }
 #statusbar button[data-dot="bad"]  .sb-dot { color: var(--accent-red); }
 
-/* 整合性チェックのバッジ (BLK-reviewer-20260907-0843)。常時見えている必要がある */
+/* 整合性チェックのバッジ。常時見えている必要がある */
 #status-consistency {
   background: transparent;
   border: 1px solid var(--border);
@@ -7172,7 +7172,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   cursor: pointer;
 }
 #status-consistency:hover, #status-eventsync:hover { background: var(--bg-tertiary); }
-/* BLK-builder-20260908-0858-2 (design 7a/7b): 下端に寄せた件数表示。整合と同じ見た目に揃える */
+/* 下端に寄せた件数表示。整合と同じ見た目に揃える */
 #status-livediff, #status-diff, #status-pins, #status-inbox, #status-rename {
   background: transparent;
   border: 1px solid var(--border);
@@ -7195,7 +7195,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #status-rename[data-tone="done"] { color: var(--accent-green); border-color: var(--accent-green); }
 #status-consistency.has-warning, #status-eventsync.has-warning { color: var(--accent-orange); border-color: var(--accent-orange); }
 
-/* イベント⇔メソッド整合のバッジ (BLK-primary-20260907-1803-wish) */
+/* イベント⇔メソッド整合のバッジ */
 #status-eventsync {
   background: transparent;
   border: 1px solid var(--border);
@@ -7223,7 +7223,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   cursor: move;
 }
 
-/* ── 帯を押して決まった挿入先の跡 (BLK-junior-20260918-0149) ────────────────── */
+/* ── 帯を押して決まった挿入先の跡 ────────────────── */
 /* 帯・帯下のライフラインを押すと選択は外れるので、押した場所と「内側 / 外側」の
    どちらに入るかを図の上に残す。ピッカーを閉じるまで出したままにする。 */
 #overlay-layer rect.band-pick {
@@ -7255,7 +7255,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   pointer-events: none;
 }
 
-/* ── 矢印に乗せたときの相手表示 (BLK-junior-20260908-1703) ──────────────────── */
+/* ── 矢印に乗せたときの相手表示 ──────────────────── */
 /* 同じ色・太さの線が複数あると、クリックして右パネルの From/To を読むまで
    どれがどれか分からなかった。乗せた時点で相手を出し、当て物をなくす。 */
 #edge-hint {
@@ -7295,7 +7295,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   stroke-dasharray: 6,3;
   pointer-events: none;
 }
-/* BLK-owner-20260924-2232-4: 図の編集の窓と「末尾に追加」の確定・取り消しに、効くキーを添える (src/ui/modal-keys.js と同じ当て方)。 */
+/* 図の編集の窓と「末尾に追加」の確定・取り消しに、効くキーを添える (src/ui/modal-keys.js と同じ当て方)。 */
 :is(#seq-modal, #act-modal, #st-modal, #st-tx-modal, #st-br-modal, #cl-sc-modal, #seq-sc-modal) button[id$="-confirm"]::after,
 [id$="-tail-detail"] button[id$="-tail-add"]:not(.no-key-hint)::after { content: " (Enter)"; opacity: .75; font-size: .9em; }
 :is(#seq-modal, #act-modal, #st-modal, #st-tx-modal, #st-br-modal, #cl-sc-modal, #seq-sc-modal) button[id$="-cancel"]::after { content: " (Esc)"; opacity: .75; font-size: .9em; }
@@ -7307,8 +7307,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   <!-- ── 図種レール (design 1a): 6 図種を 1 クリックで切り替える ────────── -->
   <div id="rail" role="toolbar" aria-label="図の種類">
     <span class="rail-logo" title="PlantUMLAssist">P</span>
-    <!-- BLK-human-20260923-1700 (design 10a): レール右の FILES ツリーを畳む / 開く。
-         BLK-builder-20260924-1358-3: 10a のとおりロゴ P の直下・図種の列の上に置く (開くツリーのすぐ隣)。
+    <!-- レール右の FILES ツリーを畳む / 開く。
+         10a のとおりロゴ P の直下・図種の列の上に置く (開くツリーのすぐ隣)。
          印は app.js が diagram-rail の線画 (files) に差し替える (▤ は fallback)。 -->
     <button type="button" class="rail-btn" id="rail-files" aria-pressed="true"
             aria-controls="files-panel" title="ファイル (Ctrl+B)">
@@ -7322,7 +7322,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   </div>
 
   <!-- ── FILES ツリー (design 10a) ──────────────────────────────────────────
-       BLK-human-20260923-1700: 「保存先チップ」「一覧」「開く」「⇔ 先輩」の
+       「保存先チップ」「一覧」「開く」「⇔ 先輩」の
        4 つが別々の入口で、どこに何があるかを入口ごとに覚え直していた。
        レールの右に常設する 1 本のツリーに畳む。節は上から
        開いている図 / 保存先 / 読むだけ / GIT。古い入口の実体はこの中に引っ越す
@@ -7357,7 +7357,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
                 class="files-sec-count" id="files-count-target"></span></button>
         <div class="files-sec-body" id="files-body-target">
           <!-- 保存先の一番上はフォルダそのもの。押すと保存先を変えられる (旧・保存先チップ)。
-               design 10a (BLK-builder-20260924-1923-4): 頭の ▾ / ▸ で、その下の部品のフォルダをまとめて畳む -->
+               design 10a: 頭の ▾ / ▸ で、その下の部品のフォルダをまとめて畳む -->
           <div class="files-target-row">
             <button type="button" class="files-target-caret" id="files-target-caret" aria-expanded="true"
                     aria-controls="files-parts" title="部品のフォルダをまとめて畳む / 開く"><span class="files-caret"
@@ -7366,14 +7366,14 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           </div>
           <!-- design 10a: 保存先の下は部品ごとのフォルダ (`SPI 4 / 6`)。
                中身は #folder-panel の一覧をそのまま読んで組むので、数える所は 1 つのまま。
-               6 図種の済/未の表そのものは 部品ビューの職掌 (BLK-owner-20260918-0049-prune)
+               6 図種の済/未の表そのものは 部品ビューの職掌
                なので、ここは束ねて数えるところまでにして、未作成はそこへ渡す。 -->
           <div id="files-parts"></div>
           <div id="folder-panel"></div>
         </div>
       </section>
     </div>
-    <!-- design 10a / 10c (BLK-builder-20260924-1655-2): 「読むだけ」「GIT」はツリーの下端に 1 行ずつ置く
+    <!-- design 10a / 10c: 「読むだけ」「GIT」はツリーの下端に 1 行ずつ置く
          (10c「10a の左下」)。保存先の一覧が長くても見出しと件数が常に見えるよう、流れる一覧の外に出す。
          開くと下端から上へ伸び、伸びすぎたらこの中で流れる。 -->
     <div class="files-foot">
@@ -7384,7 +7384,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <button type="button" class="files-sec-head" id="files-sec-readonly" aria-expanded="false"
                   aria-controls="files-body-readonly"><span class="files-caret" aria-hidden="true">▸</span><span
                   class="files-sec-label">読むだけ</span><span class="files-sec-count" id="files-count-readonly"></span></button>
-          <!-- design 9a / 10a (BLK-builder-20260924-1350-3): 絵文字をやめ、レールと同じ 1px 線画 (目) にする -->
+          <!-- design 9a / 10a: 絵文字をやめ、レールと同じ 1px 線画 (目) にする -->
           <button class="tab-tool files-sec-act" id="btn-tab-peek" aria-label="読むだけのフォルダの図を調べる"
                   title="読むだけのフォルダの図を調べる… (並べている相手、無ければ先頭のフォルダ。別のフォルダは行の右クリックから。保存先は変わりません)"><svg class="files-act-glyph"
                   viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1"
@@ -7402,7 +7402,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" class="files-sec-head" id="files-sec-git" aria-expanded="false"
                 aria-controls="files-body-git"><span class="files-caret" aria-hidden="true">▸</span><span
                 class="files-sec-label">GIT</span><span class="files-sec-count" id="files-count-git"></span></button>
-        <!-- BLK-human-20260923-1702 (design 10c): 保存先が Git のときだけ出る。
+        <!-- 保存先が Git のときだけ出る。
              ブランチ・変更・コミットと「この図の履歴」。取得・送信・ブランチ切替は押したときだけ動く。 -->
         <div class="files-sec-body" id="files-body-git">
           <div class="git-head-row">
@@ -7430,7 +7430,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div class="files-summary" id="files-summary" role="status"></div>
   </div>
 
-  <!-- BLK-human-20260923-1702 (design 10c): 比較する相手を選ぶ。先頭は作業中 (未コミット)。 -->
+  <!-- 比較する相手を選ぶ。先頭は作業中 (未コミット)。 -->
   <div id="git-pick-modal" hidden role="dialog" aria-label="比較する相手を選ぶ">
     <div class="git-pick-head"><strong>比較する相手を選ぶ</strong> <span id="git-pick-file"></span>
       <button type="button" id="git-pick-close" title="閉じる">×</button></div>
@@ -7447,37 +7447,37 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <!-- design 1a: 上部に残すのは「編集中のファイル名」「検索」「状態表示」「Export」だけ。
          Open/Save/設定/Undo/Redo/ズーム/再描画は下の #toolbar-actions に退避し、
          入口は Ctrl+K のコマンドパレット・左レール・キャンバス上のズーム HUD が持つ。 -->
-    <!-- BLK-human-20260923-1600 (design 9a): 上部バー左は「{フォルダ} / {ファイル名}」の
+    <!-- 上部バー左は「{フォルダ} / {ファイル名}」の
          パンくず 1 本。ファイル名がアクティブタブと 2 か所に出るのをやめ、保存先チップは
          パンくずのフォルダ名に統合した (押すと保存先を変えられる)。 -->
-    <!-- BLK-human-20260923-1700 (design 10a): 保存先チップは FILES ツリーの
+    <!-- 保存先チップは FILES ツリーの
          「保存先」節の一番上 (保存先フォルダの行) へ引っ越した。上部バーに残すのは
          編集中のファイル名だけ。 -->
-    <!-- design 10a (BLK-builder-20260924-1715-1): 上部バー左は「{保存先} / {部品} / {ファイル名}」の
+    <!-- design 10a: 上部バー左は「{保存先} / {部品} / {ファイル名}」の
          パンくず。フォルダの段は押すと FILES ツリーでそのフォルダを見せる (保存先を変えるのは
          ツリーの保存先の行)。保存先が無い新規の図はファイル名だけ。 -->
     <span id="top-crumbs"></span>
     <span id="top-file-name" title="編集中の図">(無題).puml</span>
     <!-- design 9a: 保存の状態をそのまま出す。未保存のときだけ ● とアクセント色、
-         保存済みは淡色の「保存済み」に落とす (BLK-junior-20260913-0306 の入口は残す)。 -->
+         保存済みは淡色の「保存済み」に落とす (の入口は残す)。 -->
     <button id="top-save" type="button" title="保存" data-save-state="saved">保存済み<span id="top-save-key"></span></button>
-    <!-- BLK-human-20261006-2020-1: 手で保存した直後に「いつ・どこへ」を数秒だけ出す -->
+    <!-- 手で保存した直後に「いつ・どこへ」を数秒だけ出す -->
     <span id="top-save-flash" role="status" hidden></span>
     <button id="top-source-lock" type="button" hidden></button>
 
-    <!-- BLK-builder-20260907-0803-1 (design 1a): コマンド中心。名前を打って実行する入口 -->
+    <!-- コマンド中心。名前を打って実行する入口 -->
     <button class="tb-btn" id="btn-command-palette" title="コマンド・要素を検索 (Ctrl+K)">
       <span class="cp-search-icon">⌕</span>
       <span class="cp-search-label">コマンド・要素を検索 / Run anything</span>
       <span class="cp-search-kbd">Ctrl+K</span>
     </button>
 
-    <!-- BLK-builder-20260907-2237-2 (design 1a): 状態表示はモードを変える入口も兼ねる。
+    <!-- 状態表示はモードを変える入口も兼ねる。
          1a の上部バーにモードの select は無く、選ぶ場所は設定の「レンダリング」タブ。 -->
     <button id="top-render-status" type="button" role="status"
       title="レンダリングのモードと直前の所要時間 (押すと設定のレンダリングを開く)">local · —</button>
 
-    <!-- BLK-human-20260923-1600 (design 9a): 入れる・出すは対の操作なので、上部バーの
+    <!-- 入れる・出すは対の操作なので、上部バーの
          右端に Import ▾ / Export ▾ を 1 組で並べる。タブ列の「開く」はここへ移した
          (空の画面の入口とドラッグ&ドロップはそのまま)。 -->
     <div class="export-wrap">
@@ -7497,13 +7497,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button id="exp-png">PNGとして保存</button>
         <button id="exp-png-transparent">PNG（透過背景）</button>
         <button id="exp-clipboard">クリップボードにコピー</button>
-        <!-- BLK-owner-20260923-2332-prune: 「全図をSVGで保存（zip）」は開いているタブだけを詰める範囲違いの
+        <!-- 「全図をSVGで保存（zip）」は開いているタブだけを詰める範囲違いの
              zip で、似た zip の入口がメニューに 2 つ並んでいた。資料セットの「対象の選び方」→
              「開いている図すべて」に落とした (実体のボタンは #toolbar-actions に残す)。
-             BLK-primary-20260914-2006-wish: 旧「全図」は今開いているタブだけが対象で、
+             旧「全図」は今開いているタブだけが対象で、
              保存フォルダに 25 枚あってもタブが 1 枚なら 1 枚しか入らない。資料に入れる
              図の組に名前を付けて登録し、名前を選ぶだけで常にその枚数を出す -->
-        <!-- BLK-owner-20260918-0329-prune: 「zip にして渡す」入口は Export ▾ の中の
+        <!-- 「zip にして渡す」入口は Export ▾ の中の
              この「渡す」1 か所に集める。タブ列には置かない (実体のボタンは
              #toolbar-actions に残すので Ctrl+K からは今まで通りの名前で引ける) -->
         <div class="exp-group-title">渡す</div>
@@ -7511,10 +7511,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button id="exp-delivery" title="表紙 (図一覧・版数・提出前チェック結果)・前回提出からの差分・全図 SVG を 1 つの納品 zip にまとめる">納品パッケージ（zip）…</button>
         <button id="exp-handoff" title="系統チェック・名前突合・変更サマリ・SVG 一式を 1 つのパッケージ (zip) に書き出す">引き継ぎ（zip）…</button>
         <div class="exp-group-title">その他</div>
-        <!-- BLK-junior-20260909-0003-wish: 設計書に貼る資料は 1 部品の複数図種で 1 組。
+        <!-- 設計書に貼る資料は 1 部品の複数図種で 1 組。
              どの図種の資料用がまだ無いか・元の図が資料用より新しくないかを一覧で見せ、
              手当ての要る図種だけをまとめて 1 回で書き出す -->
-        <!-- BLK-junior-20260909-0103-wish: 図の要素と設計書の要求 ID (SWReq-xxx) の対応を
+        <!-- 図の要素と設計書の要求 ID (SWReq-xxx) の対応を
              図の中に持ち、Export のときに対応表 (CSV) と画像の脚注を同時に確定させる -->
         <button id="exp-req-trace" title="クラス・メソッド・状態・遷移に要求ID（SWReq-xxx）を付け、対応表をCSVで書き出す（画像の脚注にも入れられる）">要求ID対応を付ける／対応表を書き出す…</button>
       </div>
@@ -7544,15 +7544,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <button class="tb-btn" id="btn-zoom-in"  title="拡大">＋</button>
     <button class="tb-btn" id="btn-zoom-fit" title="幅に合わせる">Fit</button>
     <button class="tb-btn" id="btn-render" title="再レンダリング">⟳ Render</button>
-    <!-- BLK-builder-20260907-2237-2 (design 1a): モード切替の実体。1a の上部バーには
+    <!-- モード切替の実体。1a の上部バーには
          出さない。選ぶ入口は設定の「レンダリング」タブ・Ctrl+K・状態表示のクリック。
          保存や描画の経路はこの select を唯一の窓口にしたままなので、値と change は
          これまでどおり効く。 -->
-    <!-- BLK-owner-20260918-0329-prune: 「zip にして渡す」の実体。入口は Export ▾ の「渡す」
+    <!-- 「zip にして渡す」の実体。入口は Export ▾ の「渡す」
          (と Ctrl+K)。画面には出さないが DOM には残すので、処理も件数表示もそのまま働く -->
     <button class="tab-tool" id="btn-tab-handoff" title="系統チェック・名前突合・変更サマリ・SVG 一式を 1 つのパッケージ (zip) に書き出す">引き継ぎ</button>
     <button class="tab-tool" id="btn-tab-delivery" title="表紙 (図一覧・版数・提出前チェック結果)・前回提出からの差分・全図 SVG を 1 つの納品 zip にまとめる">納品パッケージ</button>
-    <!-- BLK-owner-20260923-1829-prune: 「資料にする」出口は 📦 資料セット 1 つに畳んだ。
+    <!-- 「資料にする」出口は 📦 資料セット 1 つに畳んだ。
          範囲 (1 枚 / 部品 / 名前を付けた組 / 資料一式) と形式は資料セット画面で選ぶ。
          実体のボタンは画面から外してここに残すので、処理も件数表示も Ctrl+K も今までどおり働く -->
     <button id="exp-svg-pick" title="全図・変更図のみ・要修正のみで絞り込んで、選んだ図だけを zip に詰める">図を選んでSVGで保存（zip）…</button>
@@ -7580,75 +7580,75 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <!-- 開いている図のタブ。切り替えても各図の DSL は保持される -->
       <div id="tab-bar">
         <button class="tab-tool" id="btn-tab-new" title="新しい図を開く">＋</button>
-        <!-- BLK-human-20260923-1700 (design 10a): 「一覧」は FILES ツリーの「保存先」節の
+        <!-- 「一覧」は FILES ツリーの「保存先」節の
              見出しになった (id はそのまま。押すと保存先の図が開く) -->
-        <!-- BLK-human-20260917-0901 / design 9a: 手元の .puml を開く入口は上部バーの
+        <!-- / design 9a: 手元の .puml を開く入口は上部バーの
              Import ▾ へ移した。DOM には残す (ドラッグ&ドロップ・空の画面・Ctrl+K が叩く) -->
         <button class="tab-tool" id="btn-open-file" hidden title="手元の .puml / .plantuml / .uml / .txt を開きます (複数可)。エディタやプレビューへドラッグ&ドロップでも開けます" aria-label="ファイルを開く(.puml)">開く</button>
-        <!-- BLK-primary-20260908-0823-design (7a): 機能ボタンを 6 分類のメニューに畳む -->
+        <!-- 機能ボタンを 6 分類のメニューに畳む -->
         <button class="tab-tool" id="btn-tab-tools" aria-expanded="false" aria-controls="tool-menu"
                 title="ツールを分類から選ぶ (Ctrl+K でも同じ操作が引ける)">ツール ▾</button>
-        <!-- BLK-primary-20260908-1803: 静かなタブ列でも、畳んだ機能の入口を 1 クリック分残す。
-             BLK-builder-20260924-1416-3 (design 7a / 9a / 10a): 文字は「ツール ▾」、置き場所はタブ列の右端 -->
+        <!-- 静かなタブ列でも、畳んだ機能の入口を 1 クリック分残す。
+             文字は「ツール ▾」、置き場所はタブ列の右端 -->
         <button class="tab-tool tab-tool-mini" id="btn-tab-tools-mini" aria-expanded="false" aria-controls="tool-menu"
                 title="畳んでいるツールを分類から選ぶ (Ctrl+K でも同じ操作が引ける)">ツール ▾</button>
-        <!-- BLK-human-20260923-1700 (design 10a): 👀 他フォルダ と 並べて比較 は
+        <!-- 👀 他フォルダ と 並べて比較 は
              FILES ツリーの「読むだけ」節へ引っ越した (id はそのまま) -->
-        <!-- BLK-junior-20260907-2009-wish: やり直し途中の控えに印を付け、📂 一覧で畳む -->
+        <!-- やり直し途中の控えに印を付け、📂 一覧で畳む -->
         <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、保存先の一覧から畳む">一時控え</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
-        <!-- BLK-junior-20260916-0046-wish: 揃える先は登録簿が知っている。組を選ぶだけで
+        <!-- 揃える先は登録簿が知っている。組を選ぶだけで
              揺れの残るファイルが出て、チェックした分をまとめて当てる -->
         <button class="tab-tool" id="btn-tab-unify" title="登録簿で決めた正式表記に揃っていない図を挙げ、選んだ分にまとめて当てる (どの図に残っているかを探さなくてよい)">表記統一</button>
-        <!-- BLK-primary-20260907-2203-wish: 症状文を貼るだけで関連しそうな図を出す -->
+        <!-- 症状文を貼るだけで関連しそうな図を出す -->
         <button class="tab-tool" id="btn-tab-symptom" title="不具合の症状文を貼ると、部品名を思い付かなくても関連しそうな図を関連度順に出す">⇄ 症状検索</button>
-        <!-- BLK-primary-20260915-0506-wish: 部品名がどの版から入ったか (混入点) を全図の版から 1 回で出す -->
+        <!-- 部品名がどの版から入ったか (混入点) を全図の版から 1 回で出す -->
         <button class="tab-tool" id="btn-tab-blame" title="部品名を入れると、保存フォルダの全図の過去版を一度に走査して「その名前が増えた版・消えた版」を時系列で出す。表記が混在し始めた版にも印が付く">◉ 混入点</button>
-        <!-- BLK-junior-20260908-0003-wish: 指摘 1 件を観点として全図に当て、欠けている図だけを出す -->
+        <!-- 指摘 1 件を観点として全図に当て、欠けている図だけを出す -->
         <button class="tab-tool" id="btn-tab-pattern" title="レビュー指摘を観点として開いている図全部に当て、同じ抜けがある図だけを一覧する">◎ 観点一括</button>
         <button class="tab-tool" id="btn-tab-apply" title="指摘に並んだ複数のクラスへ同じメソッド・属性を 1 回で追加する">⊞ 一括適用</button>
-        <!-- BLK-primary-20260907-0823-wish: 同じ系統の複数枚で動作名が揃っているかを見る -->
-        <!-- BLK-primary-20260907-1403-wish: 顧客に出す前に、全図の title / note / 部品名を横断で見る -->
+        <!-- 同じ系統の複数枚で動作名が揃っているかを見る -->
+        <!-- 顧客に出す前に、全図の title / note / 部品名を横断で見る -->
         <button class="tab-tool" id="btn-tab-submit" title="顧客提出前に、全図のタイトル・注釈・部品名を横断で見て社内略語を洗い出し、正式名称の対応表を確定して全図に当てる">提出前チェック</button>
-        <!-- BLK-owner-20260918-0429-prune: 引き継ぎチェックリストの入口。ツール ▾ →「確かめる」から開く -->
+        <!-- 引き継ぎチェックリストの入口。ツール ▾ →「確かめる」から開く -->
         <button class="tab-tool" id="btn-tab-handover" title="渡す図の「置換済み / note 最新 / SVG 最新 / 指摘と符合する欠落」を 1 画面の表で読み、渡す前に見る図だけを残す">引き継ぎチェック</button>
         <button class="tab-tool" id="btn-tab-family" title="同じ系統の図を並べて、片方にしか無いメッセージ名・遷移名を探す">⇉ 系統チェック</button>
         <button class="tab-tool" id="btn-tab-drivermap" title="どの図がどの図の相手かを系統として宣言し、1 プロジェクトとして持つ。宣言した対応が崩れたら赤くなる">系統マップ −</button>
-        <!-- BLK-reviewer-20260907-1903-wish: 状態遷移がどのシーケンスにも現れない「トレース漏れ」を出す -->
+        <!-- 状態遷移がどのシーケンスにも現れない「トレース漏れ」を出す -->
         <button class="tab-tool" id="btn-tab-trace" title="状態遷移図の遷移が、同じ系統のシーケンス図のどれかに現れているかを見る">◎ トレース</button>
         <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
-        <!-- BLK-owner-20260923-1509-prune: 「⇔ 並べて見る」は「並べて比較」とタブ列で隣り合い、
+        <!-- 「⇔ 並べて見る」は「並べて比較」とタブ列で隣り合い、
              名前では違いが読めなかった。タブ列から外し、並べて比較の枠の
              相手「別タブの図」にした (並べる面 compare-pane 自体はそのまま使う)。 -->
-        <!-- BLK-junior-20260907-0803-wish: 既存の図をテンプレートに新しい図を作る -->
-        <!-- BLK-owner-20260924-2337-prune: 部品を起こす・テンプレート・骨格から・セット複製の 4 つの入口を 1 つにした。
+        <!-- 既存の図をテンプレートに新しい図を作る -->
+        <!-- 部品を起こす・テンプレート・骨格から・セット複製の 4 つの入口を 1 つにした。
              何から起こす (部品名だけ / 既存の図 1 枚 / 同じ系統の図ぜんぶ / 組み込みの骨格) は窓の上端で選ぶ。 -->
         <button class="tab-tool" id="btn-tab-template" title="既存の図や雛形から新しい図を起こす。何から起こすか (部品名だけで 6 図種の下書き・既存の図 1 枚・同じ系統の図ぜんぶ・組み込みの骨格) は窓の上端で選ぶ">⧉ 新しい図を起こす…</button>
-        <!-- BLK-reviewer-20260907-0803: 前回保存時点から変わった図があるかを常時見せる -->
+        <!-- 前回保存時点から変わった図があるかを常時見せる -->
         <button class="tab-tool" id="btn-tab-diff" title="前回保存した時点から変わった図の一覧">± 差分 −</button>
-        <!-- BLK-reviewer-20260908-0723-wish: 単発 diff では見えない「行って戻った」を履歴の上で見る -->
+        <!-- 単発 diff では見えない「行って戻った」を履歴の上で見る -->
         <button class="tab-tool" id="btn-tab-versions" title="この図が保存のたびにどう変わったかを通しで並べる。前の版に戻った「往復」には印が付く">⟲ 変遷 −</button>
-        <!-- BLK-junior-20260908-1603-wish: この図がどの図の後継かを 1 回登録し、継承元の更新を自動で言う -->
+        <!-- この図がどの図の後継かを 1 回登録し、継承元の更新を自動で言う -->
         <button class="tab-tool" id="btn-tab-lineage" title="この図の継承元 (どの図から派生したか) を 1 回登録すると、継承元が更新されたときに差分の行数で知らせる">⇡ 継承元 −</button>
-        <!-- BLK-primary-20260907-0923-wish: 変わった図の変更前後をまとめて 1 画面に並べる -->
-        <!-- BLK-reviewer-20260907-1203-wish: レビューの指摘を図の該当行に貼り、未読/既読で追う -->
+        <!-- 変わった図の変更前後をまとめて 1 画面に並べる -->
+        <!-- レビューの指摘を図の該当行に貼り、未読/既読で追う -->
         <button class="tab-tool" id="btn-tab-pins" title="この図に付いたレビュー指摘の一覧。図の上の印をクリックしても開く">指摘 −</button>
-        <!-- BLK-junior-20260907-2203-wish: 図をまたいで未対応の指摘を集める受信箱 -->
+        <!-- 図をまたいで未対応の指摘を集める受信箱 -->
         <button class="tab-tool" id="btn-tab-inbox" title="保存フォルダの図をまたいで、未対応の指摘を「どの図に何件」で出す。監査が出した指摘も手で書いた指摘も同じ札で並び、出典で絞り込める。行を押すとその図の該当行へ飛ぶ">指摘箱 −</button>
         <button class="tab-tool" id="btn-tab-board" title="変わった図の変更前 DSL と変更後 DSL を全部まとめて 1 画面に並べる (レビュー会議用)">▤ 変更サマリ</button>
         <button class="tab-tool" id="btn-tab-cross" title="名前の不一致・未使用 participant・粒度のばらつき・SVG 実体不一致・手動指摘を、保存フォルダ 1 つ分の 1 画面にまとめて出す。行を押すとその図へ飛ぶ">▦ 突合ボード</button>
-        <!-- BLK-junior-20260907-1403-wish: 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
+        <!-- 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
         <button class="tab-tool" id="btn-tab-review" title="型の基準にした図と突き合わせて、この図のずれと図種特有の間違いを出す">レビュー −</button>
-        <!-- BLK-primary-20260907-1303-wish: 引き継ぎに要る確認結果と図を 1 つの zip に固める -->
-        <!-- BLK-primary-20260908-0003-wish: 図の束を 1 プロジェクトとして、部品名で辿れるように渡す -->
-        <!-- BLK-owner-20260924-0852-prune: 🕸 参照関係の画面は ▤ 影響を見る 1 つに寄せた。ここは旧名で引いた人の案内 (押すと ▤ 影響を見る が開く) -->
+        <!-- 引き継ぎに要る確認結果と図を 1 つの zip に固める -->
+        <!-- 図の束を 1 プロジェクトとして、部品名で辿れるように渡す -->
+        <!-- 🕸 参照関係の画面は ▤ 影響を見る 1 つに寄せた。ここは旧名で引いた人の案内 (押すと ▤ 影響を見る が開く) -->
         <button class="tab-tool" id="btn-tab-xref" title="部品名が図をまたいでどこに出てくるかは ▤ 影響を見る で見る (名前を空のまま開くと、図をまたぐ部品名が枚数付きで並ぶ)">▤ 影響を見る</button>
-        <!-- BLK-owner-20260918-0329-prune: 📦 引き継ぎ / 📦 納品パッケージ はタブ列から外し、
+        <!-- 📦 引き継ぎ / 📦 納品パッケージ はタブ列から外し、
              Export ▾ の「渡す」に集めた。実体のボタンは #toolbar-actions にある -->
       </div>
-      <!-- BLK-primary-20260908-0823-design (7a): ツールを 6 分類で縦に並べるパネル -->
+      <!-- ツールを 6 分類で縦に並べるパネル -->
       <div id="tool-menu" role="menu" aria-label="ツール" hidden></div>
-      <!-- BLK-primary-20260907-2303-wish: この図に残された申し送り (なぜ直したか) -->
+      <!-- この図に残された申し送り (なぜ直したか) -->
       <div id="hn-banner" style="display:none;">
         <span id="hn-banner-text"></span>
         <button type="button" id="hn-banner-edit" title="この図の申し送りを書き直す">書き直す</button>
@@ -7665,7 +7665,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <datalist id="rename-candidates"></datalist>
         <label for="rename-to">置換後</label>
         <input id="rename-to" autocomplete="off" spellcheck="false" placeholder="Spi_Driver">
-        <!-- BLK-primary-20260914-1106-friction: 開いた時点で前回の組を入れておく。
+        <!-- 開いた時点で前回の組を入れておく。
              入っている理由をここで言う (自分が打ったのか前回の残りかを確かめさせない) -->
         <div id="rename-seed-note" role="status" style="display:none;"></div>
         <div class="rename-row">
@@ -7676,7 +7676,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <input type="checkbox" id="rename-scan-folder" checked style="width:auto;">
           <label for="rename-scan-folder">保存フォルダの全ファイルも数える</label>
         </div>
-        <!-- BLK-primary-20260917-0023: ヒット件数のすぐ横から影響範囲の一覧へ入る
+        <!-- ヒット件数のすぐ横から影響範囲の一覧へ入る
              (件数を読んでから「どの図のどの行か」を見るまでに画面を探させない) -->
         <div class="rename-hits-head">
           <span id="rename-hits-label"></span>
@@ -7687,32 +7687,32 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="rename-folder"></div>
         <!-- 置換を実行する前に、図種 × 関係の内訳で影響範囲を見る -->
         <div id="rename-impact"></div>
-        <!-- BLK-primary-20260909-0103-wish: 出現 1 個ずつを意味 (遷移イベント /
+        <!-- 出現 1 個ずつを意味 (遷移イベント /
              メソッド宣言 / 端点) で呼び分け、役割ごとに参照元の図を並べる -->
         <div id="rename-semantic"></div>
         <!-- 綴りが変わらない仕様変更 (戻り値型・引数) を全図へ 1 回で当てる -->
         <div id="rename-signature"></div>
-        <!-- BLK-primary-20260908-2103-wish: この部品名がいつ・どの図で改名されたか -->
+        <!-- この部品名がいつ・どの図で改名されたか -->
         <div id="rename-history"></div>
         <div id="rename-summary"></div>
         <div class="rename-actions">
-          <!-- BLK-primary-20260908-1303-wish: 適用する前に、当たった図の該当行が
+          <!-- 適用する前に、当たった図の該当行が
                どう変わるかを変更サマリボードと同じ見た目で並べて確かめる -->
           <button id="btn-rename-preview" disabled title="この部品名が出てくる図と行・参照元と参照先・連鎖で影響が届く図を 1 画面で見る。置換後を入れていれば、各図の該当行がどう変わるかも並ぶ (まだ置換はしません)">▤ 影響を見る</button>
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
         </div>
-        <!-- BLK-primary-20260914-1106-friction: 過去に当てた置換の組と、その組が
+        <!-- 過去に当てた置換の組と、その組が
              今どうなっているか (残り / 適用済み) を出す。残っている組だけ
              押せば置換前・置換後が埋まる。
-             BLK-primary-20260917-0223: この箱はフォルダ側の組を非同期に読んでから
+             この箱はフォルダ側の組を非同期に読んでから
              行が増える。入力欄と操作ボタンより上に置くと、その 1 行が届いた瞬間に
              パネル全体が 20px 下がり、ちょうど押していたボタンが指の下から逃げる
              (mousedown と mouseup が別の要素になり click が起きない)。
              あとから伸びるものは、動かされて困るものより下に置く -->
         <div id="rename-redo"></div>
       </div>
-      <!-- BLK-junior-20260916-0046-wish: 表記統一の一括反映。⇄ 一括置換は「何を打つか」を
+      <!-- 表記統一の一括反映。⇄ 一括置換は「何を打つか」を
            人が知っている前提の道具だが、揃える先は登録簿 (_names.json) に既にある。
            ここは組を選ぶだけで、揺れの残るファイルと件数が出て、チェックした分を
            保存まで 1 回で当てる (ファイルを 1 枚ずつ開いて探す工程が要らない)。 -->
@@ -7727,7 +7727,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <button id="btn-unify-cancel">閉じる</button>
         </div>
         <div id="unify-result" class="unify-result"></div>
-        <!-- BLK-owner-20260917-2329-prune: 登録簿に無い社内略語の組 (旧 📤 提出前チェックの対応表) -->
+        <!-- 登録簿に無い社内略語の組 (旧 📤 提出前チェックの対応表) -->
         <div id="unify-abbrev"></div>
       </div>
       <!-- 部品名がどの版から入ったか (混入点) を、全図の版を 1 回走査して時系列に並べる -->
@@ -7841,7 +7841,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
         <!-- design 5c: 挿入メニューを開いている間、入る行に「← N 行目に挿入」を重ねる -->
         <div id="insert-marker" hidden></div>
-        <!-- BLK-owner-20260930-0111-1: 図で選んだ部品の行に重ねる帯 (本文欄へは focus を移さない) -->
+        <!-- 図で選んだ部品の行に重ねる帯 (本文欄へは focus を移さない) -->
         <div id="editor-jump-band" hidden></div>
       </div>
       <!-- 構造ビュー。行を選ぶと DSL タブに戻ってその行へ飛ぶ -->
@@ -7849,7 +7849,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <input id="outline-filter" autocomplete="off" spellcheck="false" placeholder="要素・関係を絞り込む">
         <div id="outline-list" role="tree"></div>
         <div id="outline-summary"></div>
-        <!-- BLK-junior-20260907-1703-wish: 参照図と「同じ形か」を数で突き合わせる -->
+        <!-- 参照図と「同じ形か」を数で突き合わせる -->
         <div id="outline-cmp">
           <label for="outline-cmp-select">参照図と数合わせ</label>
           <select id="outline-cmp-select"></select>
@@ -7876,7 +7876,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         </div>
         <div id="state-table-body" hidden></div>
       </div>
-      <!-- 入れ子ツリー (BLK-junior-20260916-0526-wish)。状態遷移図のときだけ出す。
+      <!-- 入れ子ツリー。状態遷移図のときだけ出す。
            木の組み立ては state-tree.js。ここは開閉と焦点の帯だけ -->
       <div id="state-tree-panel" hidden>
         <div id="state-tree-head">
@@ -7894,7 +7894,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="preview-container">
         <!-- design 5a: 描画エラーを図の上に重ねる帯。直前の図はそのまま残す -->
         <div id="render-error-overlay" role="alert" hidden></div>
-        <!-- BLK-reviewer-20260912-2103-wish: この保存で中身が別名の図と入れ替わって
+        <!-- この保存で中身が別名の図と入れ替わって
              いないかを保存のその場で言う帯。あわせて保存操作の控えをここで読む。
              中身は save-swap.js -->
         <div id="save-swap-overlay" role="alert" hidden>
@@ -7904,13 +7904,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
             <span id="ssw-summary"></span>
           </div>
           <ul id="ssw-list"></ul>
-          <!-- BLK-primary-20260912-2206-wish: フォルダ全体で中身が一致した組と、
+          <!-- フォルダ全体で中身が一致した組と、
                巻き込まれた図を 1 操作で戻すボタン。中身は twin-restore.js -->
           <ul id="ssw-twins" hidden></ul>
           <button type="button" id="btn-ssw-restore" hidden></button>
           <ol id="ssw-log" hidden></ol>
         </div>
-        <!-- BLK-primary-20260914-1406: 押した保存が控え (`{名前}-編集中`) へ逸れたことを
+        <!-- 押した保存が控え (`{名前}-編集中`) へ逸れたことを
              その場で言い、1 押しで本体へ書き直せる帯。中身は save-redirect.js -->
         <div id="save-redirect-overlay" role="alert" hidden>
           <div class="srd-head">
@@ -7919,7 +7919,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
             <button type="button" id="btn-srd-keep"></button>
           </div>
         </div>
-        <!-- BLK-junior-20260908-1703-wish: 継承元の増減行に対応する図形を
+        <!-- 継承元の増減行に対応する図形を
              図の上で色付けしたときの帯。当たらなかった行はここに並べる -->
         <div id="lg-mark-overlay" role="status" hidden>
           <div class="lgm-head">
@@ -7942,11 +7942,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 
     <!-- 参照ペイン: 別のタブの図を並べて出す (先輩の図を見ながら書く)。
          スクロールは主ペインと独立。既定では畳んでいる。 -->
-    <!-- BLK-human-20260915-1203: 参照ペイン・先輩の枠のどちらも境目をドラッグして幅を変える -->
+    <!-- 参照ペイン・先輩の枠のどちらも境目をドラッグして幅を変える -->
     <div class="pane-resizer" id="resizer-compare" hidden
          role="separator" aria-orientation="vertical" aria-label="参照ペインの幅"></div>
     <div id="compare-pane" hidden>
-      <!-- BLK-primary-20260909-0303-wish: 「変更前後を見せる」1 つの業務のために
+      <!-- 「変更前後を見せる」1 つの業務のために
            「⇔ 並べて見る」と「± 差分」の 2 画面を選び分けていた。同じペインの中の
            タブにして、会議中どちらを聞かれても閉じずに切り替えられるようにする。 -->
       <div id="compare-modes" role="tablist" aria-label="見比べ方">
@@ -7955,7 +7955,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="compare-mode-diff" class="compare-mode" role="tab"
                 aria-selected="false" title="この図の前回保存時点との差分を行で見る">± 差分</button>
       </div>
-      <!-- BLK-owner-20260923-1509-prune: 並べる面は 1 つ。どちらの枠が出ていても
+      <!-- 並べる面は 1 つ。どちらの枠が出ていても
            同じ「相手」の列を持ち、押せば相手だけが入れ替わる。 -->
       <div id="compare-target-row">
         <strong>比較相手</strong>
@@ -7966,7 +7966,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="compare-status"></span>
         <button type="button" id="btn-compare-close" title="並べて見るのをやめる">✕</button>
       </div>
-      <!-- BLK-primary-20260914-1206-wish: ⇄一括置換・🔖[適用] は保存フォルダへ直接書くので、
+      <!-- ⇄一括置換・🔖[適用] は保存フォルダへ直接書くので、
            開き直すと前後が出せなかった。書き込み 1 回ぶんの前後をここに並べ、会議で
            見せたい回を選べるようにする。 -->
       <div id="compare-hist-bar">
@@ -7975,35 +7975,35 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="compare-hist-summary"></span>
       </div>
       <div id="compare-hist-list" hidden></div>
-      <!-- BLK-junior-20260907-0843-wish: 参照図と編集中の図の食い違いを保存前に挙げる -->
+      <!-- 参照図と編集中の図の食い違いを保存前に挙げる -->
       <div id="check-bar">
         <button type="button" id="btn-check-run" title="参照図と突き合わせて食い違いを探す">⚖ 整合チェック</button>
         <span id="check-summary"></span>
       </div>
       <div id="check-list" hidden></div>
-      <!-- BLK-junior-20260908-0823-wish: 2 枚の図の対応表。名前がばらばらでも
+      <!-- 2 枚の図の対応表。名前がばらばらでも
            対応を機械的に取り、片方にしか無い要素だけを目立たせる。
-           BLK-junior-20260908-1203-wish: 状態遷移図に加えクラス図 (クラスと関係) も同じ表で扱う。 -->
+           状態遷移図に加えクラス図 (クラスと関係) も同じ表で扱う。 -->
       <div id="map-bar">
         <button type="button" id="btn-map-run" title="参照図と自分の図の対応表を作る (状態遷移図は状態・遷移、クラス図はクラス・関係)">対応表</button>
         <span id="map-summary"></span>
       </div>
       <div id="map-warn" hidden></div>
-      <!-- BLK-junior-20260908-0823: 対応をどこまで人が決めたか。推測が残る間は
+      <!-- 対応をどこまで人が決めたか。推測が残る間は
            「参照図だけ」の行を先輩が足した要素と言い切らない。 -->
       <div id="map-decision" hidden>
         <span id="map-decision-text"></span>
         <button type="button" id="btn-map-reset" hidden
                 title="手で決めた対応を全部取り消して、機械の推測に戻す">対応をやり直す</button>
       </div>
-      <!-- BLK-junior-20260908-0923-wish: 先輩・reviewer に預けた質問の件数 -->
+      <!-- 先輩・reviewer に預けた質問の件数 -->
       <div id="map-asked" hidden></div>
-      <!-- BLK-primary-20260925-0932-wish: 組になった綴り違いを相手の綴りに揃える (自分の図だけを書く) -->
+      <!-- 組になった綴り違いを相手の綴りに揃える (自分の図だけを書く) -->
       <div id="map-align" hidden></div>
       <div id="map-list" hidden></div>
-      <!-- BLK-junior-20260908-1303-wish: 派生図は雛形をペリフェラル名だけ変えて複製したもの。
+      <!-- 派生図は雛形をペリフェラル名だけ変えて複製したもの。
            題材語を伏せて突き合わせ、「この図だけ / 雛形だけ」の行を出す。 -->
-      <!-- BLK-junior-20260908-1403-wish: 雛形は 1 回だけ登録して呼び名で選ぶ。
+      <!-- 雛形は 1 回だけ登録して呼び名で選ぶ。
            以降は相手フォルダの絶対パスを打ち直さなくてよい。 -->
       <div id="tr-bar">
         <select id="tr-pick" title="比べる雛形を選ぶ (登録した雛形は次の周でもそのまま使える)">
@@ -8021,7 +8021,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </div>
       <div id="td-note" hidden></div>
       <div id="td-list" hidden></div>
-      <!-- BLK-junior-20260908-1403: 2 枚比べだと「片方にだけある要素は無い」で行き止まりになる。
+      <!-- 2 枚比べだと「片方にだけある要素は無い」で行き止まりになる。
            開いている図を全部まとめて突き合わせ、行ごとにどの図にあるかを出す。 -->
       <div id="tc-bar">
         <button type="button" id="btn-tc-run"
@@ -8031,8 +8031,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="tc-verdict" hidden></div>
       <div id="tc-note" hidden></div>
       <div id="tc-list" hidden></div>
-      <!-- BLK-junior-20260908-0723-wish: 他の人のフォルダの同じ図を相手にする -->
-      <!-- BLK-owner-20260924-2135-prune: 相手のフォルダは FILES「読むだけ」で比較中にしたフォルダ 1 つから取る (パスを打つ欄は持たない) -->
+      <!-- 他の人のフォルダの同じ図を相手にする -->
+      <!-- 相手のフォルダは FILES「読むだけ」で比較中にしたフォルダ 1 つから取る (パスを打つ欄は持たない) -->
       <div id="xf-bar">
         <button type="button" id="xf-dir-name" hidden></button>
         <span id="xf-dir-hint">FILES の読むだけでフォルダを選ぶと、ここにその図の増分が出ます</span>
@@ -8042,11 +8042,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="xf-rename"></span>
       </div>
       <div id="xf-summary" hidden></div>
-      <!-- BLK-junior-20260908-0823: 名前で対応が付かない 2 枚を、形 (種別ごとの件数) で見比べる -->
+      <!-- 名前で対応が付かない 2 枚を、形 (種別ごとの件数) で見比べる -->
       <div id="xf-shape" hidden></div>
-      <!-- BLK-junior-20260908-1303: 骨格が同じで語だけ違う 2 枚の対応表 -->
+      <!-- 骨格が同じで語だけ違う 2 枚の対応表 -->
       <div id="xf-parallel" hidden></div>
-      <!-- BLK-junior-20260917-0223-wish: 先輩側の増分をチェックしてまとめて取り込む -->
+      <!-- 先輩側の増分をチェックしてまとめて取り込む -->
       <div id="xf-take-bar" hidden>
         <label id="xf-take-all-label">
           <input type="checkbox" id="xf-take-all" title="相手にしかない行をすべて選ぶ"> すべて選択
@@ -8063,7 +8063,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="compare-diff-view"></div>
     </div>
 
-    <!-- BLK-junior-20260914-1406-wish: 先輩の図を読み専用の 2 枠目として据え置く。
+    <!-- 先輩の図を読み専用の 2 枠目として据え置く。
          フォルダを 1 回選べば、図を切り替えても相手が自動で入れ替わる。 -->
     <div class="pane-resizer" id="resizer-senior" hidden
          role="separator" aria-orientation="vertical" aria-label="比較相手の枠の幅"></div>
@@ -8072,7 +8072,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- design 9a: 「先輩」は使う人の立場で、中身を表していない。相手が先輩でも
              他チームでも過去の版でも動きは同じなので「比較相手」と呼ぶ。 -->
         <strong>比較相手</strong>
-        <!-- BLK-owner-20260923-1509-prune: 「2 つを左右に置いて見比べる」入口が 5 つあり、
+        <!-- 「2 つを左右に置いて見比べる」入口が 5 つあり、
              うち 2 つはタブ列で隣り合って名前で区別できなかった。面はこの枠 1 つにし、
              「誰と並べるか」を枠の中で選ぶ (選択肢と旧称は compare-entry が持つ)。 -->
         <span id="senior-target" role="group" aria-label="比較する相手"></span>
@@ -8087,26 +8087,26 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         </span>
         <button type="button" id="senior-close" title="この枠を閉じる">×</button>
       </div>
-      <!-- BLK-human-20260923-1702 (design 10c): 相手が Git のコミットのときの見出し。
+      <!-- 相手が Git のコミットのときの見出し。
            相手の名前を押すと相手選びがその場で開き、◀ ▶ で 1 コミットずつ送れる。 -->
       <div id="senior-git" hidden>
         <button type="button" id="senior-git-pick" title="比較する相手を選ぶ"></button>
         <button type="button" id="senior-git-prev" title="1 つ古いコミット">◀</button>
         <button type="button" id="senior-git-next" title="1 つ新しいコミット">▶</button>
         <span id="senior-git-sides"></span>
-        <!-- BLK-builder-20260924-1836-2 (design 10c): 「差分だけ / 並べて比較」の 2 択 (据え置く / 1 回だけ と同じ形)。
+        <!-- 「差分だけ / 並べて比較」の 2 択 (据え置く / 1 回だけ と同じ形)。
              押している方だけ地色。既定は並べて比較 (本文の全部と図) -->
         <span id="senior-git-view" role="group" aria-label="コミットとの見比べ方">
           <button type="button" id="senior-git-diffonly" aria-pressed="false" title="作業中と違う行だけを出す">差分だけ</button>
           <button type="button" id="senior-git-sbs" aria-pressed="true" title="コミット時点の本文の全部と図を並べる">並べて比較</button>
         </span>
-        <!-- BLK-builder-20260924-1823-2 (design 10c): 図の上の差分の色の意味を 1 行で言う -->
+        <!-- 図の上の差分の色の意味を 1 行で言う -->
         <span id="senior-git-legend"></span>
       </div>
-      <!-- 初めて開いたときだけ「この枠は何か」を 1 行出す (BLK-human-20260915-1203) -->
+      <!-- 初めて開いたときだけ「この枠は何か」を 1 行出す -->
       <div id="senior-first-note" hidden></div>
       <div id="senior-notice"></div>
-      <!-- BLK-junior-20260915-2240-wish: 先輩がこの図種を 1 枚も持っていないとき、
+      <!-- 先輩がこの図種を 1 枚も持っていないとき、
            手順1「手本を見て直す」が成立しない。先輩の他図種に実際に書かれている
            名前だけから仮の手本を組んで出す (決め打ちの当てずっぽうを減らす)。 -->
       <div id="senior-draft-row" hidden>
@@ -8114,7 +8114,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
                 title="比較相手の他の図種 (クラス図・シーケンス図など) に書かれている名前から、この図種の下書きを組む">相手に無い図種を仮に組む</button>
         <span id="senior-draft-note"></span>
       </div>
-      <!-- BLK-junior-20260914-2206-wish: 先輩のクラス図は全ドライバ共通の 1 枚なので
+      <!-- 先輩のクラス図は全ドライバ共通の 1 枚なので
            部品名で 1:1 に引けない。共通図が相手のときだけ、部品名で抜き出す欄を出す。 -->
       <div id="senior-slice" hidden>
         <label for="senior-slice-key">部品</label>
@@ -8148,7 +8148,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 
   </div><!-- /#main -->
 
-  <!-- BLK-primary-20260914-2206-wish: 影響の手当て列。依存グラフ/変更チケットで洗った図を
+  <!-- 影響の手当て列。依存グラフ/変更チケットで洗った図を
        1 枚ずつ開いて直す間、下端に残り続ける。閉じて開き直さずに次の図へ送れる。 -->
   <div id="fw-bar" hidden>
     <span id="fw-label" role="status"></span>
@@ -8162,35 +8162,35 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   <!-- ── Status bar ──────────────────────────────────────────────────────── -->
   <div id="statusbar">
     <span id="status-parse">Ready</span>
-    <!-- BLK-builder-20260924-1413-2 (design 7a / 9c): パース OK → N elements · M relations → 保存状態 → 件数 の順 -->
+    <!-- パース OK → N elements · M relations → 保存状態 → 件数 の順 -->
     <span id="status-info"></span>
     <span id="status-autosave" style="color:var(--text-secondary);"></span>
     <span id="status-save-result" role="status" style="color:var(--text-secondary);"></span>
     <span class="sb-spacer" aria-hidden="true"></span>
-    <!-- BLK-builder-20260908-0858-2 (design 7a/7b): 件数を持つものを下端に寄せ、押せばそのパネルが開く -->
+    <!-- 件数を持つものを下端に寄せ、押せばそのパネルが開く -->
     <button type="button" id="status-diff" title="前回保存した時点から変わった図の一覧">± 差分 −</button>
-    <!-- BLK-reviewer-20260915-2346-wish: 開いている図が前回保存版から何行増えて何行消えるかを、保存を押す前に常時出す -->
+    <!-- 開いている図が前回保存版から何行増えて何行消えるかを、保存を押す前に常時出す -->
     <button type="button" id="status-livediff" data-livediff="none" title="前回保存版といまの中身を並べて見る (押すと開きます)">前回保存版 —</button>
     <button type="button" id="status-pins" title="この図に付いたレビュー指摘の一覧">指摘 −</button>
     <button type="button" id="status-inbox" title="保存フォルダの図をまたいだ未対応のレビュー指摘">指摘箱 −</button>
-    <!-- BLK-primary-20260914-1006-friction: 部品名の統一が済んでいるか。過去に当てた
+    <!-- 部品名の統一が済んでいるか。過去に当てた
          置換の組に旧称が残っていないかを常時数え、済んでいるなら ⇄ 一括置換を
          開いて空打ちする手順そのものを要らなくする -->
     <button type="button" id="status-rename" title="過去に当てた置換の組はまだ数えていません">統一 −</button>
-    <!-- BLK-junior-20260908-1103 (design 7b): 先輩の図を見る入口は 🧰 ツールの折りたたみの
+    <!-- 先輩の図を見る入口は 🧰 ツールの折りたたみの
          奥にあり、図種ごとの初回は毎回そこを通っていた。常に見えている下端に置き、
          押せば 1 クリックで先輩の枠が開く -->
-    <!-- BLK-builder-20260924-1716-4 (design 9c / 10a): 相手が決まるまでは出さない。入口は FILES「読むだけ」の ⇔ -->
+    <!-- 相手が決まるまでは出さない。入口は FILES「読むだけ」の ⇔ -->
     <button type="button" id="status-senior" hidden title="別のフォルダの図を読むだけで横に並べます (押すと開きます)"></button>
-    <!-- BLK-reviewer-20260907-0843: 整合性チェックの警告件数を常時出す -->
+    <!-- 整合性チェックの警告件数を常時出す -->
     <button type="button" id="status-consistency" title="命名規約・未使用 participant・メソッド不一致・粒度不一致の一覧">整合 —</button>
-    <!-- BLK-primary-20260907-1803-wish: state の遷移イベントと class のメソッドの突合表 -->
+    <!-- state の遷移イベントと class のメソッドの突合表 -->
     <button type="button" id="status-eventsync" title="state 図の遷移イベントと class 図のメソッドの突合表を開く">⇄ イベント —</button>
   </div>
 
   </div><!-- /#app-body -->
 
-<!-- コマンドパレット (BLK-builder-20260907-0803-1 / design 1a) -->
+<!-- コマンドパレット (design 1a) -->
 <div id="cp-modal" role="dialog" aria-label="コマンド・要素を検索">
   <div id="cp-panel">
     <input id="cp-input" type="text" autocomplete="off" spellcheck="false"
@@ -8201,7 +8201,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   </div>
 </div>
 
-<!-- テンプレートから新規作成 (BLK-junior-20260907-0803-wish) -->
+<!-- テンプレートから新規作成 -->
 <div id="tpl-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="tpl-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:600px;max-width:820px;max-height:80vh;overflow-y:auto;"></div>
 </div>
@@ -8263,7 +8263,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <!-- design 1a: 自動保存 / レンダリング / エディタ / ショートカット / データ -->
     <div id="cfg-tabs" role="tablist"></div>
 
-    <!-- BLK-human-20260916-0903: 中身だけが縦に流れる。ダイアログの大きさ・タブ列・下のボタンはタブに依らず動かない -->
+    <!-- 中身だけが縦に流れる。ダイアログの大きさ・タブ列・下のボタンはタブに依らず動かない -->
     <div id="cfg-panes">
     <div id="cfg-pane-autosave" class="cfg-pane">
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;">
@@ -8301,12 +8301,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="cfg-render-warning" style="font-size:11px;color:var(--accent-red);margin-bottom:10px;"></div>
       <div id="cfg-render-note" style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;"></div>
 
-      <!-- BLK-human-20260909-2200: plantuml.jar も Java も配布物に同梱しない。
+      <!-- plantuml.jar も Java も配布物に同梱しない。
            どこにあるか / 入っているかをここで見せ、足りなければここから入れる。 -->
       <div id="cfg-engine" style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px;">
         <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">描画エンジン / PlantUML と Java</div>
         <div id="cfg-jar-status" style="font-size:11px;margin-bottom:4px;"></div>
-        <!-- BLK-human-20260925-1500: 使用中の版と推奨版 (lib/PLANTUML_VERSION)。違えば「取得し直す」。 -->
+        <!-- 使用中の版と推奨版 (lib/PLANTUML_VERSION)。違えば「取得し直す」。 -->
         <div id="cfg-jar-version-row" hidden style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
           <span id="cfg-jar-version" data-outdated="0" data-differs="0" style="font-size:11px;"></span>
           <button type="button" id="cfg-jar-refetch" hidden title="推奨版の plantuml.jar を公式リリースから取り直す (この操作で初めて外部へ接続します)">取得し直す</button>
@@ -8319,7 +8319,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <button type="button" id="cfg-jar-fetch" title="PlantUML の公式リリースから jar を取得する (この操作で初めて外部へ接続します)">公式から取得</button>
         </div>
         <div id="cfg-java-status" style="font-size:11px;"></div>
-        <!-- BLK-human-20260915-1201: 取得中 / 完了 / 失敗をこの 1 行で言う。
+        <!-- 取得中 / 完了 / 失敗をこの 1 行で言う。
              失敗したときだけ、同じ場所に再試行の入口を出す。 -->
         <div id="cfg-engine-note" role="status" data-engine-phase="" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>
         <button type="button" id="cfg-jar-retry" hidden style="margin-top:4px;font-size:11px;"
@@ -8399,7 +8399,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </div>
     </div>
 
-    <!-- BLK-human-20260916-0902: 不具合報告に貼る版・コミット・日付 (git tag が正本) -->
+    <!-- 不具合報告に貼る版・コミット・日付 (git tag が正本) -->
     <div id="cfg-pane-about" class="cfg-pane" hidden>
       <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:6px;">バージョン / Version</div>
       <div style="display:flex;align-items:center;gap:8px;">
@@ -8408,7 +8408,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="cfg-version-status" style="font-size:11px;color:var(--text-secondary);"></span>
       </div>
       <div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">不具合を報告するときは、この 1 行を一緒に貼ってください。</div>
-      <!-- BLK-human-20260917-0900: 新しい版に気付けるようにする。押したときだけ確かめ、落とさない・実行しない -->
+      <!-- 新しい版に気付けるようにする。押したときだけ確かめ、落とさない・実行しない -->
       <div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <button type="button" id="cfg-update-check" title="GitHub Releases の最新版と比べる (押したときだけ通信。自動では落とさない)">更新を確認</button>
         <span id="cfg-update-status" style="font-size:11px;color:var(--text-secondary);"></span>
@@ -8738,7 +8738,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/svg-text-diff.js"></script>
 <script src="src/ui/git-ui.js"></script>
 <script src="src/ui/file-menu.js"></script>
-<!-- BLK-primary-20260907-0923-wish: 変更サマリボード。変わった図を全件、変更前後で並べる -->
+<!-- 変更サマリボード。変わった図を全件、変更前後で並べる -->
 <div id="rd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="rd-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:1080px;max-height:88vh;overflow-y:auto;"></div>
 </div>
@@ -8748,15 +8748,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <strong>変更サマリボード</strong>
       <span id="cb-summary"></span>
       <span class="board-tools">
-        <!-- BLK-primary-20260924-1332-wish: 何と比べるかをこの画面の中で選ぶ (今日 0 時 / 前回の会議 / 前回提出) -->
+        <!-- 何と比べるかをこの画面の中で選ぶ (今日 0 時 / 前回の会議 / 前回提出) -->
         <label title="変更前をいつの時点にするか。前回の会議 = 今日より前に最後に会議セットで並べた時点、前回提出 = 最後に納品パッケージを作った時点">変更前 = <select id="cb-base"></select></label>
-        <!-- BLK-primary-20260913-0306-wish: 顧客の前では DSL を見せられない。
+        <!-- 顧客の前では DSL を見せられない。
              ここを押すと、並んでいる図が描いた絵の変更前後に切り替わる。 -->
         <button type="button" id="cb-svg" aria-pressed="false" title="顧客に見せる画面に切り替える (DSL を出さず、描いた図の変更前後を並べる)">SVGで見る</button>
         <span id="cb-svg-state"></span>
         <label><input type="checkbox" id="cb-full"> 全文</label>
         <label><input type="checkbox" id="cb-same"> 変更なしも出す</label>
-        <!-- BLK-primary-20260912-2103-wish: 14 枚のドメイン図に限らず、保存フォルダで更新されたファイルを全部拾う -->
+        <!-- 14 枚のドメイン図に限らず、保存フォルダで更新されたファイルを全部拾う -->
         <label title="今日この保存フォルダで更新されたファイルも並べる (いつもの 14 枚に限らない)"><input type="checkbox" id="cb-scan-folder" checked> 今日のフォルダ更新も拾う</label>
         <label title="会議で [要修正] を付けた行だけを残す (新人に渡す分)"><input type="checkbox" id="cb-fixonly"> 要修正のみ</label>
         <span id="cb-filter-state"></span>
@@ -8768,11 +8768,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="cb-close">閉じる</button>
       </span>
     </div>
-    <!-- BLK-primary-20260908-1803-wish: 申し送りは差分がある間しか書けなかった。
+    <!-- 申し送りは差分がある間しか書けなかった。
          ここで図を選んで直接書けば、直し終えて基準に取り込んだ後でも残せる。
          引き継ぎ後は、新人が返した JSON を読み込んで未読・要フォローを見る。 -->
     <div class="board-head" id="cb-handover-bar">
-      <!-- BLK-primary-20260918-0249-wish: 会議で見せる図はその場で 3〜5 枚選ぶ。
+      <!-- 会議で見せる図はその場で 3〜5 枚選ぶ。
            選んだ図だけを選んだ順に並べ、各図は 変更前 / 変更後 のタブで切り替える。 -->
       <button type="button" id="cb-meeting" aria-pressed="false" title="選んだ図だけを選んだ順に並べる (各図の見出しの [会議に入れる] で 3〜5 枚選ぶ)">会議セット</button>
       <select id="cb-meeting-doc" title="会議で見せる図を名前で選ぶ (変わっていない図も選べる)"></select>
@@ -8791,9 +8791,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="cb-body" class="diff-board"></div>
   </div>
 </div>
-<!-- BLK-primary-20260908-1303-wish: ⇄ 一括置換の「▤ 影響を見る」。適用する前に、
+<!-- ⇄ 一括置換の「▤ 影響を見る」。適用する前に、
      ヒットした図の該当行が置換でどう変わるかを変更サマリボードと同じ見た目で並べる。
-     BLK-owner-20260923-1949-prune: 「この部品名がどの図のどこに効くか」を出す画面は
+     「この部品名がどの図のどこに効くか」を出す画面は
      ここ 1 つ。部品名の依存グラフ (参照元・参照先・連鎖で影響が届く図、note の一括付与、
      変更チケット、版履歴) は上段、出現行 (置換後があれば今 / 置換後) は下段に並ぶ。
      Ctrl+K の「依存グラフ」「名前で図を探す」もこの画面を開く。 -->
@@ -8802,15 +8802,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div class="board-head">
       <strong>影響を見る</strong>
       <span id="ri-summary"></span>
-      <!-- BLK-primary-20260917-0023: 何枚中何枚に変更ありか (残りは触らなくてよい) -->
+      <!-- 何枚中何枚に変更ありか (残りは触らなくてよい) -->
       <span id="ri-roster"></span>
       <span class="board-tools">
         <label title="ヒット行の前後だけでなく図の全文を出す"><input type="checkbox" id="ri-full"> 全文</label>
-        <!-- BLK-primary-20260917-0223: 会議の画面共有では、テキスト差分ではなく
+        <!-- 会議の画面共有では、テキスト差分ではなく
              「置換前の図」と「置換後 (仮適用) の図」を並べて見せたい -->
         <label title="図ごとに 変更前 / 変更後 (仮適用) の図を並べて出す (押すと原寸)"><input type="checkbox" id="ri-svg" checked> 図で見る</label>
         <span id="ri-svg-state" role="status"></span>
-        <!-- BLK-owner-20260924-0852-prune: 旧 🕸 参照関係の「書き出す」。書き出しはこの 1 か所 -->
+        <!-- 旧 🕸 参照関係の「書き出す」。書き出しはこの 1 か所 -->
         <button type="button" id="ri-export" title="この画面に載っている図 (開いているタブ + 保存フォルダ) の、図をまたぐ部品名と図どうしの繋がりを xref.md に書き出す。保存先ディレクトリの値も一緒に載る (受け取った側は ⚙設定の保存先ディレクトリにこの xref.md ごと貼れる)">書き出す (xref.md)</button>
         <button type="button" id="dg-use" title="この画面で見ている名前を一括置換の「置換前」に入れて戻る">この名前を置換前に入れる</button>
         <button type="button" id="ri-apply">この内容で置換する</button>
@@ -8818,7 +8818,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </span>
     </div>
     <div id="ri-scroll">
-      <!-- BLK-primary-20260908-2003-wish: 名前を 1 つ選ぶと参照元 (左) → 名前 (中央) →
+      <!-- 名前を 1 つ選ぶと参照元 (左) → 名前 (中央) →
            参照先 (右) が矢印で並び、隣の名前を経由して影響が届く図まで一覧に出る。 -->
       <section id="ri-refs" aria-label="参照の連鎖">
         <div class="ri-refs-head">
@@ -8838,7 +8838,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="dg-body">
           <div id="dg-canvas"></div>
           <div id="dg-impact"></div>
-          <!-- BLK-primary-20260917-0123-wish: 不具合対応の入口。影響が届く図まで出ても
+          <!-- 不具合対応の入口。影響が届く図まで出ても
                「いつこの記述に変わったか」は各図を開いて目で追うしかなかった。
                影響一覧の版履歴を 1 本の時系列に混ぜ、症状の語で絞って
                「ここで書き換わった」版を名指しする。 -->
@@ -8858,10 +8858,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
             <div id="dg-ver-summary" role="status"></div>
             <div id="dg-ver-list"></div>
           </div>
-          <!-- BLK-primary-20260915-0007: 影響先すべてに同じ note を 1 回で打つ。
+          <!-- 影響先すべてに同じ note を 1 回で打つ。
                「意図的な省略を note で明記する」対応は、影響が届く図の枚数だけ
                同じ文言を打ち直す作業になっていた (1 図ずつ一覧から開き直す)。 -->
-          <!-- BLK-owner-20260924-0852-prune: 旧 🕸 参照関係の「図どうしの繋がり」。参照の連鎖 (名前の矢印) には
+          <!-- 旧 🕸 参照関係の「図どうしの繋がり」。参照の連鎖 (名前の矢印) には
                図の組が無いので、連鎖の下に畳んで置く。 -->
           <details id="ri-links-box">
             <summary>図どうしの繋がり (同じ部品名が出てくる図の組) <span id="ri-links-count"></span></summary>
@@ -8884,7 +8884,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         </div>
       </section>
       <div class="ri-occ-head"><strong>出てくる行</strong></div>
-      <!-- BLK-primary-20260917-0523-wish: 部品名 / メソッド名から「その名前を使っている図の一覧」を引く。
+      <!-- 部品名 / メソッド名から「その名前を使っている図の一覧」を引く。
            置換後が空のとき (置換前だけ・Ctrl+K「名前で図を探す」) はこの出現箇所の一覧、
            置換後を入れていれば下の 今 / 置換後 の並びになる。 -->
       <div id="ri-occ" hidden>
@@ -8905,7 +8905,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   <div id="ri-zoom"><div id="ri-zoom-inner"><div id="ri-zoom-head"></div><div id="ri-zoom-body"></div></div></div>
 </div>
 
-<!-- BLK-primary-20260909-0603-wish: 変更チケット。1 回の仕様変更で直す図の一覧と
+<!-- 変更チケット。1 回の仕様変更で直す図の一覧と
      「直した」印を保存フォルダに残す。次の run は依存グラフを開き直さず、
      この札の未チェックだけを見れば続きから直せる。 -->
 <div id="ct-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
@@ -8924,7 +8924,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="ct-body"></div>
   </div>
 </div>
-<!-- BLK-junior-20260908-2203-wish: 提出物庫。画像を書き出した瞬間の DSL を刻印で積んだ庫。
+<!-- 提出物庫。画像を書き出した瞬間の DSL を刻印で積んだ庫。
      作業ファイルが同じ名前で上書きされても、ここに積んだ提出物は消えない。
      手順 1 は「部品 × 図種 × 前回分を選んで開く」だけで済む。 -->
 <div id="vault-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
@@ -8943,13 +8943,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="vault-body" class="diff-board"></div>
   </div>
 </div>
-<!-- BLK-primary-20260908-1203-wish: 提出用 zip に詰める図を選ぶ。
+<!-- 提出用 zip に詰める図を選ぶ。
      絞り込みは変更サマリボードと同じ「変更図のみ / 要修正のみ」 -->
-<!-- BLK-primary-20260914-2006-wish: 資料セット。書き出す対象を「今開いているタブ」から
+<!-- 資料セット。書き出す対象を「今開いているタブ」から
      切り離し、名前で選べるようにする -->
-<!-- BLK-primary-20260917-0323-wish: 引き継ぎチェックリスト。渡す 14 枚の
+<!-- 引き継ぎチェックリスト。渡す 14 枚の
      置換済み / note最新 / SVG最新 / 指摘 を 1 画面で読み、赤い行だけを見る -->
-<!-- BLK-reviewer-20260917-0323-wish: 呼び出しグラフ。クラス/メソッドを 1 つ選ぶと、
+<!-- 呼び出しグラフ。クラス/メソッドを 1 つ選ぶと、
      それを呼んでいる全シーケンス図・状態遷移図がドメインごとに並び、行まで辿れる -->
 <div id="cg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="cg-modal-content">
@@ -8977,7 +8977,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   <div id="hb-modal-content">
     <div id="hb-head">
       <strong>引き継ぎチェックリスト</strong>
-      <!-- BLK-primary-20260924-1432-wish: 渡す相手のフォルダを選ぶと、相手の同名図との食い違いが 5 列目に出る。
+      <!-- 渡す相手のフォルダを選ぶと、相手の同名図との食い違いが 5 列目に出る。
            保存先は動かさない。候補は FILES の「読むだけ」と同じ隣のフォルダ。 -->
       <label id="hb-peer-wrap" title="渡す相手のフォルダを選ぶと、相手の同名図との食い違いを数えます (保存先は動きません)">渡す相手 =
         <select id="hb-peer" aria-label="渡す相手のフォルダ"><option value="">選ばない</option></select></label>
@@ -8988,7 +8988,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="hb-close">閉じる</button>
       </span>
     </div>
-    <!-- BLK-owner-20260925-0235-prune: 引き継ぎ zip の対象 (的・未確定) はこの窓の見出しの下、書き出しは下端。
+    <!-- 引き継ぎ zip の対象 (的・未確定) はこの窓の見出しの下、書き出しは下端。
          行の頭の ✔ / − が入る / 入らない。Export ▾「引き継ぎ」も同じ窓を開く。 -->
     <div id="hb-et"></div>
     <div id="hb-body">
@@ -9012,7 +9012,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="docset-close">閉じる</button>
       </span>
     </div>
-    <!-- BLK-owner-20260923-1829-prune: 範囲はメニューの項目数ではなくここで選ぶ -->
+    <!-- 範囲はメニューの項目数ではなくここで選ぶ -->
     <div id="docset-scope" role="group" aria-label="対象の選び方">
       <span class="ds-scope-label">対象の選び方</span>
       <button type="button" id="dsc-set" data-scope="set" aria-pressed="true"
@@ -9036,10 +9036,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span id="docset-pick-count" role="status"></span>
       <button type="button" id="docset-create" title="保存フォルダにある図（保存先の一覧で印を付けていればその図だけ）を、この名前の資料セットとして登録する">今の対象を登録する</button>
     </div>
-    <!-- BLK-primary-20260917-0323-wish: 未確認のまま渡そうとしている図を、押す前に名指しする -->
+    <!-- 未確認のまま渡そうとしている図を、押す前に名指しする -->
     <div id="docset-handover" data-blocked="0" role="status"></div>
     <div id="docset-rows"></div>
-    <!-- BLK-primary-20260916-0100-wish: 貼る前に資料の体裁 (順序・見出し・1 行説明) を
+    <!-- 貼る前に資料の体裁 (順序・見出し・1 行説明) を
          組んで、1 枚物のプレビューで確かめる。zip を開いてから並べ直さずに済ませる -->
     <div id="docset-layout" style="display:none;">
       <div id="dl-head">
@@ -9060,12 +9060,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         </div>
       </div>
     </div>
-    <!-- BLK-primary-20260916-0426-wish: 書き出した後に「客先に見せてよい状態か」を
+    <!-- 書き出した後に「客先に見せてよい状態か」を
          資料の完成物 (表紙・目次・図番号・注記 + 図の本体) で見返す。差し戻しは
          そのページから編集に戻る (zip を解いて 1 枚ずつ開き直さない) -->
     <div id="docset-proof" style="display:none;">
       <div id="dp-head">
-        <!-- 納品パッケージの窓の「タイトル」欄 (#dp-title) と同じ id にしない (getElementById が先のこちらを返し、書き出しの題が空になっていた。BLK-releaser-20260929-0851-2) -->
+        <!-- 納品パッケージの窓の「タイトル」欄 (#dp-title) と同じ id にしない (getElementById が先のこちらを返し、書き出しの題が空になっていた。) -->
         <strong id="dpf-title"></strong>
         <span id="dp-verdict" role="status"></span>
         <span id="dp-tools">
@@ -9094,13 +9094,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </span>
     </div>
     <div id="expick-since" role="status"></div>
-    <!-- BLK-primary-20260925-1032-wish: 候補は開いている図 + 保存先の図。名前で絞り、印を付けた図だけを書き出す -->
+    <!-- 候補は開いている図 + 保存先の図。名前で絞り、印を付けた図だけを書き出す -->
     <div id="expick-find"><input type="search" id="expick-filter" placeholder="名前で絞り込む（保存先の図も含む）" aria-label="図の名前で絞り込む" autocomplete="off" /></div>
     <div id="expick-body"></div>
     <div id="expick-state" role="status"></div>
   </div>
 </div>
-<!-- 部品の図をまとめて資料化 (BLK-junior-20260908-1903-wish) -->
+<!-- 部品の図をまとめて資料化 -->
 <div id="cpack-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="cpack-modal-content">
     <div id="cpack-head">
@@ -9116,7 +9116,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="cpack-state" role="status"></div>
   </div>
 </div>
-<!-- 1 枚を資料化 (BLK-junior-20260908-2303-wish) -->
+<!-- 1 枚を資料化 -->
 <div id="mexp-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="mexp-modal-content">
     <div id="mexp-head">
@@ -9127,7 +9127,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button type="button" id="mexp-close">閉じる</button>
       </span>
     </div>
-    <!-- BLK-junior-20260914-2006-wish: 部品を選ぶ前に、部品 × 図種の残りを 1 枚で見せる。
+    <!-- 部品を選ぶ前に、部品 × 図種の残りを 1 枚で見せる。
          マスを押すと下の部品欄・図種欄がそこに合う (プルダウンの往復を無くす)。 -->
     <div id="mexp-matrix-summary" role="status"></div>
     <div id="mexp-matrix-wrap">
@@ -9137,13 +9137,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </table>
     </div>
     <div id="mexp-matrix-legend"></div>
-    <!-- BLK-junior-20260914-2106-wish: マスに「設計書のどの見出しに貼る画像か」を
+    <!-- マスに「設計書のどの見出しに貼る画像か」を
          1 回登録しておく。以後は資料化のたびに対応が残り、設計書側からは
          「この見出しの最新画像はどれか」を逆引きできる。 -->
     <div id="mexp-anchor-bar">
       <span id="mexp-anchor-summary" role="status"></span>
       <button type="button" id="mexp-anchor-toggle">見出しから逆引き…</button>
-      <!-- BLK-junior-20260915-0206-wish: 書き出し終えたあと「6 図種とも揃っているか」を
+      <!-- 書き出し終えたあと「6 図種とも揃っているか」を
            見返すための 1 枚。部品の図種を絵と保存日時ごと並べる (一覧を部品名で
            フィルタして 1 枚ずつ開き直す確認が要らなくなる)。 -->
       <button type="button" id="mexp-summary-toggle">部品サマリカード…</button>
@@ -9170,7 +9170,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <label class="mexp-field">部品
         <select id="mexp-component"></select>
       </label>
-      <!-- BLK-junior-20260914-2006: どの部品に何図種残っているかを、
+      <!-- どの部品に何図種残っているかを、
            部品を選び直さずに開いた時点で読めるようにする -->
       <span id="mexp-progress" role="status"></span>
       <label class="mexp-field">図種
@@ -9183,14 +9183,14 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     </div>
     <div id="mexp-plan" role="status">部品と図種を選ぶと、書き出す形式と名前がここに出ます。</div>
     <div id="mexp-state" role="status"></div>
-    <!-- BLK-junior-20260915-0007: 資料化の根拠を、資料化したその場に残す。
+    <!-- 資料化の根拠を、資料化したその場に残す。
          実行してもモーダルは閉じず、保存先の一覧を読み直した結果 (置けたか) が
          ここに出たままになる。トーストを見落としても一覧へ戻らなくてよい。 -->
     <div id="mexp-result" hidden>
       <span id="mexp-result-text" role="status"></span>
       <button type="button" id="mexp-result-open" title="この図を保存先の一覧で開く">この図を保存先の一覧で開く</button>
     </div>
-    <!-- BLK-junior-20260915-0106: 手順7 が求めるのは「指摘の内容が反映されているか」で、
+    <!-- 手順7 が求めるのは「指摘の内容が反映されているか」で、
          置けたことだけでは足りない。保存先から本文を読み直してここに出し、
          一覧を開き直して同じ確認をもう一度たどらずに済ませる。 -->
     <div id="mexp-readback" hidden>
@@ -9202,7 +9202,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     </div>
   </div>
 </div>
-<!-- 部品の資料一式 (BLK-junior-20260909-0003-wish) -->
+<!-- 部品の資料一式 -->
 <div id="mboard-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="mboard-modal-content">
     <div id="mboard-head">
@@ -9228,7 +9228,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="mboard-state" role="status"></div>
   </div>
 </div>
-<!-- 要求ID対応 (BLK-junior-20260909-0103-wish) -->
+<!-- 要求ID対応 -->
 <div id="req-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="req-modal-content">
     <div id="req-head">
@@ -9252,7 +9252,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="req-state" role="status"></div>
   </div>
 </div>
-<!-- BLK-reviewer-20260908-1403-wish: 突合の結果を 1 画面に集める -->
+<!-- 突合の結果を 1 画面に集める -->
 <div id="ab-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="ab-modal-content">
     <div id="ab-head">
@@ -9274,7 +9274,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   </div>
 </div>
 
-<!-- BLK-reviewer-20260908-0723-wish: 1 図の中身が保存のたびにどう変わったかを通しで見る -->
+<!-- 1 図の中身が保存のたびにどう変わったかを通しで見る -->
 <div id="vt-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="vt-modal-content">
     <div id="vt-head">
@@ -9290,7 +9290,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="vt-body"></div>
   </div>
 </div>
-<!-- BLK-junior-20260908-1603-wish: この図の継承元を覚え、更新されたら差分の行数で知らせる -->
+<!-- この図の継承元を覚え、更新されたら差分の行数で知らせる -->
 <div id="lg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="lg-modal-content">
     <div id="lg-head">
@@ -9316,7 +9316,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="lg-body"></div>
   </div>
 </div>
-<!-- BLK-reviewer-20260914-2106-wish: stale と出た 1 枚について、保存中の SVG と
+<!-- stale と出た 1 枚について、保存中の SVG と
      今の puml を描き直した SVG を並べ、可視差分 (追加・削除・移動) だけを光らせる。
      これが無い間、reviewer は 1 枚ごとに /render を叩いて `<?plantuml-src ?>` を
      取り除いた文字列 diff を書いていた。中身は src/core/svg-visual-diff.js -->
@@ -9362,24 +9362,24 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   <div id="peek-content">
     <div id="peek-head">
       <strong>読むだけのフォルダ</strong>
-      <!-- BLK-owner-20260924-1836-prune: フォルダの一覧 (#peek-dirs) は窓から外した。見ているフォルダの名前だけを出し、
+      <!-- フォルダの一覧 (#peek-dirs) は窓から外した。見ているフォルダの名前だけを出し、
            押すと FILES「読むだけ」のその行へ移る (フォルダはツリーで選ぶ) -->
       <button type="button" id="peek-dir-name" class="peek-dir-name"></button>
       <span id="peek-notice"></span>
       <span id="peek-tools">
         <button type="button" id="peek-template" disabled title="この図をテンプレートにして新しい図を作る">⧉ テンプレートとして開く</button>
-        <!-- BLK-junior-20260909-0603-wish: 覗いた手本を閉じずに右へ据える。
+        <!-- 覗いた手本を閉じずに右へ据える。
              以降は書きかけと手本が同時に見え、対応表で足りない状態・遷移が出る。 -->
         <button type="button" id="peek-compare" disabled title="この図を手本として自分の書きかけの右に並べ、対応表で足りない状態・遷移を出す">⇔ 自分の図と並べる</button>
-        <!-- BLK-junior-20260914-1006: ファイル名が対をなさない相手 (複合図) でも、
+        <!-- ファイル名が対をなさない相手 (複合図) でも、
              今開いている自分の図の部品名から「先輩のどの図に載っているか」を名指しする。 -->
         <button type="button" id="peek-find-part" title="今開いている自分の図の部品名で、このフォルダの図の中身を引き、載っている図を名指しする">自分の部品を探す</button>
         <button type="button" id="peek-cohort-toggle" title="同じドメイン名の図をフォルダ横断で並べる">ドメインで揃える</button>
         <button type="button" id="peek-sbs-toggle" title="同じファイル名を持つ 2 人の図を左右に並べ、部品名・メッセージ名の食い違いだけを光らせる">⇔ 同名で並べる</button>
-        <!-- BLK-junior-20260915-0606-wish: 部品を 1 つ選ぶと、その部品の 6 図種が
+        <!-- 部品を 1 つ選ぶと、その部品の 6 図種が
              先輩・自分の 2 列で並ぶ。自分の欄はその場で直して保存できる。 -->
         <button type="button" id="peek-board-toggle" title="部品を 1 つ選び、その部品の 6 図種を先輩・自分の 2 列で並べる（自分の欄はその場で直して保存できる）">部品ビュー</button>
-        <!-- BLK-junior-20260913-0306-wish: 指摘.md の 1 件を選ぶと、そこに書かれた
+        <!-- 指摘.md の 1 件を選ぶと、そこに書かれた
              図名を自分と先輩のフォルダから見つけ、並べて見る画面をその組で開く。 -->
         <button type="button" id="peek-note-toggle" title="隣のフォルダの指摘.md を 1 件ずつ並べ、押した指摘の図を自分と先輩のフォルダから見つけて並べて見る">指摘から選ぶ</button>
         <button type="button" id="peek-cohort-templates" style="display:none;" title="アプリ同梱テンプレ・既定サンプル由来のドメインも突合に含める">テンプレも表示</button>
@@ -9390,7 +9390,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     </div>
     <div id="peek-body">
       <div id="peek-dirs"></div>
-      <!-- BLK-junior-20260914-1806-wish: 題材 1 つについて 6 図種ぶんの対応要否を 1 画面で出す。
+      <!-- 題材 1 つについて 6 図種ぶんの対応要否を 1 画面で出す。
            図種を 1 つずつ担当する進め方だと、この確認が 6 周にまたがって 1 枚ずつになる。
            中身は kind-matrix.js -->
       <div id="peek-files"></div>
@@ -9398,18 +9398,18 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="peek-note" style="display:none;"></div>
         <div id="peek-cohort" style="display:none;"></div>
         <div id="peek-sbs" style="display:none;"></div>
-        <!-- BLK-junior-20260915-0606-wish: 部品ビュー。行 = 6 図種、左 = 先輩の本文、
+        <!-- 部品ビュー。行 = 6 図種、左 = 先輩の本文、
              右 = 自分の本文 (編集可)。先輩の欄の名前を押すと自分の欄に綴りが入る。
              中身は part-board.js -->
         <div id="peek-board" style="display:none;"></div>
-        <!-- BLK-junior-20260914-1006-wish: 開いた図が複合図 (共通基底 + 各ドライバ) なら、
+        <!-- 開いた図が複合図 (共通基底 + 各ドライバ) なら、
              部品を並べる。押すとその部品の所だけを切り出し、自分の同じ部品の図と並べる。 -->
         <div id="peek-parts" style="display:none;"></div>
-        <!-- BLK-junior-20260915-0506-wish: 相乗り図を切り出さずに 1 枚のまま眺めるための
+        <!-- 相乗り図を切り出さずに 1 枚のまま眺めるための
              部品フィルタ。押した部品に関係するクラス・関連だけが浮き、他は淡色 / 非表示。 -->
         <div id="peek-focus" style="display:none;"></div>
         <div id="peek-title"></div>
-        <!-- BLK-junior-20260914-1306-wish: 開いた 1 枚が前回保存から何を足され何を消されたか。
+        <!-- 開いた 1 枚が前回保存から何を足され何を消されたか。
              取り込む側は本文ではなく「＋部品 −関係」を読むので、図の上に出す。 -->
         <div id="peek-changes" style="display:none;"></div>
         <div id="peek-ba" hidden></div>

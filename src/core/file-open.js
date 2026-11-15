@@ -1,7 +1,7 @@
 'use strict';
 window.MA = window.MA || {};
 
-// file-open — 手元の .puml を開く (BLK-human-20260917-0901)。
+// file-open — 手元の .puml を開く。
 //
 // 「どこから開くのか分からない」「ドラッグで開けない」「開いたら崩れた」を 1 か所で扱う。
 //   - 開ける拡張子の判定 (.puml / .plantuml / .uml / .txt)
@@ -93,7 +93,7 @@ window.MA.fileOpen = (function() {
     /^(note|rnote|hnote)\b/i, /^end\s*note\b/i, /^[{}]\s*$/, /^(package|namespace|rectangle|frame|folder|node|cloud|database|box)\b/i,
     /^end\s*box\b/i, /^<style>/i, /^<\/style>/i,
   ];
-  // 半矢印 (`-\` `-/` `\-` `/-`) も矢印 (BLK-migrator-20260925-1600)。
+  // 半矢印 (`-\` `-/` `\-` `/-`) も矢印。
   var ARROW = /(<\|?|<<?|\*|\bo|#|\+|\^|\bx)?(-+|\.{2,}|=+)(\[[^\]]*\])?(up|down|left|right|u|d|l|r)?(-*|\.*)(\|?>|>>?|\*|o\b|#|\+|\^|x\b|\\\\?|\/\/?)|(<\|?|<<?|\*|o|#|\+|x|\\\\?|\/\/?)(-+|\.{2,})|--|\.\./i;
 
   var KIND = {
@@ -134,7 +134,7 @@ window.MA.fileOpen = (function() {
     return false;
   }
 
-  // BLK-migrator-20260925-1600: 複数行の構文はブロックとして読み飛ばし、中の行を 1 行ずつ判定しない。
+  // 複数行の構文はブロックとして読み飛ばし、中の行を 1 行ずつ判定しない。
   //   /' … '/、note … end note、legend、複数行の title / header / footer、ref over … end ref、
   //   skinparam { }、sprite { } / sprite <svg> … </svg>、<style> … </style>、
   //   !procedure / !function / !definelongmacro … !end…
@@ -165,7 +165,7 @@ window.MA.fileOpen = (function() {
   }
 
   // 未対応の行の一覧。複数行の note / legend / クラスの中身 / 複数行 Action は読み飛ばす。
-  // BLK-migrator-20260925-1600: これは行ごとの推定。帯はこれ単独では出さない (bannerRows を通す)。
+  // これは行ごとの推定。帯はこれ単独では出さない (bannerRows を通す)。
   function unsupported(text, kind) {
     var lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
     var out = [];
@@ -188,7 +188,7 @@ window.MA.fileOpen = (function() {
     return out;
   }
 
-  // ── 帯の判定: エンジンが読めたか (BLK-migrator-20260925-1600) ─────────────
+  // ── 帯の判定: エンジンが読めたか ─────────────
   // 行ごとの正規表現は PlantUML の文法を追い切れず、正しい図の 217 枚中 117 枚に帯を出していた。
   // 帯は PlantUML の答えで決める。
   //   engine = { state: 'ok' }                           エンジンが図 (エラー画でない SVG) を返した
@@ -323,7 +323,7 @@ window.MA.fileOpen = (function() {
     return [head].concat(rows.map(function(r) { return 'L' + r.line + ': ' + skeleton(r.text); })).join('\n');
   }
 
-  // BLK-builder-20260924-1415-4 (design 7a / 9a): 空の画面の入口は図のすぐ下に流れで置く。
+  // 空の画面の入口は図のすぐ下に流れで置く。
   // 図は transform: scale で拡大されるので、流れの上の高さ (等倍) と見た目の高さの差だけ
   // 入口を下へずらし、拡大しても図に重ねない。縮小のときは等倍の位置のまま (base だけ空ける)。
   function emptyHintGap(height, zoom, base) {
