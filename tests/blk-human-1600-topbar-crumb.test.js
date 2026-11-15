@@ -113,12 +113,13 @@ describe('並べて比較の枠 (design 9a)', function() {
     expect(t.label.indexOf('先輩')).toBe(-1);
   });
 
-  test('画面側も「比較相手」と名乗り、仮の手本の口は図種で言う', function() {
+  // 「相手に無い図種を仮に組む」は TICKET-owner-20261115-2141-prune で外した。
+  test('画面側も「比較相手」と名乗り、仮の手本の口は無い', function() {
     var html = require('fs').readFileSync(require('path').join(__dirname, '..', 'plantuml-assist.html'), 'utf8');
     expect(html).toContain('<strong>比較相手</strong>');
     expect(html).toContain('id="senior-mode-keep"');
     expect(html).toContain('id="senior-mode-once"');
-    expect(html).toContain('相手に無い図種を仮に組む');
+    expect(html).not.toContain('相手に無い図種を仮に組む');
     // BLK-builder-20260924-1716-4 (design 9c / 10a): 下端の札は相手が決まるまで出ないので、名乗りは FILES の入口で見る。
     expect(html).toContain('aria-label="並べて比較"');
   });

@@ -291,7 +291,7 @@
 
   // ── 現在の 1 冊 ───────────────────────────────────────────────────────
   // 図種ごとのパネルは server を知らないので、app.js が読んだものをここに預ける
-  // (partVocab.setCurrent と同じ約束)。
+  // (呼ぶ側が null で白紙に戻せる約束)。
   var _current = empty();
   function setCurrent(reg) { _current = reg ? parse(reg) : empty(); }
   function current() { return _current; }

@@ -16,9 +16,10 @@ var dom = new jsdom.JSDOM('<!DOCTYPE html><html><body></body></html>');
 global.window = dom.window;
 global.document = dom.window.document;
 
-['../src/core/html-utils.js', '../src/core/dsl-utils.js', '../src/core/name-pairing.js',
+// part-vocab / name-pairing は TICKET-owner-20261115-2141-prune で外した。
+['../src/core/html-utils.js', '../src/core/dsl-utils.js',
  '../src/core/dupe-merge.js', '../src/core/method-audit.js', '../src/core/part-reference.js',
- '../src/core/part-vocab.js', '../src/core/name-audit.js', '../src/core/name-registry.js',
+ '../src/core/name-audit.js', '../src/core/name-registry.js',
  '../src/ui/properties.js']
   .forEach(function(m) {
     try { delete require.cache[require.resolve(m)]; } catch (e) {}
@@ -26,7 +27,6 @@ global.document = dom.window.document;
   });
 var NR = global.window.MA.nameRegistry;
 var NA = global.window.MA.nameAudit;
-var PV = global.window.MA.partVocab;
 var P = global.window.MA.properties;
 
 // 事故の実物。primary は IRQCtrl、junior は Irq_Ctrl。
@@ -200,7 +200,6 @@ describe('入力欄 (junior / primary が名前を打つ場所)', function() {
   beforeEach(function() {
     document.body.innerHTML = '<input id="nm">';
     field = document.getElementById('nm');
-    PV.setCurrent(null);
     NR.setCurrent(null);
   });
 
