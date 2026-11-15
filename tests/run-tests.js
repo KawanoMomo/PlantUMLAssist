@@ -3,6 +3,11 @@ const fs = require('fs');
 const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..');
+// server.py を読み込む test (python -c) が設定・控えの置き場 (DATA_ROOT) を利用者のものと共有しないよう、
+// test-results/ の下を渡す (子プロセスは環境変数を引き継ぐ)。TICKET-owner-20261115-1827-1。
+if (!process.env.PUA_DATA_ROOT) {
+  process.env.PUA_DATA_ROOT = path.join(projectRoot, 'test-results', 'unit-data');
+}
 const sourceFiles = [
   'src/core/html-utils.js',
   'src/core/svg-export.js',

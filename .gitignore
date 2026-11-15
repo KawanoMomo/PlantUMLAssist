@@ -39,6 +39,8 @@ docs/userissue/
 
 # Auto-save file-backend runtime data
 autosave/
+# 保存先ごとの控え (図種・最後の保存・版。保存先には書かない)
+folders/
 .server_stdout_tmp.log
 
 

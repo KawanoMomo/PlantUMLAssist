@@ -96,8 +96,21 @@ test('primary 手順5 CRLF の図を直して保存しても CRLF・字下げ・
   const savedText = saved.toString('utf8');
   expect(/(^|[^\r])\n/.test(savedText), '素の LF が混ざらない').toBe(false);
   expect(savedText.endsWith('@enduml\r\n'), '末尾の改行も元のまま').toBe(true);
-  // 別名の控えを作らない (直したのは開いたファイルそのもの)。
-  expect(fs.readdirSync(dir).filter((f) => /\.puml$/.test(f))).toEqual([NAME + '.puml']);
+  // 別名の控えを作らない (直したのは開いたファイルそのもの)。保存先 (利用者の Git 作業木) には
+  // .puml 以外の控え・目録 (_kinds.json / _meta.json / _versions/) も書かない (TICKET-owner-20261115-1827-1)。
+  expect(fs.readdirSync(dir)).toEqual([NAME + '.puml']);
+
+  // Undo・Redo の後にもう一度保存しても、保存先は .puml 1 枚のまま、中身は同じバイト列。
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => H.getEditorText(page), { timeout: 5000 }).not.toBe(edited);
+  await page.keyboard.press('Control+y');
+  await expect.poll(() => H.getEditorText(page), { timeout: 5000 }).toBe(edited);
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('#status-save-result')).toContainText('保存しました', { timeout: 20000 });
+  await expect.poll(() => Buffer.compare(fs.readFileSync(file), want), { timeout: 10000 }).toBe(0);
+  await page.waitForTimeout(1500);   // 自動保存が走り終える間を置いてから数える
+  expect(fs.readdirSync(dir)).toEqual([NAME + '.puml']);
 
   // 字下げ・コメントの行は元のバイトのまま残る (改名の対象の語を持つ行は改名分だけ変わる)。
   const savedLines = savedText.split('\r\n');
