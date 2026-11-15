@@ -260,11 +260,11 @@ v5.0「整理の版」の成果物 1(TICKET-roadmap-20261115-2114-1)。機能台
 
 | # | 機能 | 節 | 判定 | 統合先 | 根拠 | 束 | 状態 | 痕跡の語 |
 |---|---|---|---|---|---|---|---|---|
-| 147 | Export ▾(8 項目)/ Export ▾(5 項目) | Export・資料化・納品 | 統合 | Export ▾ の 4 項目(SVG / PNG / PNG(透過背景)/ クリップボード) | 台本: junior 場面 4 と primary 手順 6 は 1 枚を SVG / PNG に出す。価値: roadmap の中核「書き出す」。消す枝 = 📦 資料セット・「渡す」の見出し(roadmap (b))。納品・引き継ぎ・要求 ID の項目は外し済み | TICKET-owner-20261116-0140-prune | 未 | `資料セット` |
-| 148 | 📦 資料セット | Export・資料化・納品 | 消す | — | 台本: 書き出しは 1 枚ずつ。設計書: 根なし。roadmap (b) 資料化・やらない「複数の図をまとめて書き出す」 | TICKET-owner-20261116-0140-prune | 未 | `資料セット` `doc-set` `bulk-export` |
-| 149 | 資料の体裁 | Export・資料化・納品 | 消す | — | 台本: 場面なし。設計書: 根なし。roadmap (b) | TICKET-owner-20261116-0140-prune | 未 | `資料の体裁` `doc-layout` |
-| 150 | 資料として見る | Export・資料化・納品 | 消す | — | 台本: 場面なし。設計書: 根なし。roadmap (b) | TICKET-owner-20261116-0140-prune | 未 | `資料として見る` `doc-proof` |
-| 151 | 資料化した画像を設計書の貼付先の見出しと結び付け、見出しから最新画像を逆引きする | Export・資料化・納品 | 消す | — | 台本: 場面なし。roadmap (d) 保存先に `.puml` 以外を書く | TICKET-owner-20261116-0140-prune | 未 | `貼付先` `material-anchor` |
+| 147 | Export ▾(8 項目)/ Export ▾(5 項目) | Export・資料化・納品 | 統合 | Export ▾ の 4 項目(SVG / PNG / PNG(透過背景)/ クリップボード) | 台本: junior 場面 4 と primary 手順 6 は 1 枚を SVG / PNG に出す。価値: roadmap の中核「書き出す」。消す枝 = 📦 資料セット・「渡す」の見出し(roadmap (b))。納品・引き継ぎ・要求 ID の項目は外し済み | TICKET-owner-20261116-0140-prune | 済 | `資料セット` |
+| 148 | 📦 資料セット | Export・資料化・納品 | 消す | — | 台本: 書き出しは 1 枚ずつ。設計書: 根なし。roadmap (b) 資料化・やらない「複数の図をまとめて書き出す」 | TICKET-owner-20261116-0140-prune | 済 | `資料セット` `doc-set` `bulk-export` |
+| 149 | 資料の体裁 | Export・資料化・納品 | 消す | — | 台本: 場面なし。設計書: 根なし。roadmap (b) | TICKET-owner-20261116-0140-prune | 済 | `資料の体裁` `doc-layout` |
+| 150 | 資料として見る | Export・資料化・納品 | 消す | — | 台本: 場面なし。設計書: 根なし。roadmap (b) | TICKET-owner-20261116-0140-prune | 済 | `資料として見る` `doc-proof` |
+| 151 | 資料化した画像を設計書の貼付先の見出しと結び付け、見出しから最新画像を逆引きする | Export・資料化・納品 | 消す | — | 台本: 場面なし。roadmap (d) 保存先に `.puml` 以外を書く | TICKET-owner-20261116-0140-prune | 済 | `貼付先` `material-anchor` |
 | 152 | 📦 納品パッケージ | Export・資料化・納品 | 消す | — | 台本: 納品の場面は無い。設計書: 根なし。roadmap (b) | TICKET-owner-20261115-1828-prune | 済 | `delivery-package` |
 | 153 | 📦 引き継ぎ | Export・資料化・納品 | 消す | — | 台本: 引き継ぎの場面は無い。設計書: 根なし。roadmap (b) | TICKET-owner-20261115-1828-prune | 済 | `handoff-package` |
 | 154 | 提出物庫 | Export・資料化・納品 | 消す | — | 台本: 場面なし。roadmap (b)(d) 保存先に書き出しの控えを積む | TICKET-owner-20261115-1828-prune | 済 | `提出物庫` |

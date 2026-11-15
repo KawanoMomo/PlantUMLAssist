@@ -3207,7 +3207,7 @@ function init() {
   document.getElementById('exp-png').addEventListener('click', function() { exportMenu.classList.remove('open'); exportPNG(false); });
   document.getElementById('exp-png-transparent').addEventListener('click', function() { exportMenu.classList.remove('open'); exportPNG(true); });
   document.getElementById('exp-clipboard').addEventListener('click', function() { exportMenu.classList.remove('open'); exportClipboard(); });
-  // 開いている図すべての zip・資料セット・Export ▾ の「渡す」見出しは TICKET-owner-20261116-0140-prune で外した。
+  // 開いている図すべての zip・名前を付けた図の組・Export ▾ の「渡す」見出しは TICKET-owner-20261116-0140-prune で外した。
   // Export ▾ は 1 枚の図の SVG / PNG / 透過 PNG / クリップボードの 4 項目。
 
   // FEAT-117 (resolves HFR-046 前半): Ctrl+E でエクスポートメニューを開き、先頭項目へ
@@ -3761,7 +3761,7 @@ function initCommandPalette() {
       { id: 'export-png', title: 'PNG として保存 / Export PNG', hint: 'Export', keywords: ['export', 'png'], run: function() { clickById('exp-png'); } },
       { id: 'export-png-t', title: 'PNG（透過背景）/ Export PNG transparent', hint: 'Export', keywords: ['export', 'png', 'transparent'], run: function() { clickById('exp-png-transparent'); } },
       { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
-      // 全図・資料セット・選んだ図・要修正の zip、資料の体裁、資料化の行は TICKET-owner-20261116-0140-prune で外した。
+      // 全図・名前を付けた図の組・選んだ図・要修正の zip、資料の見出しと並び、資料化の行は TICKET-owner-20261116-0140-prune で外した。
       { id: 'mode-local', title: 'レンダリング: local (Java)', hint: 'Render', keywords: ['render', 'mode', 'local'], run: function() { selectValue('render-mode', 'local'); } },
       { id: 'mode-online', title: 'レンダリング: online (plantuml.com)', hint: 'Render', keywords: ['render', 'mode', 'online'], run: function() { selectValue('render-mode', 'online'); } },
     ];

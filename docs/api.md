@@ -82,7 +82,6 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `POST /autosave` | `{type, dir, dsl}` | 図の DSL を保存する |
 | `DELETE /autosave` | `?dir=&type=` | 保存を消す |
 | `POST /autosave-svg` | `{type, dir, svg}` | 書き出した svg を保存する (印を刻む) |
-| `POST /autosave-image` | `{name, dir, image: {ext, base64}}` | 資料化した画像 (png / svg) を保存フォルダに置き、書けた大きさを返す |
 | `GET /autosave-versions` | `?dir=&type=` | 1 枚の図の版の一覧 |
 | `GET /peek-dirs` | — | 保存フォルダの候補を覗く |
 | `GET /git-status` | `?dir=` | 保存先が Git 作業木なら `{repo, branch, ahead, behind, changes:[{code, file, name}]}`。作業木でなければ `{repo:false}`。読むだけで通信しない |
@@ -99,7 +98,6 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `GET /cohort-ack` | `?dir=` | 保存フォルダの**親**にある確認済みの組の台帳 (`_cohort-ack.json`。ドメイン突合で内部揺れと確かめた組) |
 | `POST /cohort-ack` | `{dir, entries}` | 確認済みの組の台帳を丸ごと置き換える |
 | `POST /file-roles` | `{dir, roles}` | `_roles.json` を丸ごと置き換える |
-| `POST /export-zip` | `{dir, name, base64}` | 書き出した zip を保存フォルダに置き、書けたバイト数を返す |
 
 保存中の svg が今の puml から作られたかは、`GET /autosave` の `svgSource` (svg に刻まれた印) と
 `hash` (今の puml の sha1) を比べる。印が無い svg は `POST /verify-svg` が描き直して確かめる。
@@ -115,9 +113,6 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `POST /peek-settled` | `{dir, peer, kind, settled}` / `{dir, clear: true}` | 確定を 1 つ足す (`settled: false` で外す) / 全部外す |
 | `GET /rename-pairs` | `?dir=` | そのフォルダで打たれた置換の組 (新しい順) |
 | `POST /rename-pairs` | `{dir, from, to, hits}` | 置換の組を 1 つ覚える (同じ組は 1 行) |
-| `GET /doc-sets` | `?dir=` | そのフォルダに登録した資料セット (名前を付けた図の組) |
-| `POST /doc-sets` | `{dir, name, docs}` | 資料セットを 1 つ登録する (同じ名前は置き換え) |
-| `DELETE /doc-sets` | `?dir=&name=` | 資料セットを 1 つ消す |
 | `GET /version` | — | アプリの版・コミット・日付 (`{version, commit, date}`。git tag が正本) |
 | `GET /update-check` | — | 押したときだけ GitHub Releases の latest を 1 回読み `{current, release:{tag_name, html_url, assets}}` か `{current, error}`。落とさない・実行しない |
 | `POST /open-url` | `{url}` | このリポジトリの GitHub の URL だけを既定のブラウザで開く。他の URL は 400 |
