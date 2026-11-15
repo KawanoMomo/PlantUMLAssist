@@ -430,11 +430,15 @@ test('手順9 保存先の図が多くても、読むだけの見出しはツリ
   const sumBox = await page.locator('#files-summary').boundingBox();
   expect(roBox && sumBox && Math.abs(roBox.y + roBox.height - sumBox.y) < 4).toBe(true);
   // 保存先の一覧はその上で流れる (最後の部品は見出しの下に潜らず、流せば見える)。
+  // ツリーは保存先の読み込み・Git の数え直しのたびに描き直されるので (全体実行の負荷で遅れて届くと、
+  // 掴んだ行が DOM から外れて scrollIntoViewIfNeeded が落ちていた)、描き直しを挟んでも測り直す。
   const last = page.locator('#files-parts .files-part-head').last();
-  await last.scrollIntoViewIfNeeded();
-  const lastBox = await last.boundingBox();
-  const roBox2 = await ro.boundingBox();
-  expect(lastBox && roBox2 && lastBox.y + lastBox.height <= roBox2.y + 1).toBe(true);
+  await expect(async () => {
+    await last.scrollIntoViewIfNeeded({ timeout: 2000 });
+    const lastBox = await last.boundingBox();
+    const roBox2 = await ro.boundingBox();
+    expect(lastBox && roBox2 && lastBox.y + lastBox.height <= roBox2.y + 1).toBe(true);
+  }).toPass({ timeout: 15000 });
   // 見出しの行の目の印は畳んだまま押せる。
   await expect(page.locator('#btn-tab-peek')).toBeInViewport();
   await S.clearDir(page, dir);
