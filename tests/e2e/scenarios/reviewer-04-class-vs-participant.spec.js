@@ -3,7 +3,7 @@
 const { test, expect } = require('@playwright/test');
 const R = require('./_reviewer-docs');
 const S = require('./_scenario');
-const { loadMA } = require('../../../tools/audit-runtime');
+const { loadMA } = require('../../load-ma');
 
 test('手順4 クラス名と participant 名の食い違いを挙げられる', () => {
   const classes = R.classNames(R.DOCS.driver_common_class);

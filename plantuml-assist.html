@@ -1865,20 +1865,6 @@ html, body {
 }
 #folder-panel .folder-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
 #folder-panel .folder-badge { flex: 0 0 auto; font-size: 9px; line-height: 1; }
-/* BLK-reviewer-20260916-0326-wish: 他 persona との部品名衝突 */
-#folder-panel .folder-clash { flex: 0 0 auto; font-size: 9px; line-height: 1; white-space: nowrap; }
-#folder-panel .folder-clash-cross { color: var(--warning, #d08a30); font-weight: 700; }
-#folder-panel .folder-clash-internal { color: var(--text-secondary); }
-#folder-panel .folder-name-clash {
-  font-size: 11px; color: var(--text-secondary); padding: 4px 6px;
-  border-top: 1px solid var(--border);
-}
-#folder-panel .folder-name-clash.nc-cross { color: var(--warning, #d08a30); }
-#folder-panel .folder-name-clash.nc-clean { color: var(--accent); }
-#folder-panel .folder-clash-lines { font-size: 11px; padding: 0 6px 6px 6px; }
-#folder-panel .folder-clash-lines .fc-group { color: var(--text-primary); padding-top: 3px; }
-#folder-panel .folder-clash-lines .fc-where { color: var(--text-secondary); padding-left: 10px; }
-#folder-panel .folder-clash-run { flex: 0 0 auto; }
 #folder-panel .folder-badge-changed { color: var(--accent); }
 #folder-panel .folder-badge-new { color: var(--accent); font-weight: 700; }
 /* BLK-reviewer-20260916-0426-wish: 前回控えから変わっていない図の印。
@@ -2184,22 +2170,6 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   font-family: var(--font-mono, monospace);
 }
 .tool-menu-key + .tool-menu-badge { margin-left: 6px; }
-/* 無変更確定 (BLK-reviewer-20260907-2203-wish): 複製ボタンと、その可否の理由 */
-#folder-panel button.folder-carry {
-  margin-top: 2px;
-  color: var(--text-secondary);
-  font-size: 10px;
-  text-align: center;
-}
-#folder-panel button.folder-carry:disabled { opacity: 0.55; cursor: default; }
-#folder-panel .folder-carry-note {
-  font-size: 10px;
-  color: var(--text-secondary);
-  padding: 2px 4px;
-  text-align: left;
-  white-space: normal;
-}
-#folder-panel .folder-carry-note.recheck { color: var(--accent-orange); }
 #folder-panel button.folder-mark-seen {
   margin-top: 4px;
   border-top: 1px solid var(--border);
@@ -2566,7 +2536,6 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
   border-radius: 3px; font-size: 11px; padding: 1px 5px; cursor: pointer; margin-right: 4px;
 }
-/* 監査履歴 (BLK-reviewer-20260907-2303-wish) */
 /* 他フォルダの閲覧 (読むだけ。保存先は動かさない) */
 #peek-content {
   background: var(--bg-secondary);
@@ -2965,27 +2934,6 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #peek-focus .peek-focus-label { font-size: 11px; color: var(--accent); padding-top: 4px; }
 #peek-dsl .peek-dsl-dim { opacity: 0.35; }
 #peek-dsl .peek-dsl-keep { color: var(--text-primary); font-weight: 600; }
-#at-modal-content {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  width: 92vw;
-  max-width: 1280px;
-  height: 88vh;
-  display: flex;
-  flex-direction: column;
-}
-#at-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  color: var(--text-primary);
-}
-#at-summary { color: var(--accent); font-family: var(--font-mono); }
-
 /* ── 突合ダッシュボード (BLK-reviewer-20260908-1403-wish) ────────────
    別々のモーダルに分かれていた突合の出口を 1 枚の表にまとめる。 */
 #ab-modal-content {
@@ -3044,51 +2992,6 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   border-radius: 3px; cursor: pointer; padding: 1px 8px; font-size: 11px; font-family: var(--font-mono);
 }
 .ab-unify-to:hover { border-color: var(--accent); }
-
-/* ── 仕様突合 (BLK-primary-20260915-2240-wish) ─────────────────────────────
-   design/ の仕様項目と GUI の現在値を並べ、不一致を「設定差」と「仕様後退」に分ける。 */
-#dc-modal-content {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  width: 88vw;
-  max-width: 1100px;
-  height: 80vh;
-  display: flex;
-  flex-direction: column;
-}
-#dc-head {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px; border-bottom: 1px solid var(--border);
-  font-size: 12px; color: var(--text-primary);
-}
-#dc-summary { color: var(--accent); font-family: var(--font-mono); }
-#dc-summary.dc-has-gap { color: var(--accent-orange); }
-#dc-tools { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-#dc-body { flex: 1; overflow: auto; padding: 10px 14px; }
-#dc-note { padding: 0 14px 8px 14px; font-size: 11px; color: var(--text-secondary); }
-#dc-coverage { padding: 0 14px 8px 14px; font-size: 11px; color: var(--text-secondary); }
-#dc-coverage.dc-has-hole { color: var(--accent-orange); }
-#dc-spec { font-size: 11px; max-width: 200px; }
-.dc-scope { color: var(--text-secondary); font-size: 10px; }
-.dc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.dc-table th {
-  text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border);
-  color: var(--text-secondary); font-weight: normal; position: sticky; top: 0;
-  background: var(--bg-secondary);
-}
-.dc-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
-.dc-plan { white-space: nowrap; font-family: var(--font-mono); color: var(--text-secondary); }
-.dc-verdict { white-space: nowrap; font-family: var(--font-mono); }
-.dc-row[data-verdict="gap"] .dc-verdict { color: var(--accent-orange); }
-.dc-row[data-verdict="setting"] .dc-verdict { color: var(--accent); }
-.dc-row[data-verdict="ok"] { opacity: 0.65; }
-.dc-actual { font-family: var(--font-mono); }
-.dc-reason { color: var(--text-secondary); }
-.dc-act { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
-.dc-act button { font-size: 11px; padding: 1px 8px; cursor: pointer;
-  border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 10px; }
-.dc-act button:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ── 継承元 (BLK-junior-20260908-1603-wish) ─────────────────────────────────
    この図がどの図の後継かを 1 回登録し、継承元の更新を差分の行数で見せる。 */
@@ -3209,61 +3112,6 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 .vt-diff .vt-d-add { color: var(--accent-green, #4caf50); display: block; }
 .vt-diff .vt-d-del { color: var(--accent-red); display: block; }
 .vt-empty { font-size: 11px; color: var(--text-secondary); padding: 10px 0; }
-#at-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-#at-tools input {
-  background: var(--bg-tertiary); color: var(--text-primary);
-  border: 1px solid var(--border); border-radius: 3px; font-size: 11px; padding: 3px 6px; width: 160px;
-}
-#at-tools button {
-  border: 1px solid var(--border);
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 3px 10px;
-}
-#at-body { flex: 1; overflow: auto; padding: 6px 14px 14px 14px; }
-#at-body .at-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 4px; }
-#at-body .at-note { color: var(--accent-orange); font-size: 11px; padding: 4px 2px; }
-#at-body table.at-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-#at-body table.at-table th {
-  text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border);
-  color: var(--text-secondary); font-weight: normal; white-space: nowrap; position: sticky; top: 0;
-  background: var(--bg-secondary);
-}
-#at-body table.at-table th .at-th-count { color: var(--text-secondary); margin-left: 6px; opacity: 0.7; }
-#at-body table.at-table td { padding: 3px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
-#at-body table.at-table td.at-item { font-family: var(--font-mono); color: var(--text-primary); white-space: nowrap; }
-#at-body table.at-table td.at-cell .at-cat { color: var(--text-primary); }
-#at-body table.at-table td.at-cell .at-none { color: var(--text-secondary); opacity: 0.5; }
-#at-body table.at-table td.at-status { white-space: nowrap; }
-#at-body table.at-table .at-chip {
-  border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; color: var(--text-secondary);
-}
-#at-body table.at-table .at-moves { color: var(--text-secondary); margin-left: 6px; opacity: 0.8; }
-#at-body table.at-table tr[data-at-status="再分類"] .at-chip { color: var(--accent-orange); border-color: var(--accent-orange); }
-#at-body table.at-table tr[data-at-status="解消"] .at-chip { color: var(--accent); border-color: var(--accent); }
-#at-body table.at-table tr[data-at-status="新規"] .at-chip { color: var(--accent-red); border-color: var(--accent-red); }
-/* 指摘の台帳 (BLK-reviewer-20260914-1306-wish)
-   帯は「いまどのカテゴリか」しか答えないので、指摘 1 件の
-   対象ファイル・行 / 初出 / 解消 を 1 行に畳んだ台帳を帯の上に置く。 */
-#at-ledger { padding: 8px 0 2px 0; }
-#at-ledger .fl-head { font-size: 12px; color: var(--text-primary); padding-bottom: 4px; }
-#at-ledger .fl-sum { color: var(--text-secondary); font-size: 11px; margin-left: 8px; font-family: var(--font-mono); }
-#at-ledger table.fl-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-#at-ledger table.fl-table th {
-  text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--border);
-  color: var(--text-secondary); font-weight: normal; white-space: nowrap;
-}
-#at-ledger table.fl-table td { padding: 3px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
-#at-ledger .fl-title { font-family: var(--font-mono); color: var(--text-primary); }
-#at-ledger .fl-where { font-family: var(--font-mono); color: var(--text-secondary); }
-#at-ledger .fl-spark { font-family: var(--font-mono); letter-spacing: 1px; }
-#at-ledger tr[data-fl-open="1"] .fl-state { color: var(--accent-red); }
-#at-ledger tr[data-fl-open="0"] .fl-state { color: var(--accent); }
-#at-ledger .fl-empty { color: var(--text-secondary); font-size: 12px; padding: 8px 2px; }
-#at-band-head { font-size: 12px; color: var(--text-primary); padding: 10px 0 4px 0; border-top: 1px solid var(--border); }
 /* 提出用 zip の図選び (BLK-primary-20260908-1203-wish) */
 /* BLK-reviewer-20260917-0323-wish: 呼び出しグラフ */
 #cg-modal-content {
@@ -6509,91 +6357,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   height: 40px;
 }
 
-/* BLK-reviewer-20260908-1503-wish: 保存時チェックの帯。エラー帯と同じ位置に
-   重ねるが、色は警告 (図は読める) で分ける。 */
-/* BLK-reviewer-20260915-0007-wish: 保存を止める帯。済んだことを知らせる
-   save-check より強い色 (これから書くかどうかを聞いているため)。 */
-#save-guard-overlay {
-  position: sticky;
-  top: 0;
-  left: 0;
-  /* 保存を止めて返事を待っている帯なので、直前の保存が出した帯 (衝突・突合・入れ替わり。
-     いずれも sticky / z-index 30) の下に入らない。同じ高さだと DOM で後ろの帯が
-     「このまま保存」の上に被さって押せなかった。 */
-  z-index: 31;
-  margin: -16px -16px 12px -16px;
-  padding: 6px 12px;
-  background: rgba(70, 24, 24, 0.97);
-  color: #ff9a8a;
-  border-bottom: 1px solid #a33;
-  font-size: 12px;
-}
-#save-guard-overlay .sgd-head { padding-right: 150px; }
-#sgd-list { margin: 4px 0 0; padding-left: 18px; padding-right: 150px; max-height: 140px; overflow-y: auto; }
-#sgd-list li { margin: 2px 0; line-height: 1.4; }
-#sgd-list li .sgd-decl {
-  display: block; margin-top: 1px; color: #d8b6b6; font-family: monospace; font-size: 11px;
-}
-/* BLK-reviewer-20260923-2012-wish: note の自由文で答えてある組は、その note を名指しする。 */
-#sgd-list li .sgd-note { display: block; margin-top: 1px; color: #e6d39a; font-size: 11px; }
-#save-guard-overlay .sgd-actions { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
-#save-guard-overlay button { font-size: 11px; padding: 2px 8px; cursor: pointer; }
-/* BLK-reviewer-20260915-0106-wish: 第 3 選択肢の理由欄。押してから開く
-   (常時出していると、帯が保存のたびに縦へ伸びて図を隠す)。 */
-#sgd-omit-row { margin-top: 6px; padding-right: 150px; }
-#sgd-omit-row label { display: block; font-size: 11px; color: #d8b6b6; margin-bottom: 2px; }
-#sgd-omit-row .sgd-omit-input { display: flex; gap: 6px; }
-#sgd-omit-reason { flex: 1; font-size: 11px; padding: 2px 6px; min-width: 0; }
-#sgd-omit-preview {
-  margin-top: 3px; color: #d8b6b6; font-family: monospace; font-size: 11px;
-  white-space: pre-wrap; max-height: 70px; overflow-y: auto;
-}
-#save-check-overlay {
-  position: sticky;
-  top: 0;
-  left: 0;
-  z-index: 29;
-  margin: -16px -16px 12px -16px;
-  padding: 6px 12px;
-  background: rgba(58, 46, 10, 0.96);
-  color: #ffa657;
-  border-bottom: 1px solid #7a5c15;
-  font-size: 12px;
-}
-/* 右端はズーム帯の下になるので、文字を流し込まない */
-#save-check-overlay .sck-head { display: flex; align-items: center; gap: 8px; padding-right: 150px; }
-#save-check-overlay .sck-head span { flex: 1; }
-#save-check-overlay button { font-size: 11px; padding: 1px 6px; cursor: pointer; }
-#sck-list { margin: 4px 0 0; padding-left: 18px; padding-right: 150px; max-height: 120px; overflow-y: auto; }
-#sck-list li { margin: 2px 0; line-height: 1.4; }
-#sck-list li.sck-new { color: #ffd08a; }
-#sck-list li .sck-tag {
-  display: inline-block; margin-right: 6px; padding: 0 4px;
-  border: 1px solid currentColor; border-radius: 3px; font-size: 10px;
-}
-/* BLK-primary-20260916-0526-wish: 隣の persona との部品名衝突は、相手に断らないと
-   揃えられない (自分の中の揺れより重い)。保存の帯の中で一番上に、相手色で出す。 */
-#save-clash-overlay {
-  position: sticky;
-  top: 0;
-  left: 0;
-  z-index: 30;
-  margin: -16px -16px 12px -16px;
-  padding: 6px 12px;
-  background: rgba(58, 30, 10, 0.96);
-  color: #ffb38a;
-  border-bottom: 1px solid #8a5a2a;
-  font-size: 12px;
-}
-/* 右端はズーム帯 (#zoom-hud) の下になる。ボタンが 2 つあるので save-check より広く空ける
-   (足りないと「揃える」が帯の下に隠れて押せない)。 */
-#save-clash-overlay .scl-head { display: flex; align-items: center; gap: 8px; padding-right: 260px; flex-wrap: wrap; }
-#save-clash-overlay .scl-head span { flex: 1; min-width: 12em; }
-#save-clash-overlay button { font-size: 11px; padding: 1px 6px; cursor: pointer; }
-#scl-list { margin: 4px 0 0; padding-left: 18px; padding-right: 260px; max-height: 120px; overflow-y: auto; }
-#scl-list li { margin: 2px 0; line-height: 1.4; }
-/* 相手側の図の名前。ここを読めば 1 枚ずつ開かずに誰に断ればよいかが決まる。 */
-#scl-list li .scl-where { color: #d8c0a8; }
 /* BLK-reviewer-20260912-2103-wish: 中身の入れ替わりは「読めるが間違っている」
    状態なので、突合の警告より強い色 (エラー寄り) で出す。 */
 
@@ -7410,7 +7173,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 }
 #status-consistency:hover, #status-eventsync:hover { background: var(--bg-tertiary); }
 /* BLK-builder-20260908-0858-2 (design 7a/7b): 下端に寄せた件数表示。整合と同じ見た目に揃える */
-#status-livediff, #status-diff, #status-pins, #status-inbox, #status-requests, #status-rename {
+#status-livediff, #status-diff, #status-pins, #status-inbox, #status-rename {
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -7420,22 +7183,16 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   padding: 0 6px;
   cursor: pointer;
 }
-#status-livediff:hover, #status-diff:hover, #status-pins:hover, #status-inbox:hover, #status-requests:hover,
+#status-livediff:hover, #status-diff:hover, #status-pins:hover, #status-inbox:hover,
 #status-rename:hover { background: var(--bg-tertiary); }
-#status-livediff.has-open, #status-diff.has-open, #status-pins.has-open, #status-inbox.has-open, #status-requests.has-open,
+#status-livediff.has-open, #status-diff.has-open, #status-pins.has-open, #status-inbox.has-open,
 #status-rename.has-open {
   color: var(--accent-orange);
   border-color: var(--accent-orange);
 }
-/* 依頼バッジ (BLK-reviewer-20260914-2006)。未着手・再発が混ざる回は赤まで上げる
-   (直す側が「今日はまず何を見るか」を、画面を開く前に決められるようにする)。 */
 /* 統一が済んでいることは緑で言い切る。「開かなくてよい」と読める色が要る */
 #status-rename { max-width: 24em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #status-rename[data-tone="done"] { color: var(--accent-green); border-color: var(--accent-green); }
-#status-requests[data-tone="stalled"] {
-  color: var(--accent-red);
-  border-color: var(--accent-red);
-}
 #status-consistency.has-warning, #status-eventsync.has-warning { color: var(--accent-orange); border-color: var(--accent-orange); }
 
 /* イベント⇔メソッド整合のバッジ (BLK-primary-20260907-1803-wish) */
@@ -7879,11 +7636,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- BLK-junior-20260907-2203-wish: 図をまたいで未対応の指摘を集める受信箱 -->
         <button class="tab-tool" id="btn-tab-inbox" title="保存フォルダの図をまたいで、未対応の指摘を「どの図に何件」で出す。監査が出した指摘も手で書いた指摘も同じ札で並び、出典で絞り込める。行を押すとその図の該当行へ飛ぶ">指摘箱 −</button>
         <button class="tab-tool" id="btn-tab-board" title="変わった図の変更前 DSL と変更後 DSL を全部まとめて 1 画面に並べる (レビュー会議用)">▤ 変更サマリ</button>
-        <!-- BLK-reviewer-20260907-2303-wish: 監査ツールが育つと、同じ欠陥が別カテゴリへ移る -->
-        <!-- BLK-primary-20260915-2240-wish: design の仕様と GUI の現在値を突き合わせる -->
-        <button class="tab-tool" id="btn-tab-design" title="design/ の仕様項目と、いま開いている GUI の現在値を並べて、一致/設定差/仕様後退に振り分ける">仕様突合</button>
         <button class="tab-tool" id="btn-tab-cross" title="名前の不一致・未使用 participant・粒度のばらつき・SVG 実体不一致・手動指摘を、保存フォルダ 1 つ分の 1 画面にまとめて出す。行を押すとその図へ飛ぶ">▦ 突合ボード</button>
-        <button class="tab-tool" id="btn-tab-audit-timeline" title="監査を回すたびに記録し、同じ欠陥が run ごとにどのカテゴリへ分類されたかを 1 本の帯で並べる。解消と再分類を分けて出す">◷ 監査履歴</button>
         <!-- BLK-junior-20260907-1403-wish: 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
         <button class="tab-tool" id="btn-tab-review" title="型の基準にした図と突き合わせて、この図のずれと図種特有の間違いを出す">レビュー −</button>
         <!-- BLK-primary-20260907-1303-wish: 引き継ぎに要る確認結果と図を 1 つの zip に固める -->
@@ -8141,56 +7894,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="preview-container">
         <!-- design 5a: 描画エラーを図の上に重ねる帯。直前の図はそのまま残す -->
         <div id="render-error-overlay" role="alert" hidden></div>
-        <!-- BLK-reviewer-20260915-0007-wish: 保存を書き込む**前**に、同じ保存
-             フォルダのクラス図と突き合わせ、宣言の無い呼び出しを並べて止める帯。
-             中身は save-guard.js -->
-        <div id="save-guard-overlay" role="alert" hidden>
-          <div class="sgd-head">
-            <span id="sgd-summary"></span>
-          </div>
-          <ul id="sgd-list"></ul>
-          <div class="sgd-actions">
-            <button type="button" id="btn-sgd-fix" title="保存をやめて、このまま図を直す">✎ やめて直す</button>
-            <button type="button" id="btn-sgd-save" title="宣言の食い違いを承知のうえで保存する">⚠ このまま保存</button>
-            <!-- BLK-reviewer-20260915-0106-wish: 「宣言しないと決めた」を自由文の
-                 note ではなく、監査ツールが読める 1 行 (`'@omit-method`) で図に残す。
-                 突合は次の tick から この行を見て指摘から外す。 -->
-            <button type="button" id="btn-sgd-omit" title="宣言しないと決めた理由を図に記し、以後の突合から外す">意図的に省略（理由を記す）</button>
-          </div>
-          <div class="sgd-omit" id="sgd-omit-row" hidden>
-            <label for="sgd-omit-reason">省略する理由（図に残り、監査はこの行を読んで指摘から外します）</label>
-            <div class="sgd-omit-input">
-              <input type="text" id="sgd-omit-reason" placeholder="例: 呼び先は BSW 提供。本設計では宣言しない">
-              <button type="button" id="btn-sgd-omit-go" title="この理由で省略を記録して保存する">記録して保存</button>
-            </div>
-            <div class="sgd-omit-preview" id="sgd-omit-preview"></div>
-          </div>
-        </div>
-        <!-- BLK-primary-20260916-0526-wish: 保存したその場で隣の persona の保存
-             フォルダまで読み、部品名が表記違いでぶつかっていれば相手と相手の図を
-             名指しする帯。押さないと動かない 一覧の突合を待たない。
-             中身は save-clash.js -->
-        <div id="save-clash-overlay" role="alert" hidden>
-          <div class="scl-head">
-            <button type="button" id="btn-scl-close" title="この警告を閉じる（次の保存でまた出ます）">✕</button>
-            <span id="scl-summary"></span>
-            <button type="button" id="btn-scl-fix" hidden></button>
-            <button type="button" id="btn-scl-folder" title="保存先の一覧を開いて、衝突している図を全部見る">ぶつかった図を保存先の一覧で見る</button>
-          </div>
-          <ul id="scl-list"></ul>
-        </div>
-        <!-- BLK-reviewer-20260908-1503-wish: 保存したその場で突合を掛け、
-             この図に新しく生えた不一致を図の上に出す。中身は save-check.js -->
-        <div id="save-check-overlay" role="status" hidden>
-          <!-- ボタンは左に置く。右上にはズーム帯 (#zoom-hud) が浮いていて、
-               右端に置くと押せない位置になる。 -->
-          <div class="sck-head">
-            <button type="button" id="btn-sck-close" title="この警告を閉じる（次の保存でまた出ます）">✕</button>
-            <button type="button" id="btn-sck-board" title="突合ボードを開いて全部の図で見る">▦ 突合ボード</button>
-            <span id="sck-summary"></span>
-          </div>
-          <ul id="sck-list"></ul>
-        </div>
         <!-- BLK-reviewer-20260912-2103-wish: この保存で中身が別名の図と入れ替わって
              いないかを保存のその場で言う帯。あわせて保存操作の控えをここで読む。
              中身は save-swap.js -->
@@ -8470,9 +8173,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <button type="button" id="status-livediff" data-livediff="none" title="前回保存版といまの中身を並べて見る (押すと開きます)">前回保存版 —</button>
     <button type="button" id="status-pins" title="この図に付いたレビュー指摘の一覧">指摘 −</button>
     <button type="button" id="status-inbox" title="保存フォルダの図をまたいだ未対応のレビュー指摘">指摘箱 −</button>
-    <!-- BLK-reviewer-20260914-2006: 指摘.md に書かれた依頼が何件・最長何 tick 継続しているか。
-         直す側が業務を始める前に指摘.md を GUI の外で開く動作を要らなくする -->
-    <button type="button" id="status-requests" title="指摘.md の依頼はまだ読めていません (隣の reviewer フォルダを見ます)">継続依頼 −</button>
     <!-- BLK-primary-20260914-1006-friction: 部品名の統一が済んでいるか。過去に当てた
          置換の組に旧称が残っていないかを常時数え、済んでいるなら ⇄ 一括置換を
          開いて空打ちする手順そのものを要らなくする -->
@@ -8751,7 +8451,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/change-stamp.js"></script>
 <script src="src/core/review-diff.js"></script>
 <script src="src/core/selected-endpoints.js"></script>
-<script src="src/core/review-carry.js"></script>
 <script src="src/core/folder-select.js"></script>
 <script src="src/core/folder-export.js"></script>
 <script src="src/core/folder-filter.js"></script>
@@ -8760,7 +8459,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/peek-verdict.js"></script>
 <script src="src/core/peek-settled.js"></script>
 <script src="src/core/kind-matrix.js"></script>
-<script src="src/core/design-check.js"></script>
 <script src="src/core/side-pane.js"></script>
 <script src="src/core/senior-pane.js"></script>
 <script src="src/core/compare-entry.js"></script>
@@ -8848,7 +8546,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/export-shortcuts.js"></script>
 <script src="src/core/diagram-settings.js"></script>
 <script src="src/core/name-audit.js"></script>
-<script src="src/core/name-clash.js"></script>
 <script src="src/core/add-kind-vocab.js"></script>
 <script src="src/core/name-registry.js"></script>
 <script src="src/core/name-unify.js"></script>
@@ -8859,7 +8556,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/semantic-refs.js"></script>
 <script src="src/core/xref-graph.js"></script>
 <script src="src/core/method-audit.js"></script>
-<script src="src/core/omit-method.js"></script>
 <script src="src/core/template-new.js"></script>
 <script src="src/core/part-reference.js"></script>
 <script src="src/core/part-vocab.js"></script>
@@ -8891,8 +8587,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/tool-menu.js"></script>
 <script src="src/core/status-counters.js"></script>
 <script src="src/core/status-badges.js"></script>
-<script src="src/core/request-ledger.js"></script>
-<script src="src/core/request-badge.js"></script>
 <script src="src/core/zoom-hud.js"></script>
 <script src="src/core/relation-add.js"></script>
 <script src="src/core/settings-tabs.js"></script>
@@ -8938,13 +8632,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/meeting-notes.js"></script>
 <script src="src/core/meeting-set.js"></script>
 <script src="src/core/audit-timeline.js"></script>
-<script src="src/core/finding-ledger.js"></script>
 <script src="src/core/audit-board.js"></script>
 <script src="src/core/status-dashboard.js"></script>
 <script src="src/core/finding-origins.js"></script>
-<script src="src/core/save-guard.js"></script>
-<script src="src/core/save-check.js"></script>
-<script src="src/core/save-clash.js"></script>
 <script src="src/core/save-swap.js"></script>
 <script src="src/core/live-diff.js"></script>
 <script src="src/core/twin-restore.js"></script>
@@ -9562,24 +9252,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="req-state" role="status"></div>
   </div>
 </div>
-<!-- 監査履歴 (BLK-reviewer-20260907-2303-wish) -->
-<div id="at-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="at-modal-content">
-    <div id="at-head">
-      <strong>監査履歴</strong>
-      <span id="at-summary"></span>
-      <span id="at-tools">
-        <input type="text" id="at-label" placeholder="run の名前 (空なら日時)">
-        <button type="button" id="at-record">いまの監査を記録</button>
-        <button type="button" id="at-copy" title="台帳を 指摘.md に貼れる形でコピーする">台帳を指摘.md 用にコピー</button>
-        <button type="button" id="at-clear">記録を消す</button>
-        <button type="button" id="at-close">閉じる</button>
-      </span>
-    </div>
-    <div id="at-body"></div>
-  </div>
-</div>
-
 <!-- BLK-reviewer-20260908-1403-wish: 突合の結果を 1 画面に集める -->
 <div id="ab-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="ab-modal-content">
@@ -9599,36 +9271,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </span>
     </div>
     <div id="ab-body"></div>
-  </div>
-</div>
-
-<!-- BLK-primary-20260915-2240-wish: design/ の仕様と GUI の現在値を突き合わせ、
-     不一致を「設定差」と「仕様後退」に機械的に振り分ける (手順 11 の 3 手を 1 手にする) -->
-<div id="dc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="dc-modal-content">
-    <div id="dc-head">
-      <strong>仕様突合 (design)</strong>
-      <span id="dc-summary"></span>
-      <span id="dc-tools">
-        <label style="font-size:11px;color:var(--text-secondary);">
-          <input type="checkbox" id="dc-only-diff"> 不一致だけ
-        </label>
-        <!-- BLK-primary-20260915-2240-friction: design/README.md の「対象の仕様」は
-             6 ファイルある。1 ファイルずつ確かめるときに他の出典が混ざらないよう絞る -->
-        <select id="dc-spec" title="出典の .dc.html で絞り込む"></select>
-        <button type="button" id="dc-recheck">測り直す</button>
-        <button type="button" id="dc-copy">仕様後退を BLK 用にコピー</button>
-        <button type="button" id="dc-close">閉じる</button>
-      </span>
-    </div>
-    <div id="dc-note">
-      出典は <code>design/README.md</code> の「対象の仕様」。不一致は「設定差」(この環境の設定が既定と違うだけ)
-      と「仕様後退」(設定は既定なのに満たしていない) に分かれる。BLK にする値打ちがあるのは仕様後退だけ。
-    </div>
-    <!-- BLK-primary-20260915-2240-friction: 突合項目の無い仕様ファイルは、この画面を
-         開いても分からないまま残る。どこまで機械で見ているかをここに出す -->
-    <div id="dc-coverage"></div>
-    <div id="dc-body"></div>
   </div>
 </div>
 

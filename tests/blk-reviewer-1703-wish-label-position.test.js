@@ -8,7 +8,7 @@
 // ここでは「位置が系統ごとに出ること」「多数派からズレた系統が上に来ること」
 // 「比べる相手が居ないときにズレと言わないこと」を固定する。
 
-const { loadMA } = require('../tools/audit-runtime');
+const { loadMA } = require('./load-ma');
 
 const { MA } = loadMA();
 const LP = MA.labelPosition;

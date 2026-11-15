@@ -5,7 +5,7 @@
 // ここでは「対応が無い行が先頭に来ること」「実在メッセージ名が対応欄に出ること」
 // 「架空ラベルに実在名の候補が付くこと」を固定する。
 
-const { loadMA } = require('../tools/audit-runtime');
+const { loadMA } = require('./load-ma');
 const TT = require('../src/core/trace-label-table');
 
 const { MA } = loadMA();

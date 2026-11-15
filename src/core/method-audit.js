@@ -344,26 +344,6 @@ window.MA.methodAudit = (function() {
       return a.method < b.method ? -1 : (a.method > b.method ? 1 : 0);
     });
 
-    // BLK-reviewer-20260915-0106-wish: 「意図して宣言しない」と決めたメソッドは、
-    // note の自由文ではなく `'@omit-method Cls.Method 理由` の 1 行で宣言する。
-    // ここで突合から外し、外した分は omitted に理由ごと残す —— 黙って件数だけ
-    // 減らすと、宣言を書いた図を開かないかぎり何を外したか分からなくなる。
-    var OM = window.MA.omitMethod;
-    var omitted = [];
-    if (OM) {
-      var part = OM.partition(issues, OM.collect(list));
-      issues = part.issues;
-      omitted = part.omitted;
-    }
-    // BLK-reviewer-20260923-2012-wish: タグは無いが note の自由文で答えている組は、
-    // 指摘に残したまま印 (noteReply) を付け、未解消とは別に数える箱にも入れる。
-    var noteReplied = [];
-    if (OM && OM.markNotes) {
-      var mk = OM.markNotes(issues, OM.collect(list, { notes: true }));
-      issues = mk.items;
-      noteReplied = mk.noteReplied;
-    }
-
     return {
       calls: calls,
       events: events,
@@ -372,10 +352,9 @@ window.MA.methodAudit = (function() {
       classes: classes,
       methods: methods,
       issues: issues,
-      // 意図的な省略の宣言で外した指摘 (理由・宣言した図つき)。
-      omitted: omitted,
-      // issues のうち、note の自由文で応答済み (タグ化待ち) のもの。issues にも残る。
-      noteReplied: noteReplied,
+      // 省略の宣言で外す仕組みは外した (旧い呼び手のために空で返す)。
+      omitted: [],
+      noteReplied: [],
       clean: issues.length === 0,
     };
   }

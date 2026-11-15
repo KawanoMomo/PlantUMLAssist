@@ -117,7 +117,7 @@ test('手順6 絵が入れ替わった SVG を、相手の図の名前まで名�
 
 // 判定そのもの (どの組を入れ替わりと呼ぶか) は、実物を用意しにくい形も含めて純関数で守る。
 test('手順6 保存した本人にも、その場で相手の名前が出る', () => {
-  const { loadMA } = require('../../../tools/audit-runtime');
+  const { loadMA } = require('../../load-ma');
   const { MA } = loadMA();
   expect(MA.svgCross).toBeTruthy();
   const scan = MA.svgCross.scan([

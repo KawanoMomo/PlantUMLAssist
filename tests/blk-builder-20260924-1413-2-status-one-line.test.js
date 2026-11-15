@@ -9,22 +9,18 @@ var fs = require('fs');
 var path = require('path');
 
 describe('shortResult — 保存直後の 1 行の短い形', function() {
-  test('パスはファイル名だけ、（…）の内訳と前置きは落とし、区切りは · にする', function() {
-    expect(AST.shortResult('./test-results/autosave/probe/junior/diagram1.puml に保存しました ／ 他 persona との部品名の衝突なし（1 枚と照合）'))
-      .toBe('diagram1.puml に保存しました · 衝突なし');
+  test('パスはファイル名だけ、（…）の内訳は落とし、区切りは · にする', function() {
+    expect(AST.shortResult('./test-results/autosave/probe/junior/diagram1.puml に保存しました ／ 版を残しました（3 版目）'))
+      .toBe('diagram1.puml に保存しました · 版を残しました');
+  });
+
+  test('保存の 1 行は「{名前}.puml に保存しました」だけ (突合の結果を足さない)', function() {
+    expect(AST.shortResult('./test-results/autosave/probe/junior/diagram1.puml に保存しました'))
+      .toBe('diagram1.puml に保存しました');
   });
 
   test('Windows のパスもファイル名だけ', function() {
     expect(AST.shortResult('上書き保存しました: E:\\work\\spi\\spi_state.puml')).toBe('上書き保存しました: spi_state.puml');
-  });
-
-  test('保存時チェックの「… を見て、この図に不一致はありません」は結論だけ', function() {
-    expect(AST.shortResult('./a/spi.puml に保存しました ／ 名前・整合・系統・トレース・手動指摘 を見て、この図に不一致はありません'))
-      .toBe('spi.puml に保存しました · 不一致なし');
-  });
-
-  test('衝突ありの件数は残す (警告は消さない)', function() {
-    expect(AST.shortResult('./a/b/spi.puml に保存しました ／ 他 persona と衝突 2 図')).toBe('spi.puml に保存しました · 他 persona と衝突 2 図');
   });
 
   test('パスも内訳も無い文はそのまま', function() {

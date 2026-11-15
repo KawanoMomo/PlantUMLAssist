@@ -3713,12 +3713,7 @@ function init() {
   setupMaterialBoard();
   setupReqTrace();
   setupHandoverBanner();
-  setupAuditTimeline();
   setupAuditBoard();
-  setupDesignCheck();
-  setupSaveGuard();
-  setupSaveCheck();
-  setupSaveClash();
   setupSaveSwap();
   setupOverlayOriginSync();
   setupVersionTimeline();
@@ -3968,12 +3963,10 @@ function initCommandPalette() {
       // BLK-owner-20260924-1836-prune: 名前は FILES「読むだけ」のフォルダの右クリックの行と同じ。旧名は検索の語に残す。
       { id: 'tab-peek', title: 'このフォルダの図を調べる… / Files: inspect a read-only folder', hint: 'Files', keywords: ['peek', 'files', 'readonly', 'folder', 'よむだけ', 'ほかの', 'ふぉるだ', '他フォルダを覗く', '他の保存フォルダを覗く', '読むだけのフォルダを足す', '覗く', 'のぞく', 'しらべる'], button: 'btn-tab-peek', run: function() { clickById('btn-tab-peek'); } },
       { id: 'tab-drivermap', title: '系統マップを開く / Driver map', hint: 'Tabs', keywords: ['driver', 'map', 'けいとう', 'まっぷ'], button: 'btn-tab-drivermap', run: function() { clickById('btn-tab-drivermap'); } },
-      { id: 'tab-design', title: '仕様突合 (design) / Design spec check', hint: 'Tabs', keywords: ['design', 'spec', 'gap', 'しよう', 'とつごう', 'せっけい'], button: 'btn-tab-design', run: function() { clickById('btn-tab-design'); } },
       { id: 'tab-cross', title: '突合ボード / Cross-check board', hint: 'Tabs', keywords: ['cross', 'board', 'audit', 'とつごう', 'ぼーど', '名前突合', '表記揺れ', '表記ゆれ', 'name audit', 'name', 'なまえ', 'ゆれ', 'つきあわせ', '宣言なし', 'メソッド突合'], button: 'btn-tab-cross', run: function() {
         var cpIn = document.getElementById('cp-input');
         openAuditBoardFor(cpIn ? cpIn.value : '');
       } },
-      { id: 'tab-audit-timeline', title: '監査履歴を開く / Audit timeline', hint: 'Tabs', keywords: ['audit', 'timeline', 'かんさ', 'りれき'], button: 'btn-tab-audit-timeline', run: function() { clickById('btn-tab-audit-timeline'); } },
       { id: 'tab-review', title: '基準の図と突き合わせる / Review desk', hint: 'Tabs', keywords: ['review', 'desk', 'きじゅん', 'つきあわせ'], button: 'btn-tab-review', run: function() { clickById('btn-tab-review'); } },
       { id: 'tab-inbox', title: '図をまたぐ指摘箱 / Pin inbox', hint: 'Tabs', keywords: ['inbox', 'pin', 'してきばこ'], button: 'btn-tab-inbox', run: function() { clickById('btn-tab-inbox'); } },
       // 🔖 手動指摘のタブは 📥 指摘箱に畳んだ (BLK-owner-20260923-1409-prune)。
@@ -5050,9 +5043,7 @@ function applyActiveDoc() {
   if (!doc) return;
   // BLK-migrator-20260917-2349-b: 保存時チェックの帯は保存した図のもの。別の図に移っても残ると
   // 図の上端を覆い、そこにある要素へホバー・クリックが届かない。
-  hideSaveCheckIfOtherDoc(doc.id);
   hideSaveSwapIfOtherDoc(doc.id);
-  hideSaveClashIfOtherDoc(doc.id);
   _svgKindFix = null;  // SVG に合わせた図種は前の図のもの (BLK-migrator-20260924-0637)
   var mod = modules[doc.diagramType] || modules[currentDiagramType];
   if (mod) {
@@ -5301,10 +5292,6 @@ function renderTabs() {
   // 申し送りは開いた時点で見えていないと口頭説明の代わりにならない。
   // 復元で開いた場合も出したいので、タブを組み立て直すたびに引き直す。
   try { renderHandoverBanner(); } catch (e) {}
-  // 依頼バッジ (BLK-reviewer-20260914-2006)。指摘.md は reviewer が run ごとに
-  // 書き替えるので、タブを組み立て直す機会に読み直す (控えは版で数えるので、
-  // 同じ版を何度読んでも継続 tick 数は伸びない)。
-  try { renderRequestBadge(); refreshRequestBadge(); } catch (e) {}
   // 統一バッジ (BLK-primary-20260914-1006-friction)。旧称が残っているかは図の中身で
   // 決まるので、タブを組み立て直す機会に数え直す。
   try { renderRenameBadge(); refreshRenameBadge(); } catch (e) {}
@@ -7233,21 +7220,14 @@ function writeMeetingNotes(copy) {
   return res;
 }
 
-// ── 監査履歴 (BLK-reviewer-20260907-2303-wish) ──────────────────────────
-// 監査ツールは run ごとに育つので、DSL が 1 行も変わっていなくてもカテゴリ別の
-// 件数は動く。「メソッド 5 → 0」を見て直ったと思うと、実は粒度へ移っただけ、
-// ということが起きる。監査を回すたびに記録を積み、欠陥の実体ごとに
-// 「どの run でどのカテゴリに分類されていたか」を 1 行に並べて、
-// 解消 (もう出ない) と再分類 (出るが別カテゴリ) を分けて出す。
-// 判断は audit-timeline が持ち、ここは監査を回して並べるだけ。
-
+// ── 開いている図に掛ける監査の一式 (突合ボードが使う) ──────────────────────
 function _atDocs() {
   if (!window.MA.workspace) return [];
   saveActiveDoc();
   return window.MA.workspace.list();
 }
 
-// いま開いている図に、CLI と同じ監査一式を掛ける。モジュールが無い監査は
+// いま開いている図に、監査の一式を掛ける。モジュールが無い監査は
 // 「見ていない」として結果に載せない (0 件と区別する)。
 function _atRunAudits() {
   var docs = _atDocs();
@@ -7265,124 +7245,6 @@ function _atRunAudits() {
   one('trace', function() { return window.MA.traceCoverage ? window.MA.traceCoverage.audit(docs) : undefined; });
   one('density', function() { return window.MA.transitionDensity ? window.MA.transitionDensity.rank(docs) : undefined; });
   return { audits: out, docs: docs.length };
-}
-
-// ── 指摘の台帳 (BLK-reviewer-20260914-1306-wish) ────────────────────────
-// 帯が答えるのは「いまどのカテゴリか」だけで、指摘 1 件が「いつから出ていて
-// どのファイルの何行目か、いつ消えたか」は持たない。そのため反映確認は毎回
-// audit.js --summary-json を叩き直し、run ログを遡って突き合わせる作業だった。
-// ここは同じ記録から台帳を組み、帯の上に置く。判断は finding-ledger が持つ。
-var _flLast = null;
-
-function _flView() {
-  var FL = window.MA.findingLedger;
-  var TL = window.MA.auditTimeline;
-  if (!FL || !TL) return null;
-  var docs = [];
-  try { docs = _atDocs(); } catch (e) { docs = []; }
-  _flLast = FL.build({ snapshots: TL.load(), docs: docs });
-  return _flLast;
-}
-
-function _flHtml(view) {
-  var FL = window.MA.findingLedger;
-  var esc = window.MA.htmlUtils.escHtml;
-  if (!FL || !view) return '';
-  var html = '<div class="fl-head">指摘の台帳<span class="fl-sum" id="at-ledger-summary">'
-    + esc(FL.summaryLine(view)) + '</span></div>';
-  if (!view.rows.length) {
-    return html + '<div class="fl-empty">記録した run に、クラス / メソッド / イベントの指摘はありません。</div>';
-  }
-  html += '<table class="fl-table"><thead><tr><th>指摘</th><th>対象ファイル:行</th>'
-    + '<th>初出</th><th>解消</th><th>継続</th><th title="tick ごとの出欠 (● 出た / ○ 出ない)">出欠</th>'
-    + '</tr></thead><tbody>';
-  view.rows.forEach(function(r) {
-    html += '<tr data-fl-open="' + (r.open ? '1' : '0') + '" data-fl-entity="' + esc(r.entity) + '">'
-      + '<td class="fl-title">' + esc(r.title) + '</td>'
-      + '<td class="fl-where">' + esc(FL.whereText(r)) + '</td>'
-      + '<td>' + esc(r.since) + '</td>'
-      + '<td class="fl-state">' + (r.open ? '未解消' : esc(r.resolvedAt || '')) + '</td>'
-      + '<td>' + r.ticks + ' tick</td>'
-      + '<td class="fl-spark">' + esc(r.spark) + '</td></tr>';
-  });
-  return html + '</tbody></table>';
-}
-
-function copyFindingLedger() {
-  var FL = window.MA.findingLedger;
-  var st = document.getElementById('at-summary');
-  if (!FL) return null;
-  var view = _flLast || _flView();
-  var text = FL.markdown(view, '指摘の台帳');
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(function() {
-      if (st) st.textContent = '台帳を指摘.md 用にコピーしました (' + view.rows.length + ' 件)';
-    }, function() {
-      if (st) st.textContent = 'コピーできません';
-    });
-  } else if (st) {
-    st.textContent = 'コピーできません';
-  }
-  return text;
-}
-
-function renderAuditTimeline() {
-  var body = document.getElementById('at-body');
-  var sumEl = document.getElementById('at-summary');
-  var TL = window.MA.auditTimeline;
-  if (!body || !TL) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  var t = TL.build(TL.load());
-
-  if (sumEl) sumEl.textContent = TL.summaryLine(t);
-
-  if (t.runs.length === 0) {
-    body.innerHTML = '<div class="at-empty">まだ記録がありません。「いまの監査を記録」を押すと、'
-      + 'この時点の指摘を 1 列として積みます。2 回目から、解消したものと分類が変わっただけのものを分けて出します。</div>';
-    return;
-  }
-
-  var html = '';
-  if (t.newCategories.length) {
-    html += '<div class="at-note">監査カテゴリが増えた → ' + esc(t.newCategories.join('・'))
-      + ' (図が変わっていなくても件数はここで動きます)</div>';
-  }
-  if (t.goneCategories.length) {
-    html += '<div class="at-note">監査カテゴリが減った → ' + esc(t.goneCategories.join('・')) + '</div>';
-  }
-
-  // 台帳を先に出す。反映確認はここだけ見れば終わる。
-  html += '<div id="at-ledger">' + _flHtml(_flView()) + '</div>';
-  html += '<div id="at-band-head">カテゴリの帯 (同じ欠陥が run ごとにどこへ分類されたか)</div>';
-
-  html += '<table class="at-table"><thead><tr><th class="at-th-item">欠陥</th>';
-  t.runs.forEach(function(r) {
-    html += '<th title="' + esc(r.at) + '">' + esc(r.label) + '<span class="at-th-count">'
-      + r.count + ' 件</span></th>';
-  });
-  html += '<th class="at-th-status">いまの扱い</th></tr></thead><tbody>';
-
-  if (t.rows.length === 0) {
-    html += '<tr><td colspan="' + (t.runs.length + 2) + '" class="at-empty">記録した run に指摘はありません。</td></tr>';
-  }
-  t.rows.forEach(function(row) {
-    html += '<tr data-at-status="' + esc(row.status) + '">'
-      + '<td class="at-item" title="' + esc(row.entity) + '">' + esc(row.title) + '</td>';
-    row.cells.forEach(function(c) {
-      html += '<td class="at-cell">' + (c ? '<span class="at-cat">' + esc(c.text) + '</span>' : '<span class="at-none">—</span>') + '</td>';
-    });
-    html += '<td class="at-status"><span class="at-chip">' + esc(row.status) + '</span>'
-      + (row.moves ? '<span class="at-moves">移動 ' + row.moves + ' 回</span>' : '') + '</td></tr>';
-  });
-  html += '</tbody></table>';
-  body.innerHTML = html;
-}
-
-function toggleAuditTimeline(open) {
-  var modal = document.getElementById('at-modal');
-  if (!modal) return;
-  if (open) renderAuditTimeline();
-  modal.style.display = open ? 'flex' : 'none';
 }
 
 // ── 突合ダッシュボード (BLK-reviewer-20260908-1403-wish) ────────────────────
@@ -7630,176 +7492,6 @@ function setupAuditBoard() {
   modal.addEventListener('click', function(ev) {
     if (ev.target === modal) toggleAuditBoard(false);
   });
-}
-
-// ── 仕様突合 (BLK-primary-20260915-2240-wish) ─────────────────────────────
-// design/ の仕様項目と、いま開いている GUI の現在値を並べる。primary の手順 11 は
-// 「.dc.html を grep → タブを目で数える → 自分で比べて言語化」の 3 手だったが、
-// 不一致を「設定差」と「仕様後退」に機械で振り分けるのでここを開くだけで済む。
-// 判定は design-check.js が持ち、ここは測って描くだけ。
-var _dcRows = [];
-var _dcOnlyDiff = false;
-// BLK-primary-20260915-2240-friction: 出典 (.dc.html) での絞り込み。'' はすべて。
-var _dcSpec = '';
-
-function _dcReadSetting(key) {
-  try { return localStorage.getItem(key); } catch (e) { return null; }
-}
-
-function runDesignCheck() {
-  var DC = window.MA.designCheck;
-  if (!DC) { _dcRows = []; return _dcRows; }
-  _dcRows = DC.sortRows(DC.run(document, _dcReadSetting));
-  return _dcRows;
-}
-
-var DC_VERDICT_LABEL = { ok: '一致', setting: '設定差', gap: '仕様後退' };
-
-function renderDesignCheck() {
-  var DC = window.MA.designCheck;
-  var body = document.getElementById('dc-body');
-  var sum = document.getElementById('dc-summary');
-  if (!DC || !body) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  var rows = _dcRows.filter(function(r) {
-    if (_dcOnlyDiff && r.verdict === 'ok') return false;
-    if (_dcSpec && r.spec !== _dcSpec) return false;
-    return true;
-  });
-  if (sum) {
-    sum.textContent = DC.summaryText(_dcRows);
-    sum.classList.toggle('dc-has-gap', DC.summary(_dcRows).gap > 0);
-  }
-  // 突合項目の無い仕様ファイルは、この画面では何も分からないファイル。
-  // 手で grep する手が残っているのはそこだけ、と読めるように出す。
-  var cov = document.getElementById('dc-coverage');
-  if (cov && DC.coverageText) {
-    cov.textContent = DC.coverageText(_dcRows);
-    var hole = (DC.coverage(_dcRows) || []).some(function(c) { return !c.total; });
-    cov.classList.toggle('dc-has-hole', hole);
-  }
-  if (!rows.length) {
-    var empty = '突き合わせる仕様項目がありません';
-    if (_dcSpec && _dcOnlyDiff) empty = 'この出典に不一致はありません (すべて仕様どおり)';
-    else if (_dcSpec) empty = 'この出典には突合項目がありません (まだ .dc.html を手で読む必要があります)';
-    else if (_dcOnlyDiff) empty = '不一致はありません (すべて仕様どおり)';
-    body.innerHTML = '<div class="ab-empty">' + empty + '</div>';
-    return;
-  }
-  var html = '<table class="dc-table"><thead><tr>'
-    + '<th>案</th><th>仕様項目</th><th>期待</th><th>現在値</th><th>判定</th><th>理由</th>'
-    + '</tr></thead><tbody>';
-  rows.forEach(function(r) {
-    // 設定差は「既定に戻す」で、仕様後退は「BLK 用にコピー」で次の 1 手に繋がる。
-    var act = '';
-    if (r.verdict === 'setting' && (r.settingKeys || []).length) {
-      act = '<div class="dc-act"><button type="button" class="dc-reset" data-key="'
-        + esc(r.settingKeys.join(',')) + '">この設定を既定に戻す</button></div>';
-    } else if (r.verdict === 'gap') {
-      act = '<div class="dc-act"><button type="button" class="dc-draft" data-id="'
-        + esc(r.id) + '">BLK 用にコピー</button></div>';
-    }
-    html += '<tr class="dc-row" data-verdict="' + esc(r.verdict) + '">'
-      + '<td class="dc-plan">' + esc(r.plan) + '</td>'
-      + '<td>' + esc(r.title)
-      + '<div class="dc-reason">出典: ' + esc(r.spec) + '</div>'
-      + '<div class="dc-scope">' + esc(r.scopeText || '') + '</div></td>'
-      + '<td>' + esc(r.expect) + '</td>'
-      + '<td class="dc-actual">' + esc(r.actual) + '</td>'
-      + '<td class="dc-verdict">' + esc(DC_VERDICT_LABEL[r.verdict] || r.verdict) + '</td>'
-      + '<td class="dc-reason">' + esc(r.reason) + act + '</td>'
-      + '</tr>';
-  });
-  body.innerHTML = html + '</tbody></table>';
-}
-
-// 出典 (.dc.html) の絞り込み。並びは design/README.md の「対象の仕様」の順のまま。
-// 件数を添えるので、開いた時点で「項目 0 件のファイル = まだ手で読む必要がある」が分かる。
-function renderDesignCheckSpecFilter() {
-  var DC = window.MA.designCheck;
-  var sel = document.getElementById('dc-spec');
-  if (!sel || !DC || !DC.coverage) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  var html = '<option value="">すべての出典 (' + _dcRows.length + ' 項目)</option>';
-  DC.coverage(_dcRows).forEach(function(c) {
-    html += '<option value="' + esc(c.spec) + '">' + esc(c.spec) + ' (' + c.total + ')</option>';
-  });
-  sel.innerHTML = html;
-  sel.value = _dcSpec;
-}
-
-function toggleDesignCheck(open) {
-  var modal = document.getElementById('dc-modal');
-  if (!modal) return;
-  if (open) { runDesignCheck(); renderDesignCheckSpecFilter(); renderDesignCheck(); }
-  modal.style.display = open ? 'flex' : 'none';
-}
-
-// 仕様後退だけを BLK 本文の形にまとめる (手順 11 の成果物は BLK なので)。
-function designCheckDraft(id) {
-  var DC = window.MA.designCheck;
-  if (!DC) return '';
-  var rows = _dcRows.filter(function(r) {
-    return r.verdict === 'gap' && (!id || r.id === id);
-  });
-  return rows.map(DC.blockerDraft).join('\n\n');
-}
-
-function setupDesignCheck() {
-  var btn = document.getElementById('btn-tab-design');
-  var modal = document.getElementById('dc-modal');
-  if (!btn || !modal || !window.MA.designCheck) return;
-  btn.addEventListener('click', function() { toggleDesignCheck(true); });
-  var close = document.getElementById('dc-close');
-  if (close) close.addEventListener('click', function() { toggleDesignCheck(false); });
-  var recheck = document.getElementById('dc-recheck');
-  if (recheck) {
-    recheck.addEventListener('click', function() {
-      runDesignCheck(); renderDesignCheckSpecFilter(); renderDesignCheck();
-    });
-  }
-  var only = document.getElementById('dc-only-diff');
-  if (only) only.addEventListener('change', function() { _dcOnlyDiff = this.checked; renderDesignCheck(); });
-  var spec = document.getElementById('dc-spec');
-  if (spec) spec.addEventListener('change', function() { _dcSpec = this.value; renderDesignCheck(); });
-  var copy = document.getElementById('dc-copy');
-  if (copy) copy.addEventListener('click', function() { copyDesignCheckDraft(''); });
-  var body = document.getElementById('dc-body');
-  if (body) {
-    body.addEventListener('click', function(ev) {
-      var t = ev.target;
-      if (!t || !t.classList) return;
-      if (t.classList.contains('dc-draft')) { copyDesignCheckDraft(t.getAttribute('data-id')); return; }
-      if (t.classList.contains('dc-reset')) { resetDesignSetting(t.getAttribute('data-key')); }
-    });
-  }
-  modal.addEventListener('click', function(ev) {
-    if (ev.target === modal) toggleDesignCheck(false);
-  });
-}
-
-function copyDesignCheckDraft(id) {
-  var text = designCheckDraft(id || '');
-  var btn = document.getElementById('dc-copy');
-  if (!text) { if (btn) btn.textContent = '仕様後退はありません'; return; }
-  try {
-    navigator.clipboard.writeText(text);
-    if (btn) {
-      btn.textContent = 'コピーしました';
-      setTimeout(function() { btn.textContent = '仕様後退を BLK 用にコピー'; }, 1800);
-    }
-  } catch (e) { /* コピーできなくても表は読める */ }
-}
-
-// 設定差の行から、その設定だけを既定に戻す。戻したら測り直して同じ画面で結果を見せる
-// (戻したのに直らなければ、それは設定差ではなく仕様後退だと分かる)。
-function resetDesignSetting(key) {
-  if (!key) return;
-  try {
-    String(key).split(',').forEach(function(k) { if (k) localStorage.removeItem(k); });
-  } catch (e) { return; }
-  // 既定に戻した設定を画面へ反映するには読み直しが要る (設定は起動時に 1 回読む)。
-  location.reload();
 }
 
 // ── 整合ダッシュボード: 図ごと (BLK-reviewer-20260915-0606-wish) ───────────
@@ -8633,47 +8325,6 @@ function setupLineage() {
   if (lgmClose) lgmClose.addEventListener('click', clearLineageMarks);
 
   renderLineageBadge();
-}
-
-function setupAuditTimeline() {
-  var btn = document.getElementById('btn-tab-audit-timeline');
-  var modal = document.getElementById('at-modal');
-  var TL = window.MA.auditTimeline;
-  if (!btn || !modal || !TL) return;
-  btn.addEventListener('click', function() { toggleAuditTimeline(true); });
-
-  var closeBtn = document.getElementById('at-close');
-  if (closeBtn) closeBtn.addEventListener('click', function() { toggleAuditTimeline(false); });
-  modal.addEventListener('click', function(ev) {
-    if (ev.target === modal) toggleAuditTimeline(false);
-  });
-  document.addEventListener('keydown', function(ev) {
-    if (ev.key === 'Escape' && modal.style.display === 'flex') toggleAuditTimeline(false);
-  });
-
-  var rec = document.getElementById('at-record');
-  if (rec) {
-    rec.addEventListener('click', function() {
-      var r = _atRunAudits();
-      var label = document.getElementById('at-label');
-      var name = label && label.value ? label.value.trim() : '';
-      var snap = TL.snapshot(r.audits, { label: name, docs: r.docs });
-      TL.save(TL.push(TL.load(), snap));
-      if (label) label.value = '';
-      renderAuditTimeline();
-    });
-  }
-  var cp = document.getElementById('at-copy');
-  if (cp) cp.addEventListener('click', function() { copyFindingLedger(); });
-
-  var clr = document.getElementById('at-clear');
-  if (clr) {
-    clr.addEventListener('click', function() {
-      if (!confirm('記録した監査履歴を全部消します。よろしいですか。')) return;
-      TL.clear();
-      renderAuditTimeline();
-    });
-  }
 }
 
 // ── 他フォルダの閲覧 ───────────────────────────────────────────────────────
@@ -10008,92 +9659,6 @@ function _noteLoad(force) {
     return false;
   });
   return _noteLoading;
-}
-
-// ── 依頼バッジ (BLK-reviewer-20260914-2006) ────────────────────────────────
-// 指摘.md に書かれた依頼は、直す側 (primary) の画面には何も出ていなかった。
-// 継続 tick 数は `npm run requests` で読めるが、それは書いた側 (reviewer) の CLI で、
-// 直す側は業務を始める前に指摘.md を GUI の外で開いて読むしかない。読み忘れた回は
-// そのまま 1 tick 放置になる。未解消の件数と最長継続 tick 数を下端に常時出し、
-// 「今日は未着手の依頼があるか」を確かめる動作そのものを無くす。
-// 数え方は CLI と同じ request-ledger。1 tick = 指摘.md の 1 版 (本文の指紋)。
-var _rqRows = [];
-var _rqSum = null;
-var _rqTick = '';       // 最後に控えに足した tick (同じ版で数え直さない)
-var _rqBusy = false;
-var _rqWired = false;
-
-function _rqStore(dir, next) {
-  var RB = window.MA.requestBadge;
-  if (!RB) return null;
-  var key = RB.storageKey(dir);
-  try {
-    if (next === undefined) return localStorage.getItem(key);
-    localStorage.setItem(key, JSON.stringify(next));
-  } catch (e) {}
-  return null;
-}
-
-// 指摘.md と保存フォルダの指紋を取り、控えに 1 tick 足して行を作り直す。
-function refreshRequestBadge(force) {
-  var RL = window.MA.requestLedger;
-  var RB = window.MA.requestBadge;
-  var RN = window.MA.reviewNote;
-  var WS = window.MA.workspace;
-  if (!RL || !RB || !RN || !WS) return Promise.resolve(false);
-  if (_rqBusy) return Promise.resolve(false);
-  _rqBusy = true;
-  var dir = _wsFileDir();
-  return Promise.all([
-    fetch('/peek-notes?dir=' + encodeURIComponent(dir))
-      .then(function(r) { return r.ok ? r.json() : null; })
-      .catch(function() { return null; }),
-    WS.listFileEntries(dir).catch(function() { return []; }),
-  ]).then(function(both) {
-    var note = RN.pickNote((both[0] || {}).notes);
-    if (!note) { _rqRows = []; _rqSum = null; renderRequestBadge(); return false; }
-    var tick = RB.tickLabel(note.text);
-    // 図の指紋。本文までは取りに行かず、一覧が返す hash をそのまま指紋に使う
-    // (依頼が名指しした図が前の版から動いたか、だけが要る)。
-    var docs = {};
-    (both[1] || []).forEach(function(e) {
-      if (e && e.name) docs[e.name] = String(e.hash || e.mtime || '');
-    });
-    var state = RL.update(RL.readState(_rqStore(dir)), {
-      label: tick, at: new Date().toISOString(), markdown: note.text, docs: docs,
-    });
-    _rqStore(dir, state);
-    _rqTick = tick;
-    _rqRows = RL.rows(state);
-    _rqSum = RB.summarize(_rqRows);
-    renderRequestBadge();
-    return true;
-  }).catch(function() {
-    return false;
-  }).then(function(v) { _rqBusy = false; return v; });
-}
-
-function renderRequestBadge() {
-  var RB = window.MA.requestBadge;
-  var btn = document.getElementById('status-requests');
-  if (!RB || !btn) return;
-  btn.classList.toggle('has-open', RB.isActive(_rqSum));
-  btn.setAttribute('data-tone', RB.tone(_rqSum));
-  applyStatusBadge(btn, '継続依頼', _rqSum ? _rqSum.open : null,
-    RB.tone(_rqSum) === 'stalled' ? 'bad' : 'warn');
-  btn.setAttribute('data-open', _rqSum ? String(_rqSum.open) : '');
-  btn.setAttribute('data-worst', _rqSum ? String(_rqSum.worst) : '');
-  btn.title = RB.titleText(_rqRows, _rqSum);
-  if (_rqWired) return;
-  _rqWired = true;
-  // 押したら指摘.md の一覧まで連れて行く (件数を見てから中身を読むまでが 1 手)。
-  // タブ列の 👀 は畳まれていることがあるので、ボタンではなく画面を直に開く。
-  btn.addEventListener('click', function() {
-    try {
-      openPeekFolder();
-      setNoteMode(true);
-    } catch (e) {}
-  });
 }
 
 // ── 部品名の統一バッジ (BLK-primary-20260914-1006-friction) ────────────────
@@ -13485,11 +13050,6 @@ function setupTabs() {
   // 印はパネルを開いている間だけ持つ (次に開いたときは白紙から選ぶ)。
   var folderPicked = [];
   var folderNames = [];
-  // BLK-reviewer-20260916-0326-wish: 他 persona との部品名突合の結果。
-  // 押されるまで null (照合していないことと、照合して 0 件を読み分ける)。
-  var nameClashRes = null;
-  var nameClashMine = {};
-  var nameClashBusy = false;
   // BLK-junior-20260908-1103: 名前での絞り込み。一覧は 20 枚超の行が縦に並び、
   // 行ごとに印・役割・差分のボタンが付くので、目的の 1 枚を一発で押し分けにくい。
   var folderQuery = '';
@@ -14236,7 +13796,6 @@ function setupTabs() {
         appendSwapQueueSection(panel, dir);
         appendKindSummary(panel);
         appendKindMismatchSummary(panel);
-        appendNameClashSummary(panel);
         plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
         appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
         appendGoneVersionsSection(panel);
@@ -14304,7 +13863,6 @@ function setupTabs() {
       }
       appendKindSummary(panel);
       appendKindMismatchSummary(panel);
-      appendNameClashSummary(panel);
       sp.items.forEach(function(r) { panel.appendChild(rowOf(r)); });
       appendDraftSection(sp.drafts, rowOf);
       appendGoneVersionsSection(panel);
@@ -14337,7 +13895,6 @@ function setupTabs() {
                                               function() { renderFolderPanel(); });
       });
       panel.appendChild(mark);
-      appendCarrySection(dir, sp.items);
       syncFolderPickUi();
       applyFolderFilter();
       focusFolderFilter();
@@ -15832,13 +15389,6 @@ function setupTabs() {
       row.setAttribute('data-note-hit', hit);
       if (hit === 'target') row.classList.add('folder-note-target');
     }
-    // BLK-reviewer-20260916-0326-wish: 他 persona の図と部品名が割れている印。
-    var cb = folderClashBadge(name);
-    if (cb) {
-      row.appendChild(cb);
-      row.classList.add('folder-clash-row');
-      row.setAttribute('data-clash-verdict', cb.getAttribute('data-clash-severity'));
-    }
     var kb = folderKindBadge(name);
     if (kb) row.appendChild(kb);
     // BLK-owner-20260924-0637-1: 本文から読んだ図種を行に持たせる。FILES ツリーは名前に図種が無い図も
@@ -16581,58 +16131,8 @@ function setupTabs() {
     });
     return Promise.all(jobs).then(function() {
       var ok = RD.save(_reviewStore(), dir, bodies);
-      // 本文と一緒に「そのとき出ていた指摘一覧」と「監査の構え」も控える。
-      // 次の review で図が 1 行も変わっていなければ、この一覧をそのまま
-      // 今回の指摘として複製できる (BLK-reviewer-20260907-2203-wish)。
-      var RC = window.MA.reviewCarry;
-      if (RC) {
-        RC.save(_reviewStore(), dir, RC.makeRecord(
-          RC.collectPins(window.MA.reviewPins, bodies),
-          RC.signature(window.MA),
-          new Date().toISOString()
-        ));
-      }
       return ok;
     });
-  }
-
-  // 無変更確定 (BLK-reviewer-20260907-2203-wish)。
-  // 「変更図 0 枚」を確かめた直後に、前回の指摘一覧をそのまま今回の指摘にする。
-  // 図が無変更でも監査ツール側が変わっていれば新しい指摘が出るので、そのときは
-  // 複製せずに再突合を促す。
-  function appendCarrySection(dir, rows) {
-    var RC = window.MA.reviewCarry;
-    if (!RC) return;
-    var store = _reviewStore();
-    var prev = RC.load(store, dir);
-    var p = RC.plan(prev, { rows: rows, signature: RC.signature(window.MA) });
-
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'folder-carry';
-    btn.setAttribute('data-carry-ok', p.ok ? '1' : '0');
-    btn.setAttribute('data-carry-reason', p.reason);
-    btn.setAttribute('data-carry-count', String(p.count));
-    btn.textContent = '前回の指摘をそのまま今回の指摘にする（' + p.count + ' 件）';
-    btn.title = '前回 review 時点から図が 1 行も変わっていないとき、前回の指摘一覧を複製して'
-      + '「' + RC.NOTE + '」を 1 行付けて確定する';
-    btn.disabled = !p.ok;
-    btn.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      var rec = RC.carry(prev, new Date().toISOString(), RC.signature(window.MA));
-      if (!rec) return;
-      RC.save(store, dir, rec);
-      if (window.MA.toast) window.MA.toast.show('無変更として確定しました（' + RC.statusText(rec) + '）');
-      renderFolderPanel();
-    });
-    panel.appendChild(btn);
-
-    var note = document.createElement('div');
-    note.className = 'folder-carry-note' + (p.recheck ? ' recheck' : '');
-    note.setAttribute('data-carry-reason', p.reason);
-    note.textContent = (prev && prev.carriedFrom && p.ok ? '確定済み: ' + RC.statusText(prev) + ' / ' : '')
-      + p.message;
-    panel.appendChild(note);
   }
 
   // 名前で絞り込む欄。数文字打てば候補がその 1 枚になり、Enter でそのまま開ける。
@@ -16846,22 +16346,11 @@ function setupTabs() {
     // 「開く」の隣に置く —— どちらも「印を付けた図をどうするか」のボタンで、
     // 資料を作る場面では開かずに出せることがここで分かる必要がある。
     bar.appendChild(folderExportButton());
-    // BLK-reviewer-20260916-0326-wish: 他 persona の図と部品名を突き合わせる。
-    // 「印を付けた図をどうするか」の隣ではなく最後に置く —— 対象は印ではなく
-    // フォルダ全体で、押すと一覧の各行に「誰と衝突しているか」の印が付く。
-    bar.appendChild(folderClashButton());
     // BLK-reviewer-20260917-0323-wish: 突合の入口をもう 1 つ。突合対象が
     // 「フォルダの 24 枚」ではなく「メソッド 1 個」のときはここから入る。
     bar.appendChild(folderCallGraphButton());
     return bar;
   }
-
-  // ── 他 persona との部品名衝突 (BLK-reviewer-20260916-0326-wish) ──────────
-  // 表記揺れはグループ単位でしか出ないので、Clock_Ctrl ⇔ ClockCtrl が自分の中
-  // だけの揺れなのか相手の図とぶつかっているのかは、グループの図を 1 枚ずつ
-  // 開いて誰のフォルダかを見るまで分からなかった (前回の run はそれを取り違えた)。
-  // 一覧の行に「誰と衝突しているか」を出し、突合対象をコマンドで組み立てて
-  // 全文を読み直す手順ごと無くす。
 
   // 呼び出し関係を辿る画面へ。印にも枚数にも紐づかない「メソッド 1 個から引く」入口。
   function folderCallGraphButton() {
@@ -16876,105 +16365,6 @@ function setupTabs() {
       openCallGraph();
     });
     return b;
-  }
-
-  function folderClashButton() {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-clash-run';
-    b.id = 'folder-clash-run';
-    b.textContent = '他personaと突合';
-    b.title = '隣の persona のフォルダの図まで読んで、部品名の表記が割れている図に印を付けます';
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      runNameClash();
-    });
-    return b;
-  }
-
-  // 全 persona のフォルダの本文を読んで突き合わせる。押されるまで読まない
-  // (フォルダ数 × 枚数の読み込みを、見る気になっていない段階で走らせない)。
-  function runNameClash() {
-    var NC = window.MA.nameClash;
-    var WS = window.MA.workspace;
-    if (!NC || !WS || nameClashBusy) return Promise.resolve(null);
-    nameClashBusy = true;
-    renderFolderPanel();
-    var dirs = _peekDirs.slice();
-    if (!dirs.length) dirs = [{ path: _wsFileDir(), name: _noteMineFolder() || '自分', current: true }];
-    return Promise.all(dirs.map(function(d) {
-      return WS.listFiles(d.path).then(function(names) {
-        return Promise.all((names || []).filter(function(n) { return n; }).map(function(n) {
-          return WS.loadFile(n, d.path).then(function(text) {
-            return { name: d.name + '/' + n, persona: d.name, _file: n, _dir: d.path,
-                     _current: !!d.current, dsl: typeof text === 'string' ? text : '' };
-          }).catch(function() { return null; });
-        }));
-      }).catch(function() { return []; });
-    })).then(function(sets) {
-      var docs = [];
-      sets.forEach(function(rows) {
-        (rows || []).forEach(function(r) { if (r) docs.push(r); });
-      });
-      nameClashRes = NC.audit(docs);
-      // 一覧の行はこのフォルダのファイル名なので、自分の図だけ名前で引けるようにする。
-      nameClashMine = {};
-      docs.forEach(function(d) {
-        if (d._current) nameClashMine[d._file] = nameClashRes.byDoc[d.name];
-      });
-      nameClashBusy = false;
-      renderFolderPanel();
-      return nameClashRes;
-    }, function() {
-      nameClashBusy = false;
-      nameClashRes = null;
-      renderFolderPanel();
-      return null;
-    });
-  }
-
-  function folderClashBadge(name) {
-    var NC = window.MA.nameClash;
-    if (!NC || !nameClashRes) return null;
-    var b = NC.badge(nameClashMine[name]);
-    if (!b) return null;
-    var el = document.createElement('span');
-    el.className = 'folder-clash folder-clash-' + b.severity;
-    el.setAttribute('data-clash', name);
-    el.setAttribute('data-clash-severity', b.severity);
-    el.textContent = b.mark + ' ' + b.label;
-    el.title = b.title;
-    return el;
-  }
-
-  // 一覧の下の 1 行。何枚を照合しての結果かを必ず書く (照合していないだけの
-  // 0 件と読み分けられないと、結局 audit を回し直すことになる)。
-  function appendNameClashSummary(host) {
-    var NC = window.MA.nameClash;
-    if (!NC) return;
-    var line = document.createElement('div');
-    line.id = 'folder-name-clash';
-    line.className = 'folder-name-clash ' + NC.summaryClass(nameClashRes);
-    line.textContent = nameClashBusy
-      ? '他の persona のフォルダを読んでいます…'
-      : NC.summaryLine(nameClashRes);
-    line.title = '「他personaと突合」を押すと、隣のフォルダの図まで読んで部品名を突き合わせます';
-    host.appendChild(line);
-
-    // 衝突している組は、相手側の綴りと図の名前まで出す。ここで名指ししないと
-    // 「どの図が相手側か」を確かめるために結局 1 枚ずつ開くことになる。
-    var lines = NC.crossLines(nameClashRes);
-    if (!lines.length) return;
-    var box = document.createElement('div');
-    box.id = 'folder-clash-lines';
-    box.className = 'folder-clash-lines';
-    lines.forEach(function(t) {
-      var row = document.createElement('div');
-      row.className = t.charAt(0) === ' ' ? 'fc-line fc-where' : 'fc-line fc-group';
-      row.textContent = t.trim();
-      box.appendChild(row);
-    });
-    host.appendChild(box);
   }
 
   function folderExportButton() {
@@ -27996,18 +27386,6 @@ function saveFile() {
       doc = { id: doc.id, name: dm.name, diagramType: doc.diagramType, dsl: doc.dsl };
     }
   }
-  // BLK-reviewer-20260915-0007-wish: 書き込む前に、同じ保存フォルダのクラス図と
-  // 突き合わせる。宣言の無い呼び出しがあれば、ここで止めて一覧を出す
-  // (保存後に言う save-check では、書けたと思って次の図へ移った後になる)。
-  // BLK-builder-20260924-0012-b2-1-red: 突き合わせる相手 (保存フォルダのクラス図) を
-  // まだ読んでいなければ、読んでから判定し直す。読む前に判定すると相手 0 枚で
-  // 素通りし、開いて最初の保存だけが宣言の無い呼び出しのまま書き込まれていた。
-  // 読んでいる最中にもう一度押されても、同じ読み込みを待つ (先に素通りさせない)。
-  if (_sgdNeedsFolder()) {
-    _sgdLoadFolder(_wsFileDir()).then(function() { saveFile(); });
-    return;
-  }
-  if (runSaveGuard(doc)) return;
 
   var ST = window.MA.saveTarget;
   // BLK-human-20260925-1150: 書き先はそのタブのフォルダ。保存先を替えても、前に開いたタブは開いたファイルへ書く。
@@ -28017,16 +27395,11 @@ function saveFile() {
     // saveActiveDoc() が既に書き出しているが、ここでは結果を待って利用者に伝える。
     window.MA.workspace.saveToFile(_withSourceEol(doc), target.dir).then(function(ok) {
       setSaveStatus(ST.messageFor(target, ok));
-      // 保存できた図にだけ、その場で突合を掛ける (BLK-reviewer-20260908-1503-wish)。
       if (ok) {
         _afterManualSave(doc, target, true);
         // 書いた先が開いている図と違うなら、そのことを最優先で言う。
         // 状態バーの 1 行だけでは「保存した」と「本体が変わった」の食い違いが読めない。
         showSaveRedirect(redirected, target.dir);
-        runSaveCheck(doc && doc.name);
-        // 隣の persona と部品名がぶつかっていないか (BLK-primary-20260916-0526-wish)。
-        // 読み込みを待つので保存の表示は止めない。
-        runSaveClash(doc && doc.name);
         // この保存で中身が別名の図と入れ替わっていないか (BLK-reviewer-20260912-2103-wish)
         runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
       }
@@ -28038,254 +27411,7 @@ function saveFile() {
   if (ST) setSaveStatus(ST.messageFor(target, true));
   // ダウンロードした中身を前回保存版にする (書いたファイルと画面の印を食い違わせない)。
   if (doc) _afterManualSave({ id: doc.id, name: doc.name, diagramType: doc.diagramType, dsl: mmdText }, target, false);
-  runSaveCheck(doc && doc.name);
-  runSaveClash(doc && doc.name);
   runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
-}
-
-// ── 保存時チェック (BLK-reviewer-20260908-1503-wish) ────────────────────────
-// 「保存」を押したその場で突合ボードと同じ突合を掛け、いま保存した図に新しく
-// 生えた不一致を図の上に出す。判定は src/core/save-check.js。ここは結線だけ。
-
-function _svckState() {
-  var SC = window.MA.saveCheck;
-  return SC ? SC.load(_reviewStore(), _wsFileDir()) : { seen: {} };
-}
-
-// 保存した図 1 枚について突合を掛け、警告を作る。控えは進めない (描画側で進める)。
-function _svckEvaluate(docName) {
-  var SC = window.MA.saveCheck, AB = window.MA.auditBoard;
-  if (!SC || !AB || !docName) return null;
-  var run = _atRunAudits();
-  var findings = null;
-  try { findings = _mfRows(); } catch (e) { findings = null; }
-  // SVG 実体のずれは 📂 一覧が読んだ結果があるときだけ載る (保存で読みに行かない)。
-  var board = AB.build({ audits: run.audits, svg: _abSvgScan, findings: findings });
-  _abBoard = board;
-  return SC.evaluate(board, { doc: docName, state: _svckState() });
-}
-
-function hideSaveCheckIfOtherDoc(activeId) {
-  var el = document.getElementById('save-check-overlay');
-  if (el && !el.hidden && el.getAttribute('data-doc-id') !== String(activeId)) el.hidden = true;
-}
-
-function hideSaveCheck() {
-  var el = document.getElementById('save-check-overlay');
-  if (el) el.hidden = true;
-}
-
-function renderSaveCheck(res) {
-  var SC = window.MA.saveCheck;
-  var el = document.getElementById('save-check-overlay');
-  if (!SC || !el) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  var sum = document.getElementById('sck-summary');
-  var list = document.getElementById('sck-list');
-  if (!res) { el.hidden = true; return; }
-
-  if (sum) sum.textContent = SC.summaryLine(res);
-  if (list) {
-    var html = '';
-    SC.lines(res).forEach(function(l) {
-      html += '<li class="' + (l.isNew ? 'sck-new' : 'sck-old') + '">'
-        + '<span class="sck-tag">' + (l.isNew ? '新規' : 'そのまま ' + l.ignored + ' 回')
-        + '</span>' + esc(l.text) + '</li>';
-    });
-    list.innerHTML = html;
-    list.hidden = !html;
-  }
-  // 指摘が無いときは帯を出さない (毎回の保存で図が隠れる方が邪魔になる)。
-  // 指摘が無いときは帯を出さず、突合の結果はステータスバーの保存先の後ろに足す。
-  // ここで setSaveStatus に置き換えると「どこに書いたか」が消える。
-  if (!SC.shouldWarn(res)) { el.hidden = true; appendSaveStatus(SC.checkLine(res)); return; }
-  var ws = window.MA.workspace;
-  el.setAttribute('data-doc-id', ws ? String(ws.getActiveId()) : '');
-  el.hidden = false;
-}
-
-// 保存のたびに呼ぶ。突合が落ちても保存そのものは成立させる。
-function runSaveCheck(docName) {
-  var SC = window.MA.saveCheck;
-  if (!SC) return null;
-  var res = null;
-  try { res = _svckEvaluate(docName); } catch (e) { res = null; }
-  if (!res) { hideSaveCheck(); return null; }
-  try { renderSaveCheck(res); } catch (e) { /* 表示できなくても控えは進める */ }
-  try { SC.save(_reviewStore(), _wsFileDir(), SC.advance(_svckState(), res)); } catch (e) {}
-  return res;
-}
-
-// ── 保存時の他 persona 衝突 (BLK-primary-20260916-0526-wish) ────────────────
-// 隣の persona と部品名が表記違いでぶつかっていることは、これまで reviewer が
-// audit を通しで走らせて指摘.md に書くまで分からなかった (ClockCtrl ⇔ Clock_Ctrl の
-// 継続 3 tick 目)。📂一覧の「他personaと突合」は押さないと動かないので、日常の
-// 保存には乗らない。ここで保存のたびに同じ突合を掛け、ぶつかっていれば相手と
-// 相手の図を名指しする。判定は src/core/save-clash.js。ここは結線だけ。
-
-// 隣のフォルダは保存のたびには読み直さない (フォルダ数 × 枚数の読み込みが
-// 保存の速さを食う)。自分のフォルダだけは必ず読み直す — いま保存した本文が
-// 控えのままだと、直した綴りでまた警告が出る。
-var _sclOthers = null;      // 隣のフォルダを読んだ控え
-var _sclOthersAt = 0;
-var _sclOthersMs = 60000;
-var _sclBusy = false;
-var _sclPlan = null;        // 帯の「揃える」が押されたときに実行する置換
-
-// 1 つのフォルダの図を、突合に掛けられる形 ({ name, persona, dsl }) で読む。
-function _sclReadDir(d) {
-  var WS = window.MA.workspace;
-  return WS.listFiles(d.path).then(function(names) {
-    return Promise.all((names || []).filter(function(n) { return n; }).map(function(n) {
-      return WS.loadFile(n, d.path).then(function(text) {
-        return { name: d.name + '/' + n, persona: d.name, _file: n,
-                 dsl: typeof text === 'string' ? text : '' };
-      }).catch(function() { return null; });
-    })).then(function(rows) {
-      return (rows || []).filter(function(r) { return r; });
-    });
-  }).catch(function() { return []; });
-}
-
-function _sclDirs() {
-  var dirs = _peekDirs.slice();
-  if (!dirs.length) dirs = [{ path: _wsFileDir(), name: _noteMineFolder() || '自分', current: true }];
-  return dirs;
-}
-
-// 突合に掛ける図をそろえる。隣は控えでよいが、自分は読み直す。
-// BLK-releaser-20260930-0802-1: 隣のフォルダの一覧 (_peekDirs) は、以前は保存先の一覧の参照タブ列が
-// 起動時に読んでいた。参照タブ列を外した (BLK-owner-20260925-0416-prune) ので、FILES「読むだけ」を
-// 開かないまま保存すると一覧が空で、自分のフォルダしか突き合わせずに「衝突なし」と言っていた。
-// 突合の前に一覧を自分で読みに行く (読めていれば読み直さない)。
-function _sclCollect() {
-  var ensure = (typeof _ensurePeekDirs === 'function') ? _ensurePeekDirs() : Promise.resolve(false);
-  return ensure.catch(function() { return false; }).then(_sclCollectDirs);
-}
-
-function _sclCollectDirs() {
-  var dirs = _sclDirs();
-  var mineDir = null, others = [];
-  dirs.forEach(function(d) { if (d.current) mineDir = d; else others.push(d); });
-  if (!mineDir) mineDir = dirs[0];
-  var fresh = (_sclOthers && (Date.now() - _sclOthersAt) < _sclOthersMs)
-    ? Promise.resolve(_sclOthers)
-    : Promise.all(others.map(_sclReadDir)).then(function(sets) {
-        var out = [];
-        sets.forEach(function(rows) { (rows || []).forEach(function(r) { out.push(r); }); });
-        _sclOthers = out;
-        _sclOthersAt = Date.now();
-        return out;
-      });
-  return fresh.then(function(theirs) {
-    return _sclReadDir(mineDir).then(function(mine) {
-      return { mine: mine, docs: window.MA.saveClash.merge(theirs, mine) };
-    });
-  });
-}
-
-// 保存した図が、突合の中で何という名前になっているか。
-// 見つからないまま「衝突なし」と言わないために、名前で引けないときは null を返す。
-function _sclDocName(mine, docName) {
-  var want = _s2(docName);
-  if (!want) return null;
-  for (var i = 0; i < mine.length; i++) {
-    var f = _s2(mine[i]._file);
-    if (f === want || f.replace(/\.[^.]+$/, '') === want) return mine[i].name;
-  }
-  return null;
-}
-
-function _s2(v) { return v == null ? '' : String(v); }
-
-function hideSaveClash() {
-  var el = document.getElementById('save-clash-overlay');
-  if (el) el.hidden = true;
-  _sclPlan = null;
-}
-
-function renderSaveClash(ev) {
-  var SL = window.MA.saveClash;
-  var el = document.getElementById('save-clash-overlay');
-  if (!SL || !el) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  // ぶつかっていないときは帯を出さず、照合したことだけを保存先の後ろに足す
-  // (保存のたびに図が隠れる方が邪魔になる)。
-  if (!SL.shouldWarn(ev)) { hideSaveClash(); appendSaveStatus(SL.statusLine(ev)); return; }
-
-  var sum = document.getElementById('scl-summary');
-  if (sum) sum.textContent = SL.summaryLine(ev);
-  var list = document.getElementById('scl-list');
-  if (list) {
-    var html = '';
-    SL.lines(ev).forEach(function(l) {
-      html += '<li>' + esc(l.mine + ' ⇔ ' + l.theirs + ' — 揃える先: ' + l.suggested)
-        + ' <span class="scl-where">'
-        + esc('（' + (l.personas.length ? l.personas.join('・') + ' の ' : '')
-              + l.docs.join('、') + '）')
-        + '</span></li>';
-    });
-    list.innerHTML = html;
-  }
-  // 揃える先が相手の綴りなら、この図をその場で揃えられる。揃える先が自分の綴りの
-  // ときはボタンを出さない (相手の図を断りなく書き換えることになる)。
-  var plans = SL.fixPlan(ev);
-  _sclPlan = plans.length === 1 ? plans[0] : null;
-  var fix = document.getElementById('btn-scl-fix');
-  if (fix) {
-    fix.hidden = !_sclPlan;
-    if (_sclPlan) {
-      fix.textContent = SL.fixLabel(_sclPlan);
-      fix.title = 'この図の ' + _sclPlan.from + ' を ' + _sclPlan.to
-        + ' に置き換えます（開いている他の図は触りません）';
-    }
-  }
-  // BLK-migrator-20260923-1409: どの図の保存で出た帯かを憶え、別の図へ移ったら引っ込める
-  var wsCl = window.MA.workspace;
-  el.setAttribute('data-doc-id', wsCl ? String(wsCl.getActiveId()) : '');
-  el.hidden = false;
-}
-
-// 保存のたびに呼ぶ。突合が落ちても保存そのものは成立させる。
-function runSaveClash(docName) {
-  var SL = window.MA.saveClash;
-  var NC = window.MA.nameClash;
-  if (!SL || !NC || !window.MA.workspace || _sclBusy || !docName) return Promise.resolve(null);
-  _sclBusy = true;
-  return _sclCollect().then(function(got) {
-    var res = NC.audit(got.docs);
-    var ev = SL.evaluate(res, { doc: _sclDocName(got.mine, docName) });
-    _sclBusy = false;
-    try { renderSaveClash(ev); } catch (e) {}
-    return ev;
-  }, function() {
-    _sclBusy = false;
-    hideSaveClash();
-    return null;
-  });
-}
-
-function setupSaveClash() {
-  // 帯は #preview-container の中にある。キャンバスのクリック (挿入ピッカー) へ
-  // 抜けさせない。
-  var el = document.getElementById('save-clash-overlay');
-  if (el) el.addEventListener('click', function(ev) { ev.stopPropagation(); });
-  var close = document.getElementById('btn-scl-close');
-  if (close) close.addEventListener('click', hideSaveClash);
-  var folder = document.getElementById('btn-scl-folder');
-  if (folder) folder.addEventListener('click', function() { _ensureFolderListOpen(); });
-  var fix = document.getElementById('btn-scl-fix');
-  if (fix) {
-    fix.addEventListener('click', function() {
-      if (!_sclPlan) return;
-      // 台本 5.5 のとおり、参加者名だけの変更は対象図だけに絞る。
-      var activeId = window.MA.workspace.getActiveId();
-      var docs = _renameDocs().filter(function(d) { return d.id === activeId; });
-      renameAcrossDocs(_sclPlan.from, _sclPlan.to, docs);
-      setSaveStatus(_sclPlan.from + ' を ' + _sclPlan.to + ' に揃えました。保存すると相手と揃います');
-      hideSaveClash();
-    });
-  }
 }
 
 // ── 保存の入れ替わり検知 (BLK-reviewer-20260912-2103-wish) ──────────────────
@@ -28317,15 +27443,6 @@ function hideSaveSwap() {
 // 別の図に移っても出たままだと図を帯の高さだけ下へ押し、縦に長い図の下の方が画面の外へ
 // 出てホバーが届かない。保存時チェックの帯と同じく、次の図を開いたら引っ込める
 // (次の保存でまた出る)。記録を自分で開いているときは追跡の最中なので残す。
-// BLK-migrator-20260923-1409: 「名前の衝突」の帯も保存した図のもの (相手の図と名前は保存した図の中身から
-// 出している)。別の図に移っても出たままだと、入れ替わりの帯と同じく図を帯の高さだけ下へ押し、縦に長い図
-// (AWS 構成図の Figure 5 など) の下端の参加者が画面の外へ出てホバーが届かない。次の保存でまた出る。
-function hideSaveClashIfOtherDoc(activeId) {
-  var el = document.getElementById('save-clash-overlay');
-  if (!el || el.hidden) return;
-  if (el.getAttribute('data-doc-id') !== String(activeId)) hideSaveClash();
-}
-
 function hideSaveSwapIfOtherDoc(activeId) {
   var el = document.getElementById('save-swap-overlay');
   if (!el || el.hidden || _sswLogOpen) return;
@@ -28521,222 +27638,6 @@ function setupSaveSwap() {
     if (el) el.hidden = false;
     renderSaveSwapLog();
   });
-}
-
-// ── 保存前のメソッド突合 (BLK-reviewer-20260915-0007-wish) ──────────────────
-// 保存を書き込む前に、いま保存する図の呼び出しを**同じ保存フォルダのクラス図**と
-// 突き合わせ、宣言が無ければ帯で止めて一覧を出す。判定は src/core/save-guard.js。
-// save-check (保存後) と違い、相手はタブではなく📂 一覧が読んだフォルダの中身。
-
-var _sgdAck = {};        // 図の名前 → 「このまま保存」を選んだときの顔ぶれ
-var _sgdPending = null;  // 帯を出したあと「このまま保存」で再実行する保存
-var _sgdRes = null;      // いま帯に出している突合の結果 (第 3 選択肢が書く対象)
-
-function hideSaveGuard() {
-  var el = document.getElementById('save-guard-overlay');
-  if (el) el.hidden = true;
-  _sgdPending = null;
-  _sgdRes = null;
-  var row = document.getElementById('sgd-omit-row');
-  if (row) row.hidden = true;
-}
-
-function renderSaveGuard(res) {
-  var SG = window.MA.saveGuard;
-  var el = document.getElementById('save-guard-overlay');
-  if (!SG || !el) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  var sum = document.getElementById('sgd-summary');
-  if (sum) sum.textContent = SG.summaryLine(res);
-  var list = document.getElementById('sgd-list');
-  if (list) {
-    var html = '';
-    SG.lines(res).forEach(function(l) {
-      html += '<li>' + esc(l.text)
-        + (l.decl ? '<span class="sgd-decl">クラス図に足すなら: ' + esc(l.decl) + '</span>' : '')
-        + (l.note ? '<span class="sgd-note">' + esc(l.note) + '</span>' : '')
-        + '</li>';
-    });
-    list.innerHTML = html;
-  }
-  // 第 3 選択肢 (意図的に省略) の理由欄は、押されるまで閉じておく。
-  _sgdRes = res;
-  var row = document.getElementById('sgd-omit-row');
-  if (row) row.hidden = true;
-  var rin = document.getElementById('sgd-omit-reason');
-  if (rin) rin.value = '';
-  _sgdNotePrefill = '';
-  renderOmitPreview();
-  el.hidden = false;
-}
-
-// BLK-reviewer-20260923-2012-wish: 帯の指摘が note の自由文で既に答えてあるとき、
-// 「🚫 意図的に省略」で理由欄に入れた note の本文。理由欄がこのままなら、
-// 指摘ごとに自分の note の本文を理由に使う (note が 2 つ以上あっても打ち直させない)。
-var _sgdNotePrefill = '';
-
-// ── 意図的な省略 (BLK-reviewer-20260915-0106-wish) ─────────────────────────
-// 帯に出ている指摘を「宣言しないと決めた」として片づけるとき、note の自由文では
-// なく `'@omit-method Cls.Method 理由` の 1 行を図に足す。次の突合 (GUI・CLI とも
-// src/core/method-audit.js) はこの行を読んで指摘から外すので、reviewer は puml を
-// 開いて日本語の意図を読み取らなくても「意図省略で解消」と書ける。
-
-// 書き込む行を、書く前にそのまま見せる。何が図に残るかを押す前に読ませる。
-function renderOmitPreview() {
-  var pv = document.getElementById('sgd-omit-preview');
-  var OM = window.MA.omitMethod;
-  if (!pv) return;
-  if (!OM || !_sgdRes) { pv.textContent = ''; return; }
-  var rin = document.getElementById('sgd-omit-reason');
-  var reason = rin ? rin.value : '';
-  pv.textContent = omitTagLines(reason).join('\n');
-}
-
-// いま帯に出ている指摘のうち、まだ宣言が無いものぶんの行。
-function omitTagLines(reason) {
-  var OM = window.MA.omitMethod;
-  if (!OM || !_sgdRes) return [];
-  var cur = mmdText;
-  var out = [];
-  var asNote = !!_sgdNotePrefill && String(reason || '').trim() === _sgdNotePrefill.trim();
-  (_sgdRes.issues || []).forEach(function(i) {
-    if (OM.has(cur, i)) return;
-    var r = (asNote && i.noteReply && i.noteReply.reason) ? i.noteReply.reason : reason;
-    out.push(OM.tagLine(i, r));
-  });
-  return out;
-}
-
-// 理由を図に書き込んでから保存へ進む。理由が空なら書かない —— 理由の無い
-// 省略宣言は、note の自由文を機械可読にした意味が無くなる。
-function applyOmitAndSave() {
-  var OM = window.MA.omitMethod;
-  var rin = document.getElementById('sgd-omit-reason');
-  var reason = rin ? String(rin.value || '').trim() : '';
-  if (!OM || !_sgdRes) return;
-  if (!reason) {
-    var pv = document.getElementById('sgd-omit-preview');
-    if (pv) pv.textContent = '理由を書いてください（この行は図に残り、監査はここを読みます）';
-    if (rin) rin.focus();
-    return;
-  }
-  var add = omitTagLines(reason);
-  if (add.length) {
-    if (window.MA.history) { try { window.MA.history.pushHistory(); } catch (e) {} }
-    mmdText = OM.apply(mmdText, add);
-    suppressSync = true;
-    editorEl.value = mmdText;
-    suppressSync = false;
-    try { window.MA.workspace.updateActive({ dsl: mmdText }); } catch (e) {}
-    updateLineNumbers();
-    scheduleRefresh();
-    try { renderTabs(); } catch (e) {}
-  }
-  hideSaveGuard();
-  // 書き足したので、次の突合ではこの指摘は外れる (帯はもう出ない)。
-  saveFile();
-}
-
-// 保存前に呼ぶ。止めるなら true。止めないときは帯を隠して保存を続けさせる。
-// BLK-migrator-20260923-1809: 開いたときから本文が 1 文字も変わっていないか。
-// 判定の正本は source-lock の指紋 (開いた瞬間に憶えている)。錠を持たない図
-// (自分で作ったタブ) は「開いたまま」ではないので false。
-// BLK-builder-20260924-0637-b2-1-red: 問い合わせで錠を動かさない。decide は名前が変わると
-// 錠を外すので、控えへ逸らした後の doc (名前が `{名前}-編集中`) で聞くと、それだけで
-// 錠が外れ、保存直後の突合が本体へ書き戻していた (「本体は変更前のまま」と帯が言うのに本体が変わる)。
-function _isUnchangedSinceOpen(doc) {
-  var SL = window.MA.sourceLock;
-  if (!SL || !doc || !doc.id || typeof doc.dsl !== 'string') return false;
-  try {
-    return !!SL.unchangedSinceOpen(doc.id, doc.dsl);
-  } catch (e) { return false; }
-}
-
-// 保存前の突合の相手 (保存フォルダ) をまだ読んでいないか。読みに行って失敗した
-// フォルダでは待たない (保存そのものを止め続けない)。
-var _sgdFolderTried = null;
-var _sgdFolderLoad = null;
-function _sgdLoadFolder(dir) {
-  if (!_sgdFolderLoad) {
-    var done = function() { _sgdFolderTried = dir; _sgdFolderLoad = null; };
-    _sgdFolderLoad = loadFolderImpact(true).then(done, done);
-  }
-  return _sgdFolderLoad;
-}
-function _sgdNeedsFolder() {
-  if (!_fiFolderMode()) return false;
-  var dir = _wsFileDir();
-  return !!dir && _fiDir !== dir && _sgdFolderTried !== dir;
-}
-
-function runSaveGuard(doc) {
-  var SG = window.MA.saveGuard;
-  if (!SG || !doc || !doc.name) return false;
-  var res = null;
-  try {
-    // 相手は📂 一覧が読んだ保存フォルダの中身だけ。タブで代用しない —— 開いて
-    // いないだけのクラス図を「無い」と読んで no-class を量産するのを避ける。
-    res = SG.check({ doc: doc, folderDocs: _fiFileDocs, unchanged: _isUnchangedSinceOpen(doc) });
-  } catch (e) { return false; }
-  if (!SG.shouldBlock(res)) { hideSaveGuard(); return false; }
-  // 同じ顔ぶれを一度「承知」しているなら、二度は止めない。
-  if (_sgdAck[doc.name] === SG.signature(res)) { hideSaveGuard(); return false; }
-  _sgdPending = { name: doc.name, sig: SG.signature(res) };
-  try { renderSaveGuard(res); } catch (e) { return false; }
-  // BLK-migrator-20260923-1809: 止めたことを状態バーにも言う。帯はプレビュー枠の
-  // 中に出るので、大きい図で下へ送られていると「押したのに何も起きない」に見える。
-  try { setSaveStatus('保存を止めました: ' + SG.summaryLine(res)); } catch (e) {}
-  return true;
-}
-
-function setupSaveGuard() {
-  var el = document.getElementById('save-guard-overlay');
-  if (el) el.addEventListener('click', function(ev) { ev.stopPropagation(); });
-  var fix = document.getElementById('btn-sgd-fix');
-  if (fix) fix.addEventListener('click', function() { hideSaveGuard(); });
-  var go = document.getElementById('btn-sgd-save');
-  if (go) go.addEventListener('click', function() {
-    var p = _sgdPending;
-    hideSaveGuard();
-    if (p) _sgdAck[p.name] = p.sig;
-    saveFile();
-  });
-  var omit = document.getElementById('btn-sgd-omit');
-  if (omit) omit.addEventListener('click', function() {
-    var row = document.getElementById('sgd-omit-row');
-    if (!row) return;
-    row.hidden = false;
-    var rin = document.getElementById('sgd-omit-reason');
-    // note で既に答えてある組なら、その本文を理由欄に入れて開く (note は消さない)。
-    var SG = window.MA.saveGuard;
-    var pre = (SG && SG.notePrefill) ? SG.notePrefill(_sgdRes) : '';
-    if (rin && pre && !String(rin.value || '').trim()) {
-      rin.value = pre;
-      _sgdNotePrefill = pre;
-    }
-    renderOmitPreview();
-    if (rin) rin.focus();
-  });
-  var omitReason = document.getElementById('sgd-omit-reason');
-  if (omitReason) {
-    omitReason.addEventListener('input', renderOmitPreview);
-    omitReason.addEventListener('keydown', function(ev) {
-      if (ev.key === 'Enter') { ev.preventDefault(); applyOmitAndSave(); }
-    });
-  }
-  var omitGo = document.getElementById('btn-sgd-omit-go');
-  if (omitGo) omitGo.addEventListener('click', applyOmitAndSave);
-}
-
-function setupSaveCheck() {
-  // 帯は #preview-container の中にある。キャンバスのクリック (挿入ピッカー) へ
-  // 抜けさせない。抜けると帯のボタンを押すたびに挿入ピッカーが開く。
-  var el = document.getElementById('save-check-overlay');
-  if (el) el.addEventListener('click', function(ev) { ev.stopPropagation(); });
-  var close = document.getElementById('btn-sck-close');
-  if (close) close.addEventListener('click', hideSaveCheck);
-  var board = document.getElementById('btn-sck-board');
-  if (board) board.addEventListener('click', function() { toggleAuditBoard(true); });
 }
 
 // 保存の結果をステータスバーに数秒だけ出す。押しても何も起きないように

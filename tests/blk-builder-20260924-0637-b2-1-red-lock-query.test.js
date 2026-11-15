@@ -54,14 +54,11 @@ describe('source-lock — 開いたときのままかを、錠を動かさずに
   });
 });
 
-describe('app.js — 保存前の突合の問い合わせは錠を動かさない', function() {
-  test('_isUnchangedSinceOpen は decide ではなく unchangedSinceOpen で聞く', function() {
+describe('app.js — 保存は監査で止めない (保存前の突合は整理で外した)', function() {
+  test('保存の前に突合を掛けて止める入口が無い', function() {
     var app = fs.readFileSync(path.join(__dirname, '..', 'src', 'app.js'), 'utf-8');
-    var i = app.indexOf('function _isUnchangedSinceOpen(');
-    expect(i).toBeGreaterThan(-1);
-    var body = app.slice(i, app.indexOf('\n}', i));
-    expect(body.indexOf('unchangedSinceOpen(doc.id')).toBeGreaterThan(-1);
-    expect(body.indexOf('.decide(')).toBe(-1);
+    expect(app.indexOf('runSaveGuard(')).toBe(-1);
+    expect(app.indexOf('function _isUnchangedSinceOpen(')).toBe(-1);
   });
 });
 

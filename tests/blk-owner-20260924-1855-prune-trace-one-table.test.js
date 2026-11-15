@@ -7,7 +7,7 @@
 // - 画面側: #fl-table はどこにも出さず、系統チェックには案内ボタンだけがある
 const fs = require('fs');
 const path = require('path');
-const { loadMA } = require('../tools/audit-runtime');
+const { loadMA } = require('./load-ma');
 const TT = require('../src/core/trace-label-table');
 
 const { MA } = loadMA();

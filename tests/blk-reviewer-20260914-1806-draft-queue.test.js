@@ -6,11 +6,7 @@
 //   (2) 新しく増えた下書きが、増えた図と同じ列で数えられないこと。
 const assert = require('assert');
 const scope = require('../src/core/audit-scope');
-const { execFileSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
 
-const REPO = path.join(__dirname, '..');
 
 function entries(list) {
   return scope.fileEntries(list);
@@ -62,50 +58,5 @@ describe('BLK-1806 前回控えとの差の内訳', function() {
   test('下書きの見分けは sync-state の接尾辞に従う', function() {
     assert.strictEqual(scope.draftBaseOf('junior/a-編集中.puml'), 'junior/a');
     assert.strictEqual(scope.draftBaseOf('junior/a.puml'), null);
-  });
-});
-
-describe('BLK-1806 --drafts', function() {
-  const dir = path.join(REPO, 'test-results', 'blk-1806-drafts');
-
-  function setup() {
-    fs.rmSync(dir, { recursive: true, force: true });
-    fs.mkdirSync(dir, { recursive: true });
-    const base = '@startuml\nstate Idle\n@enduml';
-    // 本体へ差し替え待ち (下書きの方が新しく、中身も違う)。
-    fs.writeFileSync(path.join(dir, 'gpio_state.puml'), base, 'utf-8');
-    fs.writeFileSync(path.join(dir, 'gpio_state-編集中.puml'), base + '\nstate Busy', 'utf-8');
-    const old = new Date(Date.now() - 60000);
-    fs.utimesSync(path.join(dir, 'gpio_state.puml'), old, old);
-    // もう消してよい下書き (本体と中身が同じ)。
-    fs.writeFileSync(path.join(dir, 'spi_state.puml'), base, 'utf-8');
-    fs.writeFileSync(path.join(dir, 'spi_state-編集中.puml'), base, 'utf-8');
-    // 下書きの無い図はキューに載らない。
-    fs.writeFileSync(path.join(dir, 'can_state.puml'), base, 'utf-8');
-  }
-
-  test('差し替え待ちと削除予定を、GUI を開かずに名指しできる', function() {
-    setup();
-    const out = execFileSync(process.execPath,
-      [path.join(REPO, 'tools', 'audit.js'), dir, '--drafts'],
-      { cwd: REPO, encoding: 'utf-8' });
-    assert.ok(out.indexOf('下書き 2 枚') !== -1, out);
-    assert.ok(out.indexOf('本体へ差し替え待ち 1 枚') !== -1, out);
-    assert.ok(out.indexOf('gpio_state-編集中.puml → gpio_state.puml') !== -1, out);
-    assert.ok(out.indexOf('spi_state-編集中.puml → spi_state.puml … 削除予定') !== -1, out);
-    assert.ok(out.indexOf('can_state') === -1, '下書きの無い図が混ざっている');
-    fs.rmSync(dir, { recursive: true, force: true });
-  });
-
-  test('下書きが 1 枚も無ければ、黙らずにそう言う', function() {
-    const empty = path.join(REPO, 'test-results', 'blk-1806-drafts-none');
-    fs.rmSync(empty, { recursive: true, force: true });
-    fs.mkdirSync(empty, { recursive: true });
-    fs.writeFileSync(path.join(empty, 'gpio_state.puml'), '@startuml\nstate Idle\n@enduml', 'utf-8');
-    const out = execFileSync(process.execPath,
-      [path.join(REPO, 'tools', 'audit.js'), empty, '--drafts'],
-      { cwd: REPO, encoding: 'utf-8' });
-    assert.ok(out.indexOf('編集中の下書きはありません') !== -1, out);
-    fs.rmSync(empty, { recursive: true, force: true });
   });
 });

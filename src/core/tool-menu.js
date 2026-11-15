@@ -43,12 +43,10 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-cross',          label: '突合ボード (表記揺れ・宣言なし・メソッドも 1 画面で)', group: 'まとめて点検',
         keywords: ['名前突合', '名前の表記揺れ', '表記ゆれ', 'name audit', 'メソッド突合'] },
       { id: 'btn-tab-pattern',        label: '1 つの観点で全図を棚卸し', group: 'まとめて点検' },
-      { id: 'btn-tab-design',         label: '仕様 (design) と現在値の突合', group: 'まとめて点検' },
       { id: 'btn-tab-submit',         label: '提出前チェック', group: '渡す前に' },
       // BLK-owner-20260918-0429-prune: 「渡してよいか」を数える突合。ここに載るまでは
       // Ctrl+K でしか辿り着けず、同じ目的の 6 つで 1 つだけ入口が違っていた。
       { id: 'btn-tab-handover',       label: '引き継ぎチェックリスト', group: '渡す前に' },
-      { id: 'btn-tab-audit-timeline', label: '監査履歴', group: '渡す前に' },
     ] },
     // BLK-owner-20260923-1307-prune: 「2 つの版・2 枚の図を並べて違いを見る」入口を 2 つに絞る。
     // 前の回 (BLK-owner-20260918-0529-prune) は 5 つの入口をここに並べて名前だけ揃えたが、
