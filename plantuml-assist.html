@@ -1006,7 +1006,7 @@ html, body {
   display: none;
   position: absolute;
   z-index: 40;
-  /* 240px では見出し・絞り込み・対象set で埋まり、
+  /* 240px では見出し・絞り込み・選ぶバーで埋まり、
      棚卸しの 8 行が窓の外に出ていた。画面の高さに合わせて伸ばす。 */
   max-height: min(70vh, 620px);
   overflow-y: auto;
@@ -1087,37 +1087,6 @@ html, body {
   border-bottom: 1px solid var(--border);
   margin-bottom: 3px;
 }
-/* 対象 set との突合 */
-#folder-panel .folder-target-summary {
-  font-size: 10px;
-  padding: 3px 6px;
-  color: var(--text-secondary);
-}
-#folder-panel .folder-target-summary.target-set-ok { color: var(--accent); }
-#folder-panel .folder-target-summary.target-set-short { color: var(--accent-red); font-weight: bold; }
-#folder-panel .folder-target-bar { padding: 0 6px 4px; display: flex; gap: 4px; }
-#folder-panel button.folder-target-set,
-#folder-panel button.folder-target-clear {
-  flex: 0 0 auto;
-  font-size: 10px;
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-#folder-panel button.folder-target {
-  flex: 0 0 auto;
-  font-size: 10px;
-  padding: 1px 5px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-#folder-panel button.folder-target.folder-target-on { border-color: var(--accent); color: var(--accent); }
 /* 上書きされる前の版。行の末尾に付き、押すと
    すぐ下に版が開く。版のある図にしか出ないので、普段の一覧は今までのまま。 */
 #folder-panel button.folder-versions {
@@ -5449,7 +5418,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/saved-kind.js"></script>
 <script src="src/core/kind-mismatch.js"></script>
 <script src="src/core/draft-mark.js"></script>
-<script src="src/core/target-set.js"></script>
 <script src="src/core/folder-reopen.js"></script>
 <script src="src/core/recent-files.js"></script>
 <script src="src/core/dupe-merge.js"></script>

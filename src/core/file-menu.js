@@ -48,7 +48,7 @@ window.MA.fileMenu = (function() {
     // 保存先の行・「保存先」見出しから別のフォルダを保存先に替える
     // (隣のフォルダから選ぶか、パスを入れる)。今は ⚙ 設定 → 自動保存 → ファイル → パス の 5 手だった。
     { id: 'change-target', label: '別のフォルダを保存先にする…', targetOnly: true },
-    // 旧 📂 一覧 (要約・選ぶバー・対象 set・SVG の鮮度…) はツリーから外し、
+    // 旧 📂 一覧 (要約・選ぶバー・SVG の鮮度…) はツリーから外し、
     // 今の保存先の右クリックからだけ中央の枠に開く。
     { sep: true, targetOnly: true },
     { id: 'open-list', label: '保存先の一覧を開く', targetOnly: true },

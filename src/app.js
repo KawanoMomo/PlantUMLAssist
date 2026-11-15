@@ -6184,8 +6184,6 @@ function setupTabs() {
   var draftNames = [];
   // 「揃っているべき一式」として登録した図名と、
   // 今の一覧との突合結果。手順 1 の「14 枚あるか」を目で数えずに済ませる。
-  var targetNames = [];
-  var targetScan = null;
   // 棚卸しで見ている部品。null は「まだ選んでいない」で、
   // このときだけ今開いている図の部品を自動で選ぶ。'' は「選択を外した」であり、
   // 自動選択で埋め直さない (外したのに別の部品が出ると、見ている棚卸しを取り違える)。
@@ -6781,12 +6779,6 @@ function setupTabs() {
       draftNames = DM ? DM.keepExisting(DM.load(store, dir), entries) : [];
       if (DM) DM.save(store, dir, draftNames);
 
-      // 対象 set は「今そこにあるもの」ではなく利用者が決めた期待値なので、
-      // 消えた図の名前を落とさない (落とすと「足りない」が言えなくなる)。
-      var TS = window.MA.targetSet;
-      targetNames = TS ? TS.load(store, dir) : [];
-      targetScan = TS ? TS.reconcile(targetNames, entries) : null;
-
       if (!RW) {
         var plain = DM ? DM.split(entries, draftNames) : { items: entries, drafts: [] };
         setFolderNames(plain);
@@ -6794,7 +6786,6 @@ function setupTabs() {
         appendRecentSection(panel, entries);
         panel.appendChild(folderFilterBar());
         panel.appendChild(folderPickBar());
-        appendTargetSection(panel, dir);
         appendRoleSection(panel, dir);
         appendSvgSection(panel, dir);
         appendWriteSection(panel, dir);
@@ -6848,7 +6839,6 @@ function setupTabs() {
       appendRecentSection(panel, entries);
       panel.appendChild(folderFilterBar());
       panel.appendChild(folderPickBar());
-      appendTargetSection(panel, dir);
       appendRoleSection(panel, dir);
       appendSvgSection(panel, dir);
       appendWriteSection(panel, dir);
@@ -6933,7 +6923,7 @@ function setupTabs() {
   // 一時控えは成果物の下にまとめ、既定では畳む。畳んだ枚数は必ず言葉で出す
   // (一覧に出ていないことを「保存できていない」と読み違えないため)。
   // FILES ツリーの「保存先」節 (幅 208px) では、ファイルの行を入口
-  // (ファイルを開く・保存先タブ・絞り込み) のすぐ下へ上げる。棚 (選ぶバー・対象 set・SVG の鮮度…) はその下。
+  // (ファイルを開く・保存先タブ・絞り込み) のすぐ下へ上げる。棚 (選ぶバー・SVG の鮮度…) はその下。
   // 行は約 35 個の棚の後ろに積まれ、節を開いた位置から約 2,300px 下にあった。要素・id は動かすだけで作り直さない。
   function raiseRowsInTree() {
     if (!panel || !panel.closest || !panel.closest('#files-panel')) return;
@@ -8160,7 +8150,6 @@ function setupTabs() {
     if (svgMtimes[name] && svgContent[name] !== 'match') {
       row.appendChild(folderSvgVisualButton(name));
     }
-    if (window.MA.targetSet) row.appendChild(folderTargetButton(name));
     row.appendChild(folderDraftButton(name));
     // 同じ図種の枠に版が並ぶようになったので、
     // 版は行の上で 1 文字で分かるようにする (名前の末尾を読み比べない)。
@@ -8577,76 +8566,6 @@ function setupTabs() {
       if (!FS) return;
       folderPicked = FS.selectAll(changedNames());
       syncFolderPickUi();
-    });
-    return b;
-  }
-
-  // 一覧を開いた瞬間に「対象 14 枚のうち何枚あるか /
-  // どれが足りないか」を見出しで言う。未登録のときも黙らず、登録の入口を出す
-  // (「まだ数えていない」と「揃っている」を取り違えないため)。
-  function appendTargetSection(host, dir) {
-    var TS = window.MA.targetSet;
-    if (!TS) return;
-    var rec = targetScan || TS.reconcile(targetNames, []);
-    var line = document.createElement('div');
-    line.className = 'folder-target-summary ' + TS.summaryClass(rec);
-    line.id = 'folder-target-summary';
-    line.setAttribute('data-target-expected', String(rec.expected));
-    line.setAttribute('data-target-present', String(rec.present));
-    line.textContent = TS.summary(rec);
-    host.appendChild(line);
-
-    var bar = document.createElement('div');
-    bar.className = 'folder-target-bar';
-    var set = document.createElement('button');
-    set.type = 'button';
-    set.className = 'folder-target-set';
-    set.id = 'folder-target-set';
-    set.textContent = TS.buttonLabel(rec);
-    set.title = TS.buttonTitle(rec);
-    set.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      // 一時控えは成果物ではないので対象 set に入れない (畳んだ控えが
-      // 期待枚数を押し上げると、翌日の過不足が読めなくなる)。
-      var DM = window.MA.draftMark;
-      var pick = folderNames.filter(function(n) { return !(DM && DM.has(draftNames, n)); });
-      TS.save(_reviewStore(), dir, pick);
-      renderFolderPanel();
-    });
-    bar.appendChild(set);
-    if (rec.configured) {
-      var off = document.createElement('button');
-      off.type = 'button';
-      off.className = 'folder-target-clear';
-      off.id = 'folder-target-clear';
-      off.textContent = TS.clearLabel();
-      off.title = 'このフォルダの対象 set を外す。見出しの過不足は出なくなる';
-      off.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        TS.clear(_reviewStore(), dir);
-        renderFolderPanel();
-      });
-      bar.appendChild(off);
-    }
-    host.appendChild(bar);
-  }
-
-  // 行ごとの「対象 / 対象にする」。取り直しをせずに 1 枚だけ足す / 外せる。
-  function folderTargetButton(name) {
-    var TS = window.MA.targetSet;
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-target';
-    b.setAttribute('data-target-name', name);
-    var inSet = TS.has(targetNames, name);
-    if (inSet) b.classList.add('folder-target-on');
-    b.textContent = TS.rowLabel(inSet);
-    b.title = TS.rowTitle(inSet);
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      targetNames = TS.toggle(targetNames, name);
-      TS.save(_reviewStore(), _wsFileDir(), targetNames);
-      renderFolderPanel();
     });
     return b;
   }
