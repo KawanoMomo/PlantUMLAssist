@@ -90,6 +90,7 @@ const sourceFiles = [
   'src/core/text-updater.js',
   'src/core/parser-utils.js',
   'src/core/history.js',
+  'src/core/undo-route.js',
   'src/core/selection.js',
   'src/core/connection-mode.js',
   'src/core/overlay-builder.js',

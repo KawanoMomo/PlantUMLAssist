@@ -14,6 +14,8 @@ window.MA.history = (function() {
     onUpdate: function() {},
     getKey: function() { return ''; },
     onRestore: function() {},
+    // 操作を 1 つ積んだとき (Ctrl+Z の行き先の判定が「直前の操作がどこから来たか」を知るため)。
+    onPush: function() {},
   };
 
   function init(opts) {
@@ -22,6 +24,7 @@ window.MA.history = (function() {
     state.onUpdate = opts.onUpdate || function() {};
     state.getKey = typeof opts.getKey === 'function' ? opts.getKey : function() { return ''; };
     state.onRestore = typeof opts.onRestore === 'function' ? opts.onRestore : function() {};
+    state.onPush = typeof opts.onPush === 'function' ? opts.onPush : function() {};
   }
 
   function _key() {
@@ -45,6 +48,7 @@ window.MA.history = (function() {
       if (s.undo.length > MAX_HISTORY) s.undo.shift();
     }
     s.future = [];
+    try { state.onPush(); } catch (e) { /* 判定の控えが取れなくても積むことは止めない */ }
     state.onUpdate();
   }
 
