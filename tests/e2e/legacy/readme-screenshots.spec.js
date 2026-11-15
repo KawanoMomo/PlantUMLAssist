@@ -1,11 +1,13 @@
 // @ts-check
 // Generates screenshots for README.md feature documentation.
-// Run: npx playwright test tests/e2e/readme-screenshots.spec.js --workers=1
+// Run: npx playwright test tests/e2e/legacy/readme-screenshots.spec.js --workers=1
+// The shots go to test-results/readme-screenshots so a test run never rewrites the tracked
+// docs/images/*.png. To refresh the README images, copy them from there by hand.
 const { test } = require('@playwright/test');
 const { gotoApp, switchTypeWithSample } = require('../helpers');
 const path = require('path');
 
-const OUT_DIR = path.join(__dirname, '..', '..', '..', 'docs', 'images');
+const OUT_DIR = path.join(__dirname, '..', '..', '..', 'test-results', 'readme-screenshots');
 
 test.describe('README screenshots', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
