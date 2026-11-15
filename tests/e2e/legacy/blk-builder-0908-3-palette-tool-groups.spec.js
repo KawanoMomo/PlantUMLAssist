@@ -57,11 +57,4 @@ test.describe('BLK-builder-0908-3 パレットのツール 6 分類', () => {
     await expect(page.locator('#cp-list .cp-item', { hasText: '突合ボード (表記揺れ' })).toHaveCount(1);
   });
 
-  test('選ぶとその道具が開く (畳んだ後も経路が残る)', async ({ page }) => {
-    await gotoApp(page);
-    await page.keyboard.press('Control+k');
-    await page.locator('#cp-input').fill('変更サマリ');
-    await page.locator('#cp-list .cp-item').first().click();
-    await expect(page.locator('#cb-modal')).toBeVisible();
-  });
 });

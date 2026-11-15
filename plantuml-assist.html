@@ -3778,7 +3778,7 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
   color: var(--text-primary);
 }
 .board-head > * { flex: none; }   /* 幅が足りなくても縮めず、次の行に送る */
-#cb-summary, #ri-summary, #dg-summary, #vault-summary, #ct-summary { color: var(--accent); }
+#ri-summary, #dg-summary, #ct-summary { color: var(--accent); }
 /* 変更チケット。
    残りが一目で分かることだけが要件なので、済んだ行は沈めて未チェックを前に出す。 */
 #ct-body { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
@@ -3806,22 +3806,7 @@ table.ct-table button.ct-open {
   border-radius: 3px; font-size: 10px; padding: 1px 8px; cursor: pointer; white-space: nowrap;
 }
 table.ct-table button.ct-open:hover { border-color: var(--accent); }
-/* 提出物庫 */
-table.vault-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-table.vault-table th {
-  text-align: left; padding: 3px 8px; color: var(--text-secondary);
-  font-weight: normal; border-bottom: 1px solid var(--border);
-}
-table.vault-table td { padding: 3px 8px; vertical-align: top; }
-table.vault-table td.vault-at { font-family: var(--font-mono); white-space: nowrap; }
-table.vault-table td.vault-back { white-space: nowrap; color: var(--text-secondary); }
-table.vault-table tr.vault-row[data-back="0"] td.vault-back { color: var(--accent); }
-table.vault-table td.vault-title { word-break: break-all; }
-table.vault-table button.vault-open {
-  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
-  border-radius: 3px; font-size: 10px; padding: 1px 8px; cursor: pointer; white-space: nowrap;
-}
-table.vault-table button.vault-open:hover { border-color: var(--accent); }
+/* 保存先の一覧の「変更チケット」の帯 */
 .folder-vault-bar { display: flex; align-items: center; gap: 8px; padding: 4px 10px; font-size: 11px; }
 .folder-vault-bar .folder-vault-open {
   border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
@@ -7503,13 +7488,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              旧「全図」は今開いているタブだけが対象で、
              保存フォルダに 25 枚あってもタブが 1 枚なら 1 枚しか入らない。資料に入れる
              図の組に名前を付けて登録し、名前を選ぶだけで常にその枚数を出す -->
-        <!-- 「zip にして渡す」入口は Export ▾ の中の
-             この「渡す」1 か所に集める。タブ列には置かない (実体のボタンは
-             #toolbar-actions に残すので Ctrl+K からは今まで通りの名前で引ける) -->
+        <!-- 「zip にして渡す」入口は Export ▾ の中のこの「渡す」1 か所 (資料セット)。タブ列には置かない -->
         <div class="exp-group-title">渡す</div>
         <button id="exp-docset" title="登録した資料セット（名前を付けた図の組）を選ぶと、タブを開き直さずに保存フォルダからその枚数ぶんを zip にする">資料セット（SVG / PNG・1 枚 / 部品 / 組）…</button>
-        <button id="exp-delivery" title="表紙 (図一覧・版数・提出前チェック結果)・前回提出からの差分・全図 SVG を 1 つの納品 zip にまとめる">納品パッケージ（zip）…</button>
-        <button id="exp-handoff" title="系統チェック・名前突合・変更サマリ・SVG 一式を 1 つのパッケージ (zip) に書き出す">引き継ぎ（zip）…</button>
         <div class="exp-group-title">その他</div>
         <!-- 設計書に貼る資料は 1 部品の複数図種で 1 組。
              どの図種の資料用がまだ無いか・元の図が資料用より新しくないかを一覧で見せ、
@@ -7544,21 +7525,16 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <button class="tb-btn" id="btn-zoom-in"  title="拡大">＋</button>
     <button class="tb-btn" id="btn-zoom-fit" title="幅に合わせる">Fit</button>
     <button class="tb-btn" id="btn-render" title="再レンダリング">⟳ Render</button>
-    <!-- モード切替の実体。1a の上部バーには
+    <!-- モード切替の実体 (#render-mode)。1a の上部バーには
          出さない。選ぶ入口は設定の「レンダリング」タブ・Ctrl+K・状態表示のクリック。
          保存や描画の経路はこの select を唯一の窓口にしたままなので、値と change は
          これまでどおり効く。 -->
-    <!-- 「zip にして渡す」の実体。入口は Export ▾ の「渡す」
-         (と Ctrl+K)。画面には出さないが DOM には残すので、処理も件数表示もそのまま働く -->
-    <button class="tab-tool" id="btn-tab-handoff" title="系統チェック・名前突合・変更サマリ・SVG 一式を 1 つのパッケージ (zip) に書き出す">引き継ぎ</button>
-    <button class="tab-tool" id="btn-tab-delivery" title="表紙 (図一覧・版数・提出前チェック結果)・前回提出からの差分・全図 SVG を 1 つの納品 zip にまとめる">納品パッケージ</button>
     <!-- 「資料にする」出口は 📦 資料セット 1 つに畳んだ。
          範囲 (1 枚 / 部品 / 名前を付けた組 / 資料一式) と形式は資料セット画面で選ぶ。
          実体のボタンは画面から外してここに残すので、処理も件数表示も Ctrl+K も今までどおり働く -->
     <button id="exp-svg-pick" title="全図・変更図のみ・要修正のみで絞り込んで、選んだ図だけを zip に詰める">図を選んでSVGで保存（zip）…</button>
-    <button id="exp-svg-fix" title="▤ 変更サマリで [要修正] の印が付いた図だけを zip に詰める">要修正のみをSVGで保存（zip）</button>
     <button id="exp-png-pack" title="保存フォルダから同じ部品の図を全図種まとめ、図番号を振った PNG セット（zip）にして書き出す">部品の図をまとめて資料化（PNG）…</button>
-    <button id="exp-material" title="部品と図種を選ぶと、その図種に決まっている形式で書き出し、題名に（資料用）を付けて保存フォルダと提出物庫にも入れる">1 枚を資料化（形式は図種で自動）…</button>
+    <button id="exp-material" title="部品と図種を選ぶと、その図種に決まっている形式で書き出し、題名に（資料用）を付けて保存フォルダにも入れる">1 枚を資料化（形式は図種で自動）…</button>
     <button id="exp-svg-all" title="開いているタブの図を全部 SVG にして 1 つの zip にする">開いている図すべてをSVGで保存（zip）</button>
     <button id="exp-material-board" title="部品の図種を全部並べ、資料用が無い図種・元が新しい図種を色分けで見せて、選んだ図種をまとめて資料化する">部品の資料一式を見る／まとめて資料化…</button>
     <select id="render-mode" title="レンダリングモード">
@@ -7608,10 +7584,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-pattern" title="レビュー指摘を観点として開いている図全部に当て、同じ抜けがある図だけを一覧する">◎ 観点一括</button>
         <button class="tab-tool" id="btn-tab-apply" title="指摘に並んだ複数のクラスへ同じメソッド・属性を 1 回で追加する">⊞ 一括適用</button>
         <!-- 同じ系統の複数枚で動作名が揃っているかを見る -->
-        <!-- 顧客に出す前に、全図の title / note / 部品名を横断で見る -->
-        <button class="tab-tool" id="btn-tab-submit" title="顧客提出前に、全図のタイトル・注釈・部品名を横断で見て社内略語を洗い出し、正式名称の対応表を確定して全図に当てる">提出前チェック</button>
-        <!-- 引き継ぎチェックリストの入口。ツール ▾ →「確かめる」から開く -->
-        <button class="tab-tool" id="btn-tab-handover" title="渡す図の「置換済み / note 最新 / SVG 最新 / 指摘と符合する欠落」を 1 画面の表で読み、渡す前に見る図だけを残す">引き継ぎチェック</button>
         <button class="tab-tool" id="btn-tab-family" title="同じ系統の図を並べて、片方にしか無いメッセージ名・遷移名を探す">⇉ 系統チェック</button>
         <button class="tab-tool" id="btn-tab-drivermap" title="どの図がどの図の相手かを系統として宣言し、1 プロジェクトとして持つ。宣言した対応が崩れたら赤くなる">系統マップ −</button>
         <!-- 状態遷移がどのシーケンスにも現れない「トレース漏れ」を出す -->
@@ -7635,7 +7607,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-pins" title="この図に付いたレビュー指摘の一覧。図の上の印をクリックしても開く">指摘 −</button>
         <!-- 図をまたいで未対応の指摘を集める受信箱 -->
         <button class="tab-tool" id="btn-tab-inbox" title="保存フォルダの図をまたいで、未対応の指摘を「どの図に何件」で出す。監査が出した指摘も手で書いた指摘も同じ札で並び、出典で絞り込める。行を押すとその図の該当行へ飛ぶ">指摘箱 −</button>
-        <button class="tab-tool" id="btn-tab-board" title="変わった図の変更前 DSL と変更後 DSL を全部まとめて 1 画面に並べる (レビュー会議用)">▤ 変更サマリ</button>
         <button class="tab-tool" id="btn-tab-cross" title="名前の不一致・未使用 participant・粒度のばらつき・SVG 実体不一致・手動指摘を、保存フォルダ 1 つ分の 1 画面にまとめて出す。行を押すとその図へ飛ぶ">▦ 突合ボード</button>
         <!-- 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
         <button class="tab-tool" id="btn-tab-review" title="型の基準にした図と突き合わせて、この図のずれと図種特有の間違いを出す">レビュー −</button>
@@ -7648,12 +7619,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </div>
       <!-- ツールを 6 分類で縦に並べるパネル -->
       <div id="tool-menu" role="menu" aria-label="ツール" hidden></div>
-      <!-- この図に残された申し送り (なぜ直したか) -->
-      <div id="hn-banner" style="display:none;">
-        <span id="hn-banner-text"></span>
-        <button type="button" id="hn-banner-edit" title="この図の申し送りを書き直す">書き直す</button>
-        <button type="button" id="hn-banner-close" title="閉じる (申し送りは消えない)">×</button>
-      </div>
       <div id="diff-panel"></div>
       <div id="review-panel"></div>
       <div id="pin-panel"></div>
@@ -8231,18 +8196,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <div id="seq-sc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="seq-sc-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:640px;max-width:880px;max-height:80vh;overflow-y:auto;"></div>
 </div>
-<div id="sc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="sc-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:680px;max-width:960px;max-height:82vh;overflow-y:auto;"></div>
-</div>
 <div id="ev-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="ev-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:1000px;max-height:82vh;overflow-y:auto;"></div>
 </div>
 
 <div id="ck-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="ck-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:680px;max-width:960px;max-height:82vh;overflow-y:auto;"></div>
-</div>
-<div id="dp-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="dp-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:620px;max-width:860px;max-height:84vh;overflow-y:auto;"></div>
 </div>
 <div id="dm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="dm-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:660px;max-width:940px;max-height:80vh;overflow-y:auto;"></div>
@@ -8528,15 +8487,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/doc-set.js"></script>
 <script src="src/core/doc-layout.js"></script>
 <script src="src/core/doc-proof.js"></script>
-<script src="src/core/vault.js"></script>
 <script src="src/core/export-target.js"></script>
-<script src="src/core/handoff-summary.js"></script>
-<script src="src/core/handoff-route.js"></script>
-<script src="src/core/handoff-package.js"></script>
-<script src="src/core/export-log.js"></script>
-<script src="src/core/delivery-package.js"></script>
-<script src="src/core/delivery-review.js"></script>
-<script src="src/core/delivery-history.js"></script>
 <script src="src/core/app-bridge.js"></script>
 <script src="src/core/file-open.js"></script>
 <script src="src/core/save-prefs.js"></script>
@@ -8621,16 +8572,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/cross-ref-diff.js"></script>
 <script src="src/core/count-compare.js"></script>
 <script src="src/core/change-board.js"></script>
-<script src="src/core/change-baseline.js"></script>
 <script src="src/core/show-before-after.js"></script>
 <script src="src/core/export-select.js"></script>
-<script src="src/core/handover-notes.js"></script>
-<script src="src/core/handover-checklist.js"></script>
-<script src="src/core/handover-board.js"></script>
 <script src="src/core/call-graph.js"></script>
-<script src="src/core/review-verdicts.js"></script>
-<script src="src/core/meeting-notes.js"></script>
-<script src="src/core/meeting-set.js"></script>
 <script src="src/core/audit-timeline.js"></script>
 <script src="src/core/audit-board.js"></script>
 <script src="src/core/status-dashboard.js"></script>
@@ -8682,7 +8626,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/line-peek.js"></script>
 <script src="src/core/lineage-mark.js"></script>
 <script src="src/core/label-colors.js"></script>
-<script src="src/core/submit-check.js"></script>
 <script src="src/core/glossary.js"></script>
 <script src="src/core/sequence-autonumber.js"></script>
 <script src="src/core/class-scaffold.js"></script>
@@ -8741,55 +8684,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <!-- 変更サマリボード。変わった図を全件、変更前後で並べる -->
 <div id="rd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="rd-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:1080px;max-height:88vh;overflow-y:auto;"></div>
-</div>
-<div id="cb-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div class="board-modal">
-    <div class="board-head">
-      <strong>変更サマリボード</strong>
-      <span id="cb-summary"></span>
-      <span class="board-tools">
-        <!-- 何と比べるかをこの画面の中で選ぶ (今日 0 時 / 前回の会議 / 前回提出) -->
-        <label title="変更前をいつの時点にするか。前回の会議 = 今日より前に最後に会議セットで並べた時点、前回提出 = 最後に納品パッケージを作った時点">変更前 = <select id="cb-base"></select></label>
-        <!-- 顧客の前では DSL を見せられない。
-             ここを押すと、並んでいる図が描いた絵の変更前後に切り替わる。 -->
-        <button type="button" id="cb-svg" aria-pressed="false" title="顧客に見せる画面に切り替える (DSL を出さず、描いた図の変更前後を並べる)">SVGで見る</button>
-        <span id="cb-svg-state"></span>
-        <label><input type="checkbox" id="cb-full"> 全文</label>
-        <label><input type="checkbox" id="cb-same"> 変更なしも出す</label>
-        <!-- 14 枚のドメイン図に限らず、保存フォルダで更新されたファイルを全部拾う -->
-        <label title="今日この保存フォルダで更新されたファイルも並べる (いつもの 14 枚に限らない)"><input type="checkbox" id="cb-scan-folder" checked> 今日のフォルダ更新も拾う</label>
-        <label title="会議で [要修正] を付けた行だけを残す (新人に渡す分)"><input type="checkbox" id="cb-fixonly"> 要修正のみ</label>
-        <span id="cb-filter-state"></span>
-        <label title="指摘と変更の対応表で、まだ図を結んでいない指摘 (会議で「対応なし」と言う分) だけを出す"><input type="checkbox" id="cb-map-pending"> 未対応の指摘のみ</label>
-        <button type="button" id="cb-map-export" title="指摘 1 件ごとに「どの図の変更で対応したか / 対応なし」を並べた対応表を Markdown で書き出す (会議資料)">対応表を書き出す</button>
-        <button type="button" id="cb-minutes" title="開いた図ごとの要修正件数・印の付いた行・申し送りを 1 枚の Markdown にまとめて書き出す (会議の議事録)">会議メモを書き出す</button>
-        <button type="button" id="cb-minutes-copy" title="同じ内容をクリップボードにコピーする">コピー</button>
-        <span id="cb-minutes-state"></span>
-        <button type="button" id="cb-close">閉じる</button>
-      </span>
-    </div>
-    <!-- 申し送りは差分がある間しか書けなかった。
-         ここで図を選んで直接書けば、直し終えて基準に取り込んだ後でも残せる。
-         引き継ぎ後は、新人が返した JSON を読み込んで未読・要フォローを見る。 -->
-    <div class="board-head" id="cb-handover-bar">
-      <!-- 会議で見せる図はその場で 3〜5 枚選ぶ。
-           選んだ図だけを選んだ順に並べ、各図は 変更前 / 変更後 のタブで切り替える。 -->
-      <button type="button" id="cb-meeting" aria-pressed="false" title="選んだ図だけを選んだ順に並べる (各図の見出しの [会議に入れる] で 3〜5 枚選ぶ)">会議セット</button>
-      <select id="cb-meeting-doc" title="会議で見せる図を名前で選ぶ (変わっていない図も選べる)"></select>
-      <button type="button" id="cb-meeting-add" title="選んだ図を会議セットに足す">＋追加</button>
-      <button type="button" id="cb-meeting-clear" title="会議セットを空にする">空に</button>
-      <span id="cb-meeting-state" role="status"></span>
-      <label for="cb-note-doc">申し送りを足す</label>
-      <select id="cb-note-doc" title="申し送りを添える図 (差分が無い図にも書ける)"></select>
-      <input type="text" id="cb-note-text" placeholder="なぜ直したか" maxlength="200">
-      <button type="button" id="cb-note-add" title="選んだ図に申し送りを足す (差分の有無によらない)">追加</button>
-      <span id="cb-note-add-state"></span>
-      <label for="cb-reply-file" title="新人が引き継ぎパッケージで返した handover-reply.json を読み込む">返信を読み込む</label>
-      <input type="file" id="cb-reply-file" accept=".json,application/json">
-      <span id="cb-checklist-state"></span>
-    </div>
-    <div id="cb-body" class="diff-board"></div>
-  </div>
 </div>
 <!-- ⇄ 一括置換の「▤ 影響を見る」。適用する前に、
      ヒットした図の該当行が置換でどう変わるかを変更サマリボードと同じ見た目で並べる。
@@ -8924,25 +8818,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div id="ct-body"></div>
   </div>
 </div>
-<!-- 提出物庫。画像を書き出した瞬間の DSL を刻印で積んだ庫。
-     作業ファイルが同じ名前で上書きされても、ここに積んだ提出物は消えない。
-     手順 1 は「部品 × 図種 × 前回分を選んで開く」だけで済む。 -->
-<div id="vault-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div class="board-modal">
-    <div class="board-head">
-      <strong>提出物庫</strong>
-      <span id="vault-summary" role="status"></span>
-      <span class="board-tools">
-        <label for="vault-subject">部品名</label>
-        <select id="vault-subject"></select>
-        <label for="vault-kind">図種</label>
-        <select id="vault-kind"></select>
-        <button type="button" id="vault-close">閉じる</button>
-      </span>
-    </div>
-    <div id="vault-body" class="diff-board"></div>
-  </div>
-</div>
 <!-- 提出用 zip に詰める図を選ぶ。
      絞り込みは変更サマリボードと同じ「変更図のみ / 要修正のみ」 -->
 <!-- 資料セット。書き出す対象を「今開いているタブ」から
@@ -8971,36 +8846,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="cg-empty" style="display:none;"></div>
       </div>
     </div>
-  </div>
-</div>
-<div id="hb-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="hb-modal-content">
-    <div id="hb-head">
-      <strong>引き継ぎチェックリスト</strong>
-      <!-- 渡す相手のフォルダを選ぶと、相手の同名図との食い違いが 5 列目に出る。
-           保存先は動かさない。候補は FILES の「読むだけ」と同じ隣のフォルダ。 -->
-      <label id="hb-peer-wrap" title="渡す相手のフォルダを選ぶと、相手の同名図との食い違いを数えます (保存先は動きません)">渡す相手 =
-        <select id="hb-peer" aria-label="渡す相手のフォルダ"><option value="">選ばない</option></select></label>
-      <span id="hb-sum" role="status"></span>
-      <span id="hb-tools">
-        <button type="button" id="hb-reload" title="保存フォルダ・指摘.md を読み直して数え直す">数え直す</button>
-        <button type="button" id="hb-copy" title="この表をタブ区切りで写す（run ログ・引き継ぎメールへ）">表を写す</button>
-        <button type="button" id="hb-close">閉じる</button>
-      </span>
-    </div>
-    <!-- 引き継ぎ zip の対象 (的・未確定) はこの窓の見出しの下、書き出しは下端。
-         行の頭の ✔ / − が入る / 入らない。Export ▾「引き継ぎ」も同じ窓を開く。 -->
-    <div id="hb-et"></div>
-    <div id="hb-body">
-      <table id="hb-table">
-        <thead>
-          <tr><th title="引き継ぎ zip に入る (✔) / 入らない (−)。押して切り替える">入る</th><th>図</th><th>置換済み</th><th>note最新</th><th>SVG最新</th><th>指摘と符合する欠落</th><th id="hb-peer-th" hidden>相手の同名図</th><th></th></tr>
-        </thead>
-        <tbody id="hb-rows"></tbody>
-      </table>
-      <div id="hb-empty" style="display:none;"></div>
-    </div>
-    <div id="hb-foot"></div>
   </div>
 </div>
 <div id="docset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
@@ -9036,8 +8881,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span id="docset-pick-count" role="status"></span>
       <button type="button" id="docset-create" title="保存フォルダにある図（保存先の一覧で印を付けていればその図だけ）を、この名前の資料セットとして登録する">今の対象を登録する</button>
     </div>
-    <!-- 未確認のまま渡そうとしている図を、押す前に名指しする -->
-    <div id="docset-handover" data-blocked="0" role="status"></div>
     <div id="docset-rows"></div>
     <!-- 貼る前に資料の体裁 (順序・見出し・1 行説明) を
          組んで、1 枚物のプレビューで確かめる。zip を開いてから並べ直さずに済ませる -->
@@ -9087,13 +8930,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <span id="expick-tools">
         <button type="button" class="expick-mode" id="expick-mode-all" data-mode="all">全部</button>
         <button type="button" class="expick-mode" id="expick-mode-changed" data-mode="changed" title="前回提出時の基準と中身が違う図と、まだ提出していない図">変更図のみ</button>
-        <button type="button" class="expick-mode" id="expick-mode-since" data-mode="since" title="前回この zip を書き出した時点と中身が違う図と、まだ出していない図">前回書き出しから</button>
-        <button type="button" class="expick-mode" id="expick-mode-fix" data-mode="fix" title="変更サマリボードで [要修正] の印が付いた行を持つ図">要修正のみ</button>
         <button type="button" id="expick-save">選んだ図を zip で保存</button>
         <button type="button" id="expick-close">閉じる</button>
       </span>
     </div>
-    <div id="expick-since" role="status"></div>
     <!-- 候補は開いている図 + 保存先の図。名前で絞り、印を付けた図だけを書き出す -->
     <div id="expick-find"><input type="search" id="expick-filter" placeholder="名前で絞り込む（保存先の図も含む）" aria-label="図の名前で絞り込む" autocomplete="off" /></div>
     <div id="expick-body"></div>

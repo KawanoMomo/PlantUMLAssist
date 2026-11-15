@@ -135,12 +135,13 @@ describe('資料化 — 実行前に全部が決まる', function() {
     expect(ME.planText(null)).toContain('部品と図種');
   });
 
-  test('済んだあとに、保存フォルダと庫に入ったことを言う', function() {
+  test('済んだあとに、保存フォルダに入ったことを言う', function() {
     var p = ME.plan(FILES, 'GPIOドライバ', '状態遷移図');
     var m = ME.doneMessage(p);
     expect(m).toContain('GPIOドライバ状態遷移(資料用)');
     expect(m).toContain('SVG');
-    expect(m).toContain('提出物庫');
+    expect(m).toContain('保存フォルダに入れました');
+    expect(m).not.toContain('提出物庫');
     expect(ME.failMessage(p, new Error('描画に失敗'))).toContain('描画に失敗');
   });
 });

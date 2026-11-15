@@ -172,7 +172,7 @@ window.MA.materialMatrix = (function() {
     if (!rs.length) return _s(component) + ' に資料化の要る図種はありません';
     if (!ng.length) {
       return '' + _s(component) + ' の ' + ok
-        + ' 図種をまとめて資料化しました（保存フォルダと提出物庫にも入れました）';
+        + ' 図種をまとめて資料化しました（保存フォルダにも入れました）';
     }
     return '' + _s(component) + ' の ' + ok + ' 図種を資料化しましたが、'
       + ng.length + ' 図種が失敗しました：'

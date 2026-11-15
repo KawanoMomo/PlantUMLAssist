@@ -753,12 +753,6 @@ API_INDEX = {
          'request': '?dir='},
         {'endpoint': 'POST /cohort-ack', 'summary': '確認済みの組の台帳を置き換える',
          'request': "{dir, entries: [{key, domain, kind, left, right, fingerprint, note, by, at}]}"},
-        {'endpoint': 'GET /meeting-log', 'summary': '会議セットで並べた日時の控え (▤ 変更サマリボードの「変更前 = 前回の会議」)',
-         'request': '?dir='},
-        {'endpoint': 'POST /meeting-log', 'summary': '会議セットで並べた日時を 1 つ足す',
-         'request': '{dir, at}'},
-        {'endpoint': 'GET /vault', 'summary': '保管庫の中身', 'request': '?dir='},
-        {'endpoint': 'POST /vault', 'summary': '保管庫へ入れる'},
         {'endpoint': 'GET /tickets', 'summary': '変更チケットの一覧', 'request': '?dir='},
         {'endpoint': 'POST /tickets', 'summary': '変更チケットを 1 枚書く', 'request': "{dir, ticket}"},
         {'endpoint': 'DELETE /tickets', 'summary': '変更チケットを 1 枚消す', 'request': '?dir=&id='},
@@ -777,7 +771,6 @@ API_INDEX = {
          'request': "{dir, roles}"},
         {'endpoint': 'POST /export-zip', 'summary': '書き出した zip を保存フォルダに置き、書けたバイト数を返す',
          'request': "{dir, name, base64}"},
-        {'endpoint': 'POST /export-log', 'summary': '書き出しの控えを 1 件足す'},
         {'endpoint': 'POST /file-op', 'summary': 'FILES ツリーの右クリック: 図の名前変更 / 複製 / 別フォルダへ移動 / 場所を開く'},
         {'endpoint': 'GET /prefs', 'summary': 'この機械に保存した設定'},
         {'endpoint': 'GET /data-root', 'summary': '設定と既定の保存先の置き場所 {dataRoot, sandbox} (sandbox は PUA_DATA_ROOT で起こしたテスト用)'},
@@ -1427,9 +1420,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/version-diff':
             with _fs_lock:
                 return self._handle_version_diff()
-        if self.path.split('?')[0] == '/vault':
-            with _fs_lock:
-                return self._handle_vault_get()
         if self.path.split('?')[0] == '/tickets':
             with _fs_lock:
                 return self._handle_tickets_get()
@@ -1451,9 +1441,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/cohort-ack':
             with _fs_lock:
                 return self._handle_cohort_ack_get()
-        if self.path.split('?')[0] == '/meeting-log':
-            with _fs_lock:
-                return self._handle_meeting_log_get()
         if self.path.split('?')[0] == '/peek-dirs':
             with _fs_lock:
                 return self._handle_peek_dirs()
@@ -1515,9 +1502,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/autosave-image':
             with _fs_lock:
                 return self._handle_autosave_image_post()
-        if self.path == '/vault':
-            with _fs_lock:
-                return self._handle_vault_post()
         if self.path == '/tickets':
             with _fs_lock:
                 return self._handle_tickets_post()
@@ -1536,18 +1520,12 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/cohort-ack':
             with _fs_lock:
                 return self._handle_cohort_ack_post()
-        if self.path == '/meeting-log':
-            with _fs_lock:
-                return self._handle_meeting_log_post()
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
         if self.path == '/export-zip':
             with _fs_lock:
                 return self._handle_export_zip_post()
-        if self.path == '/export-log':
-            with _fs_lock:
-                return self._handle_export_log_post()
         if self.path == '/verify-svg':
             with _fs_lock:
                 return self._handle_verify_svg_post()
@@ -2063,25 +2041,6 @@ class Handler(BaseHTTPRequestHandler):
                 json.dumps({'kinds': kinds}, ensure_ascii=False), encoding='utf-8')
         except OSError:
             pass  # 控えは best-effort。書けなくても保存そのものは通す
-
-    def _export_log_path(self, save_dir):
-        """BLK-primary-20260909-0003-wish: 「いつ・どの版で何を客先に出したか」の控え。
-
-        図の隣に置く。ブラウザの localStorage に置いていたときは、開き直す・
-        別の端末で開くたびに控えが消え、同じフォルダで何度出しても毎回
-        「初回提出」になっていた。控えはフォルダの属性なので図に従う。
-        """
-        return save_dir / '_export-log.json'
-
-    def _read_export_log(self, save_dir):
-        p = self._export_log_path(save_dir)
-        if not p.exists():
-            return None
-        try:
-            data = json.loads(p.read_text(encoding='utf-8'))
-        except (ValueError, OSError):
-            return None
-        return data if isinstance(data, dict) else None
 
     def _read_file_roles(self, save_dir):
         p = self._roles_path(save_dir)
@@ -2610,129 +2569,6 @@ class Handler(BaseHTTPRequestHandler):
             'before': before, 'after': after,
         })
 
-    # --- 提出物庫 (BLK-junior-20260908-2203-wish) -----------------------------
-    #
-    # `_versions/` はファイル名ごとの控えなので、「周を 1 つ完走して画像を出した」
-    # という区切りは残らない。名前を既定の diagram1 のまま次の周を始めれば、
-    # 完走した図は上書きの控えとして 20 版の中に紛れ、どれが提出物かは分からない。
-    # 提出物庫は「画像を書き出した瞬間の DSL」をファイル名と無関係な刻印で積む
-    # だけの、追記しかしない置き場。上書きも削除もしないので前回分は消えない。
-    VAULT_DIRNAME = '_vault'
-
-    def _vault_dir(self, save_dir):
-        return save_dir / self.VAULT_DIRNAME
-
-    def _vault_paths(self, save_dir, stamp):
-        vdir = self._vault_dir(save_dir)
-        return vdir / (stamp + '.puml'), vdir / (stamp + '.json')
-
-    def _vault_entries(self, save_dir):
-        """庫にある提出物を新しい順に。刻印が名前なので、並べ替えは名前順でよい。"""
-        out = []
-        try:
-            paths = sorted(self._vault_dir(save_dir).glob('*.json'), reverse=True)
-        except OSError:
-            return out
-        for p in paths:
-            try:
-                meta = json.loads(p.read_text(encoding='utf-8'))
-            except (ValueError, OSError):
-                continue
-            if not isinstance(meta, dict):
-                continue
-            meta['stamp'] = p.stem
-            out.append(meta)
-        return out
-
-    def _handle_vault_get(self):
-        """GET /vault?dir=[&stamp=] — 提出物の一覧、または 1 件の DSL 本文。"""
-        parsed = urllib.parse.urlparse(self.path)
-        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
-        save_dir = self._autosave_resolve_dir(params.get('dir'))
-        stamp = params.get('stamp', '')
-        if stamp:
-            if not is_safe_autosave_name(stamp):
-                self._send_json(400, {'error': 'invalid stamp'})
-                return
-            puml, _meta = self._vault_paths(save_dir, stamp)
-            if not puml.exists():
-                self.send_error(404, 'vault entry not found')
-                return
-            try:
-                content = puml.read_text(encoding='utf-8')
-            except OSError as e:
-                self._send_json(500, {'error': f'read failed: {e}'})
-                return
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/plain; charset=utf-8')
-            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
-            self.end_headers()
-            self.wfile.write(content.encode('utf-8'))
-            return
-        self._send_json(200, {'dir': str(save_dir), 'entries': self._vault_entries(save_dir)})
-
-    def _handle_vault_post(self):
-        """POST /vault {dir, dsl, name, title, subject, kind, format} — 1 件積む。
-
-        書き出しの副作用なので、失敗しても画像の書き出しは止めない (GUI 側で握る)。
-        """
-        length = int(self.headers.get('Content-Length', 0))
-        try:
-            data = json.loads(self.rfile.read(length).decode('utf-8'))
-        except ValueError:
-            self._send_json(400, {'error': 'invalid JSON'})
-            return
-        if not isinstance(data, dict):
-            self._send_json(400, {'error': 'body must be an object'})
-            return
-        dsl = data.get('dsl')
-        if not isinstance(dsl, str) or dsl.strip() == '':
-            self._send_json(400, {'error': 'dsl must be a non-empty string'})
-            return
-        save_dir = self._autosave_resolve_dir(data.get('dir'))
-        vdir = self._vault_dir(save_dir)
-        try:
-            vdir.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            self._send_json(500, {'error': f'mkdir failed: {e}'})
-            return
-        stamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
-        puml, meta_path = self._vault_paths(save_dir, stamp)
-        n = 1
-        while puml.exists():
-            puml, meta_path = self._vault_paths(save_dir, '%s.%d' % (stamp, n))
-            n += 1
-        meta = {
-            'name': str(data.get('name') or ''),
-            'title': str(data.get('title') or ''),
-            'subject': str(data.get('subject') or ''),
-            'kind': str(data.get('kind') or ''),
-            'format': str(data.get('format') or ''),
-            'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-            'lines': len(dsl.splitlines()),
-        }
-        # BLK-junior-20260928-2255: 資料化の控えには画像の実体も入れる (puml と meta だけでは
-        # 「提出物庫に入れました」の画像が庫に無い)。{stamp}.{ext} に置き、書けた大きさを返す。
-        image_ext, image_bytes = None, None
-        if data.get('image') is not None:
-            image_ext, image_bytes = self._decode_image(data.get('image'))
-            if image_ext is None:
-                self._send_json(400, {'error': image_bytes})
-                return
-            meta['image'] = puml.stem + '.' + image_ext
-        try:
-            _atomic_write_text(puml, dsl)
-            if image_ext:
-                image_path = puml.with_suffix('.' + image_ext)
-                _atomic_write_bytes(image_path, image_bytes)
-                meta['imageSize'] = image_path.stat().st_size
-            meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding='utf-8')
-        except OSError as e:
-            self._send_json(500, {'error': f'write failed: {e}'})
-            return
-        meta['stamp'] = puml.stem
-        self._send_json(200, {'dir': str(save_dir), 'entry': meta})
-
     # --- 変更チケット (BLK-primary-20260909-0603-wish) ------------------------
     #
     # 依存グラフの影響一覧はモーダルを閉じると消えるので、1 つの仕様変更が
@@ -3146,59 +2982,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json(200, {'dir': str(save_dir), 'path': str(path), 'entries': clean})
 
-    # BLK-primary-20260924-1332-wish: 会議セットで並べた日時の控え。▤ 変更サマリボードの
-    # 「変更前 = 前回の会議」はこれを読む。ブラウザを起こし直しても (localStorage が空でも)
-    # 前の会議の時点で比べられるよう、保存フォルダに置く。1 日 1 件 (その日の最後の時刻)。
-    MEETING_LOG_FILE = '_meetings.json'
-    MEETING_LOG_MAX = 64 * 1024
-    MEETING_LOG_KEEP = 30
-
-    def _meeting_log_path(self, save_dir):
-        return Path(save_dir) / self.MEETING_LOG_FILE
-
-    def _read_meeting_log(self, save_dir):
-        path = self._meeting_log_path(save_dir)
-        try:
-            if not path.exists() or path.stat().st_size > self.MEETING_LOG_MAX:
-                return []
-            data = json.loads(path.read_text(encoding='utf-8-sig'))
-        except (OSError, ValueError):
-            return []
-        items = data.get('meetings') if isinstance(data, dict) else data
-        if not isinstance(items, list):
-            return []
-        return sorted({v.strip() for v in items if isinstance(v, str) and v.strip()})
-
-    def _handle_meeting_log_get(self):
-        """GET /meeting-log?dir= — 会議セットで並べた日時の控え (古い順)."""
-        parsed = urllib.parse.urlparse(self.path)
-        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
-        save_dir = self._autosave_resolve_dir(params.get('dir'))
-        self._send_json(200, {'dir': str(save_dir), 'meetings': self._read_meeting_log(save_dir)})
-
-    def _handle_meeting_log_post(self):
-        """POST /meeting-log {dir, at} — 日時を 1 つ足す。同じ日の分はその日の最後の時刻に置き換える."""
-        data = self._read_json_object()
-        if data is None:
-            return
-        at = data.get('at')
-        if not isinstance(at, str) or not re.match(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}', at.strip()):
-            self._send_json(400, {'error': 'at must be an ISO datetime'})
-            return
-        at = at.strip()
-        save_dir = self._autosave_resolve_dir(data.get('dir'))
-        items = [v for v in self._read_meeting_log(save_dir) if v[:10] != at[:10]]
-        items.append(at)
-        items = sorted(items)[-self.MEETING_LOG_KEEP:]
-        path = self._meeting_log_path(save_dir)
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            _atomic_write_text(path, json.dumps({'meetings': items}, ensure_ascii=False, indent=2) + '\n')
-        except OSError as e:
-            self._send_json(500, {'error': f'書き込めません: {e}'})
-            return
-        self._send_json(200, {'dir': str(save_dir), 'meetings': items})
-
     def _handle_name_registry_get(self):
         """GET /name-registry?dir= — 保存フォルダの親にある正式表記の登録簿."""
         parsed = urllib.parse.urlparse(self.path)
@@ -3568,8 +3351,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, {'ok': True, 'path': str(svg_path), 'svgMtime': mtime})
 
     # BLK-junior-20260928-2255: 資料化した画像 (PNG / SVG) を保存フォルダに置く。
-    # これまで画像はブラウザのダウンロードに渡すだけで、保存フォルダには puml しか入らなかった
-    # (画面は「保存フォルダと提出物庫に入れました」と言っていた)。
+    # これまで画像はブラウザのダウンロードに渡すだけで、保存フォルダには puml しか入らなかった。
     IMAGE_EXTS = ('png', 'svg')
 
     @classmethod
@@ -3850,38 +3632,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json(200, {'ok': True, 'roles': clean})
 
-    def _handle_export_log_post(self):
-        """保存フォルダの _export-log.json を丸ごと置き換える。
-
-        中身の形 (channels / entries) は GUI の職掌なのでここでは見ない。
-        オブジェクトであること・保存フォルダが実在することだけを確かめる。
-        """
-        length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(length).decode('utf-8')
-        try:
-            data = json.loads(body)
-        except ValueError:
-            self._send_json(400, {'error': 'invalid JSON'})
-            return
-        if not isinstance(data, dict):
-            self._send_json(400, {'error': 'body must be an object'})
-            return
-        log = data.get('log')
-        if not isinstance(log, dict):
-            self._send_json(400, {'error': 'log must be an object'})
-            return
-        save_dir = self._autosave_resolve_dir(data.get('dir'))
-        if not (save_dir.exists() and save_dir.is_dir()):
-            self._send_json(404, {'error': '保存フォルダがありません'})
-            return
-        try:
-            self._export_log_path(save_dir).write_text(
-                json.dumps(log, ensure_ascii=False, indent=1), encoding='utf-8')
-        except OSError as e:
-            self._send_json(500, {'error': f'write failed: {e}'})
-            return
-        self._send_json(200, {'ok': True, 'dir': str(save_dir)})
-
     # --- autosave GET --------------------------------------------------------
 
     def _handle_autosave_get(self):
@@ -3955,11 +3705,6 @@ class Handler(BaseHTTPRequestHandler):
         # BLK-reviewer-20260908-1103-wish: 中身まで突き合わせた控えも一覧と同時に返す。
         # 別呼び出しにすると「未確認 22 枚」の一覧が一瞬出て、確かめた図まで疑わせる。
         verified = self._read_svg_verify(save_dir) if exists else {}
-        export_log = self._read_export_log(save_dir) if exists else None
-        # BLK-primary-20260916-2314-friction: 控え (_export-log.json) より前に作った納品 zip が
-        # フォルダに残っていても「まだ 1 度も提出していません」と出ていた。zip の中の svg/ から
-        # 何を出したかは読めるので、一覧と同時に返す (版の比較はできないが、対象の選び直しには足りる)。
-        delivery_zips = self._delivery_zips(save_dir) if exists else []
         # BLK-junior-20260912-2103-wish: 保存したときの図種の控え。一覧と同時に返す
         # (別呼び出しにすると、図種の印が付く前の一覧が一瞬出る)。
         saved_kinds = self._read_saved_kinds(save_dir) if exists else {}
@@ -3969,35 +3714,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
                               'dir': str(save_dir), 'exists': exists, 'roles': roles,
                               'verified': verified, 'now': now, 'gone': gone,
-                              'exportLog': export_log, 'kinds': saved_kinds,
-                              'deliveryZips': delivery_zips})
-
-    DELIVERY_ZIP_RE = re.compile(r'^delivery-(\d{8})-(\d{4})([a-z]?)\.zip$')
-
-    def _delivery_zips(self, save_dir, limit=20):
-        """保存フォルダの納品 zip (delivery-YYYYMMDD-HHMM.zip) を新しい順に返す。
-
-        各 zip の svg/{name}.svg から、その回に出した図の名前を読む。壊れた zip は飛ばす。
-        """
-        import zipfile
-        out = []
-        try:
-            paths = [p for p in save_dir.glob('delivery-*.zip') if self.DELIVERY_ZIP_RE.match(p.name)]
-        except OSError:
-            return out
-        paths.sort(key=lambda p: p.name, reverse=True)
-        for p in paths[:limit]:
-            m = self.DELIVERY_ZIP_RE.match(p.name)
-            try:
-                with zipfile.ZipFile(str(p)) as z:
-                    names = [n[4:-4] for n in z.namelist()
-                             if n.startswith('svg/') and n.endswith('.svg') and '/' not in n[4:]]
-            except (OSError, zipfile.BadZipFile, ValueError):
-                continue
-            d, t = m.group(1), m.group(2)
-            out.append({'file': p.name, 'names': names,
-                        'at': '%s-%s-%sT%s:%s' % (d[:4], d[4:6], d[6:], t[:2], t[2:])})
-        return out
+                              'kinds': saved_kinds})
 
     def _resolve_unstamped_svg_sources(self, save_dir, entries):
         """印の無い svg の持ち主を、svg に畳まれた DSL から名指しする。
@@ -4171,20 +3888,6 @@ class Handler(BaseHTTPRequestHandler):
                 vdir.rmdir()
             except OSError:
                 pass
-            # 提出物庫は「図を全部消す」では消えない。上書きから守るための庫なので、
-            # 作業ファイルを片付けたら提出物も消えるのでは守れていない。
-            # 消せるのは `?vault=1` を明示したときだけ (テストの下ごしらえ用)。
-            if params.get('vault') == '1':
-                vault = self._vault_dir(save_dir)
-                try:
-                    for p in vault.iterdir():
-                        try:
-                            p.unlink()
-                        except OSError:
-                            pass
-                    vault.rmdir()
-                except OSError:
-                    pass
             # 変更チケットも同じ理由で残す。仕様変更は図を作り直しても続いている
             # ので、作業ファイルを片付けたら進捗が消えるのでは持ち越せていない。
             if params.get('tickets') == '1':

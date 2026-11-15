@@ -23,13 +23,12 @@ describe('BLK-junior-20260928-2255 資料化の画像を保存フォルダと庫
 
   test('書けた画像の名前・形式・バイト数と、書けた所だけを言う', function() {
     expect(p.filename).toBe('DMAドライバ初期化シーケンス(資料用).png');
-    var both = ME.doneMessage(p, { imageSize: 5123, vault: true });
-    expect(both).toContain('DMAドライバ初期化シーケンス(資料用).png');
-    expect(both).toContain('5123 バイト');
-    expect(both).toContain('保存フォルダと提出物庫');
-    var folderOnly = ME.doneMessage(p, { imageSize: 5123, vault: false });
-    expect(folderOnly).toContain('保存フォルダに書き出しました');
-    expect(folderOnly).not.toContain('提出物庫');
+    // 提出物庫は TICKET-owner-20261115-1828-prune で外した。言うのは保存フォルダだけ。
+    var done = ME.doneMessage(p, { imageSize: 5123 });
+    expect(done).toContain('DMAドライバ初期化シーケンス(資料用).png');
+    expect(done).toContain('5123 バイト');
+    expect(done).toContain('保存フォルダに書き出しました');
+    expect(done).not.toContain('提出物庫');
   });
 
   test('書けなかったときは成功と言わず、どこに・なぜを言う', function() {

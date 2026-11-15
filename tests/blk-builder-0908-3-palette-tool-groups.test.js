@@ -22,8 +22,8 @@ function noop() {}
 var COMMANDS = [
   // BLK-owner-20260924-1332-prune: 🔍 名前突合の行は ▦ 突合ボードの行に畳んだので、確かめるの代表はボード。
   { id: 'tab-cross', title: '突合ボード / Cross-check board', hint: 'Tabs', keywords: ['名前突合', 'name audit'], button: 'btn-tab-cross', run: noop },
-  { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', button: 'btn-tab-board', run: noop },
-  { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', button: 'btn-tab-handoff', run: noop },
+  // 変更サマリ・引き継ぎ (渡す) は TICKET-owner-20261115-1828-prune で外した。レビューの代表は ± 差分。
+  { id: 'tab-diff', title: '変わった図の一覧 / Changed diagrams', hint: 'Tabs', button: 'btn-tab-diff', run: noop },
   { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', button: 'btn-tab-template', run: noop },
   { id: 'save', title: 'ファイルを保存 / Save', hint: 'File', run: noop },
   // タブ列に残るもの (＋ / 一覧) はツールメニューに載っていないので分類しない。
@@ -39,8 +39,7 @@ describe('道具のコマンドは 6 分類に入る', () => {
   test('分類はツールメニューと同じ key になる', () => {
     var items = itemsOf();
     expect(byId(items, 'tab-cross').group).toBe('check');
-    expect(byId(items, 'tab-board').group).toBe('review');
-    expect(byId(items, 'tab-handoff').group).toBe('give');
+    expect(byId(items, 'tab-diff').group).toBe('review');
     expect(byId(items, 'tab-template').group).toBe('make');
   });
 
@@ -52,7 +51,7 @@ describe('道具のコマンドは 6 分類に入る', () => {
 
   test('行のチップは分類名になる', () => {
     expect(byId(itemsOf(), 'tab-cross').badge).toBe('確かめる');
-    expect(byId(itemsOf(), 'tab-handoff').badge).toBe('渡す');
+    expect(byId(itemsOf(), 'tab-diff').badge).toBe('レビュー');
     expect(byId(itemsOf(), 'command:save').badge).toBe('コマンド');
   });
 
@@ -63,7 +62,6 @@ describe('道具のコマンドは 6 分類に入る', () => {
 
   test('右端には道具の短い呼び名が残る (どの道具かが消えない)', () => {
     expect(byId(itemsOf(), 'tab-template').hint).toBe('テンプレートから新しい図');
-    expect(byId(itemsOf(), 'tab-handoff').hint).toBe('引き継ぎパッケージ');
   });
 
   test('元の題でもメニューの言い換えでも引ける', () => {
@@ -81,12 +79,12 @@ describe('道具のコマンドは 6 分類に入る', () => {
 describe('見出しと Tab の絞り込み', () => {
   test('見出しの並びは 図に足す → 移動 → 選択中 → 6 分類 → コマンド', () => {
     var groups = CP.groupsOf(itemsOf());
-    expect(groups).toEqual(['make', 'check', 'review', 'give', 'command']);
+    expect(groups).toEqual(['make', 'check', 'review', 'command']);
   });
 
   test('6 分類の見出しに日本語の名前が付く', () => {
     expect(CP.groupLabel('check')).toBe('確かめる / Check');
-    expect(CP.groupLabel('give')).toBe('渡す / Deliver');
+    expect(CP.groupLabel('review')).toBe('レビュー / Review');
   });
 
   test('Tab は 6 分類も巡回先にする', () => {
@@ -98,7 +96,7 @@ describe('見出しと Tab の絞り込み', () => {
 
   test('分類で絞り込むとその分類の道具だけになる', () => {
     var only = CP.filterByGroup(itemsOf(), 'review');
-    expect(only.map(function(i) { return i.id; })).toEqual(['review:tab-board']);
+    expect(only.map(function(i) { return i.id; })).toEqual(['review:tab-diff']);
   });
 });
 
