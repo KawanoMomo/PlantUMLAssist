@@ -4323,569 +4323,151 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
 }
 #check-list[hidden] { display: none; }
 
-/* 対応表 */
-#map-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  flex-shrink: 0;
-}
-#btn-map-run {
-  border: 1px solid var(--border);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 2px 8px;
-  white-space: nowrap;
-}
-#btn-map-run:hover { background: var(--bg-tertiary); }
-#map-summary { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#map-summary.clean { color: var(--accent-green); }
-#map-summary.dirty { color: var(--accent-orange); }
-#map-warn {
-  padding: 4px 8px;
-  font-size: 11px;
-  color: var(--accent-orange);
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-primary);
-  flex-shrink: 0;
-}
-#map-warn[hidden] { display: none; }
-#map-list {
-  max-height: 40%;
-  overflow: auto;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-primary);
-  flex-shrink: 0;
-}
-#map-list[hidden] { display: none; }
-/* 対応表で組になった綴り違いを、相手の綴りに揃える行。
-   機械が組んだ組も、手で結んだ組も同じ行に並び、チェックした組を 1 回で当てる。 */
-#map-align {
-  padding: 4px 8px;
-  font-size: 11px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-primary);
-  flex-shrink: 0;
-}
-#map-align[hidden] { display: none; }
-#map-align .map-align-head { color: var(--text-secondary); font-size: 10px; padding-bottom: 2px; }
-#map-align .map-align-row { display: flex; gap: 6px; align-items: baseline; padding: 1px 0; font-family: var(--font-mono); }
-#map-align .map-align-row input { margin: 0; }
-#btn-map-align {
-  margin-top: 4px;
-  font-size: 11px;
-  padding: 2px 10px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  cursor: pointer;
-}
-#btn-map-align:hover { border-color: var(--accent); color: var(--accent); }
-#btn-map-align:disabled { opacity: 0.5; cursor: default; }
-#map-align-result { margin-left: 6px; color: var(--accent-green); font-size: 10px; }
-.map-head {
-  padding: 3px 8px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-}
-.map-row {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 3px 8px;
-  font-size: 11px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--bg-tertiary);
-}
-.map-row:hover { background: var(--bg-tertiary); }
-.map-row .map-match {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  width: 62px;
-  flex-shrink: 0;
-  color: var(--text-secondary);
-}
-/* 片方にしか無い行が「足された 1 要素」の候補。ここだけ色を付ける。 */
-.map-row[data-map-match="ref-only"] .map-match,
-.map-row[data-map-match="mine-only"] .map-match { color: var(--accent-orange); }
-.map-row[data-map-match="ref-only"],
-.map-row[data-map-match="mine-only"] { background: var(--bg-secondary); }
-.map-row .map-ref, .map-row .map-mine { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.map-row .map-ref { color: var(--text-primary); }
-/* クラス図の関係は「継承: 親 A ← 子 B」と長い。1 行に詰めて末尾を切ると、
-   肝心の子の名前が読めなくなるので、関係の行だけ折り返す
-。 */
-.map-row[data-map-type="relation"] { align-items: flex-start; }
-.map-row[data-map-type="relation"] .map-ref,
-.map-row[data-map-type="relation"] .map-mine {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  word-break: break-word;
-}
-/* メンバーの行は `+ TransferComplete() : void` が丸ごと読めないと写す判断が
-   できない。関係の行と同じく折り返して全部出す。 */
-.map-row[data-map-type="member"] { align-items: flex-start; }
-.map-row[data-map-type="member"] .map-ref,
-.map-row[data-map-type="member"] .map-mine {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  word-break: break-word;
-}
-.map-row .map-mine { color: var(--text-secondary); }
-#map-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
-/* 雛形との差分。対応表と同じ並びにする。 */
-#tr-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  flex-shrink: 0;
-}
-#tr-bar select, #tr-bar input {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 2px 4px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  min-width: 0;
-}
-#tr-pick { flex: 1 1 40%; }
-#tr-label { flex: 1 1 40%; }
-#tr-bar button {
-  border: 1px solid var(--border);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 2px 8px;
-  white-space: nowrap;
-}
-#tr-bar button:hover { background: var(--bg-tertiary); }
-#tr-note {
-  padding: 4px 8px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-#tr-note.clean { color: var(--accent-green); }
-#tr-note.dirty { color: var(--accent-orange); }
-#tr-note[hidden] { display: none; }
-#td-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  flex-shrink: 0;
-}
-#btn-td-run {
-  border: 1px solid var(--border);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 2px 8px;
-  white-space: nowrap;
-}
-#btn-td-run:hover { background: var(--bg-tertiary); }
-#td-summary { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#td-summary.clean { color: var(--accent-green); }
-#td-summary.dirty { color: var(--accent-orange); }
-#td-note {
-  padding: 4px 8px;
-  font-size: 10px;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-primary);
-  flex-shrink: 0;
-}
-#td-note[hidden] { display: none; }
-#td-list {
-  max-height: 40%;
-  overflow: auto;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-primary);
-  flex-shrink: 0;
-}
-#td-list[hidden] { display: none; }
-.td-row {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 3px 8px;
-  font-size: 11px;
-  border-bottom: 1px solid var(--bg-tertiary);
-}
-.td-row .td-kind { font-family: var(--font-mono); font-size: 10px; width: 62px; flex-shrink: 0; color: var(--text-secondary); }
-.td-row[data-td-kind="added"] .td-kind, .td-row[data-td-kind="removed"] .td-kind { color: var(--accent-orange); }
-.td-row[data-td-kind="added"], .td-row[data-td-kind="removed"] { background: var(--bg-secondary); }
-.td-row .td-text { flex: 1; min-width: 0; font-family: var(--font-mono); word-break: break-all; }
-#td-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
-/* 系統ぜんぶと比べる。雛形との差分と同じ並びにする。 */
-#tc-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  flex-shrink: 0;
-}
-#btn-tc-run {
-  border: 1px solid var(--border);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 2px 8px;
-  white-space: nowrap;
-}
-#btn-tc-run:hover { background: var(--bg-tertiary); }
-/* 系統ぜんぶと比べる の見出し。トレースカバレッジのモーダルにも見出しがあるので
-   id は分けてある (同じ id が 2 つあると、どちらを見ているか誰にも分からない) */
-#tcoh-summary { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#tcoh-summary.clean { color: var(--accent-green); }
-#tcoh-summary.dirty { color: var(--accent-orange); }
-#tc-verdict {
-  padding: 4px 8px;
-  font-size: 11px;
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
-  flex-shrink: 0;
-}
-#tc-verdict[hidden] { display: none; }
-#tc-note {
-  padding: 4px 8px;
-  font-size: 10px;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-primary);
-  flex-shrink: 0;
-}
-#tc-note[hidden] { display: none; }
-#tc-list {
-  max-height: 40%;
-  overflow: auto;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-primary);
-  flex-shrink: 0;
-}
-#tc-list[hidden] { display: none; }
-.tc-row {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 3px 8px;
-  font-size: 11px;
-  border-bottom: 1px solid var(--bg-tertiary);
-}
-.tc-row .tc-kind { font-family: var(--font-mono); font-size: 10px; width: 54px; flex-shrink: 0; color: var(--text-secondary); }
-.tc-row[data-tc-kind="only"] .tc-kind, .tc-row[data-tc-kind="some"] .tc-kind { color: var(--accent-orange); }
-.tc-row[data-tc-kind="only"], .tc-row[data-tc-kind="some"] { background: var(--bg-secondary); }
-.tc-row .tc-text { flex: 1; min-width: 0; font-family: var(--font-mono); word-break: break-all; }
-.tc-row .tc-where { flex-shrink: 0; font-size: 10px; color: var(--text-secondary); max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#tc-empty { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); }
-/* 状態遷移のトレース漏れの表 (#tc-table) の行は表の行のまま (上の .tc-row は比べる欄の一覧用) */
-#tc-table tr.tc-row { display: table-row; padding: 0; }
-/* 橙の行から自分の図へ足す */
-.map-row .map-take {
-  flex-shrink: 0;
-  border: 1px solid var(--accent-orange);
-  background: var(--bg-primary);
-  color: var(--accent-orange);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 10px;
-  padding: 1px 6px;
-  white-space: nowrap;
-}
-.map-row .map-take:hover { background: var(--bg-tertiary); }
-/* 不一致の行を先輩・reviewer に預ける。
-   「足す」と並ぶので、自分で決める橙とは別の色にして押し間違えないようにする。 */
-.map-row .map-ask {
-  flex-shrink: 0;
-  border: 1px solid var(--border);
-  background: var(--bg-primary);
-  color: var(--text-secondary);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 10px;
-  padding: 1px 6px;
-  white-space: nowrap;
-}
-.map-row .map-ask:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-.map-row .map-ask[disabled] { cursor: default; opacity: 0.7; }
-/* 対応をどこまで決めたか */
-#map-decision {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  font-size: 11px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-primary);
-  flex-shrink: 0;
-}
-#map-decision[hidden] { display: none; }
-#map-decision-text { flex: 1; min-width: 0; color: var(--accent-orange); }
-#map-decision.settled #map-decision-text { color: var(--accent-green); }
-#btn-map-reset {
-  flex-shrink: 0;
-  font-size: 10px;
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-#btn-map-reset:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-#btn-map-reset[hidden] { display: none; }
-.map-row .map-decide {
-  flex-shrink: 0;
-  font-size: 10px;
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-.map-row .map-decide:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-.map-row .map-pick {
-  flex-shrink: 0;
-  max-width: 140px;
-  font-size: 10px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-}
-.map-row[data-map-match="manual"] .map-match { color: var(--accent-green); }
-.map-row[data-map-decided="1"] { border-left: 2px solid var(--accent-green); }
-.map-confirm {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  font-size: 11px;
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border);
-}
-.map-confirm-lead { flex-basis: 100%; color: var(--text-secondary); }
-/* 聞き返しは 1 行 1 問。ボタンを右へ押し出して切れないようにする。 */
-.map-confirm-row { display: flex; align-items: center; gap: 4px; flex-basis: 100%; }
-.map-confirm-label { color: var(--text-primary); }
-.map-confirm-sel {
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  font-size: 11px;
-  padding: 1px 4px;
-  border-radius: 3px;
-  max-width: 180px;
-}
-.map-confirm-ok, .map-confirm-cancel {
-  border: 1px solid var(--border);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 2px 8px;
-}
-.map-confirm-ok { border-color: var(--accent-orange); color: var(--accent-orange); }
 
-/* 他の人のフォルダの図と突き合わせる */
-#xf-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  flex-shrink: 0;
-}
-#xf-dir-name { font-size: 12px; padding: 1px 8px; background: transparent; color: var(--text-primary); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; font-family: var(--font-mono); }
-#xf-dir-name:hover { border-color: var(--accent); }
-#xf-dir-name[hidden] { display: none; }
-#xf-dir-hint { color: var(--text-secondary); }
-#xf-dir-hint[hidden] { display: none; }
-#xf-pick {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  flex-shrink: 0;
-}
-#xf-pick[hidden] { display: none; }
-#xf-file {
-  flex: 1;
-  min-width: 0;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  cursor: pointer;
-}
-#xf-rename { color: var(--accent); white-space: nowrap; }
-#xf-summary {
-  padding: 3px 8px;
-  border-bottom: 1px solid var(--border);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-#xf-summary[hidden] { display: none; }
-#xf-summary.clean { color: var(--accent-green); }
-#xf-summary.dirty { color: var(--accent-orange); }
-#xf-list {
-  max-height: 34%;
-  overflow: auto;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-primary);
-  flex-shrink: 0;
-}
-#xf-list[hidden] { display: none; }
-/* 名前で対応が付かないときの、形の見比べ */
-#xf-shape, #xf-parallel { padding: 6px 8px; border-top: 1px solid var(--border); }
-#xf-shape[hidden], #xf-parallel[hidden] { display: none; }
-.xf-parallel-row.differs td { color: var(--accent-orange); }
-.xf-parallel-copy {
-  margin-top: 6px; border: 1px solid var(--border); background: var(--bg-secondary);
-  color: var(--text-primary); border-radius: 3px; cursor: pointer; font-size: 11px; padding: 2px 8px;
-}
-.xf-shape-lead { color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
-.xf-shape-sum { color: var(--accent-orange); font-size: 11px; margin: 4px 0 6px; }
-.xf-shape-table { border-collapse: collapse; font-family: var(--font-mono); font-size: 11px; }
-.xf-shape-table th, .xf-shape-table td { padding: 2px 10px 2px 0; text-align: left; }
-.xf-shape-table th { color: var(--text-secondary); font-weight: 600; }
-.xf-shape-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-.xf-shape-row.differs td { color: var(--accent-orange); }
-.xf-row {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 3px 8px;
-  font-size: 11px;
-  border-bottom: 1px solid var(--bg-tertiary);
-}
-.xf-row .xf-side {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  width: 74px;
-  flex-shrink: 0;
-}
-/* 相手にしかない = 取り込める。自分にしかない = 相手に無い。色で役割を分ける */
-.xf-row.only-ref .xf-side { color: var(--accent-orange); }
-.xf-row.only-self .xf-side { color: var(--text-secondary); }
-/* 親の中 (入れ子) に増えた要素はその親を行に出す */
-.xf-row .xf-nest {
-  flex-shrink: 0;
-  font-size: 10px;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 0 4px;
-  white-space: nowrap;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.xf-row .xf-text {
-  flex: 1 1 40%;
-  /* 入る位置の 1 行が長くても、行の DSL が読めなくならない幅を残す */
-  min-width: 140px;
-  font-family: var(--font-mono);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.xf-row .xf-text:hover { text-decoration: underline; }
-.xf-row .xf-take {
-  border: 1px solid var(--border);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 10px;
-  padding: 1px 6px;
-  flex-shrink: 0;
-}
-.xf-row .xf-take:hover { background: var(--bg-tertiary); }
-/* 取り込む分のチェックと、入る位置の提案 */
-.xf-row .xf-pick-row { flex-shrink: 0; margin: 0; cursor: pointer; }
-.xf-row .xf-where {
-  color: var(--text-secondary);
-  font-size: 10px;
-  flex: 0 1 auto;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#xf-take-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  font-size: 11px;
-  border-bottom: 1px solid var(--bg-tertiary);
-}
-#xf-take-bar #xf-take-all-label { cursor: pointer; flex-shrink: 0; }
-#xf-take-bar #btn-xf-take-checked {
-  border: 1px solid var(--border);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 10px;
-  padding: 2px 8px;
-}
-#xf-take-bar #btn-xf-take-checked:disabled { opacity: 0.5; cursor: default; }
-#xf-take-bar #xf-take-result { color: var(--text-secondary); font-size: 10px; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 .check-row {
   display: flex;
   align-items: baseline;
@@ -6735,80 +6317,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="check-summary"></span>
       </div>
       <div id="check-list" hidden></div>
-      <!-- 2 枚の図の対応表。名前がばらばらでも
-           対応を機械的に取り、片方にしか無い要素だけを目立たせる。
-           状態遷移図に加えクラス図 (クラスと関係) も同じ表で扱う。 -->
-      <div id="map-bar">
-        <button type="button" id="btn-map-run" title="参照図と自分の図の対応表を作る (状態遷移図は状態・遷移、クラス図はクラス・関係)">対応表</button>
-        <span id="map-summary"></span>
-      </div>
-      <div id="map-warn" hidden></div>
-      <!-- 対応をどこまで人が決めたか。推測が残る間は
-           「参照図だけ」の行を先輩が足した要素と言い切らない。 -->
-      <div id="map-decision" hidden>
-        <span id="map-decision-text"></span>
-        <button type="button" id="btn-map-reset" hidden
-                title="手で決めた対応を全部取り消して、機械の推測に戻す">対応をやり直す</button>
-      </div>
-      <!-- 先輩・reviewer に預けた質問の件数 -->
-      <!-- 組になった綴り違いを相手の綴りに揃える (自分の図だけを書く) -->
-      <div id="map-align" hidden></div>
-      <div id="map-list" hidden></div>
-      <!-- 派生図は雛形をペリフェラル名だけ変えて複製したもの。
-           題材語を伏せて突き合わせ、「この図だけ / 雛形だけ」の行を出す。 -->
-      <!-- 雛形は 1 回だけ登録して呼び名で選ぶ。
-           以降は相手フォルダの絶対パスを打ち直さなくてよい。 -->
-      <div id="tr-bar">
-        <select id="tr-pick" title="比べる雛形を選ぶ (登録した雛形は次の周でもそのまま使える)">
-          <option value="">参照図を雛形にする</option>
-        </select>
-        <input type="text" id="tr-label" placeholder="呼び名 (例 GPIO系初期化)"
-               title="この図を雛形として登録するときの呼び名">
-        <button type="button" id="btn-tr-add" title="いま開いている図を雛形として登録する (以降は呼び名で選べる)">雛形に登録</button>
-        <button type="button" id="btn-tr-del" title="選んでいる登録を消す">✕</button>
-      </div>
-      <div id="tr-note" hidden></div>
-      <div id="td-bar">
-        <button type="button" id="btn-td-run" title="選んだ雛形 (未選択なら参照図) と、この図との差分 (題材語の違いは除く) を出す">雛形との差分</button>
-        <span id="td-summary"></span>
-      </div>
-      <div id="td-note" hidden></div>
-      <div id="td-list" hidden></div>
-      <!-- 2 枚比べだと「片方にだけある要素は無い」で行き止まりになる。
-           開いている図を全部まとめて突き合わせ、行ごとにどの図にあるかを出す。 -->
-      <div id="tc-bar">
-        <button type="button" id="btn-tc-run"
-                title="開いている図を全部まとめて突き合わせ、1 枚にだけある行 (取り込み候補) を出す">系統ぜんぶと比べる</button>
-        <span id="tcoh-summary"></span>
-      </div>
-      <div id="tc-verdict" hidden></div>
-      <div id="tc-note" hidden></div>
-      <div id="tc-list" hidden></div>
-      <!-- 他の人のフォルダの同じ図を相手にする -->
-      <!-- 相手のフォルダは FILES「読むだけ」で比較中にしたフォルダ 1 つから取る (パスを打つ欄は持たない) -->
-      <div id="xf-bar">
-        <button type="button" id="xf-dir-name" hidden></button>
-        <span id="xf-dir-hint">FILES の読むだけでフォルダを選ぶと、ここにその図の増分が出ます</span>
-      </div>
-      <div id="xf-pick" hidden>
-        <select id="xf-file" title="相手にする図"></select>
-        <span id="xf-rename"></span>
-      </div>
-      <div id="xf-summary" hidden></div>
-      <!-- 名前で対応が付かない 2 枚を、形 (種別ごとの件数) で見比べる -->
-      <div id="xf-shape" hidden></div>
-      <!-- 骨格が同じで語だけ違う 2 枚の対応表 -->
-      <div id="xf-parallel" hidden></div>
-      <!-- 先輩側の増分をチェックしてまとめて取り込む -->
-      <div id="xf-take-bar" hidden>
-        <label id="xf-take-all-label">
-          <input type="checkbox" id="xf-take-all" title="相手にしかない行をすべて選ぶ"> すべて選択
-        </label>
-        <button type="button" id="btn-xf-take-checked"
-                title="チェックした行を、提案された位置へまとめて自分の図に入れる">チェックした 0 件を取り込む</button>
-        <span id="xf-take-result"></span>
-      </div>
-      <div id="xf-list" hidden></div>
       <div id="compare-container">
         <div id="compare-svg"></div>
       </div>
@@ -7297,7 +6805,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/before-snapshot.js"></script>
 <script src="src/core/write-history.js"></script>
 <script src="src/core/compare-view.js"></script>
-<script src="src/core/cross-ref-diff.js"></script>
 <script src="src/core/count-compare.js"></script>
 <script src="src/core/show-before-after.js"></script>
 <script src="src/core/export-select.js"></script>
@@ -7320,13 +6827,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/state-table.js"></script>
 <script src="src/core/state-tree.js"></script>
 <script src="src/core/relation-roles.js"></script>
-<script src="src/core/state-map.js"></script>
-<script src="src/core/template-diff.js"></script>
-<script src="src/core/template-registry.js"></script>
-<script src="src/core/template-cohort.js"></script>
-<script src="src/core/class-map.js"></script>
-<script src="src/core/seq-map.js"></script>
-<script src="src/core/map-align.js"></script>
 <script src="src/core/seq-to-activity.js"></script>
 <script src="src/core/reuse-picker.js"></script>
 <script src="src/core/relation-options.js"></script>

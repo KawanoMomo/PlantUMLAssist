@@ -75,7 +75,6 @@ const sourceFiles = [
   'src/core/tail-memory.js',
   'src/core/tail-kind-chips.js',
   'src/core/compare-view.js',
-  'src/core/cross-ref-diff.js',
   'src/core/folder-filter.js',
   'src/core/target-set.js',
   'src/core/line-resolver.js',
