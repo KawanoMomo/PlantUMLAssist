@@ -1,3 +1,4 @@
+- TICKET-owner-20261115-1827-3: 白紙の図 (＋ や図種の切り替えで開いた @startuml / @enduml だけの本文) のプレビューに PlantUML の「Welcome to PlantUML!」案内画面を出さず、空のキャンバスと「まだ要素がありません。右の「末尾に追加」から最初の要素を足せます」の 1 行にする。要素を 1 つ足せば今までどおり描く。本文は書き換えない
 - TICKET-releaser-20261115-2212-1: 図名を変えた直後に Ctrl+S しても、下端の「…に保存しました」が付け替えの知らせで消えない (付け替えの知らせは「／」で後ろに足す)
 - TICKET-owner-20261115-1827-2: FILES の保存先で、先頭の語が図種の語の図 (seq-1・state-1・class-1・comp-1・act-1・uc-1 など) を部品フォルダに束ねず直下に並べる。6 図種そろえても「SEQ 1 / 6」「未作成 5 図種」が 6 つ出ない。部品名で始まる図 (SPI_seq・spi_state) の束ね方は今のまま
 - TICKET-owner-20261115-1827-1: 保存先 (利用者の Git 作業木) には .puml だけを書く。図種の控え (_kinds.json)・最後の保存 (_meta.json)・版の控え (_versions/) は設定の置き場 (DATA_ROOT/folders/<保存先ごと>) に持ち、「この図の履歴」は今までどおり並ぶ。保存先に前からある控えは読めるまま、消さない・動かさない。unit は PUA_DATA_ROOT=test-results/unit-data で server を読む

@@ -168,6 +168,21 @@ window.MA.renderError = (function() {
     return { isError: true, noStartEnd: true, message: decodeEntities(m[1]), line: null };
   }
 
+  // 要素の無い本文 (＋ や図種の切り替えで開いた @startuml / @enduml だけの白紙) に PlantUML は
+  // 「Welcome to PlantUML! You can start with … https://plantuml.com」の案内画面を返す。
+  // それを利用者の図として出すと、新人には自分の図なのか plantuml.com へ行くのかが読めない。
+  // 案内画面で、本文がその文言を自分で書いた図でなければ白紙とみなす。
+  var WELCOME_RE = /Welcome to PlantUML!/;
+  function isBlankWelcome(svgText, dslText) {
+    if (!svgText || typeof svgText !== 'string' || !WELCOME_RE.test(svgText)) return false;
+    // エラー画・@start/@end の無い絵にも同じ文言が入ることがある。それは白紙ではない。
+    if (detect(svgText).isError || noStartEnd(svgText)) return false;
+    return !WELCOME_RE.test(String(dslText == null ? '' : dslText));
+  }
+  // 白紙のときにプレビューに出す 1 行 (新しいボタン・設定は足さない。足す口は右の「末尾に追加」)。
+  var BLANK_HINT = 'まだ要素がありません。右の「末尾に追加」から最初の要素を足せます';
+
   return { detect: detect, describe: describe, kindNote: kindNote,
-    emptyFirstRegions: emptyFirstRegions, crashCause: crashCause, noStartEnd: noStartEnd };
+    emptyFirstRegions: emptyFirstRegions, crashCause: crashCause, noStartEnd: noStartEnd,
+    isBlankWelcome: isBlankWelcome, BLANK_HINT: BLANK_HINT };
 })();
