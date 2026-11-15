@@ -1,0 +1,12 @@
+@startuml
+title SPI 転送の流れ
+' 手で整えた図。字下げとコメントは道具に崩させない
+start
+:Spi_Init;
+if (設定は正しい?) then (yes)
+  :Spi_Write;
+else (no)
+  :Spi_Report;
+endif
+stop
+@enduml

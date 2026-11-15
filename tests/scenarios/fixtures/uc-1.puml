@@ -1,0 +1,9 @@
+@startuml
+title SPI ドライバの要求
+' 手で整えた図。字下げとコメントは道具に崩させない
+actor App
+usecase "Send data" as UC1
+usecase "Watch state" as UC2
+  App --> UC1
+  App --> UC2
+@enduml
