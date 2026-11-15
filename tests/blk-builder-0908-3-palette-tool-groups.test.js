@@ -84,7 +84,7 @@ describe('見出しと Tab の絞り込み', () => {
 
   test('6 分類の見出しに日本語の名前が付く', () => {
     expect(CP.groupLabel('check')).toBe('確かめる / Check');
-    expect(CP.groupLabel('give')).toBe('渡す / Deliver');
+    expect(CP.groupLabel('review')).toBe('レビュー / Review');
   });
 
   test('Tab は 6 分類も巡回先にする', () => {

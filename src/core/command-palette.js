@@ -24,10 +24,11 @@ window.MA.commandPalette = (function() {
   // 見出しの並び。開いた直後にまず「図に足せるもの」が見える順にする。
   // design「実装現況」7b: タブ列を畳むと、機能の存在に気付く手掛かりは Ctrl+K だけになる。
   // 道具を 1 つの「コマンド」見出しに 30 件積んだままでは、名前を先に知っている道具しか
-  // 引けない。7a のツールメニューと同じ 6 分類で見出しを分け、Tab の絞り込み先もそこにする。
+  // 引けない。7a のツールメニューと同じ分類で見出しを分け、Tab の絞り込み先もそこにする。
   // 分類の正本は tool-menu.js (メニューと同じ並び・同じ言葉)。ここでは写さない
   // — 2 か所に書くと、道具が増えたときにメニューにはあってパレットには無い、が起きる。
-  var TOOL_GROUPS = ['make', 'edit', 'find', 'check', 'review', 'give'];
+  // 「渡す」(引き継ぎ・納品) は TICKET-owner-20261115-1828-prune で道具ごと外した。
+  var TOOL_GROUPS = ['make', 'edit', 'find', 'check', 'review'];
   // 'file' は Ctrl+P で開く「ファイル名から開く」の見出し。
   // ファイル単位の操作 (一時控え・この図の変遷) もここに入る (入口は FILES ツリーの右クリック)。
   var GROUPS = ['add', 'jump', 'selected'].concat(TOOL_GROUPS).concat(['file', 'command']);
@@ -40,7 +41,6 @@ window.MA.commandPalette = (function() {
     find: '探す / Find',
     check: '確かめる / Check',
     review: 'レビュー / Review',
-    give: '渡す / Deliver',
     file: 'ファイル / Files',
     command: 'コマンド / Command',
   };
@@ -48,7 +48,7 @@ window.MA.commandPalette = (function() {
   // 1 語で分かるようにする (design 7b のパレットは行ごとに分類を出している)。
   var GROUP_CHIPS = {
     make: '図をつくる', edit: '書き換える', find: '探す',
-    check: '確かめる', review: 'レビュー', give: '渡す', file: 'ファイル',
+    check: '確かめる', review: 'レビュー', file: 'ファイル',
   };
   // 見出しの下に 1 行だけ出す補足。何が起きるか読まずに分かるようにする。
   var GROUP_NOTES = {

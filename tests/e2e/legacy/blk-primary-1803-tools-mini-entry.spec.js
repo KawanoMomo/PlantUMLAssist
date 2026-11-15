@@ -21,7 +21,8 @@ test('既定のタブ列に「ツール ▾」の札が出る (展開用の ツ�
   const title = (await mini.getAttribute('title')) || '';
   const m = /畳んでいるツール (\d+) 件/.exec(title);
   expect(m).not.toBeNull();
-  expect(Number(m && m[1])).toBeGreaterThan(20);
+  // 整理 (TICKET-owner-20261115-1828-prune) で道具が減っても、畳んだ道具は 10 件を下回らない。
+  expect(Number(m && m[1])).toBeGreaterThan(10);
 });
 
 test('札を 1 クリックで畳んだ一覧が開く', async ({ page }) => {

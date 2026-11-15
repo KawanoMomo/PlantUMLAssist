@@ -14,7 +14,7 @@ const html = fs.readFileSync(path.resolve(__dirname, '..', 'plantuml-assist.html
 
 describe('ツールメニューの分類', function() {
   // BLK-owner-20260918-0329-prune: 「渡す」はこのメニューから外し、Export ▾ の
-  // 「渡す」1 か所に集めた。分類自体は Ctrl+K のために残るので groupOf は 'give' を返す。
+  // 「渡す」1 か所に集めた (TICKET-owner-20261115-1828-prune で引き継ぎ・納品ごと外した)。
   test('design 7a の分類がこの順で並ぶ (渡す は Export ▾ へ移した)', function() {
     expect(tm.groups().map(function(g) { return g.title; }))
       .toEqual(['図をつくる', '書き換える', '探す', '確かめる', 'レビュー']);

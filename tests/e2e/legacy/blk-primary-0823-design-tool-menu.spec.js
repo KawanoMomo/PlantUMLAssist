@@ -24,8 +24,9 @@ test('ツールボタンで分類のメニューが開き、Ctrl+K の注記が�
 
   const menu = page.locator('#tool-menu');
   await expect(menu).toBeVisible();
-await expect(menu.locator('.tool-menu-cat .tool-cat-name')).toHaveText([
-    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー', '渡す',
+  // 「渡す」(引き継ぎ・納品) は TICKET-owner-20261115-1828-prune で外した。
+  await expect(menu.locator('.tool-menu-cat .tool-cat-name')).toHaveText([
+    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー',
   ]);
   await expect(menu.locator('.tool-menu-note')).toHaveText('Ctrl+K でも引けます');
   await expect(page.locator('#btn-tab-tools')).toHaveAttribute('aria-expanded', 'true');
