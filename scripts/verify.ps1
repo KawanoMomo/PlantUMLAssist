@@ -101,7 +101,18 @@ $runScenarios = $runAll -or $files.Count -gt 0
 $withE2E = (($runAll -or $E2E) -and -not $NoE2E) -or $e2eFiles.Count -gt 0
 
 Set-Location -LiteralPath $root
-$common = @()
+# Test servers start at PUA_PORT and go up one port per worker. Without PUA_PORT, server.py's
+# default 8766 would put them in 87xx, the band other loops' agents use, and a server there can go
+# away mid-run. Ask the OS for a free ephemeral port instead.
+if (-not $env:PUA_PORT) {
+  $l = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, 0)
+  $l.Start(); $p = $l.LocalEndpoint.Port; $l.Stop()
+  if ($p -gt 65000) { $p = 64000 }
+  $env:PUA_PORT = [string]$p
+  Write-Output "verify: PUA_PORT not set - test servers from $p"
+}
+# no traces: retries would otherwise record them into -Out while other workers clean up artifacts
+$common = @('--trace=off')
 if ($Workers -gt 0) { $common += "--workers=$Workers" }
 $summaryArgs = @()
 
