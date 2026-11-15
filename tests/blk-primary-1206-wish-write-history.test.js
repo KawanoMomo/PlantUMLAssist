@@ -153,9 +153,10 @@ describe('writeHistory — 保存フォルダへ書いた回を前後ごと控�
 
   test('操作の種類ごとに言い方が変わる (どの画面で当てた回か分かる)', () => {
     expect(WH.kindLabel('rename')).toContain('一括置換');
-    expect(WH.kindLabel('note-rename')).toContain('指摘から選ぶ');
-    expect(WH.kindLabel('note-verdict')).toContain('指摘から選ぶ');
+    expect(WH.kindLabel('unify')).toContain('表記統一');
     expect(WH.kindLabel('なにか')).toBe('書き込み');
+    // TICKET-owner-20261115-1840-prune: 指摘から選ぶ は外した。残った控えの回は「書き込み」と読む (落とさない)。
+    expect(WH.kindLabel('note-rename')).toBe('書き込み');
   });
 });
 

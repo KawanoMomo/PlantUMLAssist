@@ -20,13 +20,14 @@ describe('左列の分類', function() {
       .toEqual(['図をつくる', '書き換える', '探す', '確かめる', 'レビュー']);
   });
 
-  test('分類側に件数の合計が出る (確かめる 1 / レビュー 10)', function() {
+  // TICKET-owner-20261115-1840-prune: ピン留めと指摘箱を外したので、レビューの件数は差分と基準の図の分だけ。
+  test('分類側に件数の合計が出る (確かめる 1 / レビュー 6)', function() {
     var counts = tm.groupCounts({
       'btn-tab-cross': '1',
-      'btn-tab-pins': '3', 'btn-tab-inbox': '5', 'btn-tab-diff': '2',
+      'btn-tab-review': '4', 'btn-tab-diff': '2',
     });
     expect(counts.check).toBe(1);
-    expect(counts.review).toBe(10);
+    expect(counts.review).toBe(6);
     // 0 件の分類は数字を持たない (常に場所を取る 0 を出さない)
     expect(counts.make).toBe(undefined);
   });
@@ -92,7 +93,7 @@ describe('パネルの HTML', function() {
   });
 
   test('分類の合計は項目の件数と別の印にする (件数の数え方を壊さない)', function() {
-    var out = tm.buildMenuHtml({ 'btn-tab-pins': '3' });
+    var out = tm.buildMenuHtml({ 'btn-tab-diff': '3' });
     expect((out.match(/tool-menu-badge/g) || []).length).toBe(1);
     expect(out).toContain('<span class="tool-cat-count">3</span>');
   });
@@ -132,7 +133,7 @@ describe('絞り込み', function() {
   });
 
   test('絞り込みの文言もエスケープされる', function() {
-    expect(tm.buildHitsHtml('', { 'btn-tab-pins': '<b>' })).toContain('&lt;b&gt;');
+    expect(tm.buildHitsHtml('', { 'btn-tab-diff': '<b>' })).toContain('&lt;b&gt;');
   });
 });
 

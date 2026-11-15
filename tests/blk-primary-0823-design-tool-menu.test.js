@@ -85,12 +85,12 @@ describe('メニューの HTML', function() {
   });
 
   test('件数を持つものだけ数字が付く', function() {
-    var out = tm.buildMenuHtml({ 'btn-tab-pins': '3' });
+    var out = tm.buildMenuHtml({ 'btn-tab-diff': '3' });
     expect(out).toContain('<span class="tool-menu-badge">3</span>');
     expect((out.match(/tool-menu-badge/g) || []).length).toBe(1);
   });
 
   test('文言はエスケープされる', function() {
-    expect(tm.buildMenuHtml({ 'btn-tab-pins': '<b>' })).toContain('&lt;b&gt;');
+    expect(tm.buildMenuHtml({ 'btn-tab-diff': '<b>' })).toContain('&lt;b&gt;');
   });
 });

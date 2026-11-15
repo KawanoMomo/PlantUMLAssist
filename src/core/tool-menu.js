@@ -60,8 +60,6 @@ window.MA.toolMenu = (function() {
       // (🔍 は ▤ 変更サマリボードの中には残る。提出前に全件を見る文脈)。
       // 並べる画面ではない道具。覗く・指摘を出すのが目的で、並べるのは ⇔ 並べて見る に任せる。
       { id: 'btn-tab-review',   label: '基準の図との指摘', group: '指摘' },
-      { id: 'btn-tab-pins',     label: 'この図の指摘', group: '指摘' },
-      { id: 'btn-tab-inbox',    label: '図をまたぐ指摘箱 (手で書いた指摘も出典で絞れる)', group: '指摘' },
       { id: 'btn-tab-diff',     label: '前回保存からの差分', group: '変更の履歴' },
       { id: 'btn-tab-lineage',  label: 'この図の継承元', group: '変更の履歴' },
     ] },

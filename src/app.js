@@ -1731,7 +1731,7 @@ function init() {
       syncToolButton();
     }
 
-    // タブ列のボタン文字の末尾に出る件数 (「📌 指摘 3」の 3) をメニューにも出す。
+    // タブ列のボタン文字の末尾に出る件数 (「± 差分 3」の 3) をメニューにも出す。
     // 「−」や 0 は数が無い印なので付けない。
     function badges() {
       var out = {};
@@ -1949,7 +1949,7 @@ function init() {
   })();
 
   // ── 下端の件数表示 (design 7a / 7b) ─────────────────────────────────────
-  // 差分・指摘・指摘箱の件数はタブ列のボタン文字にしか出ておらず、ツールを畳むと
+  // 差分の件数はタブ列のボタン文字にしか出ておらず、ツールを畳むと
   // 画面から消える。件数は状態表示なので下端に寄せ、押したら従来と同じパネルを開く。
   // 数え直しはそれぞれの render*Badge が持っているので、ここはタブ列のボタン文字を
   // 写すだけにする (二重に数えて食い違うのを避ける)。
@@ -3577,8 +3577,6 @@ function init() {
   setupPeekFolder();
   setupSeniorPane();
   setupSeniorGit();
-  setupPinPanel();
-  setupPinInbox();
   setupFamilyAudit();
   setupDriverMap();
   setupTraceCoverage();
@@ -3776,7 +3774,6 @@ function initCommandPalette() {
       // 旧名はこの行を引く語に残す (別の行として並べない)。
       { id: 'tab-template', title: '既存の図や雛形から新しい図を起こす… / New from…', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい', 'テンプレートから作る', 'テンプレート', '部品を起こす', '6 図種まとめて', 'part', 'starter', 'new', 'ぶひん', 'おこす', 'したがき', '6', 'ろく', 'ずしゅ', '骨格から作る', '骨格', 'skeleton', 'こっかく', 'ひな形', 'セット複製', '系統ごと複製する', '系統ごと複製', 'set', 'clone', 'family', 'せっと'], button: 'btn-tab-template', run: function() { clickById('btn-tab-template'); } },
       { id: 'tab-diff', title: '前回保存からの差分 / Diff', hint: 'Tabs', keywords: ['diff', 'change', 'さぶん', 'へんこう'], button: 'btn-tab-diff', run: function() { clickById('btn-tab-diff'); } },
-      { id: 'tab-pins', title: 'レビュー指摘 / Review pins', hint: 'Tabs', keywords: ['pin', 'review', 'してき', 'ぴん'], button: 'btn-tab-pins', run: function() { clickById('btn-tab-pins'); } },
       // design 7b: タブ列を畳むと Ctrl+K だけが手掛かりになるので、ツールメニューに
       // 載っている道具はすべてパレットからも引けなければならない。ここは
       // 「メニューにはあるがパレットに無かった」道具。題はメニューの言い換えに揃える。
@@ -3809,15 +3806,6 @@ function initCommandPalette() {
         openAuditBoardFor(cpIn ? cpIn.value : '');
       } },
       { id: 'tab-review', title: '基準の図と突き合わせる / Review desk', hint: 'Tabs', keywords: ['review', 'desk', 'きじゅん', 'つきあわせ'], button: 'btn-tab-review', run: function() { clickById('btn-tab-review'); } },
-      { id: 'tab-inbox', title: '図をまたぐ指摘箱 / Pin inbox', hint: 'Tabs', keywords: ['inbox', 'pin', 'してきばこ'], button: 'btn-tab-inbox', run: function() { clickById('btn-tab-inbox'); } },
-      // 🔖 手動指摘のタブは 📥 指摘箱に畳んだ。
-      // 名前で引いた人を、出典「手で書いた」で絞った指摘箱へ連れていく。
-      { id: 'tab-findings', title: '手で書いた指摘 / Manual findings', hint: 'Tabs', keywords: ['findings', 'manual', 'してき', 'だいちょう'], button: 'btn-tab-inbox', run: function() {
-        _inboxSetSource('manual');
-        var panel = document.getElementById('inbox-panel');
-        if (panel && panel.classList.contains('open')) { renderInboxPanel(); renderInboxBadge(); return; }
-        clickById('btn-tab-inbox');
-      } },
       // この図の履歴 を開く行は「この図の履歴を見る」1 行。旧名「変遷」は語に落とす。
       { id: 'tab-versions', title: 'この図の履歴を見る / Version history', hint: 'Tabs', keywords: ['version', 'timeline', 'history', 'へんせん', 'りれき', '変遷', 'この図の変遷', '履歴', '保存した版'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
       { id: 'tab-lineage', title: 'この図の継承元を見る / Lineage', hint: 'Tabs', keywords: ['lineage', 'parent', 'けいしょう', 'もと', 'とりこみ'], button: 'btn-tab-lineage', run: function() { clickById('btn-tab-lineage'); } },
@@ -5070,7 +5058,6 @@ function renderTabs() {
   try { renderLiveDiffChip(); } catch (e) {}
   try { renderConsistencyBadge(); } catch (e) {}
   try { renderEventSyncBadge(); } catch (e) {}
-  try { renderPinBadge(); } catch (e) {}
   // ▤ 影響を見る で見ている部品名の印は、タブを組み立て直すたびに付け直す。
   try { if (_riTabMarks.length) applyXrefHighlight(_riTabMarks); } catch (e) {}
   // 統一バッジ。旧称が残っているかは図の中身で
@@ -5598,10 +5585,8 @@ function _abBuild() {
   var AB = window.MA.auditBoard;
   if (!AB) return null;
   var run = _atRunAudits();
-  var findings = null;
-  try { findings = _mfRows(); } catch (e) { findings = null; }
   // methodDetail: 🔍 名前突合を畳んだので、メソッド突合の全件もこの画面で見る。
-  _abBoard = AB.build({ audits: run.audits, svg: _abSvgScan, findings: findings, methodDetail: true });
+  _abBoard = AB.build({ audits: run.audits, svg: _abSvgScan, findings: null, methodDetail: true });
   var m = run.audits && run.audits.method;
   _abMethodRes = (m && m.status === 'ok') ? m.result : null;
   return _abBoard;
@@ -5711,17 +5696,6 @@ function copyAuditBoard() {
   var st = document.getElementById('ab-summary');
   if (!AB) return null;
   // 「図ごと」で開いているなら、貼るのは目の前の表の方 (画面と写しを食い違わせない)。
-  if (_abView === 'origins' && window.MA.findingOrigins) {
-    var FO = window.MA.findingOrigins;
-    var fo = _foBuild();
-    var foText = FO.markdown(fo, '指摘を出典ごとに畳む');
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(foText).then(function() {
-        if (st) st.textContent = '指摘.md 用にコピーしました (' + fo.rows.length + ' 件)';
-      }, function() { if (st) st.textContent = 'コピーできません'; });
-    } else if (st) st.textContent = 'コピーできません';
-    return foText;
-  }
   if (_abView === 'docs' && window.MA.statusDashboard) {
     var SD = window.MA.statusDashboard;
     var sd = _sdBuild();
@@ -5818,8 +5792,8 @@ function setupAuditBoard() {
 
 // ── 整合ダッシュボード: 図ごと ───────────
 // 上の突合ダッシュボードは「指摘 1 件 = 1 行」なので、「この図はいま全体として
-// どうなっているか」(指摘・📌・SVG・表記の要決定・前回控えとの差分) は、
-// 📥 指摘箱・📂 一覧・突合ダッシュボードを開き直して頭の中で突き合わせるしかない。
+// どうなっているか」(SVG・表記の要決定・前回控えとの差分) は、
+// 📂 一覧・突合ダッシュボードを開き直して頭の中で突き合わせるしかない。
 // CLI も同じで、6 本のコマンドの出力を目で見比べていた (node tools/dashboard.js)。
 // ここは同じ束ね方 (src/core/status-dashboard.js) で「図 1 枚 = 1 行」に組み替える。
 
@@ -5841,18 +5815,14 @@ function _sdBuild() {
   var SD = window.MA.statusDashboard;
   if (!SD) return null;
   var run = _atRunAudits();
-  var findings = null;
-  try { findings = _mfRows(); } catch (e) { findings = null; }
   var docs = [];
   try {
     window.MA.workspace.list().forEach(function(d) { if (d.name) docs.push(d.name); });
   } catch (e) { /* 開いていないだけ。他の出口が挙げた図は下で入る */ }
-  var pins = _progressEntries();
   return SD.build({
     docs: docs,
-    findings: findings,
-    // 着手状況は 📥 指摘箱を開いた回にしか無い。無い回は「見ていない」と出す。
-    pins: pins.length ? pins : null,
+    findings: null,
+    pins: null,
     svg: _abSvgScan,
     registry: _sdRegistry(run.audits),
   });
@@ -5890,103 +5860,9 @@ function renderStatusDashboard() {
   });
 }
 
-// ── 指摘を出典ごとに畳む ─────────────────
-// 「指摘ごと」は audit の突合結果だけ、「図ごと」は図の今の状態だけを見せる。
-// reviewer が毎回 やっていた残りの仕事は、その 2 つに 📌 と /verify-svg を
-// 並べて「この行とあの行は同じ指摘の別表現か、本当に別物か」を決めることだった。
-// ここは指摘 ID を鍵に 1 行へ畳み、その 1 行に「どの出口の、どの根拠から来たか」を
-// 並べる (畳み方は CLI と共通の src/core/finding-origins.js)。
-// 畳む相手は「道具が挙げた指摘」= 突合ダッシュボードの行。画面で手書きした
-// 指摘 (_mfRows) は reviewer 自身の控えで、出典のある指摘ではないのでここでは
-// 数えない (混ぜると「出典なし」の行で表が埋まる)。
-// 突合の行には CLI のような F-nn が無いので、同じ対象・同じカテゴリの行を
-// 1 件に畳んで鍵にする。これがそのまま「別図の再掲」の判定になる。
-function _foFindings(board) {
-  var map = {};
-  var order = [];
-  ((board && board.rows) || []).forEach(function(r) {
-    var title = String(r.title || '');
-    var cat = String(r.category || '');
-    var key = cat + '|' + title;
-    if (!map[key]) {
-      map[key] = { id: key, title: title, entity: title, label: r.keep ? '維持' : '未解消',
-                   open: !r.keep, cats: cat ? [cat] : [], docs: [] };
-      order.push(key);
-    }
-    var doc = String(r.doc || '');
-    if (doc && map[key].docs.indexOf(doc) < 0) map[key].docs.push(doc);
-    if (!r.keep) map[key].open = true;
-  });
-  return order.map(function(k) { return map[k]; });
-}
-
-function _foBuild() {
-  var FO = window.MA.findingOrigins;
-  if (!FO) return null;
-  var run = _atRunAudits();
-  var pins = _progressEntries();
-  return FO.build({
-    findings: _foFindings(_abBuild()),
-    pins: pins,
-    // 画面の指摘には F-nn が無いので、📌 は図で結ぶ。
-    matchPinsByDoc: true,
-    svg: _abSvgScan,
-    registry: _sdRegistry(run.audits),
-  });
-}
-
-function renderFindingOrigins() {
-  var body = document.getElementById('ab-body');
-  var sumEl = document.getElementById('ab-summary');
-  var FO = window.MA.findingOrigins;
-  if (!body || !FO) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  var b = _foBuild();
-  if (sumEl) sumEl.textContent = b ? FO.summaryLine(b) : '';
-  if (!b || !b.rows.length) {
-    body.innerHTML = '<div class="ab-empty">畳む指摘がありません。</div>';
-    return;
-  }
-  var html = '';
-  b.groups.forEach(function(g) {
-    html += '<div class="fo-group" data-fo-key="' + esc(g.key) + '">'
-      + '<div class="fo-group-head">出典: ' + esc(g.label)
-      + ' <span class="fo-count">' + g.rows.length + ' 件 (未解消 ' + g.open + ')</span></div>'
-      + '<table class="ab-table"><thead><tr>'
-      + '<th>指摘</th><th>見出し</th><th>状態</th><th>図</th>'
-      + '<th>出典 (何を比較して出たか)</th><th>気づき</th></tr></thead><tbody>';
-    g.rows.forEach(function(r) {
-      var notes = [].concat(r.note ? [r.note] : [], r.conflicts);
-      html += '<tr class="ab-row fo-row" data-fo-id="' + esc(r.id) + '"'
-        + ' data-fo-restated="' + (r.restated ? '1' : '0') + '"'
-        + ' data-fo-conflicts="' + r.conflicts.length + '"'
-        + ' data-ab-doc="' + esc(r.docs[0] || '') + '" data-ab-line="1">'
-        // CLI には F-nn があるが、画面の突合には無い。鍵をそのまま出しても読めないので
-        // 「何の突合で出たか」を出す (鍵は data-fo-id に残す)。
-        + '<td class="fo-id">' + esc(r.id.indexOf('|') >= 0 ? (r.cats[0] || '指摘') : r.id) + '</td>'
-        + '<td class="ab-title">' + esc(r.title) + '</td>'
-        + '<td class="fo-state">' + esc(r.label || (r.open ? '未解消' : '解消')) + '</td>'
-        + '<td class="ab-doc">' + r.docs.map(function(d) { return esc(FO.docKey(d)); }).join('<br>') + '</td>'
-        + '<td class="fo-origins">' + r.origins.map(function(o) {
-            return '<span class="fo-origin" data-fo-tool="' + esc(o.tool) + '">'
-              + esc(o.label) + '</span> ' + esc(o.basis);
-          }).join('<br>') + '</td>'
-        + '<td class="fo-note">' + notes.map(esc).join('<br>') + '</td></tr>';
-    });
-    html += '</tbody></table></div>';
-  });
-  body.innerHTML = html;
-  Array.prototype.forEach.call(body.querySelectorAll('.fo-row'), function(tr) {
-    tr.addEventListener('click', function() {
-      _abJump(tr.getAttribute('data-ab-doc'), Number(tr.getAttribute('data-ab-line')) || 1);
-    });
-  });
-}
-
 var AB_VIEW_TITLE = {
   issues: '突合ダッシュボード',
   docs: '整合ダッシュボード',
-  origins: '指摘を出典ごとに畳む',
 };
 
 function setAuditBoardView(view) {
@@ -6002,7 +5878,6 @@ function setAuditBoardView(view) {
     if (el) el.style.display = _abView === 'issues' ? '' : 'none';
   });
   if (_abView === 'docs') renderStatusDashboard();
-  else if (_abView === 'origins') renderFindingOrigins();
   else renderAuditBoard();
 }
 
@@ -7297,151 +7172,29 @@ function _syncCohortTemplateBtn() {
   el.cohortTemplates.textContent = _cohortShowTemplates ? 'テンプレも表示中' : 'テンプレも表示';
 }
 
-// ── 同名ファイルを左右に並べる ──
-// reviewer は junior/primary の同じファイル名の図を突き合わせる。ドメイン突合は
-// 「どの名前が食い違うか」をチップで出すが、どの行のどの語かは本文を自分で
-// 開き直さないと分からず、2 フォルダから同名ファイルをテキストとして開いて
-// 読み比べることになっていた。ここは本文そのものを 2 列に並べ、食い違う語だけを
-// 光らせる。揃え方 (どちらの綴りに寄せるか) もその場で当てられる。
+// ── 切り出した部品を左右に並べる面 ──
+// 下の「複合図から部品を切り出して並べる」が使う 2 列の面。食い違う語だけを光らせ、
+// 揃え方 (どちらの綴りに寄せるか) もその場で当てられる。
+// 同じファイル名の図どうしを並べる入口は外した (2 枚を左右に置く入口は「並べて比較」1 つ)。
 var _sbsOn = false;
-var _sbsPairs = [];        // 同名で組めた組 (本文は未読)
-var _sbsKey = null;        // 選んでいる組
+var _sbsKey = null;        // 並べている部品の鍵
 var _sbsView = null;       // { pair, a, b, rows, marks, summary }
 var _sbsMsg = '';          // 直前に何をしたか (揃えた結果)
 
-function _sbsPairKey(p) { return p.base + '|' + p.a.folder + '|' + p.b.folder; }
-
-function _sbsPairOf(key) {
-  for (var i = 0; i < _sbsPairs.length; i++) {
-    if (_sbsPairKey(_sbsPairs[i]) === key) return _sbsPairs[i];
-  }
-  return null;
-}
-
+// 並べる面を閉じる (開くのは selectPartPair だけ)。
 function setSbsMode(on) {
   var el = _peekEls();
-  _sbsOn = !!on;
+  _sbsOn = false;
   if (el.sbsToggle) {
-    el.sbsToggle.setAttribute('aria-pressed', _sbsOn ? 'true' : 'false');
-    el.sbsToggle.classList.toggle('on', _sbsOn);
+    el.sbsToggle.setAttribute('aria-pressed', 'false');
+    el.sbsToggle.classList.remove('on');
   }
-  if (!_sbsOn) {
-    _sbsKey = null;
-    _sbsView = null;
-    _sbsMsg = '';
-    renderSbs();
-    if (el.modal && el.modal.style.display !== 'none') { renderPeekDirs(); renderPeekFiles(); }
-    return Promise.resolve(true);
-  }
-  // 2 つの並べ方を同時に出さない。上下に別の突合が並ぶと、どちらの結果を
-  // 見ているのかが画面からは決まらない。
-  if (_cohortOn) setCohortMode(false);
-  _peekName = null;
-  if (el.title) el.title.textContent = '';
-  if (el.svg) { el.svg.textContent = ''; el.svg.style.display = 'none'; }
-  if (el.dsl) el.dsl.textContent = '';
-  _sbsMsg = '';
-  renderSbs();
-  return _peekIndexDocs().then(function(docs) {
-    if (!_sbsOn) return false;
-    var SBS = window.MA.sideBySide;
-    _sbsPairs = SBS ? SBS.pairsByFile(docs) : [];
-    renderSbsPairs();
-    renderSbsFiles();
-    // 1 組しか無いなら開いておく (押して確かめる手を増やさない)。
-    if (_sbsPairs.length === 1) return selectSbsPair(_sbsPairKey(_sbsPairs[0]));
-    renderSbs();
-    return true;
-  });
-}
-
-// 選んだ組の本文だけを読む。一覧の段階では読まない (フォルダ数 × 枚数の
-// 読み込みを、見る気になっていない段階で走らせない)。
-function selectSbsPair(key) {
-  var WS = window.MA.workspace;
-  var SBS = window.MA.sideBySide;
-  _sbsKey = key;
+  _sbsKey = null;
   _sbsView = null;
   _sbsMsg = '';
-  renderSbsPairs();
-  renderSbsFiles();
   renderSbs();
-  var pair = _sbsPairOf(key);
-  if (!pair || !WS || !SBS) { renderSbs(); return Promise.resolve(false); }
-  function load(side) {
-    var src = side.doc || {};
-    return WS.loadFile(src._file, src._dir)
-      .then(function(t) { return { name: side.name, dsl: typeof t === 'string' ? t : '', _dir: src._dir, _file: src._file }; })
-      .catch(function() { return { name: side.name, dsl: '', _dir: src._dir, _file: src._file }; });
-  }
-  return Promise.all([load(pair.a), load(pair.b)]).then(function(both) {
-    if (_sbsKey !== key) return false;   // 途中で選び直された
-    _sbsView = {
-      pair: pair, a: both[0], b: both[1],
-      rows: SBS.rows(both[0], both[1]),
-      marks: SBS.marks(both[0], both[1]),
-      summary: SBS.summaryLine(both[0], both[1]),
-    };
-    renderSbs();
-    // 指摘.md は並べる相手を選ぶのとは別の口なので、読めたら 1 行を足し直す。
-    return _noteLoad().then(function() {
-      if (_sbsKey === key) renderSbs();
-      return true;
-    });
-  });
-}
-
-function renderSbsPairs() {
-  var el = _peekEls();
-  if (!el.dirs) return;
-  _peekDirsShow();
-  el.dirs.textContent = '';
-  var head = document.createElement('div');
-  head.className = 'peek-head';
-  head.id = 'sbs-pairs-head';
-  head.textContent = _sbsPairs.length
-    ? '同名ファイル (' + _sbsPairs.length + ')'
-    : '同じファイル名を 2 人が持っている組がありません';
-  el.dirs.appendChild(head);
-  _sbsPairs.forEach(function(p) {
-    var key = _sbsPairKey(p);
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'peek-dir sbs-pair' + (key === _sbsKey ? ' selected' : '');
-    b.setAttribute('data-sbs-pair', p.base);
-    b.textContent = p.base + ' (' + p.a.folder + ' × ' + p.b.folder + ')';
-    b.addEventListener('click', function() { selectSbsPair(key); });
-    el.dirs.appendChild(b);
-  });
-  if (el.notice) el.notice.textContent = '同名ファイルを並べています (読むだけ・保存先は動きません)';
-}
-
-// 組の 2 枚。押せば従来どおり 1 枚だけ本文と SVG で読める。
-function renderSbsFiles() {
-  var el = _peekEls();
-  if (!el.files) return;
-  el.files.textContent = '';
-  var head = document.createElement('div');
-  head.className = 'peek-head';
-  head.id = 'sbs-files-head';
-  var pair = _sbsPairOf(_sbsKey);
-  head.textContent = pair ? '2 枚' : '組を選んでください';
-  el.files.appendChild(head);
-  if (!pair) return;
-  [pair.a, pair.b].forEach(function(side) {
-    var src = side.doc || {};
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'peek-file' + (src._file === _peekName && src._dir === _peekDir ? ' selected' : '');
-    b.setAttribute('data-file-name', src._file);
-    b.setAttribute('data-folder', side.folder);
-    b.textContent = side.folder + ' / ' + side.base;
-    b.addEventListener('click', function() {
-      _peekDir = src._dir;
-      showPeekFile(src._file).then(renderSbsFiles);
-    });
-    el.files.appendChild(b);
-  });
+  if (el.modal && el.modal.style.display !== 'none') { renderPeekDirs(); renderPeekFiles(); }
+  return Promise.resolve(true);
 }
 
 // ── 複合図から部品を切り出して並べる ──
@@ -7681,7 +7434,6 @@ function selectPartPair(partName) {
   _partSel = res.part.name;
   if (_cohortOn) setCohortMode(false);
   _sbsOn = true;
-  _sbsPairs = [];
   _sbsKey = key;
   _sbsView = null;
   _sbsMsg = '';
@@ -7757,16 +7509,7 @@ function renderSbs() {
   if (!_sbsOn) { el.sbs.style.display = 'none'; return; }
   el.sbs.style.display = 'block';
 
-  if (!_sbsKey) {
-    var hint = document.createElement('div');
-    hint.className = 'sbs-hint';
-    hint.id = 'sbs-hint';
-    hint.textContent = _sbsPairs.length
-      ? '同じファイル名を 2 人が持っている組を ' + _sbsPairs.length + ' 件見つけました。左で組を選んでください。'
-      : '同じファイル名を 2 人が持っている組がありません。';
-    el.sbs.appendChild(hint);
-    return;
-  }
+  if (!_sbsKey) { el.sbs.style.display = 'none'; return; }
   var v = _sbsView;
   if (!v) {
     var loading = document.createElement('div');
@@ -7787,19 +7530,6 @@ function renderSbs() {
   sum.id = 'sbs-summary';
   sum.textContent = _sbsMsg || v.summary;
   el.sbs.appendChild(sum);
-
-  // 指摘.md にこの図の名前が挙がっているか。
-  // 挙がっていなければ「指摘はありません」と言い切る (確かめるために指摘.md を
-  // 全文読み直す工程を消す)。図に残る判断の注記 (domain-verdict) も添える。
-  var noteText = _noteDocStatusText();
-  if (noteText) {
-    var ns = document.createElement('div');
-    ns.className = 'sbs-summary';
-    ns.id = 'sbs-note-status';
-    ns.setAttribute('data-note-clear', /指摘はありません/.test(noteText) ? '1' : '0');
-    ns.textContent = '' + noteText;
-    el.sbs.appendChild(ns);
-  }
 
   var grid = document.createElement('div');
   grid.className = 'sbs-grid';
@@ -7894,7 +7624,7 @@ function applySbsAlign(mine, from, to, btn) {
       if (!ok) { _sbsMsg = '書き戻せませんでした (保存先を確認してください)'; renderSbs(); return false; }
       var msg = from + ' → ' + to + ' を ' + n + ' 箇所、' + mine.name + ' に保存しました';
       // 並べ直す。直った姿が同じ画面にすぐ出ないと、直ったか確かめる手が増える。
-      return selectSbsPair(_sbsKey).then(function() {
+      return selectPartPair(_partSel).then(function() {
         _sbsMsg = msg;
         renderSbs();
         return true;
@@ -7906,80 +7636,6 @@ function applySbsAlign(mine, from, to, btn) {
       renderSbs();
       return false;
     });
-}
-
-// ── 指摘.md の 1 件から並べて見る ──
-// junior は reviewer の指摘.md を GUI の外でテキストとして読み、そこに書かれた
-// 図名を目で拾い、覗き機能で自分と先輩のフォルダから同じ名前を探し当ててから
-// ようやく見比べていた。指摘 1 件を押せば、その図の組が並んだ状態で出る所まで
-// 画面が連れて行く。指摘文と図の対応付けは reviewNote が持つ (ここは描画だけ)。
-var _noteOn = false;
-var _noteRows = [];        // reviewNote.rows の戻り
-var _noteFile = null;      // 読んだ指摘.md ({folder, name, text})
-var _noteKey = null;       // 選んでいる指摘の id
-var _noteMsg = '';         // 押した結果 (組が無かったときの理由など)
-var _notePlans = [];       // findingActions.plans の戻り (指摘 1 件 = 当てる操作 1 つ)
-var _noteBusy = '';        // 当てている最中の指摘 id
-// 「前提」「突合サマリ」「◯◯への依頼」は直す図を持たない
-// 前置きで、一覧に混ざると 1 件ずつ「本物か前置きか」を読んで決めることになる。
-// 既定では一覧の外に出し、件数を言って、押せば出し直せるようにする (消しはしない)。
-var _noteShowPreamble = false;
-// 指摘 1 件 = 対象の図種・版 1 つ。
-var _noteNames = [];       // 覗ける全フォルダにある図名 (版ぞろいを引くため)
-var _noteIndex = null;     // reviewNote.index の戻り (図名 → それを持つフォルダ)
-var _noteTargets = {};     // { 指摘 id: findingVariant.choose の戻り }
-var _noteHit = null;       // 選んだ指摘の対象 ({id, name, family, kind}) — 一覧を光らせる
-
-function _noteEls() {
-  return { note: document.getElementById('peek-note'),
-           noteToggle: document.getElementById('peek-note-toggle') };
-}
-
-function _noteRowOf(id) {
-  for (var i = 0; i < _noteRows.length; i++) {
-    if (_noteRows[i].id === id) return _noteRows[i];
-  }
-  return null;
-}
-
-// 指摘.md と図名の突き合わせを読む。パネルを開いているかどうかとは別に持つ
-// (並べた図に「指摘なし」と言い切るのに、指摘を開いていることを条件にしない)。
-var _noteLoading = null;
-
-function _noteLoad(force) {
-  var RN = window.MA.reviewNote;
-  if (!RN) return Promise.resolve(false);
-  if (!force && _noteFile) return Promise.resolve(true);
-  if (!force && _noteLoading) return _noteLoading;
-  var dir = _wsFileDir();
-  // 指摘 (.md) と、突き合わせる図名の一覧を同時に取る。図名は実在するものだけを
-  // 使う (本文から「それらしい語」を拾うと md5 値やコマンド名が図名として並ぶ)。
-  _noteLoading = Promise.all([
-    fetch('/peek-notes?dir=' + encodeURIComponent(dir))
-      .then(function(r) { return r.ok ? r.json() : null; })
-      .catch(function() { return null; }),
-    _peekIndexDocs(),
-  ]).then(function(both) {
-    var data = both[0] || {};
-    var idx = RN.index(both[1]);
-    _noteFile = RN.pickNote(data.notes);
-    _noteIndex = idx;
-    _noteNames = idx.names.slice();
-    _noteRows = _noteFile ? RN.rows(RN.parse(_noteFile.text), idx) : [];
-    _notePlans = _notePlansFor(_noteRows);
-    _noteTargets = _noteTargetsFor(_noteRows);
-    _noteLoading = null;
-    return true;
-  }).catch(function() {
-    _noteRows = [];
-    _notePlans = [];
-    _noteTargets = {};
-    _noteNames = [];
-    _noteIndex = null;
-    _noteLoading = null;
-    return false;
-  });
-  return _noteLoading;
 }
 
 // ── 部品名の統一バッジ ────────────────
@@ -8086,785 +7742,6 @@ function renderRenameBadge() {
   });
 }
 
-// 並べている図に付ける 1 行。指摘.md にその図名が 1 件も挙がっていなければ
-// 「指摘はありません」と言い切り、図に残る判断の注記 (domain-verdict) も添える。
-function _noteDocStatusText() {
-  var RN = window.MA.reviewNote;
-  if (!RN || !_noteFile || !_sbsView) return '';
-  var v = _sbsView;
-  var docs = [
-    { folder: v.pair.a.folder, dsl: v.a.dsl },
-    { folder: v.pair.b.folder, dsl: v.b.dsl },
-  ];
-  return RN.docStatus(_noteRows, v.pair.base, docs).text;
-}
-
-function setNoteMode(on) {
-  var el = _noteEls();
-  _noteOn = !!on;
-  if (el.noteToggle) {
-    el.noteToggle.setAttribute('aria-pressed', _noteOn ? 'true' : 'false');
-    el.noteToggle.classList.toggle('on', _noteOn);
-  }
-  _noteMsg = '';
-  if (!_noteOn) {
-    _noteKey = null;
-    renderNotePanel();
-    return Promise.resolve(true);
-  }
-  _noteRows = [];
-  _notePlans = [];
-  _noteTargets = {};
-  _noteHit = null;
-  _noteFile = null;
-  renderNotePanel();
-  return _noteLoad(true).then(function(ok) {
-    if (!_noteOn) return false;
-    renderNotePanel();
-    return ok;
-  });
-}
-
-// ── 指摘が指す図種・版 ──
-// 指摘.md は「対象は本番用か資料用か」まで書くのに、開く側は図種単位でしか
-// 見分けず、同じ枠に並ぶ (資料用) を目で読み比べて選んでいた。指摘文に書いて
-// あるものを読み、対象の 1 枚を決めて、📂一覧のその行を光らせる。
-function _noteTargetsFor(rows) {
-  var FV = window.MA.findingVariant;
-  var out = {};
-  if (!FV) return out;
-  (rows || []).forEach(function(r) {
-    out[r.id] = FV.choose({
-      bases: (r.docs || []).map(function(d) { return d.name; }),
-      names: _noteNames,
-      text: r.text || (r.title + '\n' + r.body),
-    });
-  });
-  return out;
-}
-
-function _noteTargetOf(id) { return _noteTargets[id] || null; }
-
-// 選んだ指摘の対象。📂一覧はこれを見て行を光らせる (覗く画面を閉じても残す —
-// 手順 1 は覗いて終わりではなく、続けて自分の一覧から同じ版を開く)。
-function noteHitOf(name) {
-  if (!_noteHit || !name) return '';
-  if (_noteHit.name === name) return 'target';
-  return (_noteHit.family || []).indexOf(name) >= 0 ? 'family' : '';
-}
-
-// 組 (並べて見る左右) を、対象に選んだ版で取り直す。その版の組が無ければ
-// 今までどおり先頭の組 (指摘が名指しした図) にする。
-function _notePairFor(row, pick) {
-  var pairs = (row && row.pairs) || [];
-  if (pick && pick.name) {
-    for (var i = 0; i < pairs.length; i++) {
-      if (pairs[i].base === pick.name) return pairs[i];
-    }
-    // 指摘文は版を言葉で指すので (「対象は資料用です」)、その版のファイル名は
-    // 本文に綴られておらず、指摘が名指しした図の組には入ってこない。
-    // 両方のフォルダがその版を持っているなら、組はここで作れる。
-    var e = _noteIndex && _noteIndex.map ? _noteIndex.map[pick.name] : null;
-    if (e && e.folders.length >= 2) {
-      var fs = e.folders.slice().sort();
-      return { base: pick.name, a: fs[0], b: fs[1] };
-    }
-  }
-  return pairs.length ? pairs[0] : null;
-}
-
-// 指摘 1 件を押したときの中身。図の組が取れていれば、その組を並べて見る画面で開く。
-function selectNoteFinding(id) {
-  var row = _noteRowOf(id);
-  var pick = _noteTargetOf(id);
-  _noteKey = id;
-  _noteMsg = '';
-  _noteHit = (pick && pick.name)
-    ? { id: id, name: pick.name, family: (pick.family || []).slice(), kind: pick.kind }
-    : null;
-  try { refreshFolderPanelNow(); } catch (e) {}
-  if (!row) { renderNotePanel(); return Promise.resolve(false); }
-  if (!row.pairs.length) {
-    _noteMsg = row.docs.length
-      ? '「' + row.docs[0].name + '」は ' + (row.docs[0].folders.join('・') || '—')
-        + ' にしかありません (並べる相手がいません)'
-      : 'この指摘には、保存フォルダにある図の名前が書かれていません';
-    renderNotePanel();
-    return Promise.resolve(false);
-  }
-  var p = _notePairFor(row, pick);
-  var key = p.base + '|' + p.a + '|' + p.b;
-  renderNotePanel();
-  // 並べて見る画面は同名ファイルで組む。組の索引はそこが持っているので、
-  // 開いてから同じ鍵で選ぶ (指摘側で組を作り直すと、左右の決め方が二重になる)。
-  var open = _sbsOn ? Promise.resolve(true) : setSbsMode(true);
-  return open.then(function() {
-    return selectSbsPair(key);
-  }).then(function(ok) {
-    _noteMsg = ok
-      ? p.base + ' を ' + p.a + ' ⇔ ' + p.b + ' で並べました'
-      : p.base + ' の本文を読めませんでした';
-    // 指摘が指した版が片方のフォルダにしか無いと、並べられるのは別の版になる。
-    // 黙って別の版を並べると、その版を今回の対象だと読んでしまう。
-    if (ok && pick && pick.name && pick.name !== p.base) {
-      _noteMsg += '（指摘が指す ' + pick.name + ' は片方のフォルダにしかないので、'
-        + '保存先の一覧で光らせています）';
-    }
-    renderNotePanel();
-    return ok;
-  });
-}
-
-// ── 指摘 1 件を [適用] で当てる ──
-// 指摘.md の 1 件から図の組が並ぶ所までは来たが、そこから先の「これは ⇄一括置換 か、
-// 再出力か、別ドメイン宣言か」は primary が毎回指摘文を読んで決め、対応する画面を
-// 探して開いていた。手段は指摘文に書いてあるので、翻訳は findingActions に任せ、
-// ここは当てるだけにする (どの画面を開くかを人が決めなくてよくする)。
-function _noteMineFolder() {
-  for (var i = 0; i < _peekDirs.length; i++) {
-    if (_peekDirs[i] && _peekDirs[i].current) return _peekDirs[i].name;
-  }
-  return '';
-}
-
-function _notePlansFor(rows) {
-  var FA = window.MA.findingActions;
-  if (!FA) return [];
-  return FA.plans(rows, { mineFolder: _noteMineFolder() });
-}
-
-function _notePlanOf(id) {
-  var FA = window.MA.findingActions;
-  return FA ? FA.planOf(_notePlans, id) : null;
-}
-
-// 指摘に挙がった図のうち、自分のフォルダにある実体 ({_dir, _file})。
-function _noteMineFiles(plan) {
-  var mine = _noteMineFolder();
-  var out = [];
-  (plan && plan.docs || []).forEach(function(name) {
-    var row = _noteRowOf(plan.id);
-    ((row && row.docs) || []).forEach(function(d) {
-      if (d.name !== name) return;
-      (d.docs || []).forEach(function(pd) {
-        if (!pd || !pd._dir || !pd._file) return;
-        if (mine && String(pd.name).indexOf(mine + '/') !== 0) return;
-        out.push({ name: name, dir: pd._dir, file: pd._file });
-      });
-    });
-  });
-  return out;
-}
-
-// 再出力: 指摘の図を 1 枚ずつ描き直して保存フォルダの .svg を置き換える。
-// 1 枚失敗しても残りは進める (1 枚のために全部止まると手作業に戻る)。
-function _noteApplyReexport(plan) {
-  var WS = window.MA.workspace;
-  var files = _noteMineFiles(plan);
-  if (!WS || !files.length) return Promise.resolve({ ok: false, message: '出し直せる図がありません' });
-  var done = [];
-  var failed = [];
-  return files.reduce(function(chain, f) {
-    return chain.then(function() {
-      return WS.loadFile(f.file, f.dir).then(function(dsl) {
-        if (dsl == null) throw new Error('読めません');
-        return renderDslToSvg(dsl, f.dir);
-      }).then(function(svg) {
-        return fetch('/autosave-svg', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: f.name, dir: f.dir, svg: svg }),
-        });
-      }).then(function(resp) {
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        done.push(f.name);
-      }).catch(function() { failed.push(f.name); });
-    });
-  }, Promise.resolve()).then(function() {
-    return { ok: done.length > 0, done: done,
-             message: failed.length ? failed.join('・') + ' は出し直せませんでした' : '' };
-  });
-}
-
-// ラベル統一: 綴りの言い換えを、指摘が名指しした図 (無ければ自分のフォルダの
-// 当たる図) だけに当てる。全図に当てない (指摘は対象を絞って書かれている)。
-function _noteApplyRename(plan) {
-  var WS = window.MA.workspace;
-  var BR = window.MA.bulkRename;
-  if (!WS || !BR) return Promise.resolve({ ok: false, message: '一括置換が使えません' });
-  var dir = _wsFileDir();
-  var pick = plan.scope === 'folder'
-    ? WS.listFiles(dir).then(function(names) {
-        return (names || []).map(function(n) { return { name: n, dir: dir, file: n }; });
-      })
-    : Promise.resolve(_noteMineFiles(plan));
-  return pick.then(function(files) {
-    if (!files.length) return { ok: false, message: '当てる図がありません' };
-    var done = [];
-    var hits = 0;
-    var pairs = [];
-    return files.reduce(function(chain, f) {
-      return chain.then(function() {
-        return WS.loadFile(f.file, f.dir).then(function(dsl) {
-          var n = dsl == null ? 0 : BR.countIn(dsl, plan.from);
-          if (!n) return null;
-          var next = BR.replaceIn(dsl, plan.from, plan.to);
-          // 書く前を基準に置く。
-          if (window.MA.saveDiff) { try { window.MA.saveDiff.markIfAbsent(f.name, dsl); } catch (e) {} }
-          return WS.saveToFile({ name: f.name, dsl: next }, f.dir)
-            .then(function(ok) {
-              if (!ok) return;
-              hits += n; done.push(f.name);
-              pairs.push({ name: f.name, before: dsl, after: next });
-            });
-        }).catch(function() { return null; });
-      });
-    }, Promise.resolve()).then(function() {
-      // [適用] は保存フォルダへ直接書くので、ここで前後を控えないと後から出せない。
-      _recordWrite('note-rename', { from: plan.from, to: plan.to }, pairs);
-      return done.length
-        ? { ok: true, done: done, hits: hits }
-        : { ok: false, message: '「' + plan.from + '」は保存フォルダの図に見当たりません' };
-    });
-  });
-}
-
-// 別ドメイン明示: 相手と名前が同じでも別物、という判断を自分の図に書き残す。
-// 書く形は突合の場 (domain-verdict) と同じにする (次に突合したとき判断済みと読める)。
-function _noteApplyVerdict(plan) {
-  var WS = window.MA.workspace;
-  var DV = window.MA.domainVerdict;
-  var files = _noteMineFiles(plan);
-  if (!WS || !DV || !files.length) return Promise.resolve({ ok: false, message: '印を書ける図がありません' });
-  var done = [];
-  var pairs = [];
-  return files.reduce(function(chain, f) {
-    return chain.then(function() {
-      return WS.loadFile(f.file, f.dir).then(function(dsl) {
-        if (dsl == null) return null;
-        var DC = window.MA.domainCohort;
-        var domain = DC ? DC.domainOf(f.name) : f.name;
-        var next = DV.applyMark(dsl, 'separate', domain, plan.otherFolder);
-        if (next === dsl) { done.push(f.name); return null; }
-        if (window.MA.saveDiff) { try { window.MA.saveDiff.markIfAbsent(f.name, dsl); } catch (e) {} }
-        return WS.saveToFile({ name: f.name, dsl: next }, f.dir).then(function(ok) {
-          if (!ok) return;
-          done.push(f.name);
-          pairs.push({ name: f.name, before: dsl, after: next });
-        });
-      }).catch(function() { return null; });
-    });
-  }, Promise.resolve()).then(function() {
-    _recordWrite('note-verdict', { note: plan.otherFolder ? plan.otherFolder + ' とは別物' : '' }, pairs);
-    return done.length ? { ok: true, done: done } : { ok: false, message: '書き戻せませんでした' };
-  });
-}
-
-// 保存フォルダの図を全部読む。突合 (eventSync / methodAudit) は「状態遷移図と
-// クラス図の両方」を見て初めて足す先を決められるので、指摘が名指しした図だけでは
-// 足りない (指摘は「メソッドが無い」としか書かず、どのクラス図に足すかは書かない)。
-function _noteFolderDocs() {
-  var WS = window.MA.workspace;
-  if (!WS) return Promise.resolve([]);
-  var dir = _wsFileDir();
-  return WS.listFiles(dir).then(function(names) {
-    return (names || []).reduce(function(chain, n) {
-      return chain.then(function(acc) {
-        return WS.loadFile(n, dir).then(function(dsl) {
-          if (dsl != null) acc.push({ id: n, name: n, dsl: dsl, _dir: dir, _file: n });
-          return acc;
-        }).catch(function() { return acc; });
-      });
-    }, Promise.resolve([]));
-  }).catch(function() { return []; });
-}
-
-function _noteSaveDocs(changed) {
-  var WS = window.MA.workspace;
-  var done = [];
-  return (changed || []).reduce(function(chain, c) {
-    return chain.then(function() {
-      return WS.saveToFile({ name: c.name, dsl: c.dsl }, _wsFileDir()).then(function(ok) {
-        if (ok) done.push(c.name);
-      }).catch(function() { return null; });
-    });
-  }, Promise.resolve()).then(function() { return done; });
-}
-
-// メソッド追加: 「遷移ラベルに対応するメソッドが無い」指摘を、⇄突合の画面を
-// 開かずにその場で当てる。足す先のクラスと
-// メソッド名は eventSync の突合が出すので、ここは読む → 当てる → 保存だけ。
-function _noteApplyAddMethod(plan) {
-  var ES = window.MA.eventSync;
-  if (!ES || !window.MA.workspace) return Promise.resolve({ ok: false, message: '突合が使えません' });
-  return _noteFolderDocs().then(function(docs) {
-    if (!docs.length) return { ok: false, message: '保存フォルダに図がありません' };
-    var built = ES.build(docs);
-    // 指摘が状態遷移図を名指ししていれば、その図の遷移だけを足す。保存フォルダ全体の
-    // 欠落を当てると、指摘が触れていない図の分まで黙って増える (ラベル統一と同じ約束)。
-    var only = {};
-    (plan.docs || []).forEach(function(n) { only[n] = true; });
-    var want = built.missing.filter(function(r) {
-      if (!plan.docs || !plan.docs.length) return true;
-      return (r.stateDocs || []).some(function(n) { return only[n]; });
-    });
-    if (!want.length) {
-      return { ok: false, message: '足りないメソッドはありません (突合では欠落 0 件)' };
-    }
-    var res = ES.apply(docs, want, 'void');
-    if (!res.changed.length) return { ok: false, message: '足す先のクラスが見つかりません' };
-    return _noteSaveDocs(res.changed).then(function(done) {
-      return done.length
-        ? { ok: true, done: done, added: res.added, hits: res.added.length }
-        : { ok: false, message: '書き戻せませんでした' };
-    });
-  });
-}
-
-// クラス追加: 「このクラスがクラス図に不在」を、宣言だけ足して埋める。
-// メンバは書かない (指摘はクラスの不在しか言っていない。想像で操作を足すと
-// 実在しないメソッドが突合の「あり」側に回る)。
-function _noteApplyAddClass(plan) {
-  var CS = window.MA.classScaffold;
-  var MAUD = window.MA.methodAudit;
-  if (!CS || !MAUD || !window.MA.workspace) {
-    return Promise.resolve({ ok: false, message: 'クラス図の組み立てが使えません' });
-  }
-  return _noteFolderDocs().then(function(docs) {
-    // 足す先はクラス宣言を持つ図。複数あれば宣言の多い方 (本体のクラス図)。
-    var target = null;
-    var best = -1;
-    docs.forEach(function(d) {
-      var n = MAUD.parseClassDoc(d.dsl).classes.length;
-      if (n > best) { best = n; target = d; }
-    });
-    if (!target || best <= 0) return { ok: false, message: '保存フォルダにクラス図がありません' };
-    var declared = CS.existingIds(target.dsl);
-    var want = (plan.classes || []).filter(function(c) { return !declared[c]; });
-    if (!want.length) {
-      return { ok: false, message: '指摘のクラスは ' + target.name + ' に宣言済みです' };
-    }
-    var dsl = CS.insertBeforeEnd(target.dsl, want.map(function(c) { return 'class ' + c; }));
-    return _noteSaveDocs([{ name: target.name, dsl: dsl }]).then(function(done) {
-      return done.length
-        ? { ok: true, done: done, added: want, hits: want.length }
-        : { ok: false, message: '書き戻せませんでした' };
-    });
-  });
-}
-
-// 意図を明記: 「クラス図に足すか、意図的省略を明記するか」の後者を当てる
-// 足す先は addclass と同じ「宣言の一番多い
-// クラス図」。note の宛先が宣言されていなければ書かず、先に [クラス追加] を当てる
-// よう理由を返す (宣言の無い相手に note を向けると描画ごと落ちる)。
-function _noteApplyNoteIntent(plan) {
-  var NI = window.MA.noteIntent;
-  var MAUD = window.MA.methodAudit;
-  if (!NI || !MAUD || !window.MA.workspace) {
-    return Promise.resolve({ ok: false, message: '注釈の組み立てが使えません' });
-  }
-  return _noteFolderDocs().then(function(docs) {
-    var target = null;
-    var best = -1;
-    docs.forEach(function(d) {
-      var n = MAUD.parseClassDoc(d.dsl).classes.length;
-      if (n > best) { best = n; target = d; }
-    });
-    if (!target || best <= 0) return { ok: false, message: '保存フォルダにクラス図がありません' };
-    var res = NI.apply(target.dsl, plan.targets, { heading: plan.heading });
-    if (!res.added.length) {
-      return { ok: false, message: NI.blockReason({ skipped: res.skipped }) };
-    }
-    return _noteSaveDocs([{ name: target.name, dsl: res.dsl }]).then(function(done) {
-      return done.length
-        ? { ok: true, done: done, added: res.added, hits: res.added.length }
-        : { ok: false, message: '書き戻せませんでした' };
-    });
-  });
-}
-
-function applyNoteFinding(id, useAlt) {
-  var FA = window.MA.findingActions;
-  var main = _notePlanOf(id);
-  var plan = useAlt ? (main && main.alt) : main;
-  _noteKey = id;
-  if (!FA || !plan || !plan.ready) {
-    _noteMsg = plan ? (plan.reason || '当てられません') : '指摘が見つかりません';
-    renderNotePanel();
-    return Promise.resolve(false);
-  }
-  _noteBusy = id;
-  _noteMsg = plan.text + ' …';
-  renderNotePanel();
-  var run = plan.kind === 'rename' ? _noteApplyRename(plan)
-          : plan.kind === 'verdict' ? _noteApplyVerdict(plan)
-          : plan.kind === 'addmethod' ? _noteApplyAddMethod(plan)
-          : plan.kind === 'addclass' ? _noteApplyAddClass(plan)
-          : plan.kind === 'noteintent' ? _noteApplyNoteIntent(plan)
-          : _noteApplyReexport(plan);
-  return run.catch(function() {
-    return { ok: false, message: '当てられませんでした' };
-  }).then(function(res) {
-    _noteBusy = '';
-    _noteMsg = FA.resultText(plan, res);
-    renderNotePanel();
-    return !!(res && res.ok);
-  });
-}
-
-// ── 指摘の表記揺れ語を、開いている図に自動で突き合わせる ──
-// junior は指摘.md の「表記揺れ」欄の組 (IRQCtrl⇔Irq_Ctrl 等) を
-// 目で覚え、開いた図の全行を上から読んで該当語を探していた。行数の多い図ほどその
-// スキャンが長く、組が増えるたびに図全体を読み直すことになる。突合そのものは
-// vocabMatch が持つ (ここは描画と行送りだけ)。
-var VOCAB_MAX_LINES = 12;   // 該当行が多いときは頭だけ出す (band が画面を埋めない)
-
-function _vocabScan() {
-  var VM = window.MA.vocabMatch;
-  if (!VM || !_noteFile || !editorEl) return null;
-  return VM.scan(_noteFile.text, editorEl.value);
-}
-
-function renderVocabBand(host) {
-  var VM = window.MA.vocabMatch;
-  var res = _vocabScan();
-  if (!host || !VM || !res) return;
-
-  var band = document.createElement('div');
-  band.className = 'vocab-band';
-  band.id = 'vocab-band';
-  band.setAttribute('data-vocab-state', res.total > 0 ? 'hit' : 'none');
-  band.setAttribute('data-vocab-pairs', String(res.pairs.length));
-  band.setAttribute('data-vocab-lines', String(res.lines.length));
-  band.setAttribute('data-vocab-total', String(res.total));
-
-  var sum = document.createElement('div');
-  sum.className = 'vocab-sum';
-  sum.id = 'vocab-sum';
-  sum.textContent = '表記揺れ突合: ' + VM.summaryText(res);
-  band.appendChild(sum);
-
-  // 該当した組を、綴りごとの件数付きで 1 行に。どちらの綴りが残っているかが
-  // 見えないと、直す前に本文を開いて確かめ直すことになる。
-  var hits = VM.hitPairs(res);
-  if (hits.length) {
-    var ps = document.createElement('div');
-    ps.className = 'vocab-pairs';
-    ps.id = 'vocab-pairs';
-    ps.textContent = hits.map(function(p) {
-      return p.label + ' (' + p.terms.map(function(t) {
-        return t.term + ' ' + t.count + '件';
-      }).join('、') + ')';
-    }).join(' / ');
-    band.appendChild(ps);
-  }
-
-  // 該当行。押せばエディタのその行へ飛ぶ (見つけた所から直しに入れる)。
-  res.lines.slice(0, VOCAB_MAX_LINES).forEach(function(row) {
-    var div = document.createElement('div');
-    div.className = 'vocab-line';
-    div.setAttribute('data-vocab-line', String(row.line));
-    var no = document.createElement('span');
-    no.className = 'vocab-no';
-    no.textContent = String(row.line) + ':';
-    div.appendChild(no);
-    VM.segments(row).forEach(function(seg) {
-      var sp = document.createElement('span');
-      if (seg.hit) {
-        sp.className = 'vocab-hit';
-        sp.setAttribute('data-vocab-term', seg.term || '');
-      }
-      sp.textContent = seg.text;
-      div.appendChild(sp);
-    });
-    div.title = '行 ' + row.line + ' へ移動';
-    div.addEventListener('click', function() { jumpToLine(row.line); });
-    band.appendChild(div);
-  });
-  if (res.lines.length > VOCAB_MAX_LINES) {
-    var more = document.createElement('div');
-    more.className = 'vocab-more';
-    more.id = 'vocab-more';
-    more.textContent = 'ほか ' + (res.lines.length - VOCAB_MAX_LINES) + ' 行';
-    band.appendChild(more);
-  }
-
-  renderVocabVerdicts(band, res);
-  host.appendChild(band);
-}
-
-// ── 表記揺れの「統一先」を先輩フォルダの実績から言い切る ──
-// 突合は該当語の位置までは出すが、組の左右どちらが
-// 正式表記かは出さない。指摘.md 本文にも書かれていないので、junior は先輩フォルダの
-// 複数ファイルを grep して先輩の実際の綴りを探していた。組が複数図種にまたがると、
-// その grep を図種ごとにやり直すことになる。判定そのものは vocabCanon が持つ
-// (ここは読み込みと描画だけ)。
-var VOCAB_MAX_FILES = 3;    // 裏取り先は頭 3 枚 (それ以上は「ほか N 枚」)
-var _canonDocs = null;      // 先輩フォルダの本文 [{folder, name, text, mtime}]
-var _canonKey = '';         // 読んだフォルダの並び (変われば読み直す)
-var _canonLoading = null;
-
-// 根拠にするフォルダ。先輩の枠でフォルダを決めてあればそこだけを見る
-// (決めてあるのに他のフォルダの綴りを数に混ぜると、判定が黙って変わる)。
-// 決めていなければ、自分の保存先以外の覗けるフォルダ全部。
-function _canonDirs() {
-  var PF = window.MA.peekFolder;
-  var st = _seniorState();
-  if (st && st.dir) return [{ name: _seniorLabel(), path: st.dir }];
-  return PF ? PF.others(_peekDirs).map(function(d) {
-    return { name: d.name, path: d.path };
-  }) : [];
-}
-
-// フォルダごと 1 回の呼び出しで本文と刻印を受け取る (図を 1 枚ずつ取りに行くと、
-// 指摘を開いてから統一先が出るまでが枚数ぶん遅れて出る)。
-function refreshVocabCanon() {
-  var WS = window.MA.workspace;
-  var dirs = _canonDirs();
-  var key = dirs.map(function(d) { return d.path; }).join('|');
-  if (!WS || !dirs.length) { _canonDocs = []; _canonKey = key; return Promise.resolve(false); }
-  if (_canonKey === key && _canonDocs) return Promise.resolve(false);
-  if (_canonLoading) return _canonLoading;
-  _canonLoading = Promise.all(dirs.map(function(d) {
-    return WS.listFolder(d.path).then(function(info) {
-      return ((info && info.entries) || []).filter(function(e) {
-        return e && e.name && typeof e.text === 'string';
-      }).map(function(e) {
-        return { folder: d.name, name: e.name, text: e.text, mtime: e.mtime || '' };
-      });
-    }).catch(function() { return []; });
-  })).then(function(sets) {
-    _canonDocs = sets.reduce(function(a, s) { return a.concat(s); }, []);
-    _canonKey = key;
-    _canonLoading = null;
-    return true;
-  }).catch(function() {
-    // 読めないだけで突合そのものは止めない (統一先だけが出ない)。
-    _canonDocs = [];
-    _canonKey = key;
-    _canonLoading = null;
-    return false;
-  });
-  return _canonLoading;
-}
-
-function renderVocabVerdicts(band, res) {
-  var VM = window.MA.vocabMatch;
-  var VC = window.MA.vocabCanon;
-  if (!band || !VM || !VC) return;
-  var hits = VM.hitPairs(res);
-  if (!hits.length) return;      // 自分の図に無い組の統一先は今は要らない
-
-  // まだ読んでいなければ読みに行き、届いたら描き直す (待たせない)。
-  if (!_canonDocs) {
-    var wait = document.createElement('div');
-    wait.className = 'vocab-canon-sum';
-    wait.id = 'vocab-canon-sum';
-    wait.textContent = '統一先: 先輩の図を読み込み中…';
-    band.appendChild(wait);
-    // 読めても読めなくても 1 度は描き直す (「読み込み中…」のまま残さない)。
-    refreshVocabCanon().then(function() { if (_canonDocs) renderNotePanel(); });
-    return;
-  }
-
-  var verdicts = VC.decideAll(hits, _canonDocs,
-    window.MA.nameRegistry ? window.MA.nameRegistry.current() : null);
-
-  var sum = document.createElement('div');
-  sum.className = 'vocab-canon-sum';
-  sum.id = 'vocab-canon-sum';
-  sum.textContent = VC.summaryText(verdicts, _canonDocs.length);
-  band.setAttribute('data-canon-decided', String(VC.decided(verdicts).length));
-  band.appendChild(sum);
-
-  verdicts.forEach(function(v) {
-    var row = document.createElement('div');
-    row.className = 'vocab-canon';
-    row.setAttribute('data-canon-pair', v.label);
-    row.setAttribute('data-canon-source', v.source);
-    row.setAttribute('data-canon-to', v.canonical || '');
-    var head = document.createElement('div');
-    head.className = 'vocab-canon-head';
-    head.textContent = VC.verdictText(v);
-    row.appendChild(head);
-
-    // 裏取り先。「先輩のどの図の何行目にその綴りがあるか」まで出しておくと、
-    // 疑ったときにフォルダを grep し直さずに済む。
-    v.files.slice(0, VOCAB_MAX_FILES).forEach(function(f) {
-      var src = document.createElement('div');
-      src.className = 'vocab-canon-src';
-      src.textContent = '· ' + VC.fileText(f);
-      row.appendChild(src);
-    });
-    if (v.files.length > VOCAB_MAX_FILES) {
-      var more = document.createElement('div');
-      more.className = 'vocab-canon-src';
-      more.textContent = '· ほか ' + (v.files.length - VOCAB_MAX_FILES) + ' 枚';
-      row.appendChild(more);
-    }
-    band.appendChild(row);
-  });
-}
-
-function renderNotePanel() {
-  var el = _noteEls();
-  var RN = window.MA.reviewNote;
-  if (!el.note) return;
-  el.note.textContent = '';
-  if (!_noteOn) { el.note.style.display = 'none'; return; }
-  el.note.style.display = 'block';
-
-  var head = document.createElement('div');
-  head.className = 'note-head';
-  head.id = 'note-head';
-  head.textContent = _noteFile
-    ? (_noteFile.folder + ' / ' + _noteFile.name)
-    : '隣のフォルダに指摘 (.md) がありません';
-  el.note.appendChild(head);
-
-  var sum = document.createElement('div');
-  sum.className = 'note-summary';
-  sum.id = 'note-summary';
-  sum.textContent = _noteMsg || (RN ? RN.summaryText(_noteRows, _noteShowPreamble) : '');
-  el.note.appendChild(sum);
-
-  // 表記揺れの自動突合。指摘の語彙は既に読んで
-  // あるので、開いている図に効いているかどうかは機械が言える。該当が無いときも
-  // 「該当なし」と出す (無いことを確かめるために全行を目で追わせない)。
-  renderVocabBand(el.note);
-
-  // 前置きの出し入れ。前置きが 1 件も無いフォルダでは出さない (押す所を増やさない)。
-  var preLabel = RN ? RN.preambleLabel(_noteRows, _noteShowPreamble) : '';
-  if (preLabel) {
-    var pre = document.createElement('button');
-    pre.type = 'button';
-    pre.className = 'note-preamble-toggle' + (_noteShowPreamble ? ' on' : '');
-    pre.id = 'note-preamble-toggle';
-    pre.textContent = preLabel;
-    pre.title = '「前提」「サマリ」「依頼」など、直す図を持たない見出しの出し入れ';
-    pre.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      _noteShowPreamble = !_noteShowPreamble;
-      renderNotePanel();
-    });
-    el.note.appendChild(pre);
-  }
-
-  // 「今日 [適用] だけで済む件数」は、並べて見られる件数とは別の数なので別行にする。
-  var FA = window.MA.findingActions;
-  if (FA && _notePlans.length) {
-    var asum = document.createElement('div');
-    asum.className = 'note-summary';
-    asum.id = 'note-apply-summary';
-    asum.textContent = FA.summaryText(_notePlans);
-    el.note.appendChild(asum);
-  }
-
-  if (!_noteRows.length) {
-    var hint = document.createElement('div');
-    hint.className = 'note-hint';
-    hint.id = 'note-hint';
-    hint.textContent = _noteFile
-      ? '指摘.md に見出し (## ...) がありません'
-      : '指摘は保存先の隣のフォルダ (reviewer など) の .md から読みます';
-    el.note.appendChild(hint);
-    return;
-  }
-
-  var shown = RN ? RN.visibleRows(_noteRows, _noteShowPreamble) : _noteRows;
-  shown.forEach(function(r) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'note-finding' + (r.id === _noteKey ? ' selected' : '');
-    b.setAttribute('data-note-id', r.id);
-    b.setAttribute('data-note-ready', r.ready ? '1' : '0');
-    b.setAttribute('data-note-docs', r.docs.map(function(d) { return d.name; }).join(','));
-    if (r.pairs.length) b.setAttribute('data-note-pair', r.pairs[0].base);
-    r.marks.forEach(function(m) {
-      var s = document.createElement('span');
-      s.className = 'note-mark';
-      s.textContent = m;
-      b.appendChild(s);
-    });
-    var label = document.createElement('span');
-    label.className = 'note-docs';
-    label.textContent = RN ? RN.rowLabel(r) : r.title;
-    b.appendChild(label);
-    b.addEventListener('click', function() { selectNoteFinding(r.id); });
-    el.note.appendChild(b);
-
-    // 対象の図種・版 1 行。押す前に「どの版が
-    // 開くのか」が読める。同じ図の版が複数あるのに指摘が版を書いていなければ、
-    // 本番用を選んだことと、ほかの版があることをその場で言う。
-    var FV = window.MA.findingVariant;
-    var pick = _noteTargetOf(r.id);
-    if (FV && pick) {
-      var tr = document.createElement('div');
-      tr.className = 'note-target-row';
-      tr.setAttribute('data-note-target-for', r.id);
-      tr.setAttribute('data-note-target-name', pick.name || '');
-      tr.setAttribute('data-note-target-variant', pick.variant || '');
-      tr.setAttribute('data-note-target-kind', pick.kind || '');
-      tr.setAttribute('data-note-target-by', pick.byText ? 'text' : 'default');
-      tr.textContent = FV.targetText(pick);
-      var amb = FV.ambiguousText(pick);
-      if (amb) tr.title = amb;
-      el.note.appendChild(tr);
-      if (amb) {
-        var ar = document.createElement('div');
-        ar.className = 'note-target-alt';
-        ar.setAttribute('data-note-target-alt-for', r.id);
-        ar.textContent = amb;
-        el.note.appendChild(ar);
-      }
-    }
-
-    // 提案アクション 1 行と [適用]。押す前に「何を、どの図に」が読める。
-    var plan = _notePlanOf(r.id);
-    if (!plan) return;
-    var row = document.createElement('div');
-    row.className = 'note-action-row';
-    row.setAttribute('data-note-action-for', r.id);
-    row.setAttribute('data-note-action', plan.kind);
-    row.setAttribute('data-note-action-ready', plan.ready ? '1' : '0');
-    var what = document.createElement('span');
-    what.className = 'note-action-text';
-    what.textContent = plan.text;
-    row.appendChild(what);
-    var apply = document.createElement('button');
-    apply.type = 'button';
-    apply.className = 'note-apply';
-    apply.setAttribute('data-note-apply', r.id);
-    apply.textContent = _noteBusy === r.id ? '適用中…' : '適用';
-    apply.disabled = !plan.ready || !!_noteBusy;
-    apply.title = plan.ready ? plan.text : (plan.reason || '当てられません');
-    apply.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      applyNoteFinding(r.id);
-    });
-    row.appendChild(apply);
-
-    // 二択で来た指摘の、もう一方の手を隣に置く。
-    // どちらを選ぶかは図を書いている側の判断なので、本手を置き換えず並べる。
-    if (plan.alt) {
-      row.setAttribute('data-note-alt', plan.alt.kind);
-      row.setAttribute('data-note-alt-ready', plan.alt.ready ? '1' : '0');
-      var alt = document.createElement('button');
-      alt.type = 'button';
-      alt.className = 'note-apply note-apply-alt';
-      alt.setAttribute('data-note-apply-alt', r.id);
-      alt.textContent = _noteBusy === r.id ? '…' : plan.alt.label;
-      alt.disabled = !plan.alt.ready || !!_noteBusy;
-      alt.title = plan.alt.ready ? plan.alt.text : (plan.alt.reason || '当てられません');
-      alt.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        applyNoteFinding(r.id, true);
-      });
-      row.appendChild(alt);
-    }
-    el.note.appendChild(row);
-  });
-}
-
 // ── 覗いた図をテンプレートにする ──
 // 読むだけで見た図は、そのまま「テンプレートから新規作成」の材料にできる。
 // 覚えて打ち直す工程が無くなるので、写し違いが起きる余地がない。
@@ -8934,17 +7811,9 @@ function closePeekFolder() {
   if (el.modal) el.modal.style.display = 'none';
   _peekName = null;
   _peekDsl = '';
-  // 次に開いたときは読み直す (指摘.md は reviewer が run ごとに書き替える)。
-  _noteFile = null;
-  _noteRows = [];
-  _notePlans = [];
-  _noteTargets = {};
-  // 対象の印 (_noteHit) は残す。手順 1 は覗いて終わりではなく、続けて自分の
-  // 📂一覧から同じ版を開く。閉じた瞬間に印が消えると、また読み比べに戻る。
   renderPeekTemplateBtn();
   setCohortMode(false);
   setSbsMode(false);
-  setNoteMode(false);
 }
 
 // 覗く窓の左にあったフォルダの一覧は外した。フォルダは FILES「読むだけ」の
@@ -11280,9 +10149,6 @@ function setupPeekFolder() {
   if (el.cohortToggle) {
     el.cohortToggle.addEventListener('click', function() { setCohortMode(!_cohortOn); });
   }
-  if (el.sbsToggle) {
-    el.sbsToggle.addEventListener('click', function() { setSbsMode(!_sbsOn); });
-  }
   // 部品ビュー。
   var boardToggle = document.getElementById('peek-board-toggle');
   if (boardToggle) {
@@ -11290,8 +10156,6 @@ function setupPeekFolder() {
   }
   var findPart = document.getElementById('peek-find-part');
   if (findPart) findPart.addEventListener('click', function() { findPeekPartHome(); });
-  var noteToggle = document.getElementById('peek-note-toggle');
-  if (noteToggle) noteToggle.addEventListener('click', function() { setNoteMode(!_noteOn); });
   if (el.cohortTemplates) {
     el.cohortTemplates.addEventListener('click', function() {
       setCohortTemplates(!_cohortShowTemplates);
@@ -11430,16 +10294,6 @@ function setupTabs() {
   // 22 枚を 1 枚ずつ開いて確かめるのではなく一覧の時点で言うため。
   var kindByName = {};
   var kindEntries = [];
-  // 指摘.md を一覧の側から読んだ結果。
-  // noteBoard は「どの図をどの指摘が指しているか」、noteBoardStatus はその 1 枚の判定。
-  // 本文は対象の図だけ取り寄せる (対象外と言うために全部読むのでは往復が画面に移るだけ)。
-  var noteBoard = null;
-  var noteBoardStatus = {};
-  var noteBoardHasFile = false;
-  var noteBoardReady = false;
-  var noteBoardDir = '';
-  var noteBoardBusy = false;
-  var noteBoardSig = null;
   // 図名 → 保存したときの図種 (server の _kinds.json)。
   // 本文からの判定 (kindByName) と違い、保存した側が知っている図種なので、
   // 「別図種と紛らわしい書き方」をしていても開くときに図種が入れ替わらない。
@@ -11484,9 +10338,6 @@ function setupTabs() {
   var roleScan = null;
   var roleEntries = [];      // 役割を決めた瞬間の指紋を取るための一覧
   var roleNote = '';
-  // 図名 → 指摘の反映状態 (未反映 / 反映済み)。
-  // 「元図」と「元図(レビュー反映)」を別名で並べる代わりに、1 枚のバッジで見分ける。
-  var reviewStatus = {};
   // 図名 → 直近 N 分以内に更新されたか。
   // 他の人が同じ時間帯に書き込み続けている図を、読む前に見分ける。
   var writeStatus = {};
@@ -11507,8 +10358,6 @@ function setupTabs() {
   var swapQueue = null;
   // キューのまとめ (手順7 で primary に渡す文面) を開いているか。
   var swapReportOpen = false;
-  // 本文を開いている「宛先の書かれていない指摘」の id。
-  var unaddrOpen = '';
   // 行の 🗑 を 1 回押した名前 (2 回目で消す)。描き直すと白紙に戻る。
   var deleteArmed = '';
 
@@ -11771,9 +10620,7 @@ function setupTabs() {
     // 起動時に既定で開いた一覧は、隣のフォルダ (参照タブ・読むだけの行き先) を
     // 起動した時点の姿で控えている。人が初めて押して開くときに 1 度だけ取り直す
     // (既定で開く前は、この最初の 1 押しが取りに行く時点だった)。
-    // 控えを空にするだけだと、起動時に読み終えた指摘.md の判定
-    // (noteBoardScan は同じ保存先では読み直さない) が自分のフォルダ名を失い、宛先の書かれて
-    // いない指摘を全部「宛先不明」と言っていた。空にせず取り直し、届いたら一覧を描き直す。
+    // 空にせず取り直し、届いたら一覧を描き直す。
     if (focus && _peekDirsFromBoot) {
       _peekDirsFromBoot = false;
       _ensurePeekDirs(true).then(function() { try { refreshFolderPanelNow(); } catch (e) {} });
@@ -11988,11 +10835,6 @@ function setupTabs() {
       // ls -l で見に行くことになっていた。
       svgMtimes = SF && SF.svgMtimeMap ? SF.svgMtimeMap(svgScan) : {};
 
-      // 指摘の反映状態は server が一覧と一緒に返す pins から作る。図を開かなくても
-      // 一覧の時点で「未反映が残っている図」が分かる (別名保存を続けなくてよい)。
-      var RS = window.MA.reviewState;
-      reviewStatus = RS ? RS.statusMap(entries) : {};
-
       // 束ねる判定は一覧が既に持っている hash だけで
       // 済む (本文を取り直さないので、一覧を開いた時点で言い切れる)。
       var DPM = window.MA.dupeMerge;
@@ -12034,17 +10876,11 @@ function setupTabs() {
       savedKindByName = (res && res.kinds && typeof res.kinds === 'object') ? res.kinds : {};
       savedKindsLoaded = true;
 
-      // 指摘の判定は図の本文から出しているので、
-      // 図が 1 枚でも書き換われば取り直す。一覧は描くたびに読み直されるので、
+      // 図が 1 枚でも書き換われば、疑いの確かめ直しが要る。
       // 「読み直した」ではなく「中身が変わった」で取り直す (毎回だと描画が回り続ける)。
       var noteSig = entries.map(function(e) {
         return (e && e.name) + '@' + ((e && e.mtime) || '');
       }).join('|');
-      if (noteSig !== noteBoardSig) {
-        noteBoardSig = noteSig;
-        noteBoardReady = false;
-      }
-      // 図が 1 枚でも書き換われば、疑いの確かめ直しも要る。
       if (noteSig !== kindBodySig) {
         kindBodySig = noteSig;
         kindBodyByName = {};
@@ -12076,8 +10912,6 @@ function setupTabs() {
         appendTargetSection(panel, dir);
         appendTicketEntry(panel);
         appendInventorySection(panel);
-        appendReviewSection(panel);
-        appendNoteSection(panel, dir);
         appendRoleSection(panel, dir);
         appendSvgSection(panel, dir);
       appendPartCrossSection(panel);
@@ -12135,8 +10969,6 @@ function setupTabs() {
       appendTargetSection(panel, dir);
       appendTicketEntry(panel);
       appendInventorySection(panel);
-      appendReviewSection(panel);
-      appendNoteSection(panel, dir);
       appendRoleSection(panel, dir);
       appendSvgSection(panel, dir);
       appendPartCrossSection(panel);
@@ -13166,7 +11998,7 @@ function setupTabs() {
         if (counts['differ-content']) parts.push('食い違い ' + counts['differ-content'] + ' 枚');
         if (counts.differ) parts.push('食い違い ' + counts.differ + ' 枚');
         if (counts.missing) parts.push('SVG 無し ' + counts.missing + ' 枚');
-        if (counts.error) parts.push('確かめられず ' + counts.error + ' 枚');
+        if (counts.error) parts.push('描き直せず ' + counts.error + ' 枚');
         svgVerifyNote = total + ' 枚を描き直して比べました（' + parts.join(' / ') + '）';
         renderFolderPanel();
         return;
@@ -13511,16 +12343,6 @@ function setupTabs() {
     // 版は行の上で 1 文字で分かるようにする (名前の末尾を読み比べない)。
     var vr = folderVariantBadge(name);
     if (vr) row.appendChild(vr);
-    // 指摘.md から見たこの図の立場。
-    // 対象外なら開かずに次へ進める (自分と先輩の両方を開いて突き合わせない)。
-    var nb = folderNoteBadge(name);
-    if (nb) row.appendChild(nb);
-    var hit = noteHitOf(name);
-    if (hit) {
-      row.classList.add('folder-note-hit');
-      row.setAttribute('data-note-hit', hit);
-      if (hit === 'target') row.classList.add('folder-note-target');
-    }
     var kb = folderKindBadge(name);
     if (kb) row.appendChild(kb);
     // 本文から読んだ図種を行に持たせる。FILES ツリーは名前に図種が無い図も
@@ -13936,31 +12758,6 @@ function setupTabs() {
     return b;
   }
 
-  // 「未反映だけ選ぶ」。指摘が残っている図だけに
-  // 印を付けるので、手順 9 の「一覧から名前を読み比べて探し直す」が 1 押しになる。
-  function pendingNames() {
-    var RS = window.MA.reviewState;
-    if (!RS) return [];
-    return RS.pendingNames(reviewStatus).filter(function(n) { return folderNames.indexOf(n) >= 0; });
-  }
-
-  function folderPendingButton() {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-pick-pending';
-    b.textContent = '未反映だけ選ぶ（0 枚）';
-    b.title = '未対応のレビュー指摘が残っている図にだけ印を付ける';
-    b.disabled = true;
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      var FS = window.MA.folderSelect;
-      if (!FS) return;
-      folderPicked = FS.selectAll(pendingNames());
-      syncFolderPickUi();
-    });
-    return b;
-  }
-
   // 一覧を開いた瞬間に「対象 14 枚のうち何枚あるか /
   // どれが足りないか」を見出しで言う。未登録のときも黙らず、登録の入口を出す
   // (「まだ数えていない」と「揃っている」を取り違えないため)。
@@ -14047,208 +12844,6 @@ function setupTabs() {
       renderFolderPanel();
     });
     return b;
-  }
-
-  // 一覧の頭に出す 1 行。0 件でも黙らない (「指摘が無い」と「数えていない」は別物)。
-  // 指摘.md を一覧の側から読み、図 1 枚ずつに
-  // 対象外 / ⚠未確認 / ✅対応済み を付ける。手順 1〜2 は「対象外の行は開かず次へ」で
-  // 済み、指摘の無い図ごとに自分と先輩の両方を開いて突き合わせる往復が消える。
-  function appendNoteSection(host, dir) {
-    var NB = window.MA.noteBoard;
-    if (!NB) return;
-    var line = document.createElement('div');
-    line.className = 'folder-note-summary';
-    line.id = 'folder-note-summary';
-    line.setAttribute('data-note-ready', noteBoardReady ? '1' : '0');
-    line.textContent = noteBoardReady
-      ? NB.summaryText({ board: noteBoard, names: folderNoteNames(),
-                         statusByName: noteBoardStatus, hasNote: noteBoardHasFile,
-                         mineFolder: _noteMineFolder(), otherFolders: _noteOtherFolders() })
-      : '指摘.md を読み込んでいます…';
-    line.title = '指摘.md（隣の reviewer フォルダ）を、図 1 枚ずつに割り当てた結果です';
-    host.appendChild(line);
-    appendUnaddressedSection(host);
-    noteBoardScan(dir);
-  }
-
-  // 図名も図種も書かれていない指摘は、どの図にも割り当てられない。
-  // 件数だけを言われても「自分宛か」は指摘.md を GUI の外で開いて全文を読むまで分からず、
-  // 一覧のバッジで手順 1 が終わる周でも、この数件だけテキストファイルを読む用が残っていた。
-  // 宛先を機械で言えるところまで言い、本文はその場で開けるようにする。
-  function appendUnaddressedSection(host) {
-    var NB = window.MA.noteBoard;
-    if (!NB || !noteBoardReady || !noteBoardHasFile || !noteBoard) return;
-    var rows = NB.unaddressedRows(noteBoard,
-      { mineFolder: _noteMineFolder(), otherFolders: _noteOtherFolders() });
-    if (!rows.length) return;
-
-    var sec = document.createElement('div');
-    sec.className = 'folder-unaddr';
-    sec.id = 'folder-unaddr';
-    sec.setAttribute('data-unaddr-count', String(rows.length));
-
-    rows.forEach(function(r) {
-      var row = document.createElement('div');
-      row.className = 'folder-unaddr-row folder-unaddr-' + r.to;
-      row.setAttribute('data-unaddr-id', r.id);
-      row.setAttribute('data-unaddr-to', r.to);
-
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'folder-unaddr-head';
-      b.setAttribute('data-unaddr-open', r.id);
-      b.textContent = r.toMark + ' · ' + r.head;
-      b.title = r.why + '（押すと本文をここに出します）';
-      b.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        unaddrOpen = (unaddrOpen === r.id) ? '' : r.id;
-        renderFolderPanel();
-      });
-      row.appendChild(b);
-
-      if (unaddrOpen === r.id) {
-        var body = document.createElement('div');
-        body.className = 'folder-unaddr-body';
-        body.id = 'folder-unaddr-body';
-        body.textContent = r.body || '(本文がありません)';
-        row.appendChild(body);
-      }
-      sec.appendChild(row);
-    });
-    host.appendChild(sec);
-  }
-
-  // 指摘.md を書いた人以外の覗ける先 = 指摘に出てきうる相手の名前。
-  function _noteOtherFolders() {
-    var PF = window.MA.peekFolder;
-    var mine = String(_noteMineFolder() || '').toLowerCase();
-    var out = [];
-    (_peekDirs || []).forEach(function(d) {
-      var n = (d && d.name) || (PF && d && d.path ? PF.baseName(d.path) : '');
-      if (!n || String(n).toLowerCase() === mine) return;
-      if (/review/i.test(n)) return;   // 指摘を書いた人は宛先ではない
-      if (out.indexOf(n) < 0) out.push(n);
-    });
-    return out;
-  }
-
-  function folderNoteNames() { return (folderNames || []).slice(); }
-
-  // 行に付く指摘のバッジ。対象外も出す — 「印が無い」は「まだ読めていない」と
-  // 見分けが付かず、開かずに飛ばす根拠にならない。
-  function folderNoteBadge(name) {
-    var NB = window.MA.noteBoard;
-    if (!NB || !noteBoardReady || !noteBoardHasFile) return null;
-    var st = noteBoardStatus[name];
-    if (!st) return null;
-    var el = document.createElement('span');
-    el.className = 'folder-note-badge folder-note-' + st.key;
-    el.setAttribute('data-note-of', name);
-    el.setAttribute('data-note-status', st.key);
-    el.textContent = st.mark;
-    el.title = st.title;
-    // FILES ツリーの札はこの行を読んで出す (判定する所を 2 つにしない)。
-    // まだ確かめられない最初の 1 件の見出しと、その件が指す本文の語、その件数を持たせる。
-    if (st.head) el.setAttribute('data-note-head', st.head);
-    if (st.term) el.setAttribute('data-note-term', st.term);
-    if (st.open) el.setAttribute('data-note-open', String(st.open));
-    return el;
-  }
-
-  // FILES ツリーの札を押したとき。指摘が指す図を開き (保存先の一覧の行を
-  // 押したときと同じ開き方)、開けたら指摘の語をエディタで選んで見せる。語が無ければ開くだけ。
-  window.MA.openNoteFinding = function(name, term) {
-    var q = (window.CSS && window.CSS.escape) ? window.CSS.escape(String(name)) : String(name);
-    var it = document.querySelector('#folder-panel .folder-item[data-file-name="' + q + '"]');
-    if (!it) return false;
-    it.click();
-    var w = String(term || '');
-    if (!w) return true;
-    var tries = 0;
-    (function pick() {
-      var doc = null;
-      try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
-      var text = editorEl ? editorEl.value : '';
-      var at = (doc && doc.name === name) ? _noteTermAt(text, w) : -1;
-      if (at < 0) {
-        if (++tries < 30) window.setTimeout(pick, 100);
-        return;
-      }
-      editorEl.focus();
-      editorEl.setSelectionRange(at, at + w.length);
-      var line = text.slice(0, at).split('\n').length;
-      editorEl.scrollTop = Math.max(0, (line - 3) * 18);
-    })();
-    return true;
-  };
-  // 語の切れ目で最初に出てくる位置 (`Gpio` を探して `Gpio_Driver` の頭に当てない)。
-  function _noteTermAt(text, w) {
-    var at = text.indexOf(w);
-    while (at >= 0) {
-      var before = at > 0 ? text.charAt(at - 1) : '';
-      var after = text.charAt(at + w.length);
-      if (!/[A-Za-z0-9_]/.test(before) && !/[A-Za-z0-9_]/.test(after)) return at;
-      at = text.indexOf(w, at + 1);
-    }
-    return -1;
-  }
-
-  // 指摘.md と、対象になった図の本文を取り寄せて判定する。
-  // 一覧を開くたびに走るが、同じ保存先で一度読めていれば読み直さない。
-  function noteBoardScan(dir) {
-    var NB = window.MA.noteBoard;
-    if (!NB || noteBoardBusy) return;
-    if (noteBoardReady && noteBoardDir === dir) return;
-    noteBoardBusy = true;
-    noteBoardDir = dir;
-    var sigAt = noteBoardSig;
-    var names = folderNoteNames();
-    _ensurePeekDirs()
-      .then(function() { return _noteLoad(true); })
-      .then(function() {
-        noteBoardHasFile = !!_noteFile;
-        noteBoard = NB.scan({
-          rows: _noteRows, targets: _noteTargets, names: names,
-          kindOf: function(n) { return kindByName[n] || ''; },
-        });
-        noteBoardStatus = NB.statusMap({ board: noteBoard, names: names, dslByName: {},
-                                         mineFolder: _noteMineFolder() });
-        // 対象の図だけ本文を読む。読めない図があっても残りの判定は出す。
-        var WS = window.MA.workspace;
-        var want = NB.pendingNames(noteBoard);
-        if (!WS || !want.length) return {};
-        var bodies = {};
-        return Promise.all(want.map(function(n) {
-          return WS.loadFile(n, dir).then(function(t) {
-            if (typeof t === 'string') bodies[n] = t;
-          }, function() {});
-        })).then(function() { return bodies; });
-      })
-      .then(function(bodies) {
-        noteBoardStatus = NB.statusMap({ board: noteBoard, names: names,
-                                         dslByName: bodies || {}, mineFolder: _noteMineFolder() });
-        // 読んでいる間に図が書き換わっていたら、出すのは今の判定ではない。
-        // 次の描画で取り直させる (古い ✅ を残すと、直していない図を飛ばす)。
-        noteBoardReady = (noteBoardSig === sigAt);
-        noteBoardBusy = false;
-        try { refreshFolderPanelNow(); } catch (e) {}
-      })
-      .catch(function() {
-        noteBoardHasFile = false;
-        noteBoardReady = true;
-        noteBoardBusy = false;
-        try { refreshFolderPanelNow(); } catch (e) {}
-      });
-  }
-
-  function appendReviewSection(host) {
-    var RS = window.MA.reviewState;
-    if (!RS) return;
-    var line = document.createElement('div');
-    line.className = 'folder-review-summary';
-    line.id = 'folder-review-summary';
-    line.textContent = RS.summary(reviewStatus);
-    host.appendChild(line);
   }
 
   // 一覧に出ている図の本文を全部読んで「前回見た版」として控える。
@@ -14470,7 +13065,6 @@ function setupTabs() {
     });
     bar.appendChild(all);
     bar.appendChild(folderChangedButton());
-    bar.appendChild(folderPendingButton());
     // 一覧は長いと縦にスクロールする。開くボタンを末尾に置くと 14 枚のときに
     // 画面の外へ出るので、印を付ける行の上に固定して常に見えるようにする。
     bar.appendChild(folderOpenButton());
@@ -14590,12 +13184,6 @@ function setupTabs() {
       changed.textContent = '変更図だけ選ぶ（' + chNames.length + ' 枚）';
       changed.disabled = chNames.length === 0;
     }
-    var pending = panel.querySelector('.folder-pick-pending');
-    if (pending) {
-      var pNames = pendingNames();
-      pending.textContent = '未反映だけ選ぶ（' + pNames.length + ' 枚）';
-      pending.disabled = pNames.length === 0;
-    }
     var open = panel.querySelector('.folder-open-many');
     if (open) {
       open.textContent = FS.openLabel(folderPicked, folderNames, _openDocNames());
@@ -14650,18 +13238,6 @@ function setupTabs() {
     label.className = 'folder-name';
     label.textContent = name;
     b.appendChild(label);
-    // 指摘の反映状態は図名の右に置く。名前の末尾に「(レビュー反映)」を足す
-    // 代わりなので、名前の続きとして読める位置でないと読み替えが要る。
-    var RS = window.MA.reviewState;
-    var rc = RS && reviewStatus[name];
-    if (rc && rc.kind !== 'none' && rc.kind !== 'unknown') {
-      var rb = document.createElement('span');
-      rb.className = 'folder-review-badge review-' + rc.kind;
-      rb.setAttribute('data-review-state', rc.kind);
-      rb.textContent = RS.badgeText(rc);
-      rb.title = RS.badgeTitle(rc);
-      b.appendChild(rb);
-    }
     // 印は内容での判定を優先する。mtime が古くても
     // 中身が今の puml と一致している図は読める図なので、印を付けない
     // (逆に、内容がずれている図は mtime に関わらず名指しする)。
@@ -21352,7 +19928,6 @@ function _clearStateMap() {
   var listEl = document.getElementById('map-list');
   var sumEl = document.getElementById('map-summary');
   var warnEl = document.getElementById('map-warn');
-  var askedEl = document.getElementById('map-asked');
   var decEl = document.getElementById('map-decision');
   if (decEl) decEl.hidden = true;
   var alignEl = document.getElementById('map-align');
@@ -21360,7 +19935,6 @@ function _clearStateMap() {
   _mapAlignMsg = '';
   if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
   if (warnEl) { warnEl.textContent = ''; warnEl.hidden = true; }
-  if (askedEl) { askedEl.textContent = ''; askedEl.hidden = true; }
   if (sumEl) { sumEl.textContent = ''; sumEl.classList.remove('clean', 'dirty'); }
 }
 
@@ -21399,25 +19973,6 @@ function _mapRow(listEl, row) {
     el.addEventListener('click', function() { gotoOutlineLine(row.mineLine - 1); });
   }
   _mapDecideControls(el, row);
-  // 不一致の行は、機械では「どちらが後から足したか」まで決められない。
-  // 自分で決め切らずに先輩・reviewer へ 1 件の質問として預けて、次へ進む
-  var mq = window.MA.mapQuestion;
-  if (mq && mq.askable(row)) {
-    var ask = document.createElement('button');
-    ask.type = 'button';
-    ask.className = 'map-ask';
-    var asked = mq.hasAsked(mmdText, row);
-    ask.textContent = mq.buttonLabel(mmdText, row);
-    ask.title = asked
-      ? 'この行はもう ' + mq.defaultTo().join(' / ') + ' に預けてあります'
-      : 'この行を ' + mq.defaultTo().join(' / ') + ' への質問 1 件にして図に残す (答えは待たない)';
-    ask.disabled = asked;
-    ask.addEventListener('click', function(e) {
-      e.stopPropagation();
-      askMapRow(row);
-    });
-    el.appendChild(ask);
-  }
   // 参照図だけの行は「まだ自分の図に無い要素」なので、その場で足せる。
   // 足す道を持たない規則 (シーケンス図) では出さない (押しても何も起きない、にしない)。
   if (row.match === 'ref-only' && sm.supportsAdopt !== false) {
@@ -21615,39 +20170,6 @@ function _applyMapAdopt(row, picks) {
   if (window.MA.toast) window.MA.toast.show('自分の図に足しました: ' + out.added.join(' / '));
 }
 
-// 不一致の行 1 つを、先輩・reviewer 宛ての質問 1 件にして自分の図に残す
-// 図と一緒に保存フォルダへ渡るので、相手の
-// 「📮 指摘箱」に並ぶ。ここで答えを待たないのが要点なので、飛び先へは移動しない。
-function askMapRow(row) {
-  var mq = window.MA.mapQuestion;
-  if (!mq || !editorEl) return;
-  var out = mq.ask(mmdText, row, {
-    author: (typeof _inboxMe === 'function' && _inboxMe()) || 'junior',
-    at: new Date().toISOString().slice(0, 16),
-  });
-  if (!out) {
-    if (window.MA.toast) window.MA.toast.show('この行はもう預けてあります');
-    return;
-  }
-  _applyLineEditText(out.text);
-  renderPinBadge();
-  renderPinPanel();
-  // 「聞き済み」に変わった印を出すため対応表を描き直す (組み直しはしない)。
-  renderStateMap();
-  if (window.MA.toast) {
-    window.MA.toast.show(out.to.join(' / ') + ' に預けました: ' + out.question);
-  }
-}
-
-function renderMapAsked() {
-  var el = document.getElementById('map-asked');
-  var mq = window.MA.mapQuestion;
-  if (!el) return;
-  var text = mq ? mq.summary(mmdText) : '';
-  el.textContent = text;
-  el.hidden = (text === '');
-}
-
 // ── 対応表の組を相手の綴りに揃える ──────────
 // 「{相手フォルダ} の「X」に揃える」は名前の形で結べた綴り違いにしか出ず、部品名が総入れ替えの
 // 2 枚 (spi_init_sequence / spi_sequence) では揃える行が 1 つも出なかった。対応表で組になった行
@@ -21796,7 +20318,6 @@ function renderStateMap() {
     }).length;
   sumEl.classList.add(onlyCount === 0 ? 'clean' : 'dirty');
 
-  renderMapAsked();
   renderMapDecision();
   renderMapAlign();
   var warn = sm.abstractionWarning(_mapResult);
@@ -27525,371 +26046,7 @@ function exportClipboard() {
   });
 }
 
-// ── レビュー指摘のピン ────────────────────
-// 指摘を文章で書き直しては次の run で該当箇所を探し直す、を繰り返していた。
-// 指摘を図の行に貼れば、図を開いた瞬間に該当箇所へ赤い番号が出る。既読の印が
-// そのまま「反映を確認した」の記録になるので、前回指摘の追跡が diff 読みでなくなる。
-// 保存先は DSL のコメント行 (src/core/review-pins.js)。図と指摘が離れない。
-
-function _pins() {
-  return window.MA.reviewPins ? window.MA.reviewPins.list(mmdText) : [];
-}
-
-// 指摘を付ける先の行。図の要素を選んでいればその行、無ければエディタのキャレット行。
-function _pinTargetLine() {
-  var sel = (window.MA.selection && window.MA.selection.getRange) ? window.MA.selection.getRange() : null;
-  if (sel && sel.start) return sel.start;
-  if (!editorEl) return 0;
-  var before = editorEl.value.slice(0, editorEl.selectionStart || 0);
-  return before.split('\n').length;
-}
-
-function _pinLineText(line) {
-  var lines = String(mmdText || '').replace(/\r\n?/g, '\n').split('\n');
-  return (line >= 1 && line <= lines.length) ? lines[line - 1].trim() : '';
-}
-
-// 対応済みにするときの「修正後の行」。指摘先の行が生きていればその行、
-// 書き換わって迷子になっていれば、いま選んでいる要素の行 (直した相手) を使う。
-function _pinFixedLine(pin) {
-  var sel = (window.MA.selection && window.MA.selection.getRange) ? window.MA.selection.getRange() : null;
-  if (pin && !pin.stale && pin.line) return pin.line;
-  if (sel && sel.start) return sel.start;
-  return 0;
-}
-
-function renderPinBadge() {
-  var btn = document.getElementById('btn-tab-pins');
-  var RP = window.MA.reviewPins;
-  if (!btn || !RP) return null;
-  var sum = RP.summary(_pins());
-  btn.textContent = RP.badgeText(sum);
-  btn.classList.toggle('has-open', sum.pending > 0);
-  btn.title = sum.total
-    ? ('レビュー指摘 ' + sum.total + ' 件 (未対応 ' + sum.pending + ' / 対応済み ' + sum.done
-      + ' / 迷子 ' + sum.stale + ')')
-    : 'この図にレビュー指摘はない';
-  return sum;
-}
-
-// 図の上の印。指摘先の行に当たる overlay の枠を探し、その左上に番号を置く。
-function drawPinMarkers(overlayEl) {
-  var RP = window.MA.reviewPins;
-  if (!overlayEl || !RP) return 0;
-  var SVG_NS = 'http://www.w3.org/2000/svg';
-  var byLine = RP.byLine(mmdText);
-  var drawn = 0;
-  Object.keys(byLine).forEach(function(line) {
-    var host = overlayEl.querySelector('[data-line="' + line + '"]');
-    if (!host) return;
-    var x = parseFloat(host.getAttribute('x')) || 0;
-    var y = parseFloat(host.getAttribute('y')) || 0;
-    byLine[line].forEach(function(pin, i) {
-      var g = document.createElementNS(SVG_NS, 'g');
-      g.setAttribute('class', 'review-pin');
-      g.setAttribute('data-pin-id', pin.id);
-      g.setAttribute('data-pin-state', pin.state);
-      g.setAttribute('data-pin-line', String(line));
-      g.style.cursor = 'pointer';
-      var c = document.createElementNS(SVG_NS, 'circle');
-      c.setAttribute('cx', String(x - 2 + i * 18));
-      c.setAttribute('cy', String(y - 2));
-      c.setAttribute('r', '9');
-      c.setAttribute('fill', RP.markerColor(pin));
-      c.setAttribute('stroke', '#ffffff');
-      c.setAttribute('stroke-width', '1.5');
-      var t = document.createElementNS(SVG_NS, 'text');
-      t.setAttribute('x', String(x - 2 + i * 18));
-      t.setAttribute('y', String(y + 2));
-      t.setAttribute('text-anchor', 'middle');
-      t.setAttribute('font-size', '11');
-      t.setAttribute('fill', '#ffffff');
-      t.textContent = RP.markerLabel(pin);
-      var title = document.createElementNS(SVG_NS, 'title');
-      title.textContent = RP.stateLabel(pin.state) + ': ' + pin.text
-        + (RP.fixText(pin) ? ' (' + RP.fixText(pin) + ')' : '');
-      g.appendChild(c);
-      g.appendChild(t);
-      g.appendChild(title);
-      g.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        openPinPanel(pin.id);
-        // 印を押した時点で対象要素を選び、修正フォームまで開く。
-        jumpToPin(pin.id);
-      });
-      overlayEl.appendChild(g);
-      drawn++;
-    });
-  });
-  return drawn;
-}
-
-function openPinPanel(focusId) {
-  var btn = document.getElementById('btn-tab-pins');
-  var panel = document.getElementById('pin-panel');
-  if (!btn || !panel) return;
-  renderPinPanel();
-  panel.classList.add('open');
-  var rect = btn.getBoundingClientRect();
-  panel.style.left = Math.max(4, rect.left) + 'px';
-  panel.style.top = (rect.bottom + 2) + 'px';
-  if (focusId) {
-    var row = panel.querySelector('.pin-row[data-pin-id="' + focusId + '"]');
-    if (row) {
-      row.style.background = 'var(--bg-secondary)';
-      if (row.scrollIntoView) row.scrollIntoView();
-    }
-  }
-}
-
-// 指摘 1 件ぶんの「直す側の応答」。
-// 応答が書かれていれば誰が何と言ったかを出し、書かれていなければ書く欄を出す。
-// 応答は指摘 1 件に何度でも返せる (保留 → 対応した が履歴として残る)。
-function _pinReplyHtml(p, esc) {
-  var PR = window.MA.pinReply;
-  if (!PR) return '';
-  var id = esc(p.id);
-  var now = PR.latest(mmdText, p.id);
-  var html = '<div class="pin-reply" data-pin-id="' + id + '"'
-    + ' data-verdict="' + esc(now ? now.verdict : '') + '">';
-  if (now) {
-    html += '<span class="pin-reply-now">' + esc(PR.statusText(mmdText, p.id)) + '</span>'
-      + '<button type="button" class="pin-reply-del" data-pin-id="' + id + '"'
-      + ' title="応答を取り消してもう一度書く">応答を消す</button>';
-  }
-  html += '<select class="pin-reply-verdict" data-pin-id="' + id + '">';
-  PR.verdicts().forEach(function(v) {
-    html += '<option value="' + esc(v) + '" title="' + esc(PR.verdictTitle(v)) + '">'
-      + esc(PR.verdictLabel(v)) + '</option>';
-  });
-  html += '</select>'
-    + '<input class="pin-reply-text" data-pin-id="' + id + '"'
-    + ' placeholder="理由 (保留・直さない には必須。いつ・何待ちか)">'
-    + '<button type="button" class="pin-reply-add" data-pin-id="' + id + '"'
-    + ' title="この指摘に応答を返す。reviewer は次の run で全部を調べ直さずに済む">'
-    + (now ? '応答を書き足す' : '応答を書く') + '</button>'
-    + '<span class="pin-reply-err" data-pin-id="' + id + '" hidden></span>'
-    + '</div>';
-  return html;
-}
-
-function renderPinPanel() {
-  var panel = document.getElementById('pin-panel');
-  var RP = window.MA.reviewPins;
-  if (!panel || !RP) return;
-  var esc = window.MA.htmlUtils.escHtml;
-  var pins = _pins();
-  var sum = RP.summary(pins);
-  var target = _pinTargetLine();
-
-  var html = '<div class="pin-head" data-total="' + sum.total + '" data-open="' + sum.open
-    + '" data-done="' + sum.done + '" data-pending="' + sum.pending
-    + '" data-stale="' + sum.stale + '">レビュー指摘 ' + sum.total + ' 件 ・ 未対応 ' + sum.pending
-    + ' ・ 対応済み ' + sum.done
-    + (sum.stale ? ' ・ 行が見つからない ' + sum.stale : '') + '</div>';
-  // 直す側の応答の内訳。reviewer が最初に
-  // 知りたいのは「全部確かめ直すのか、裏取りだけでよいのか」なので先頭に置く。
-  var PR = window.MA.pinReply;
-  if (PR && pins.length) {
-    var rsum = PR.summary(pins, mmdText);
-    html += '<div class="pin-reply-head" id="pin-reply-head"'
-      + ' data-recheck="' + rsum.recheck + '" data-waiting="' + rsum.waiting
-      + '" data-unanswered="' + rsum.unanswered + '">'
-      + esc(PR.headText(rsum)) + '</div>';
-  }
-  if (!pins.length) {
-    html += '<div class="pin-row" id="pin-empty">この図に指摘はありません</div>';
-  }
-  pins.forEach(function(p) {
-    var fix = RP.fixText(p);
-    html += '<div class="pin-row' + (p.state === 'read' ? ' read' : '')
-      + (p.state === 'done' ? ' done' : '') + (p.stale ? ' stale' : '') + '"'
-      + ' data-pin-id="' + esc(p.id) + '" data-pin-state="' + esc(p.state) + '">'
-      + '<span class="pin-where">#' + esc(p.id) + ' '
-      + (p.stale ? '行が見つかりません' : ('L' + p.line)) + '</span>'
-      + '<span class="pin-state">' + esc(RP.stateLabel(p.state)) + '</span>'
-      + '<span class="pin-text">' + esc(p.text) + '</span>'
-      + '<span class="pin-anchor">' + esc(p.anchor) + '</span>'
-      // どの指摘にどの修正が対応するかを、指摘の行そのものに残して見せる。
-      + (fix ? '<span class="pin-fix">' + esc(fix) + '</span>' : '') + '<br>'
-      + '<button type="button" class="pin-jump" data-pin-id="' + esc(p.id) + '"'
-      + (window.MA.pinJump && !window.MA.pinJump.canJump(p) ? ' disabled' : '')
-      + ' title="この指摘の対象を選択して修正フォームを開く">'
-      + (window.MA.pinJump ? esc(window.MA.pinJump.jumpLabel(p)) : '対象へジャンプ')
-      + '</button> '
-      + (p.state === 'done'
-        ? '<button type="button" class="pin-reopen" data-pin-id="' + esc(p.id) + '"'
-          + ' title="修正が足りなかったときに未対応へ戻す">未対応に戻す</button> '
-        : '<button type="button" class="pin-done" data-pin-id="' + esc(p.id) + '"'
-          + ' title="直した内容をこの指摘に記録する。選択中の要素の行を修正後として憶える">'
-          + '対応済みにする</button> '
-          + '<button type="button" class="pin-toggle" data-pin-id="' + esc(p.id) + '">'
-          + (p.state === 'read' ? '未読に戻す' : '既読にする') + '</button> ')
-      + '<button type="button" class="pin-del" data-pin-id="' + esc(p.id) + '">消す</button>'
-      + _pinReplyHtml(p, esc)
-      + '</div>';
-  });
-  html += '<div class="pin-jump-bar">'
-    + '<button type="button" id="pin-next-open"'
-    + (sum.open ? '' : ' disabled') + ' title="未読の指摘を上から順に辿る">'
-    + '次の未読へジャンプ (' + sum.open + ')</button>'
-    + '<div id="pin-jump-note" hidden></div></div>';
-  html += '<div class="pin-new">'
-    + '<div class="pin-target" id="pin-target" data-line="' + target + '">'
-    + (target ? ('付ける先: L' + target + ' ' + esc(_pinLineText(target))) : '付ける先の行がありません')
-    + '</div>'
-    + '<input id="pin-text" placeholder="指摘の内容 (末尾に「根拠: 図名 に 語 が無い」を書くと毎回確かめ直します)">'
-    + '<button type="button" id="pin-add">この行に指摘を付ける</button></div>';
-  panel.innerHTML = html;
-
-  function bindAll(cls, fn) {
-    var els = panel.querySelectorAll('.' + cls);
-    for (var i = 0; i < els.length; i++) {
-      (function(el) {
-        el.addEventListener('click', function() { fn(el.getAttribute('data-pin-id'), el); });
-      })(els[i]);
-    }
-  }
-  bindAll('pin-toggle', function(id) {
-    _applyLineEditText(RP.toggleState(mmdText, id));
-    renderPinBadge();
-    renderPinPanel();
-  });
-  // 「対応済みにする」: 直した後の行を修正後として憶える。指摘の行を直すと anchor が
-  // 変わって迷子になるので、いま選んでいる要素の行 (= ジャンプして直した相手) を渡す。
-  bindAll('pin-done', function(id) {
-    var pin = null;
-    pins.forEach(function(q) { if (String(q.id) === String(id)) pin = q; });
-    _applyLineEditText(RP.markDone(mmdText, id, { line: _pinFixedLine(pin) }));
-    renderPinBadge();
-    renderPinPanel();
-  });
-  bindAll('pin-reopen', function(id) {
-    _applyLineEditText(RP.reopen(mmdText, id));
-    renderPinBadge();
-    renderPinPanel();
-  });
-  bindAll('pin-del', function(id) {
-    // 指摘を消したら、その指摘への応答も一緒に消す (相手のいない応答を残さない)。
-    var PRd = window.MA.pinReply;
-    var next = RP.remove(mmdText, id);
-    if (PRd) next = PRd.removeFor(next, id);
-    _applyLineEditText(next);
-    renderPinBadge();
-    renderPinPanel();
-  });
-  // 直す側の応答。
-  bindAll('pin-reply-add', function(id) {
-    var PRa = window.MA.pinReply;
-    if (!PRa) return;
-    var sel = panel.querySelector('.pin-reply-verdict[data-pin-id="' + id + '"]');
-    var txt = panel.querySelector('.pin-reply-text[data-pin-id="' + id + '"]');
-    var err = panel.querySelector('.pin-reply-err[data-pin-id="' + id + '"]');
-    var verdict = sel ? sel.value : '';
-    var text = txt ? txt.value : '';
-    var msg = PRa.replyError(verdict, text);
-    if (msg) {
-      // 理由の無い保留は、次の run でゼロから調べ直しになる。書かせてから通す。
-      if (err) { err.textContent = msg; err.hidden = false; }
-      return;
-    }
-    _applyLineEditText(PRa.add(mmdText, id, {
-      verdict: verdict, text: text,
-      author: _inboxMe() || 'primary', at: new Date().toISOString().slice(0, 16),
-    }));
-    renderPinBadge();
-    renderPinPanel();
-  });
-  bindAll('pin-reply-del', function(id) {
-    var PRr = window.MA.pinReply;
-    if (!PRr) return;
-    _applyLineEditText(PRr.removeFor(mmdText, id));
-    renderPinBadge();
-    renderPinPanel();
-  });
-  // 「対象へジャンプ」: 行への移動だけでなく、対象要素の選択と修正フォームまで開く。
-  bindAll('pin-jump', function(id) { jumpToPin(id); });
-  var nextBtn = document.getElementById('pin-next-open');
-  if (nextBtn) nextBtn.addEventListener('click', function() { jumpToNextOpenPin(); });
-  // L番号の表示も同じジャンプにする (「行だけ動いて要素は選ばれない」を無くす)。
-  var wheres = panel.querySelectorAll('.pin-where');
-  for (var i = 0; i < wheres.length; i++) {
-    (function(el) {
-      el.addEventListener('click', function() {
-        var row = el.parentNode;
-        jumpToPin(row.getAttribute('data-pin-id'));
-      });
-    })(wheres[i]);
-  }
-  var add = document.getElementById('pin-add');
-  if (add) {
-    add.addEventListener('click', function() {
-      var input = document.getElementById('pin-text');
-      var text = input ? input.value.trim() : '';
-      var line = _pinTargetLine();
-      if (!text || !line) return;
-      _applyLineEditText(RP.add(mmdText, {
-        line: line, text: text, author: 'reviewer', at: new Date().toISOString().slice(0, 16),
-      }));
-      renderPinBadge();
-      renderPinPanel();
-    });
-  }
-}
-
-// ── 指摘から対象要素へのジャンプ ────────────
-// 指摘の対象を選び直すのに、レイアウトが変わるたび要素を目で探してクリックし直して
-// いた。再レイアウト直後は隣を掴む誤クリックも起きる。指摘は対象行を覚えているので、
-// その行の選択候補を引き当てて 移動 + 選択 + 修正フォームまでを 1 操作で済ませる。
-
-// 今の図で「選べる要素」の一覧。図種ごとの kbdSelectables があればそれを使い、
-// 無い図種では message 関係を候補にする (command palette の jump と同じ土俵)。
-function pinSelectables() {
-  if (!currentModule) return [];
-  if (typeof currentModule.kbdSelectables === 'function') {
-    try { return currentModule.kbdSelectables(currentParsed) || []; } catch (e) { return []; }
-  }
-  return (((currentParsed && currentParsed.relations) || [])
-    .filter(function(r) { return r.kind === 'message'; })
-    .map(function(r) { return { type: 'message', id: r.id, line: r.line }; }));
-}
-
-var _lastJumpedPinId = null;
-
-// 指摘 1 件へジャンプする。行へ移動し、対象要素を選択して図の上でハイライトし、
-// 右ペインを「選択中」タブ (修正フォーム) にする。迷子の指摘は動かさず理由を出す。
-function jumpToPin(pinId) {
-  var PJ = window.MA.pinJump;
-  if (!PJ || !window.MA.reviewPins) return null;
-  var pin = null;
-  _pins().forEach(function(p) { if (String(p.id) === String(pinId)) pin = p; });
-  var p = PJ.plan(pin, pinSelectables());
-  var note = document.getElementById('pin-jump-note');
-  if (note) { note.textContent = p.message; note.hidden = false; }
-  if (!p.ok) return p;
-  jumpToLine(p.line);
-  if (p.item && window.MA.selection) {
-    window.MA.selection.setSelected([{ type: p.item.type, id: p.item.id, line: p.item.line }]);
-  }
-  if (p.openProps) showPropsTab('props');
-  _lastJumpedPinId = pin ? pin.id : null;
-  return p;
-}
-
-// 未読の指摘を上から順に辿る。1 件直したら次の指摘へ、を同じボタンで続けられる。
-function jumpToNextOpenPin() {
-  var PJ = window.MA.pinJump;
-  if (!PJ) return null;
-  var next = PJ.nextOpen(_pins(), _lastJumpedPinId);
-  if (!next) {
-    var note = document.getElementById('pin-jump-note');
-    if (note) { note.textContent = '未読の指摘はありません'; note.hidden = false; }
-    return null;
-  }
-  return jumpToPin(next.id);
-}
-
-// 指摘先の行へ飛ぶ。エディタのキャレットをその行に置き、行が見えるまでスクロールする。
+// 指定の行へ飛ぶ。エディタのキャレットをその行に置き、行が見えるまでスクロールする。
 function jumpToLine(line) {
   if (!editorEl || !line) return;
   var r = window.MA.lineResolver.caretRangeForLine(editorEl.value, line - 1);
@@ -27899,723 +26056,6 @@ function jumpToLine(line) {
   editorEl.selectionEnd = r.end;
   editorEl.scrollTop = Math.max(0, (line - 3) * 18);
 }
-
-function setupPinPanel() {
-  var btn = document.getElementById('btn-tab-pins');
-  var panel = document.getElementById('pin-panel');
-  if (!btn || !panel) return;
-  btn.addEventListener('click', function() {
-    if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
-    openPinPanel();
-  });
-  // 既読・削除・追加はその場でパネルを組み直す。組み直した後の click は
-  // 対象が DOM から外れていて panel.contains が偽になり、外側クリック扱いで
-  // パネルが閉じてしまう。パネル内の click はここで止める。
-  panel.addEventListener('click', function(ev) { ev.stopPropagation(); });
-  // 図を見に戻るときは Esc で閉じる (他のパネルと同じ作法)。
-  document.addEventListener('keydown', function(ev) {
-    if (ev.key === 'Escape') panel.classList.remove('open');
-  });
-  document.addEventListener('click', function(ev) {
-    if (!panel.classList.contains('open')) return;
-    if (panel.contains(ev.target) || ev.target === btn) return;
-    if (ev.target && ev.target.closest && ev.target.closest('.review-pin')) return;
-    panel.classList.remove('open');
-  });
-  renderPinBadge();
-}
-
-// ── 指摘の受信箱 ────────────────────────────
-// 📌 指摘は開いている 1 図ぶんしか出ない。指摘を受けて直す業務は、前の図を
-// 1 枚ずつ開いてバッジを見て回るところから始まっていた。保存フォルダの図を
-// まとめて読み、「未対応が何件・どの図に残っているか」を先に出す。
-// 行を押すとその図を開いて該当行へ飛ぶので、直す作業がそのまま続く。
-// 集計は src/core/pin-inbox.js。ここは読み込みと画面だけ。
-
-var _inboxItems = null;      // 直近の走査結果 (絞り込み前)
-var _inboxDocs = null;       // 走査で読んだ図の束 (根拠の確かめ直しに使う)
-var _inboxLoading = false;
-
-// 「自分」の名前。自分で書いた指摘を受信箱から外すために憶えておく。
-function _inboxMe() {
-  try { return window.localStorage.getItem('pua.pin-inbox.me') || ''; } catch (e) { return ''; }
-}
-function _inboxSetMe(v) {
-  try { window.localStorage.setItem('pua.pin-inbox.me', String(v == null ? '' : v)); } catch (e) { /* 保存できなくても画面は動く */ }
-}
-function _inboxUnreadOnly() {
-  try { return window.localStorage.getItem('pua.pin-inbox.unread') !== '0'; } catch (e) { return true; }
-}
-function _inboxSetUnreadOnly(v) {
-  try { window.localStorage.setItem('pua.pin-inbox.unread', v ? '1' : '0'); } catch (e) { /* 同上 */ }
-}
-// 出典の絞り込み。'' = 全部 / 'audit' = 監査が出した /
-// 'manual' = 手で書いた。🔖 手動指摘のタブをここに畳んだので、同じものはこの絞り込みで出す。
-function _inboxSource() {
-  try { return window.localStorage.getItem('pua.pin-inbox.source') || ''; } catch (e) { return ''; }
-}
-function _inboxSetSource(v) {
-  try { window.localStorage.setItem('pua.pin-inbox.source', String(v == null ? '' : v)); } catch (e) { /* 同上 */ }
-}
-
-// ── 着手状況の追跡 ───────────────────────
-// 受信箱は「まだ直っていない指摘」を並べるが、並ぶのは指摘であって着手状況ではない。
-// 前回の依頼に手が付いたかを知るには audit.js --since-files で保存フォルダの全図の
-// 指紋を控えと突き合わせるしかなく、何回 放置されているかも数え直していた。
-// 走査のたびに指摘 1 件ずつを未着手 / 着手 / 解消へ仕分け、控えを憶えておく。
-// 仕分けの規則は src/core/pin-progress.js。ここは控えの出し入れと画面だけ。
-var _inboxProgress = null;   // { key: entry } 直近の走査で付けた着手状況
-
-function _progressKey() {
-  return 'pua.pin-progress:' + String(_wsFileDir() || './autosave');
-}
-function _progressMemo() {
-  try {
-    var raw = window.localStorage.getItem(_progressKey());
-    if (!raw) return {};
-    var v = JSON.parse(raw);
-    return (v && typeof v === 'object') ? v : {};
-  } catch (e) { return {}; }
-}
-function _progressSaveMemo(memo) {
-  try { window.localStorage.setItem(_progressKey(), JSON.stringify(memo || {})); } catch (e) { /* 控えが残らなくても仕分けは出る */ }
-}
-// 解消も出すか。既定は出さない (受信箱は「まだ直っていない指摘」の箱のまま)。
-function _inboxShowResolved() {
-  try { return window.localStorage.getItem('pua.pin-inbox.resolved') === '1'; } catch (e) { return false; }
-}
-function _inboxSetShowResolved(v) {
-  try { window.localStorage.setItem('pua.pin-inbox.resolved', v ? '1' : '0'); } catch (e) { /* 同上 */ }
-}
-
-// 走査結果に着手状況を付け直し、控えを更新する。
-function _inboxTrackProgress() {
-  var PP = window.MA.pinProgress;
-  _inboxProgress = null;
-  if (!PP || !_inboxItems) return null;
-  // 着手状況と SVG の反映判定は、監査が出した指摘 (図の行に印が付いているもの) の
-  // 観測。手で書いた指摘は指紋の持ち越しで仕分けるので、ここには渡さない。
-  var tracked = _inboxItems.filter(function(p) { return p && p.source !== 'manual'; });
-  var res = PP.observe(tracked, _inboxDocs || [], _progressMemo(), {
-    now: new Date().toISOString(),
-  });
-  _progressSaveMemo(res.memo);
-  var map = {};
-  res.entries.forEach(function(e) { map[e.key] = e; });
-  _inboxProgress = map;
-  return res;
-}
-
-function _progressOf(item) {
-  var PP = window.MA.pinProgress;
-  if (!PP || !_inboxProgress || !item) return null;
-  return _inboxProgress[PP.keyOf(item)] || null;
-}
-
-// ── 反映の判定 ───────────────────────────
-// 着手状況が言えるのは puml 側だけで、客が見る SVG に出ているかは別に確かめていた
-// (puml diff・label-position 監査・/render 再描画・/verify-svg を 4 本別々に回す)。
-// 指摘の付いている図だけを描き直して突き合わせ、1 件ごとに 1 つの札にする。
-// 判定の規則は src/core/pin-verify.js。ここは材料集めと画面だけ。
-var _inboxVerify = null;      // { key2: judgement } 直近の判定
-var _inboxVerifyState = '';   // '' | 'running' | 'done' | 'failed'
-
-function _inboxVerifyOf(item) {
-  if (!_inboxVerify || !item) return null;
-  return _inboxVerify[String(item.doc) + '#' + String(item.id)] || null;
-}
-
-function _inboxVerifyList() {
-  var out = [];
-  if (!_inboxVerify) return out;
-  Object.keys(_inboxVerify).forEach(function(k) { out.push(_inboxVerify[k]); });
-  return out;
-}
-
-// 前回控え (review-diff) との行差分。puml 側の「変更点」はここから取る。
-function _inboxDiffs(docs) {
-  var RD = window.MA.reviewDiff;
-  if (!RD) return {};
-  var bodies = RD.load(window.localStorage, _wsFileDir());
-  var out = {};
-  (docs || []).forEach(function(name) {
-    out[name] = RD.compare(bodies, name, _inboxDsl(name));
-  });
-  return out;
-}
-
-// 指摘の付いている図だけを 10 枚ずつ描き直して突き合わせる。
-// 箱は先に開く (判定は後から差し込む)。1 枚も確かめられなくても箱は使える。
-function _inboxRunVerify() {
-  var PV = window.MA.pinVerify;
-  if (!PV || !_inboxProgress) { _inboxVerify = null; _inboxVerifyState = ''; return Promise.resolve(null); }
-  var entries = _progressEntries();
-  var docs = PV.docsOf(entries).slice(0, 40);
-  if (!docs.length) { _inboxVerify = null; _inboxVerifyState = ''; return Promise.resolve(null); }
-  var dir = _wsFileDir();
-  var mode = (document.getElementById('render-mode') || {}).value || 'local';
-  var svgs = {}, svgDiffs = {};
-  var queue = docs.slice();
-  _inboxVerifyState = 'running';
-
-  function finish() {
-    var list = PV.judgeAll(entries, {
-      svgs: svgs, diffs: _inboxDiffs(docs), svgDiffs: svgDiffs,
-    });
-    var map = {};
-    list.forEach(function(j) { map[j.key2] = j; });
-    _inboxVerify = map;
-    return list;
-  }
-
-  function step() {
-    if (!queue.length) {
-      _inboxVerifyState = 'done';
-      finish();
-      return Promise.resolve(true);
-    }
-    var chunk = queue.splice(0, 10);
-    return fetch('/verify-svg', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dir: dir, types: chunk, mode: mode }),
-    }).then(function(resp) {
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      return resp.json();
-    }).then(function(res) {
-      var results = (res && res.results) || {};
-      var SD = window.MA.svgDiffSummary;
-      chunk.forEach(function(name) {
-        var r = results[name] || { status: 'error' };
-        svgs[name] = r;
-        // 食い違った図は、ラベルと図形の数まで言う。この 1 行が無いと
-        // reviewer は「どこが違うのか」をまた別の入口で調べ直すことになる。
-        if (r.status === 'differ-content' && SD && typeof r.pumlText === 'string') {
-          svgDiffs[name] = SD.compare(r.pumlText, r.svgLabels, {
-            drawnLabels: r.drawnLabels, svgShape: r.svgShape, drawnShape: r.drawnShape,
-          });
-        }
-      });
-      return step();
-    }, function() {
-      // server が答えられなくても「反映済み」とは言わない (未確認のまま出す)。
-      chunk.forEach(function(name) { svgs[name] = { status: 'error', error: '確かめられませんでした' }; });
-      return step();
-    });
-  }
-
-  return step().then(function() { return _inboxVerify; }, function() {
-    _inboxVerifyState = 'failed';
-    finish();
-    return _inboxVerify;
-  });
-}
-
-function _progressEntries() {
-  var out = [];
-  if (!_inboxProgress) return out;
-  Object.keys(_inboxProgress).forEach(function(k) { out.push(_inboxProgress[k]); });
-  return out;
-}
-
-function _inboxShown() {
-  var PI = window.MA.pinInbox;
-  if (!PI || !_inboxItems) return [];
-  // 受信箱は「まだ直っていない指摘」の箱。対応済み (対応した修正を記録済み) は
-  // 既定で落とす。追跡ビューとして「解消も出す」を選んだときだけ残す。
-  // 出典が違っても、同じ図の同じ行の同じ文面は 1 件に畳む。畳まないと
-  // 手で書いた指摘と監査が出した指摘が別々に数えられる (二重勘定の元)。
-  var list = PI.filter(PI.dedupe(_inboxItems), {
-    unreadOnly: _inboxUnreadOnly(), pendingOnly: !_inboxShowResolved(), excludeAuthor: _inboxMe(),
-    source: _inboxSource(),
-  });
-  if (_inboxShowResolved() || !_inboxProgress) return list;
-  // 観測して解消と分かったものも落とす。対応済みの印が押されていなくても、
-  // 指摘した行がもう無いなら未対応ではない (押印待ちで箱に残り続けていた)。
-  return list.filter(function(p) {
-    var e = _progressOf(p);
-    if (!(e && e.status === 'resolved')) return true;
-    // puml が直っていても、保存中の SVG が
-    // 直す前のままなら依頼は終わっていない。作り直し漏れと分かったものは
-    // 解消として落とさず箱に残す (落とすと、再エクスポート漏れは誰も見ない)。
-    // SVG がそもそも無い図はここでは残さない。書き出していない保存フォルダで
-    // 解消済みの指摘が全部戻ってくると、箱が「まだ直っていない指摘」でなくなる。
-    var j = _inboxVerifyOf(p);
-    return !!(j && j.svg && j.svg.state === 'differ-content');
-  });
-}
-
-// 保存フォルダの図を 1 枚ずつ読む。開いているタブは編集中の本文で見る
-// (保存前の指摘も受信箱に出す)。1 枚読めなくても残りは集める。
-function scanPinInbox() {
-  var WS = window.MA.workspace;
-  if (!WS) return Promise.resolve([]);
-  var dir = _wsFileDir();
-  saveActiveDoc();
-  var openDocs = {};
-  WS.list().forEach(function(d) { openDocs[d.name] = d.dsl; });
-  return WS.listFiles(dir).then(function(names) {
-    var list = (names || []).slice();
-    var docs = [];
-    function step(i) {
-      if (i >= list.length) return Promise.resolve(docs);
-      var name = list[i];
-      if (typeof openDocs[name] === 'string') {
-        docs.push({ name: name, dsl: openDocs[name] });
-        return step(i + 1);
-      }
-      return WS.loadFile(name, dir).then(function(text) {
-        docs.push({ name: name, dsl: text });
-        return step(i + 1);
-      }, function() { return step(i + 1); });
-    }
-    return step(0);
-  }, function() { return []; }).then(function(docs) {
-    // 保存フォルダに無い開いたままの図 (新規タブ) も見る。
-    Object.keys(openDocs).forEach(function(n) {
-      for (var i = 0; i < docs.length; i++) { if (docs[i].name === n) return; }
-      docs.push({ name: n, dsl: openDocs[n] });
-    });
-    _inboxDocs = docs;
-    // 手で書いた指摘も同じ走査で仕分ける。
-    // 🔖 手動指摘が別に保存フォルダを読み直していた往復がここで 1 回になる。
-    var byName = {};
-    docs.forEach(function(d) { if (d && typeof d.dsl === 'string') byName[d.name] = d.dsl; });
-    _mfDocs = byName;
-    var MF = window.MA.manualFindings;
-    var items = window.MA.pinInbox.collect(docs);
-    if (MF) {
-      var rows = MF.review(_mfList(), byName);
-      // 行が動いただけの指摘は新しい行番号を憶える (次からは走査せずに当たる)。
-      _mfSave(MF.applyMoves(_mfList(), rows));
-      items = items.concat(window.MA.pinInbox.fromManual(rows));
-    }
-    return items;
-  });
-}
-
-function renderInboxBadge() {
-  var btn = document.getElementById('btn-tab-inbox');
-  var PI = window.MA.pinInbox;
-  if (!btn || !PI) return null;
-  if (!_inboxItems) {
-    btn.textContent = '指摘箱 −';
-    btn.classList.remove('has-open');
-    btn.title = '保存フォルダの図をまたいで、未対応のレビュー指摘を集める';
-    return null;
-  }
-  var sum = PI.summary(_inboxShown());
-  btn.textContent = PI.badgeText(sum);
-  btn.classList.toggle('has-open', sum.pending > 0);
-  btn.title = PI.headText(sum);
-  return sum;
-}
-
-// 指摘の図を開き、該当行へ飛ぶ。開いていない図は保存フォルダから読む。
-function openInboxItem(item) {
-  var WS = window.MA.workspace;
-  if (!WS || !item) return;
-  var panel = document.getElementById('inbox-panel');
-  if (panel) panel.classList.remove('open');
-  var active = WS.getActive();
-  if (!(active && active.name === item.doc)) saveActiveDoc();
-  function show() {
-    applyActiveDoc();
-    renderTabs();
-    renderPinBadge();
-    if (item.line) jumpToLine(item.line);
-  }
-  var already = WS.findByName ? WS.findByName(item.doc) : null;
-  if (already) { WS.setActive(already.id); show(); return; }
-  WS.loadFile(item.doc, _wsFileDir()).then(function(text) {
-    if (text == null) return;
-    var detected = WS.detectType(text);
-    WS.openOrActivate({
-      name: item.doc,
-      dsl: text,
-      diagramType: (detected && modules[detected]) ? detected : currentDiagramType,
-    });
-    show();
-  }, function() { /* 読めない図は開かない。受信箱はそのまま */ });
-}
-
-// 受信箱の 1 件に対する応答。受信箱の項目は図名しか持たないので、
-// 走査で読んだ図の本文 (_inboxDocs) から引き直す。
-function _inboxDsl(doc) {
-  var list = _inboxDocs || [];
-  for (var i = 0; i < list.length; i++) {
-    if (list[i] && list[i].name === doc) return list[i].dsl;
-  }
-  return '';
-}
-
-function _inboxReply(item) {
-  var PR = window.MA.pinReply;
-  if (!PR || !item) return null;
-  return PR.latest(_inboxDsl(item.doc), item.id);
-}
-
-function _inboxReplyText(item) {
-  var PR = window.MA.pinReply;
-  if (!PR || !item) return '';
-  return PR.statusText(_inboxDsl(item.doc), item.id);
-}
-
-function renderInboxPanel() {
-  var panel = document.getElementById('inbox-panel');
-  var PI = window.MA.pinInbox;
-  if (!panel || !PI) return;
-  var esc = window.MA.htmlUtils.escHtml;
-
-  if (_inboxLoading) {
-    panel.innerHTML = '<div class="ib-head">保存フォルダの図を読んでいます…</div>';
-    return;
-  }
-  var shown = _inboxShown();
-  var sum = PI.summary(shown);
-  var html = '<div class="ib-head" data-total="' + sum.total + '" data-open="' + sum.open
-    + '" data-docs="' + sum.openDocs + '">' + esc(PI.headText(sum)) + '</div>'
-    + '<div class="ib-filter">'
-    + '<label><input type="checkbox" id="ib-unread"' + (_inboxUnreadOnly() ? ' checked' : '')
-    + '> 未対応だけ</label> '
-    + '<label><input type="checkbox" id="ib-resolved"' + (_inboxShowResolved() ? ' checked' : '')
-    + '> 解消も出す</label> '
-    + '<label>自分 <input id="ib-me" placeholder="junior" value="' + esc(_inboxMe()) + '"></label>'
-    // 🔖 手動指摘のタブを畳んだ代わりの絞り込み。
-    // 「手で書いた / 監査が出した」は札ではなく出典なので、ここで選ぶ。
-    + ' <label>出典 <select id="ib-source">'
-    + '<option value=""' + (_inboxSource() === '' ? ' selected' : '') + '>すべて</option>'
-    + '<option value="audit"' + (_inboxSource() === 'audit' ? ' selected' : '') + '>監査が出した</option>'
-    + '<option value="manual"' + (_inboxSource() === 'manual' ? ' selected' : '') + '>手で書いた</option>'
-    + '</select></label>'
-    + ' <button type="button" id="ib-reload">読み直す</button></div>'
-    // 手で書いた指摘を足す欄。台帳のタブが持っていた手順をそのまま箱に移す。
-    + '<div class="mf-bar">'
-    + '<input id="mf-text" placeholder="この行への指摘 (例: 対応するリセットフローが無い)">'
-    + ' <button type="button" id="mf-add">L' + _pinTargetLine() + ' に足す</button>'
-    + ' <button type="button" id="mf-copy">指摘.md へコピー</button></div>';
-
-  // 着手状況の帯。指摘そのものではなく
-  // 「前回の依頼に手が付いたか」を先に出す。手順 1 はこの 1 行で足りる。
-  var PP = window.MA.pinProgress;
-  if (PP && _inboxProgress) {
-    var psum = PP.summary(_progressEntries());
-    html += '<div class="ib-progress" id="ib-progress"'
-      + ' data-untouched="' + psum.untouched + '" data-started="' + psum.started + '"'
-      + ' data-resolved="' + psum.resolved + '" data-stalled="' + psum.stalled + '">'
-      + esc(PP.headText(psum)) + '</div>';
-  }
-
-  // 反映の判定の帯。puml と SVG を 1 つの札にした
-  // 結果をここで先に言う。手順 8 (前回指摘の反映確認) はこの 1 行で終わる。
-  var PV = window.MA.pinVerify;
-  if (PV && _inboxVerifyState === 'running') {
-    html += '<div class="ib-verify-head" id="ib-verify-head" data-state="running">'
-      + 'SVG に反映されたかを確かめています…</div>';
-  } else if (PV && _inboxVerify) {
-    var vsum = PV.summary(_inboxVerifyList());
-    html += '<div class="ib-verify-head" id="ib-verify-head" data-state="' + esc(_inboxVerifyState) + '"'
-      + ' data-reflected="' + vsum.reflected + '" data-pumlonly="' + vsum['puml-only'] + '"'
-      + ' data-open="' + vsum.open + '" data-unknown="' + vsum.unknown + '">'
-      + esc(PV.headText(vsum)) + '</div>';
-  }
-
-  // 手で書いた指摘は audit.js のどの監査にも当たらず、
-  // 根拠 (別の図の中身) が消えても「DSL 無変更 → 前回のまま」で引き継がれ続ける。
-  // 受信箱を開いた時点で、根拠が崩れたものだけを名指しで先頭に出す。
-  var CC = window.MA.claimCheck;
-  var cres = CC ? CC.scan(shown, _inboxDocs || []) : null;
-  if (cres) {
-    html += '<div class="ib-claims" id="ib-claims" data-claims="' + cres.claims.length
-      + '" data-broken="' + cres.broken.length + '">'
-      + '<div class="ib-claim-head">' + esc(CC.headText(cres)) + '</div>';
-    cres.broken.forEach(function(e) {
-      html += '<div class="ib-claim-row" data-doc="' + esc(e.item.doc) + '"'
-        + ' data-pin-id="' + esc(e.item.id) + '"'
-        + ' data-claim-doc="' + esc(e.claim.doc) + '"'
-        + ' data-claim-line="' + e.result.line + '">'
-        + '<span class="ib-claim-where">' + esc(e.item.doc) + ' #' + esc(e.item.id) + '</span>'
-        + '<span class="ib-claim-why">' + esc(CC.describe(e)) + '</span></div>';
-    });
-    html += '</div>';
-  }
-
-  var groups = PI.groupByDoc(shown);
-  if (!groups.length) {
-    html += '<div class="ib-empty" id="ib-empty">'
-      + (_inboxItems ? '未対応の指摘はありません' : '「読み直す」で保存フォルダを走査します') + '</div>';
-  }
-  groups.forEach(function(g) {
-    html += '<div class="ib-group" data-doc="' + esc(g.doc) + '" data-open="' + g.open + '">'
-      + '<div class="ib-doc">' + esc(PI.groupText(g)) + '</div>';
-    g.items.forEach(function(p) {
-      // 直す側の応答を指摘と同じ行に出す。
-      // これが無いと、reviewer は次の run で図をまたいで全部を確かめ直すことになる。
-      var reply = _inboxReply(p);
-      var prog = _progressOf(p);
-      var jv = _inboxVerifyOf(p);
-      // 手で書いた指摘にも同じ語彙の札を付ける。
-      // 監査が出した指摘は puml/SVG の判定 (jv) が札になり、手で書いた指摘は
-      // 仕分け (指紋の持ち越し) を同じ 4 つへ対応付けたものが札になる。
-      var FV = window.MA.findingVocab;
-      var mfKey = (p.source === 'manual' && FV) ? (p.verdictKey || 'unknown') : '';
-      html += '<div class="ib-row' + (p.state === 'read' ? ' read' : '') + (p.stale ? ' stale' : '')
-        + '" data-doc="' + esc(p.doc) + '" data-pin-id="' + esc(p.id) + '" data-line="' + p.line + '"'
-        + ' data-source="' + esc(p.source || 'audit') + '"'
-        + (p.mfId ? ' data-mf-id="' + esc(p.mfId) + '" data-mf-status="' + esc(p.mfRow ? p.mfRow.status : '')
-            + '" data-mf-keep="' + (p.mfRow && p.mfRow.keep ? '1' : '0') + '"' : '')
-        + ' data-verdict="' + esc(reply ? reply.verdict : '') + '"'
-        + (prog ? ' data-progress="' + esc(prog.status) + '" data-passes="' + prog.passes + '"' : '')
-        + (jv ? ' data-reflect="' + esc(jv.key) + '" data-svg="' + esc(jv.svg.state) + '"' : '')
-        + (mfKey ? ' data-reflect="' + esc(mfKey) + '"' : '')
-        + '>'
-        + '<span class="ib-source ' + esc(p.source || 'audit') + '" title="'
-          + esc(FV ? FV.source(p.source || 'audit').title : '') + '">'
-          + esc(PI.sourceLabel(p)) + '</span>'
-        + (mfKey
-          ? '<span class="ib-verify ' + esc(mfKey) + '" title="' + esc(FV.title(mfKey)) + '">'
-            + esc(FV.label(mfKey)) + '</span>'
-            + (p.verdictWhy ? '<span class="ib-verify-why">' + esc(p.verdictWhy) + '</span>' : '')
-          : '')
-        + (jv
-          ? '<span class="ib-verify ' + esc(jv.key) + '" title="' + esc(jv.title) + '">'
-            + esc(jv.label) + '</span>'
-            + '<span class="ib-verify-why">' + esc('puml: ' + jv.puml.text
-              + (jv.puml.change ? '（' + jv.puml.change + '）' : '')
-              + ' / SVG: ' + jv.svg.text) + '</span>'
-          : '')
-        + (prog
-          ? '<span class="ib-prog ' + esc(prog.status) + '" title="' + esc(prog.title + ' — ' + prog.why) + '">'
-            + esc(window.MA.pinProgress.entryText(prog)) + '</span>'
-          : '')
-        + '<span class="ib-where">' + (p.stale ? '行が見つかりません' : ('L' + p.line)) + '</span> '
-        + '<span class="ib-who">' + esc(p.author || '?') + '</span>'
-        + '<span class="ib-text">' + esc(p.text) + '</span>'
-        + (p.source === 'manual'
-          ? '<span class="mf-acts">'
-            + (p.mfRow && p.mfRow.keep ? '' : '<button type="button" data-mf-act="confirm">確認した (今の行で憶え直す)</button>')
-            + '<button type="button" data-mf-act="drop">消す</button></span>'
-          : (reply
-            ? '<span class="ib-reply">↩ ' + esc(_inboxReplyText(p)) + '</span>'
-            : '<span class="ib-reply none">↩ 応答なし</span>'))
-        + '</div>';
-    });
-    html += '</div>';
-  });
-  panel.innerHTML = html;
-
-  var unread = document.getElementById('ib-unread');
-  if (unread) {
-    unread.addEventListener('change', function() {
-      _inboxSetUnreadOnly(unread.checked);
-      renderInboxPanel();
-      renderInboxBadge();
-    });
-  }
-  var resolvedBox = document.getElementById('ib-resolved');
-  if (resolvedBox) {
-    resolvedBox.addEventListener('change', function() {
-      _inboxSetShowResolved(resolvedBox.checked);
-      renderInboxPanel();
-      renderInboxBadge();
-    });
-  }
-  var me = document.getElementById('ib-me');
-  if (me) {
-    me.addEventListener('change', function() {
-      _inboxSetMe(me.value.trim());
-      renderInboxPanel();
-      renderInboxBadge();
-    });
-  }
-  var srcSel = document.getElementById('ib-source');
-  if (srcSel) {
-    srcSel.addEventListener('change', function() {
-      _inboxSetSource(srcSel.value);
-      renderInboxPanel();
-      renderInboxBadge();
-    });
-  }
-  var reload = document.getElementById('ib-reload');
-  if (reload) reload.addEventListener('click', function() { loadInbox(); });
-
-  // 手で書いた指摘の足し込みと書き出し (旧 🔖 手動指摘のタブが持っていた手順)。
-  var MFa = window.MA.manualFindings;
-  var mfAdd = document.getElementById('mf-add');
-  if (mfAdd && MFa) {
-    mfAdd.addEventListener('click', function() {
-      var input = document.getElementById('mf-text');
-      var text = input ? input.value.trim() : '';
-      var doc = _activeDocName();
-      var line = _pinTargetLine();
-      if (!text || !doc || !line) return;
-      _mfSave(MFa.add(_mfList(), {
-        doc: doc, dsl: mmdText, line: line, text: text,
-        author: _inboxMe() || 'reviewer', at: new Date().toISOString().slice(0, 16),
-        verdict: '未解消',
-      }));
-      if (_mfDocs) _mfDocs[doc] = mmdText;
-      if (input) input.value = '';
-      _inboxRefreshManual();
-      renderInboxPanel();
-      renderInboxBadge();
-    });
-  }
-  var mfCopy = document.getElementById('mf-copy');
-  if (mfCopy && MFa) {
-    mfCopy.addEventListener('click', function() {
-      var text = MFa.toMarkdown(MFa.review(_mfList(), _mfDocs || _mfOpenDocs()));
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function() {
-          mfCopy.textContent = 'コピーしました';
-        }, function() { mfCopy.textContent = 'コピーできません'; });
-      }
-    });
-  }
-
-  var claimRows = panel.querySelectorAll('.ib-claim-row');
-  for (var ci = 0; ci < claimRows.length; ci++) {
-    (function(el) {
-      el.addEventListener('click', function() {
-        openInboxItem({
-          doc: el.getAttribute('data-claim-doc'),
-          line: Number(el.getAttribute('data-claim-line')) || 1,
-        });
-      });
-    })(claimRows[ci]);
-  }
-
-  var rows = panel.querySelectorAll('.ib-row');
-  for (var i = 0; i < rows.length; i++) {
-    (function(el) {
-      el.addEventListener('click', function(ev) {
-        var id = el.getAttribute('data-pin-id');
-        var docName = el.getAttribute('data-doc');
-        var hit = null;
-        shown.forEach(function(p) { if (p.id === id && p.doc === docName) hit = p; });
-        // 手で書いた指摘の「確認した / 消す」はその場で効かせる (旧 🔖 と同じ手順)。
-        var act = ev.target && ev.target.getAttribute ? ev.target.getAttribute('data-mf-act') : null;
-        if (act && hit && hit.mfId && window.MA.manualFindings) {
-          var MFb = window.MA.manualFindings;
-          if (act === 'drop') _mfSave(MFb.remove(_mfList(), hit.mfId));
-          else if (act === 'confirm') {
-            var docs = _mfDocs || _mfOpenDocs();
-            _mfSave(MFb.confirm(_mfList(), hit.mfId, docs[hit.doc], hit.mfRow ? hit.mfRow.verdict : ''));
-          }
-          _inboxRefreshManual();
-          renderInboxPanel();
-          renderInboxBadge();
-          return;
-        }
-        if (hit) openInboxItem(hit);
-      });
-    })(rows[i]);
-  }
-}
-
-// 手で書いた指摘だけを走査せずに仕分け直す (控えを書き換えた直後に使う)。
-// 保存フォルダは読み直さない — 直前の走査で読んだ本文 (_mfDocs) で足りる。
-function _inboxRefreshManual() {
-  var MF = window.MA.manualFindings;
-  var PI = window.MA.pinInbox;
-  if (!MF || !PI || !_inboxItems) return;
-  var docs = _mfDocs || _mfOpenDocs();
-  var kept = _inboxItems.filter(function(p) { return !(p && p.source === 'manual'); });
-  _inboxItems = kept.concat(PI.fromManual(MF.review(_mfList(), docs)));
-}
-
-function loadInbox() {
-  _inboxLoading = true;
-  // 前回の判定はここで捨てる。走査し直したのに古い札が残っていると、
-  // 「もう直った」を前の run の材料で言うことになる。
-  _inboxVerify = null;
-  _inboxVerifyState = '';
-  renderInboxPanel();
-  return scanPinInbox().then(function(items) {
-    _inboxItems = items;
-    _inboxLoading = false;
-    // 走査のたびに着手状況を付け直す。控えと突き合わせるのはここ 1 か所。
-    _inboxTrackProgress();
-    renderInboxPanel();
-    renderInboxBadge();
-    // SVG に出ているかは描き直しが要るので、箱を開いたあとで差し込む。
-    return _inboxRunVerify().then(function() {
-      renderInboxPanel();
-      renderInboxBadge();
-      return items;
-    }, function() { return items; });
-  }, function() {
-    _inboxLoading = false;
-    _inboxItems = _inboxItems || [];
-    renderInboxPanel();
-    renderInboxBadge();
-  });
-}
-
-function setupPinInbox() {
-  var btn = document.getElementById('btn-tab-inbox');
-  var panel = document.getElementById('inbox-panel');
-  if (!btn || !panel) return;
-  btn.addEventListener('click', function() {
-    if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
-    panel.classList.add('open');
-    var rect = btn.getBoundingClientRect();
-    panel.style.left = Math.max(4, rect.left) + 'px';
-    panel.style.top = (rect.bottom + 2) + 'px';
-    loadInbox();
-  });
-  panel.addEventListener('click', function(ev) { ev.stopPropagation(); });
-  document.addEventListener('keydown', function(ev) {
-    if (ev.key === 'Escape') panel.classList.remove('open');
-  });
-  document.addEventListener('click', function(ev) {
-    if (!panel.classList.contains('open')) return;
-    if (panel.contains(ev.target) || ev.target === btn) return;
-    panel.classList.remove('open');
-  });
-  renderInboxBadge();
-}
-
-// ── 手動指摘の台帳 ────────────────────────
-// audit.js が拾えない、図を読んで初めて気づく類の指摘は `指摘.md` に自然文で書くしか
-// なく、次に見るときは全文を読み直していた。読み直しを省くと、もう直っている指摘を
-// 引き継ぎ続ける。指摘 1 件を「対象ファイル + 行 + 行の指紋」で憶えておき、
-// 開いたときに「未変更のため前回判定を維持」と「要再確認」へ仕分ける。
-// 仕分けの規則は src/core/manual-findings.js。ここは走査と画面だけ。
-
-var _mfDocs = null;      // 直近に読んだ {図名: DSL}
-var _mfLoading = false;
-
-function _mfList() {
-  var MF = window.MA.manualFindings;
-  if (!MF) return [];
-  return MF.load(_reviewStore(), _wsFileDir());
-}
-
-function _mfSave(list) {
-  var MF = window.MA.manualFindings;
-  if (!MF) return;
-  MF.save(_reviewStore(), _wsFileDir(), list);
-}
-
-function _mfRows() {
-  var MF = window.MA.manualFindings;
-  if (!MF) return [];
-  return MF.review(_mfList(), _mfDocs || _mfOpenDocs());
-}
-
-// 開いているタブは編集中の本文で見る (保存前の直しも仕分けに効く)。
-function _mfOpenDocs() {
-  var out = {};
-  if (!window.MA.workspace) return out;
-  saveActiveDoc();
-  window.MA.workspace.list().forEach(function(d) { out[d.name] = d.dsl; });
-  return out;
-}
-
-// 🔖 手動指摘のタブ (旧 findings-panel) は 📥 指摘箱に畳んだ
-// 走査は scanPinInbox が 1 回で行い、
-// 仕分けの規則は src/core/manual-findings.js のまま、出典の絞り込みで出す。
 
 // ── セット複製 ──────────────────────────────
 // 題材替え (GPIO → UART) は 6 図種ぶん、テンプレート作成を図種の数だけ
@@ -29078,7 +26518,6 @@ function syncEditedText() {
   try { renderReviewBadge(); } catch (e) {}
   try { renderConsistencyBadge(); } catch (e) {}
   try { renderEventSyncBadge(); } catch (e) {}
-  try { renderPinBadge(); } catch (e) {}
 }
 
 // 本文を入れ替えたが利用者の編集ではない経路 (図種の切り替えで見本・下書きを入れた) が、
@@ -30357,8 +27796,6 @@ function renderSvg() {
       }
       // 描き直しの前に押されていた枠を、この回の枠で押し直す。
       try { _resolveStaleOverlayClick(overlayEl); } catch (e) {}
-      // 指摘の付いた行に印を置く。
-      try { drawPinMarkers(overlayEl); } catch (e) {}
       // overlay は描画のたびに作り直されるので、
       // 今のキャレット行の対応表示を引き直す (再描画で peek が消えたままにしない)。
       try { refreshLinePeek(); } catch (e) {}
@@ -30470,7 +27907,7 @@ function loadCallGraph() {
   saveActiveDoc();
   var dirs = (typeof _peekDirs !== 'undefined' && _peekDirs && _peekDirs.length)
     ? _peekDirs.slice()
-    : [{ path: _wsFileDir(), name: _noteMineFolder() || '', current: true }];
+    : [{ path: _wsFileDir(), name: '', current: true }];
   _cgBusy = Promise.all(dirs.map(function(d) {
     return WS.listFiles(d.path).then(function(names) {
       return Promise.all((names || []).filter(function(n) { return n; }).map(function(n) {

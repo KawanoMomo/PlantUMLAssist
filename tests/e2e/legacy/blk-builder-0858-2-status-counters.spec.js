@@ -10,9 +10,9 @@ test.beforeEach(async ({ page }) => {
 test('下端の件数はタブ列のボタンの件数と一致する', async ({ page }) => {
   const pairs = [
     ['#btn-tab-diff', '#status-diff'],
-    ['#btn-tab-pins', '#status-pins'],
-    ['#btn-tab-inbox', '#status-inbox'],
   ];
+  // TICKET-owner-20261115-1840-prune: 指摘・指摘箱の件数はピン留め・指摘箱ごと外した。
+  await expect(page.locator('#status-pins, #status-inbox')).toHaveCount(0);
   for (const [src, out] of pairs) {
     const srcText = (await page.locator(src).textContent()) || '';
     const outText = (await page.locator(out).textContent()) || '';

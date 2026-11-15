@@ -96,7 +96,7 @@ describe('BLK-primary-20260929-1108 相対の !include はその図のフォル�
     expect(fn).toContain('_sourcePathOf(doc.id)');
     expect(fn).toContain('_docDir(doc)');
     // 保存フォルダの図を描き直す経路は、その図のフォルダを渡す
-    expect(app).toContain('return renderDslToSvg(dsl, f.dir);');
+    // (指摘から選ぶ の描き直しは TICKET-owner-20261115-1840-prune で外した)
     expect(app).toContain('return renderDslToSvg(dsl, dir);');
     var pe = fs.readFileSync(path.join(ROOT, 'src', 'core', 'preproc-expand.js'), 'utf8');
     expect(pe).toContain('function ensure(text, fetchFn, dir)');

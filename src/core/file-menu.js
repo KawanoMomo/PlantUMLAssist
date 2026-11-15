@@ -42,7 +42,7 @@ window.MA.fileMenu = (function() {
   var FOLDER_ITEMS = [
     { id: 'compare', label: '並べて比較', readonlyOnly: true },
     // 覗く窓 (#peek-modal) はツリーで選んだフォルダの「道具の置き場」
-    // (部品ビュー・指摘から選ぶ・ドメインで揃える・同名で並べる・自分の部品を探す・テンプレート)。
+    // (部品ビュー・ドメインで揃える・自分の部品を探す・テンプレート)。
     // 入口はここ (と「読むだけ」見出しの目の印) で、窓の中でフォルダを選び直させない。
     { id: 'peek', label: 'このフォルダの図を調べる…', readonlyOnly: true },
     { id: 'new-doc', label: '新しい図', writable: true },
