@@ -171,6 +171,18 @@ window.MA.fileTree = (function() {
   // `diagram2` など) は部品のフォルダに分けず、保存先の直下にファイル行で並べる
   // (1 枚ずつ「DIAGRAM2 0 / 6・未作成 6 図種」と出すと、中に図があるのに無いと読める)。
   // 本文から図種が読める図 (e.kind) は、名前に図種が無くても部品の側で数える。
+  // 先頭の語が図種の語の図 (`seq-1` `state-1` `class-1`) も部品に束ねず直下に並べる。
+  // `seq` は部品名ではなく図種の語で、6 図種そろえると 1 枚ずつの部品に割れ、
+  // どれにも「未作成 5 図種」が付いていた。行の線画のため図種は持たせたままにする。
+  function headIsKindWord(name) {
+    var n = _s(name).replace(/\.puml$/i, '');
+    var m = /^[_\-\s]*([^_\-\s]+)/.exec(n);
+    if (!m) return false;
+    var head = m[1].toLowerCase();
+    return !!(KIND_WORDS[head] || HEAD_KIND_WORDS[head]);
+  }
+  var HEAD_KIND_WORDS = { comp: true, stm: true };
+
   function layout(entries) {
     var kinded = [];
     var loose = [];
@@ -178,8 +190,8 @@ window.MA.fileTree = (function() {
       var name = _s(e && e.name ? e.name : e);
       if (!name) return;
       var kind = _s(e && e.kind) || kindOf(name);
-      if (kind) kinded.push({ name: name, kind: kind });
-      else loose.push({ name: name, kind: '' });
+      if (kind && !headIsKindWord(name)) kinded.push({ name: name, kind: kind });
+      else loose.push({ name: name, kind: kind });
     });
     loose.sort(function(a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
     return { groups: groups(kinded), loose: loose };
