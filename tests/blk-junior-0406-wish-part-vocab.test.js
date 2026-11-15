@@ -212,73 +212,13 @@ describe('名前帳 — 現在の 1 冊', function() {
   });
 });
 
-describe('名前帳 — 入力欄に出す', function() {
-  beforeEach(function() {
+
+// TICKET-owner-20261115-2140-prune: 入力欄の下に名前を並べるチップは外した (候補は今の図の中の名前だけ)。
+// 集めた名前があっても、入力欄の下には何も出さない。
+describe('入力欄には出さない', function() {
+  test('集めた名前があっても欄の下にチップは出ない', function() {
     PV.setCurrent(PV.collect('spi', DOCS));
-    global.document.body.innerHTML = '';
-  });
-
-  function mount(html) {
-    global.document.body.innerHTML = html;
-  }
-
-  test('きっかけの欄の下に、その役割の名前だけがチップで並ぶ', function() {
-    mount('<input id="f">' + P.vocabPickerHtml('pk', { roles: ['method', 'event'] }));
-    var chips = global.document.querySelectorAll('#pk .vocab-chip');
-    var got = Array.prototype.map.call(chips, function(c) { return c.getAttribute('data-name'); });
-    expect(got).toContain('Spi_Init');
-    expect(got).toContain('TransferComplete');
-    expect(got).not.toContain('Spi_Driver');
-  });
-
-  test('チップを押すとその欄が埋まる (先輩の図を開かずに 1 クリック)', function() {
-    mount('<input id="f">' + P.vocabPickerHtml('pk', { roles: ['method', 'event'] }));
-    P.bindVocabPicker('pk', 'f');
-    global.document.querySelector('#pk .vocab-chip[data-name="Spi_Init"]').click();
-    expect(global.document.getElementById('f').value).toBe('Spi_Init');
-  });
-
-  test('シーケンスの本文には括弧まで入る (後から括弧を足す手を残さない)', function() {
-    mount('<textarea id="t"></textarea>'
-      + P.vocabPickerHtml('pk', { roles: ['method', 'event'], callSuffix: true }));
-    P.bindVocabPicker('pk', 't');
-    global.document.querySelector('#pk .vocab-chip[data-name="Spi_Init"]').click();
-    expect(global.document.getElementById('t').value).toBe('Spi_Init()');
-    // きっかけは呼び出しではないので括弧を付けない。
-    global.document.querySelector('#pk .vocab-chip[data-name="TransferComplete"]').click();
-    expect(global.document.getElementById('t').value).toBe('TransferComplete');
-  });
-
-  test('手で打った綴りが揺れていれば、その欄の下に相手の綴りが出る', function() {
-    mount('<input id="f">' + P.vocabPickerHtml('pk', { roles: ['method', 'event'] }));
-    P.bindVocabPicker('pk', 'f');
-    var f = global.document.getElementById('f');
-    f.value = 'SpiInit';
-    f.dispatchEvent(new global.window.Event('input', { bubbles: true }));
-    expect(global.document.querySelector('#pk .vocab-warn').textContent).toContain('Spi_Init');
-  });
-
-  test('括弧付きで打っても中の名前で照合する', function() {
-    mount('<input id="f">' + P.vocabPickerHtml('pk', { roles: ['method'], callSuffix: true }));
-    P.bindVocabPicker('pk', 'f');
-    var f = global.document.getElementById('f');
-    f.value = 'SpiInit()';
-    f.dispatchEvent(new global.window.Event('input', { bubbles: true }));
-    expect(global.document.querySelector('#pk .vocab-warn').textContent).toContain('Spi_Init');
-  });
-
-  test('名前帳が無ければ何も出さない (他部品の図では邪魔しない)', function() {
-    PV.setCurrent(null);
-    expect(P.vocabPickerHtml('pk', { roles: ['method'] })).toBe('');
-  });
-
-  test('多いときは先頭だけ出し、残りは 1 回で開ける', function() {
-    mount('<input id="f">' + P.vocabPickerHtml('pk', { roles: ['method', 'event', 'state', 'type'], limit: 3 }));
-    P.bindVocabPicker('pk', 'f');
-    var hidden = global.document.querySelectorAll('#pk .vocab-chip[data-rest="1"]');
-    expect(hidden.length).toBeGreaterThan(0);
-    global.document.querySelector('#pk .vocab-more').click();
-    expect(global.document.querySelector('#pk .vocab-chip[data-rest="1"]').style.display).toBe('');
+    expect(P.vocabPickerHtml('pk', { roles: ['method', 'event'] })).toBe('');
   });
 });
 

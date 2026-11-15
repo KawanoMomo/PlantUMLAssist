@@ -113,9 +113,9 @@ describe('ツールメニューの道具はすべてパレットから引ける 
   // その道具へ行く経路が 1 本も無くなる。
   var appJs = require('fs').readFileSync(require('path').join(__dirname, '../src/app.js'), 'utf-8');
 
-  // BLK-owner-20260924-1212-prune: ツール ▾ の案内行 (→ ▤ 影響を見る) は Ctrl+K に写さない。
-  // その行き先は別名のコマンド 1 行が持つので、そのコマンドが在ることで経路があると数える。
-  var GUIDE_ROWS = { 'btn-tab-xref': "{ id: 'name-search'" };
+  // ツール ▾ の案内行 (Ctrl+K に写さず、別名のコマンドが経路を持つ行)。
+  // 唯一の案内行だった「部品名で図をまたいで辿る」は TICKET-owner-20261115-2140-prune で外した。
+  var GUIDE_ROWS = {};
 
   test('menuIds の全部が app.js のコマンドに button として現れる', () => {
     var missing = TM.menuIds().filter(function(id) {
@@ -160,9 +160,9 @@ describe('名指しされた道具は見出し順より前に出る', () => {
 describe('右端の呼び名', () => {
   test('言い換えと同じ文字なら出さない (同じ語が 2 度並ばない)', () => {
     var items = CP.buildItems([
-      { id: 'tab-symptom', title: '症状から関連図を探す / Symptom search', button: 'btn-tab-symptom', run: noop },
+      { id: 'tab-diff', title: '前回保存からの差分 / Diff', button: 'btn-tab-diff', run: noop },
     ], '');
-    expect(items[0].title).toBe('症状から関連図を探す');
+    expect(items[0].title).toBe('前回保存からの差分');
     expect(items[0].hint).toBe('');
   });
 });

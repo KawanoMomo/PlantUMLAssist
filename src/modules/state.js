@@ -1148,23 +1148,6 @@ window.MA.modules.plantumlState = (function() {
     }, true);
   }
 
-  // 同じ部品のシーケンス図のメッセージ名 (開いているタブから)。
-  function _txSeqNames() {
-    var WS = window.MA.workspace;
-    var FT = window.MA.fileTree;
-    var TX = window.MA.stateTxEntry;
-    if (!WS || !WS.list || !TX) return [];
-    var active = WS.getActive ? WS.getActive() : null;
-    var part = FT && active ? FT.partOf(active.name) : '';
-    var out = [];
-    WS.list().forEach(function(d) {
-      if (!d || String(d.diagramType || '') !== 'plantuml-sequence') return;
-      if (part && FT && FT.partOf(d.name) !== part) return;
-      TX.messageNames(d.dsl).forEach(function(n) { out.push(n); });
-    });
-    return out;
-  }
-
   // 候補の出る入力欄。打ち始めで絞り、↑↓ で選んで Enter で入れる。
   // 候補を選んでいないときの Enter は確定 (次の 1 本へ)、Esc は候補を閉じる → 回を閉じる。
   function _bindTxSuggest(inputId, listFn, onConfirm, onChange) {
@@ -1530,7 +1513,7 @@ window.MA.modules.plantumlState = (function() {
         P.bindVocabPicker('st-tail-trig-vocab', 'st-tail-trig', tailPreview);
         P.bindVocabPicker('st-tail-act-vocab', 'st-tail-act', tailPreview);
         var TXc = window.MA.stateTxEntry;
-        var cands = TXc ? TXc.candidates(parsedData, _txSeqNames()) : { triggers: [], guards: [], actions: [] };
+        var cands = TXc ? TXc.candidates(parsedData) : { triggers: [], guards: [], actions: [] };
         var confirm = function() {
           var addBtn = document.getElementById('st-tail-add');
           if (addBtn) addBtn.click();

@@ -25,12 +25,8 @@ window.MA.toolMenu = (function() {
       { id: 'btn-tab-rename', label: '部品名を一括置換する', group: 'まとめて直す' },
       { id: 'btn-tab-apply',  label: '複数クラスに一括適用する', group: 'まとめて直す' },
     ] },
-    { key: 'find', title: '探す', items: [
-      { id: 'btn-tab-symptom', label: '症状から関連図を探す', group: '図をたどる' },
-      { id: 'btn-tab-blame',   label: '部品名の混入点を探す', group: '図をたどる' },
-      // 🕸 参照関係の画面は畳み、旧名のまま ▤ 影響を見る を開く案内にした。
-      { id: 'btn-tab-xref',    label: '部品名で図をまたいで辿る → ▤ 影響を見る', group: '図をたどる' },
-    ] },
+    // 「探す」(図をまたぐ調べ物) の分類は TICKET-owner-20261115-2140-prune で中身ごと外した。
+    // 図をまたぐ操作は「書き換える」の ⇄ 一括置換 1 本。
     // 「確かめる」(図をまたぐ監査) の分類は TICKET-owner-20261115-1841-prune で中身ごと外した。
     // 「2 つの版・2 枚の図を並べて違いを見る」入口を 2 つに絞る。
     // 前の回 は 5 つの入口をここに並べて名前だけ揃えたが、
@@ -49,7 +45,6 @@ window.MA.toolMenu = (function() {
       // 並べる画面ではない道具。覗く・指摘を出すのが目的で、並べるのは ⇔ 並べて見る に任せる。
       { id: 'btn-tab-review',   label: '基準の図との指摘', group: '指摘' },
       { id: 'btn-tab-diff',     label: '前回保存からの差分', group: '変更の履歴' },
-      { id: 'btn-tab-lineage',  label: 'この図の継承元', group: '変更の履歴' },
     ] },
     // zip にして渡す入口は Export ▾ の「渡す」(資料セット) 1 か所。このメニューには出さない。
   ];

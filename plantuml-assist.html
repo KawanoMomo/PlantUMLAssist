@@ -2525,51 +2525,21 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 }
 .ab-unify-to:hover { border-color: var(--accent); }
 
-/* ── 継承元 ─────────────────────────────────
-   この図がどの図の後継かを 1 回登録し、継承元の更新を差分の行数で見せる。 */
-#lg-modal-content {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  width: 80vw;
-  max-width: 900px;
-  height: 72vh;
-  display: flex;
-  flex-direction: column;
-}
-#lg-head, #lg-set-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  color: var(--text-primary);
-  flex-wrap: wrap;
-}
-#lg-child { font-family: var(--font-mono); color: var(--text-secondary); }
-#lg-summary { color: var(--accent); font-family: var(--font-mono); font-size: 11px; }
-#lg-summary.lg-updated { color: var(--accent-orange); }
-#lg-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-#lg-note { color: var(--text-secondary); font-size: 11px; }
-#lg-dir {
-  background: var(--bg-tertiary); color: var(--text-primary);
-  border: 1px solid var(--border); border-radius: 3px; font-size: 11px; padding: 3px 6px; width: 240px;
-}
-#lg-parent {
-  background: var(--bg-tertiary); color: var(--text-primary);
-  border: 1px solid var(--border); border-radius: 3px; font-size: 11px; padding: 3px 6px; max-width: 320px;
-}
-#lg-head button, #lg-set-row button {
-  background: var(--bg-tertiary); color: var(--text-primary);
-  border: 1px solid var(--border); border-radius: 3px; font-size: 11px; padding: 3px 8px; cursor: pointer;
-}
-#lg-head button[disabled], #lg-set-row button[disabled] { opacity: 0.45; cursor: default; }
-#lg-body { flex: 1; overflow-y: auto; padding: 10px 14px 14px; font-size: 11px; }
-.lg-empty { color: var(--text-secondary); padding: 10px 0; }
-.lg-diff { font-family: var(--font-mono); white-space: pre-wrap; }
-.lg-diff .lg-d-add { color: var(--accent-green, #4caf50); display: block; }
-.lg-diff .lg-d-del { color: var(--accent-red); display: block; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /* ── 変遷履歴 ─────────────────────────────
    1 図の版を新しい順に並べ、前の版に戻った版 (往復) を目で拾えるようにする。 */
@@ -2644,58 +2614,32 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 .vt-diff .vt-d-add { color: var(--accent-green, #4caf50); display: block; }
 .vt-diff .vt-d-del { color: var(--accent-red); display: block; }
 .vt-empty { font-size: 11px; color: var(--text-secondary); padding: 10px 0; }
-/* 提出用 zip の図選び */
-/* 呼び出しグラフ */
-#cg-modal-content {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  width: 80vw;
-  max-width: 1040px;
-  height: 78vh;
-  display: flex;
-  flex-direction: column;
-}
-#cg-head {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px; border-bottom: 1px solid var(--border);
-  font-size: 12px; color: var(--text-primary);
-}
-#cg-sum { color: var(--text-secondary); }
-#cg-tools { margin-left: auto; display: flex; gap: 6px; align-items: center; }
-#cg-tools button, #cg-tools input {
-  border: 1px solid var(--border); background: var(--bg-tertiary);
-  color: var(--text-primary); border-radius: 4px; padding: 3px 10px;
-  font-size: 12px; cursor: pointer;
-}
-#cg-find { cursor: text; min-width: 160px; }
-#cg-cols { display: flex; flex: 1 1 auto; min-height: 0; }
-#cg-list { flex: 0 0 300px; overflow: auto; border-right: 1px solid var(--border); padding: 6px 0; }
-#cg-detail { flex: 1 1 auto; overflow: auto; padding: 10px 14px; font-size: 12px; }
-.cg-node {
-  display: flex; align-items: baseline; gap: 8px;
-  padding: 4px 12px; cursor: pointer; color: var(--text-primary);
-  border-left: 3px solid transparent;
-}
-.cg-node:hover { background: var(--bg-tertiary); }
-.cg-node[aria-selected="true"] { background: var(--bg-tertiary); border-left-color: var(--accent); }
-.cg-node[data-undeclared="1"] .cg-key { color: var(--danger, #d05050); font-weight: 600; }
-.cg-key { flex: 1 1 auto; word-break: break-all; }
-.cg-spread { flex: 0 0 auto; color: var(--text-secondary); font-size: 11px; }
-#cg-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; word-break: break-all; }
-#cg-verdict { margin-bottom: 8px; color: var(--text-secondary); }
-#cg-verdict[data-tone="ng"] { color: var(--danger, #d05050); font-weight: 600; }
-#cg-verdict[data-tone="ok"] { color: var(--accent); }
-.cg-domain { margin-top: 8px; color: var(--text-secondary); font-weight: 600; }
-.cg-ref {
-  display: flex; align-items: baseline; gap: 8px; padding: 3px 0 3px 10px;
-  border-bottom: 1px solid var(--border); cursor: pointer;
-}
-.cg-ref:hover { background: var(--bg-tertiary); }
-.cg-ref .cg-where { flex: 0 0 auto; color: var(--text-secondary); }
-.cg-ref .cg-text { flex: 1 1 auto; word-break: break-all; }
-.cg-ref[data-kind="transition"] .cg-where { color: var(--accent); }
-#cg-empty { color: var(--text-secondary); padding: 10px 2px; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /* 引き継ぎチェックリスト */
 #hb-modal-content {
   background: var(--bg-secondary);
@@ -3274,35 +3218,24 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
   font-size: 12px;
   color: var(--text-primary);
 }
-.board-head > * { flex: none; }   /* 幅が足りなくても縮めず、次の行に送る */
-#ri-summary, #dg-summary, #ct-summary { color: var(--accent); }
-/* 変更チケット。
-   残りが一目で分かることだけが要件なので、済んだ行は沈めて未チェックを前に出す。 */
-#ct-body { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
-#ct-body .ct-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 10px; }
-#ct-progress {
-  display: flex; align-items: center; gap: 10px; font-size: 12px;
-  padding: 4px 0 8px 0; color: var(--text-primary);
-}
-#ct-progress .ct-bar { flex: 1; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden; }
-#ct-progress .ct-bar > i { display: block; height: 100%; background: var(--accent); }
-#ct-progress .ct-note { color: var(--text-secondary); }
-table.ct-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-table.ct-table th {
-  text-align: left; padding: 3px 8px; color: var(--text-secondary);
-  font-weight: normal; border-bottom: 1px solid var(--border);
-}
-table.ct-table td { padding: 3px 8px; vertical-align: top; }
-table.ct-table tr.ct-item[data-done="1"] td { color: var(--text-secondary); text-decoration: line-through; }
-table.ct-table tr.ct-item[data-gone="1"] td.ct-doc-name::after { content: ' (図が見当たりません)'; color: var(--text-secondary); }
-table.ct-table td.ct-hop { white-space: nowrap; color: var(--text-secondary); }
-table.ct-table tr.ct-item[data-hop="0"] td.ct-hop { color: var(--accent); }
-table.ct-table td.ct-via { color: var(--text-secondary); word-break: break-all; }
-table.ct-table button.ct-open {
-  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
-  border-radius: 3px; font-size: 10px; padding: 1px 8px; cursor: pointer; white-space: nowrap;
-}
-table.ct-table button.ct-open:hover { border-color: var(--accent); }
+.board-head > * { flex: none; }   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /* 保存先の一覧の「変更チケット」の帯 */
 .folder-vault-bar { display: flex; align-items: center; gap: 8px; padding: 4px 10px; font-size: 11px; }
 .folder-vault-bar .folder-vault-open {
@@ -3311,125 +3244,80 @@ table.ct-table button.ct-open:hover { border-color: var(--accent); }
 }
 .folder-vault-bar .folder-vault-open:hover { border-color: var(--accent); }
 .folder-vault-bar .folder-vault-state { color: var(--text-secondary); }
-/* 部品名の依存グラフ。
-   上が矢印の絵、下が影響の届く図の一覧。絵だけでは「開いて直す図」を数えられない。 */
-/* 名前で図を探す。
-   1 行 = 1 図。押せばその図のその行へ運ぶので、一覧から開き直す手順が要らない。
-   ▤ 影響を見る の下段 (置換後が空のときの出現箇所の一覧)。 */
-#ri-occ { padding: 6px 14px 14px 14px; }
-#ri-occ .ri-occ-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 12px; margin-bottom: 6px; }
-#ns-summary { color: var(--accent); }
-#ns-q { min-width: 220px; font-family: var(--font-mono); }
-#ns-rows .ns-row {
-  border: 1px solid var(--border); border-radius: 4px; background: var(--bg-primary);
-  padding: 6px 8px; margin-bottom: 6px;
-}
-#ns-rows .ns-row[data-declared="1"] { border-color: var(--accent); }
-#ns-rows .ns-doc { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-#ns-rows .ns-name { font-weight: 600; }
-#ns-rows .ns-kind, #ns-rows .ns-count, #ns-rows .ns-where {
-  color: var(--text-secondary); font-size: 11px;
-}
-#ns-rows .ns-at {
-  display: block; width: 100%; text-align: left; margin-top: 4px; cursor: pointer;
-  border: none; background: none; color: var(--text-primary);
-  font-family: var(--font-mono); font-size: 11px; padding: 2px 4px; border-radius: 3px;
-}
-#ns-rows .ns-at:hover { background: var(--bg-tertiary); }
-#ns-rows .ns-at .ns-line { color: var(--text-secondary); margin-right: 6px; }
-#ns-rows .ns-empty, #ns-hint { color: var(--text-secondary); font-size: 11px; padding: 6px 2px; }
-#ns-rows .ns-chain-head { color: var(--text-secondary); font-size: 11px; padding: 8px 2px 4px; border-top: 1px dashed var(--border); margin-top: 6px; }
-#ns-rows .ns-row.ns-chain { border-style: dashed; }
-#ns-hint .ns-top-name { cursor: pointer; text-decoration: underline; margin-right: 8px; }
-/* 旧 🕸 参照関係の左列。名前が空のまま開いたときの下段は
-   「図をまたぐ部品名」(名前と枚数)。押すとその名前で引き直す。 */
-#ri-xref-head { color: var(--text-secondary); font-size: 11px; padding: 2px 2px 4px 2px; }
-#ri-xref-names { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px; }
-#ri-xref-names .ri-xref-name {
-  display: flex; justify-content: space-between; gap: 8px; cursor: pointer; text-align: left;
-  border: 1px solid var(--border); border-radius: 3px; background: var(--bg-primary); color: var(--text-primary);
-  font-family: var(--font-mono); font-size: 11px; padding: 3px 6px;
-}
-#ri-xref-names .ri-xref-name:hover { border-color: var(--accent); background: var(--bg-tertiary); }
-#ri-xref-names .ri-xref-count { color: var(--text-secondary); white-space: nowrap; }
-/* 図どうしの繋がり (A ⇄ B: 名前)。参照の連鎖は名前の矢印なので、図の組はその下に畳んで置く。 */
-#ri-links-box { margin-top: 8px; font-size: 11px; }
-#ri-links-box > summary { cursor: pointer; color: var(--text-secondary); }
-#ri-links { max-height: 160px; overflow-y: auto; padding: 4px 0 0 12px; color: var(--text-secondary); }
-#ri-links .ri-link { font-family: var(--font-mono); padding: 1px 0; }
-/* 依存グラフは ▤ 影響を見る の上段。上段と出現行を 1 本の縦スクロールにまとめる。 */
-#ri-scroll { flex: 1; overflow-y: auto; min-height: 0; }
-#ri-scroll #ri-body, #ri-scroll #dg-body { flex: none; overflow: visible; }
-#ri-refs { border-bottom: 1px solid var(--border); }
-.ri-refs-head, .ri-occ-head {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
-  padding: 8px 14px 0 14px; font-size: 12px; color: var(--text-primary);
-}
-.ri-refs-head > * { flex: none; }
-#dg-body { padding: 6px 14px 14px 14px; }
-#dg-canvas { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-primary); overflow-x: auto; }
-#dg-canvas .dg-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 10px; }
-#dg-canvas svg { display: block; }
-#dg-canvas svg text { font-family: var(--font-mono); font-size: 11px; fill: var(--text-primary); }
-#dg-canvas svg text.dg-count { fill: var(--text-secondary); font-size: 10px; }
-#dg-canvas svg line.dg-edge { stroke: var(--accent); stroke-width: 1.4; }
-#dg-canvas svg rect.dg-box { fill: var(--bg-tertiary); stroke: var(--border); }
-#dg-canvas svg g.dg-node[data-side="center"] rect.dg-box { stroke: var(--accent); stroke-width: 1.6; }
-#dg-impact { margin-top: 12px; border: 1px solid var(--border); border-radius: 4px; }
-#dg-impact .dg-impact-head {
-  display: flex; align-items: center; gap: 10px; padding: 6px 10px;
-  background: var(--bg-tertiary); border-bottom: 1px solid var(--border); font-size: 12px;
-}
-#dg-impact table { width: 100%; border-collapse: collapse; font-size: 11px; }
-#dg-impact th {
-  text-align: left; padding: 2px 8px; color: var(--text-secondary);
-  font-weight: normal; border-bottom: 1px solid var(--border);
-}
-#dg-impact td { padding: 2px 8px; vertical-align: top; }
-#dg-impact td.dg-doc-name { font-family: var(--font-mono); white-space: nowrap; }
-#dg-impact td.dg-via { color: var(--text-secondary); word-break: break-all; }
-#dg-impact tr.dg-doc[data-hop="0"] td.dg-hop { color: var(--accent); }
-#dg-impact tr.dg-doc[data-hop] td.dg-hop { white-space: nowrap; }
-/* 影響先の行を押すと下段「出てくる行」がその図の当たり行に絞られる */
-#dg-impact tr.dg-doc { cursor: pointer; }
-#dg-impact tr.dg-doc:hover td { background: var(--bg-tertiary); }
-#dg-impact tr.dg-doc[data-focus="1"] td { background: var(--bg-tertiary); box-shadow: inset 0 -1px 0 var(--accent); }
-/* 影響先へのまとめ note。一覧のすぐ下に出す
-   (見た一覧と打つ先が同じ画面にないと、結局 1 枚ずつ開き直すことになる)。 */
-/* 影響先の版履歴を症状の語で探す欄。 */
-#dg-ver { margin-top: 12px; border: 1px solid var(--border); border-radius: 4px; }
-#dg-ver .dg-ver-head {
-  display: flex; align-items: center; gap: 10px; font-size: 12px;
-  padding: 4px 8px; background: var(--bg-tertiary); border-bottom: 1px solid var(--border);
-}
-#dg-ver .dg-ver-head input[type="text"] { flex: 1; min-width: 120px; font-size: 11px; padding: 2px 4px; }
-#dg-ver #dg-ver-summary { font-size: 11px; color: var(--text-secondary); padding: 4px 8px; }
-#dg-ver table { width: 100%; border-collapse: collapse; font-size: 11px; }
-#dg-ver th {
-  text-align: left; padding: 2px 8px; font-weight: normal;
-  color: var(--text-secondary); border-bottom: 1px solid var(--border);
-}
-#dg-ver td { padding: 2px 8px; vertical-align: top; }
-#dg-ver td.dgv-doc { font-family: var(--font-mono); white-space: nowrap; }
-#dg-ver td.dgv-at { white-space: nowrap; color: var(--text-secondary); }
-#dg-ver td.dgv-hits { font-family: var(--font-mono); color: var(--text-secondary); word-break: break-all; }
-#dg-ver td.dgv-hits mark { background: var(--accent); color: var(--bg-primary); }
-#dg-ver tr.dgv-row[data-changed="1"] td.dgv-what { color: var(--accent); white-space: nowrap; }
-#dg-ver tr.dgv-row[data-current="1"] td { background: var(--bg-tertiary); }
-#dg-ver .dgv-empty { color: var(--text-secondary); font-size: 11px; padding: 10px 8px; }
-#dg-note-box { margin-top: 10px; border: 1px solid var(--accent); border-radius: 4px; padding: 8px 10px; }
-#dg-note-box .dg-note-head { display: flex; align-items: center; gap: 10px; font-size: 12px; margin-bottom: 6px; }
-#dg-note-box #dg-note-summary { color: var(--text-secondary); }
-#dg-note-box #dg-note-run { margin-left: auto; }
-#dg-note-box textarea {
-  width: 100%; box-sizing: border-box; font-family: var(--font-mono); font-size: 11px;
-  background: var(--bg-primary); color: var(--text-primary);
-  border: 1px solid var(--border); border-radius: 3px; padding: 4px 6px; resize: vertical;
-}
-#dg-note-box .dg-note-pick { font-size: 11px; color: var(--text-secondary); margin: 6px 0 2px 0; }
-#dg-note-targets { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; }
-#dg-note-targets label { display: flex; align-items: center; gap: 4px; font-family: var(--font-mono); cursor: pointer; }
-#dg-note-targets label.skip { color: var(--text-secondary); text-decoration: line-through; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 .board-tools { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .board-tools > * { flex: none; }   /* 文字が 1 文字ずつ縦に潰れないようにする */
 /* 道具の列そのものは見出しの残り幅に収め、入り切らない道具を次の行に送る。列ごと縮めずに
@@ -3448,7 +3336,6 @@ table.ct-table button.ct-open:hover { border-color: var(--accent); }
 }
 /* 会議メモの書き出し */
 .board-tools button, .board-tools label { white-space: nowrap; }
-#cb-summary, #ri-summary { min-width: 0; }
 .board-tools #cb-minutes { border-color: var(--accent); color: var(--accent); }
 #cb-minutes-state { color: var(--text-secondary); font-size: 11px; max-width: 320px; }
 /* 申し送りチェックリストの行 */
@@ -3668,296 +3555,88 @@ table.ct-table button.ct-open:hover { border-color: var(--accent); }
 }
 #lines-panel .lines-actions button#btn-lines-apply { border-color: var(--accent); }
 #lines-panel .lines-actions button:disabled { opacity: 0.45; cursor: default; }
-/* 混入点パネル (部品名がどの版から入ったかを時系列で見る) */
-#blame-panel {
-  display: none;
-  position: absolute;
-  z-index: 41;
-  width: 400px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 8px;
-  font-size: 11px;
-  color: var(--text-primary);
-}
-#blame-panel.open { display: block; }
-#blame-panel label {
-  display: block;
-  font-size: 10px;
-  color: var(--text-secondary);
-  margin: 0 0 2px;
-}
-#blame-panel input[type="text"] {
-  width: 100%;
-  box-sizing: border-box;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 3px 4px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-}
-#blame-head {
-  margin-top: 5px;
-  font-size: 10px;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 3px;
-}
-#blame-origin { margin-top: 4px; font-size: 10px; }
-#blame-origin .bp-origin { color: var(--text-primary); }
-#blame-origin .bp-origin.bp-none { color: var(--text-secondary); }
-#blame-results { max-height: 220px; overflow-y: auto; font-size: 10px; margin-top: 4px; }
-#blame-results .bp-row { padding: 3px 0; border-bottom: 1px solid var(--border); }
-#blame-results .bp-row-head {
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
-  font-family: var(--font-mono);
-}
-#blame-results .bp-at { color: var(--text-secondary); white-space: nowrap; }
-#blame-results .bp-file { color: var(--text-primary); }
-#blame-results .bp-delta { margin-left: auto; white-space: nowrap; }
-#blame-results .bp-mix { color: var(--accent-red); font-weight: bold; }
-#blame-results .bp-line {
-  display: flex;
-  gap: 5px;
-  font-family: var(--font-mono);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-#blame-results .bp-line .bp-sign { width: 1em; flex: 0 0 auto; }
-#blame-results .bp-add .bp-sign { color: var(--accent-green, #4a4); }
-#blame-results .bp-del { opacity: 0.7; text-decoration: line-through; }
-#blame-results .bp-line mark {
-  background: var(--accent-yellow, #ffd54f);
-  color: #000;
-  padding: 0 1px;
-}
-#blame-results .bp-open { font-size: 10px; padding: 0 4px; margin-left: 6px; }
-#blame-results .bp-diff { font-size: 10px; padding: 0 4px; margin-left: 4px; }
-.blame-actions { margin-top: 6px; display: flex; gap: 4px; justify-content: flex-end; }
 
-/* 全文差分ビュー (混入点の版と直前の版を並べて読む) */
-#vdiff-panel {
-  display: none;
-  position: absolute;
-  z-index: 42;
-  width: 560px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 8px;
-  font-size: 11px;
-  color: var(--text-primary);
-}
-#vdiff-panel.open { display: block; }
-#vdiff-title { font-family: var(--font-mono); font-size: 11px; }
-#vdiff-head {
-  margin-top: 3px;
-  font-size: 10px;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 3px;
-}
-#vdiff-jump { margin-top: 4px; font-size: 10px; color: var(--text-secondary); }
-#vdiff-body {
-  max-height: 340px;
-  overflow: auto;
-  font-size: 10px;
-  margin-top: 4px;
-  font-family: var(--font-mono);
-}
-#vdiff-body .vd-line {
-  display: flex;
-  gap: 5px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  padding: 0 2px;
-}
-#vdiff-body .vd-no {
-  width: 4.5em;
-  flex: 0 0 auto;
-  color: var(--text-secondary);
-  text-align: right;
-  user-select: none;
-}
-#vdiff-body .vd-sign { width: 1em; flex: 0 0 auto; }
-#vdiff-body .vd-add { background: rgba(68, 170, 68, 0.14); }
-#vdiff-body .vd-add .vd-sign { color: var(--accent-green, #4a4); }
-#vdiff-body .vd-del { background: rgba(200, 68, 68, 0.14); }
-#vdiff-body .vd-del .vd-sign { color: var(--accent-red, #c44); }
-#vdiff-body .vd-gap {
-  color: var(--text-secondary);
-  border-top: 1px dashed var(--border);
-  border-bottom: 1px dashed var(--border);
-  margin: 2px 0;
-}
-#vdiff-body .vd-hit { outline: 1px solid var(--accent-yellow, #ffd54f); }
-#vdiff-body mark {
-  background: var(--accent-yellow, #ffd54f);
-  color: #000;
-  padding: 0 1px;
-}
-.vdiff-actions { margin-top: 6px; display: flex; gap: 4px; justify-content: flex-end; }
 
-/* 症状検索パネル (症状文から関連図を出す) */
-#symptom-panel {
-  display: none;
-  position: absolute;
-  z-index: 41;
-  width: 340px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 8px;
-  font-size: 11px;
-  color: var(--text-primary);
-}
-#symptom-panel.open { display: block; }
-#symptom-panel label {
-  display: block;
-  font-size: 10px;
-  color: var(--text-secondary);
-  margin: 0 0 2px;
-}
-#symptom-panel textarea {
-  width: 100%;
-  box-sizing: border-box;
-  height: 48px;
-  resize: vertical;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 3px 4px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-}
-#symptom-terms { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px; }
-#symptom-terms .sym-term {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 0 4px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-primary);
-}
-#symptom-terms .sym-term.missed { opacity: 0.45; text-decoration: line-through; }
-#symptom-head {
-  margin-top: 5px;
-  font-size: 10px;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 3px;
-}
-#symptom-results { max-height: 190px; overflow-y: auto; font-size: 10px; }
-#symptom-results .sym-doc { padding: 3px 0; border-bottom: 1px solid var(--border); }
-#symptom-results .sym-doc-name {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
-  font-family: var(--font-mono);
-  color: var(--text-primary);
-}
-#symptom-results .sym-kind { color: var(--text-secondary); white-space: nowrap; margin-left: auto; }
-/* 影響を見るの行と同じ「ここから順に直す」 */
-#symptom-results .sym-walk {
-  border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);
-  border-radius: 3px; cursor: pointer; font-size: 10px; padding: 0 5px; white-space: nowrap;
-}
-#symptom-results .sym-walk:hover { border-color: var(--accent); color: var(--accent); }
-#symptom-results .sym-matched { color: var(--text-secondary); }
-#symptom-results .sym-hit {
-  display: flex;
-  gap: 5px;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  padding: 1px 0;
-}
-#symptom-results .sym-hit:hover { background: var(--bg-secondary); }
-#symptom-results .sym-hit-line { color: var(--text-secondary); min-width: 2em; text-align: right; }
-#symptom-panel .sym-opt {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin: 4px 0 0;
-  font-size: 10px;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-#symptom-systems { max-height: 150px; overflow-y: auto; font-size: 10px; margin-bottom: 4px; }
-#symptom-systems .sym-sys { padding: 2px 0; border-bottom: 1px dotted var(--border); }
-#symptom-systems .sym-sys-head {
-  font-family: var(--font-mono);
-  color: var(--text-primary);
-  padding: 1px 0;
-  cursor: pointer;
-}
-#symptom-systems .sym-sys-head:hover { background: var(--bg-secondary); text-decoration: underline; }
-#symptom-systems .sym-sys-doc {
-  display: flex;
-  gap: 5px;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  padding: 1px 0 1px 10px;
-  color: var(--text-primary);
-}
-#symptom-systems .sym-sys-doc:hover { background: var(--bg-secondary); }
-#symptom-systems .sym-sys-doc .sym-sys-kind { color: var(--text-secondary); white-space: nowrap; }
-#symptom-systems .sym-sys-doc.closed .sym-sys-kind::after { content: ' (未開封)'; }
-#symptom-systems .sym-act { color: var(--text-secondary); padding: 2px 0; }
-#symptom-flow-head {
-  font-size: 10px;
-  color: var(--text-secondary);
-  margin: 2px 0;
-}
-#symptom-flow { max-height: 160px; overflow-y: auto; font-size: 10px; margin-bottom: 4px; }
-#symptom-flow .sym-fl {
-  padding: 2px 0;
-  border-bottom: 1px dotted var(--border);
-  font-family: var(--font-mono);
-}
-#symptom-flow .sym-fl-head {
-  display: flex;
-  gap: 5px;
-  cursor: pointer;
-  color: var(--text-primary);
-  padding: 1px 0;
-}
-#symptom-flow .sym-fl-head:hover { background: var(--bg-secondary); }
-#symptom-flow .sym-fl-note { color: var(--text-secondary); white-space: nowrap; }
-/* 矛盾のある図だけを浮かせる。対応済み・対象外は沈める (開かなくてよい図) */
-#symptom-flow .sym-fl.gap .sym-fl-head { color: var(--accent-red); font-weight: 600; }
-#symptom-flow .sym-fl.ok, #symptom-flow .sym-fl.skip { opacity: 0.5; }
-#symptom-flow .sym-fl-gap {
-  display: flex;
-  gap: 5px;
-  cursor: pointer;
-  padding: 1px 0 1px 10px;
-  color: var(--text-primary);
-}
-#symptom-flow .sym-fl-gap:hover { background: var(--bg-secondary); }
-#symptom-flow .sym-fl-gap .sym-fl-line {
-  color: var(--text-secondary);
-  min-width: 2em;
-  text-align: right;
-}
-#symptom-panel .symptom-actions { display: flex; gap: 4px; margin-top: 6px; }
-#symptom-panel .symptom-actions button {
-  flex: 1;
-  font-size: 11px;
-  padding: 3px 6px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  cursor: pointer;
-}
-/* 選んだ部品名が出てくる図のタブ。1 枚ずつ開いて名前を照合しなくてよい */
-.tab.xref-hit { outline: 1px solid var(--accent); outline-offset: -1px; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #folder-panel .folder-missing { color: var(--accent-red); }
 /* 保存先のパスは長い。パネルからはみ出させず、折り返して全部読めるようにする。 */
 #folder-panel #folder-missing,
@@ -4056,14 +3735,11 @@ table.ct-table button.ct-open:hover { border-color: var(--accent); }
   gap: 6px; font-size: 10px; margin-top: 6px;
 }
 .rename-hits-head #rename-hits-label { color: var(--text-secondary); }
-mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1px; border-radius: 2px; }
-.ri-none { margin-top: 8px; font-size: 11px; }
-.ri-none .ri-none-head { color: var(--text-secondary); padding-bottom: 3px; }
-.ri-none .ri-none-rows { display: flex; flex-wrap: wrap; gap: 4px; }
-.ri-none .ri-none-doc {
-  border: 1px solid var(--bg-tertiary); border-radius: 3px;
-  padding: 1px 5px; color: var(--text-secondary); font-family: var(--font-mono);
-}
+
+
+
+
+
 #rename-hits .hit { display: flex; justify-content: space-between; padding: 1px 0; }
 #rename-hits .hit.zero { opacity: 0.45; }
 /* 改名履歴タイムライン */
@@ -4129,85 +3805,44 @@ mark.ri-hit { background: var(--accent); color: var(--bg-primary); padding: 0 1p
 #rename-folder .folder-count { white-space: nowrap; }
 /* 影響範囲プレビュー (置換前に、どの図のどの種類の線が影響するかを出す) */
 #rename-panel { width: 320px; }
-#rename-impact { margin-top: 6px; font-size: 10px; }
-#rename-impact .impact-head {
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 3px;
-  margin-bottom: 3px;
-}
-#rename-impact .impact-rows { max-height: 150px; overflow-y: auto; }
-#rename-impact .impact-doc { padding: 2px 0; }
-#rename-impact .impact-doc-name {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
-  font-family: var(--font-mono);
-  color: var(--text-primary);
-}
-#rename-impact .impact-kind { color: var(--text-secondary); white-space: nowrap; }
-#rename-impact .impact-roles { color: var(--text-secondary); padding-left: 8px; }
-#rename-impact .impact-empty { color: var(--text-secondary); }
-#rename-impact .impact-line {
-  display: flex; gap: 6px; padding: 1px 0 1px 8px; cursor: pointer;
-  color: var(--text-secondary); font-family: monospace; font-size: 10px;
-}
-#rename-impact .impact-line:hover { background: var(--bg-hover, rgba(127,127,127,0.15)); color: var(--text-primary); }
-#rename-impact .impact-line-no { min-width: 2.5em; text-align: right; opacity: 0.7; }
-#rename-impact .impact-line-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* 置換の影響ボードに並べる 変更前 / 変更後 (仮適用) の図。
-   会議ではこの一覧をそのまま映し、質問の出た図だけを押して原寸にする。 */
-#ri-svg-state { color: var(--text-secondary); font-size: 11px; }
-.ri-thumbs { display: flex; gap: 8px; margin: 4px 0 6px; }
-.ri-thumb {
-  flex: 1 1 0; min-width: 0; border: 1px solid var(--border);
-  border-radius: 3px; background: var(--bg-primary, #fff); padding: 2px;
-  cursor: zoom-in; text-align: center;
-}
-.ri-thumb:hover { border-color: var(--accent, #4a90d9); }
-.ri-thumb-head { font-size: 10px; color: var(--text-secondary); padding: 1px 0; }
-.ri-thumb-body { max-height: 160px; overflow: hidden; }
-.ri-thumb-body svg { max-width: 100%; height: auto; }
-.ri-thumb-wait { color: var(--text-secondary); font-size: 10px; padding: 12px 0; }
-.ri-thumb-note { color: var(--text-secondary); font-size: 10px; padding: 8px 4px; display: block; }
-.ri-thumb-same { color: var(--text-secondary); font-size: 10px; padding-left: 4px; }
-/* 原寸。ボードの中に重ねるので、会議中に別窓へ移らずに戻れる。 */
-#ri-zoom {
-  position: fixed; inset: 0; z-index: 1100; background: rgba(0,0,0,0.75);
-  display: none; align-items: center; justify-content: center; cursor: zoom-out;
-}
-#ri-zoom.open { display: flex; }
-#ri-zoom-inner {
-  background: var(--bg-primary, #fff); padding: 8px; border-radius: 4px;
-  max-width: 92vw; max-height: 88vh; overflow: auto;
-}
-#ri-zoom-head { font-size: 12px; margin-bottom: 4px; color: var(--text-secondary); }
-/* 意味的な参照 (役割ごとに参照元の図を並べる) */
-#rename-semantic { margin-top: 6px; font-size: 10px; }
-#rename-semantic .sr-head {
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 3px;
-  margin-bottom: 3px;
-}
-#rename-semantic .sr-sentence { color: var(--text-primary); padding-bottom: 3px; }
-#rename-semantic .sr-rows { max-height: 180px; overflow-y: auto; }
-#rename-semantic .sr-role { padding: 2px 0; }
-#rename-semantic .sr-role-name {
-  display: flex; justify-content: space-between; gap: 6px;
-  color: var(--accent);
-}
-#rename-semantic .sr-role-count { color: var(--text-secondary); white-space: nowrap; }
-#rename-semantic button.sr-ref {
-  display: flex; gap: 6px; width: 100%; text-align: left;
-  padding: 1px 0 1px 8px; cursor: pointer; background: none; border: none;
-  color: var(--text-secondary); font-family: var(--font-mono); font-size: 10px;
-}
-#rename-semantic button.sr-ref:hover { background: var(--bg-hover, rgba(127,127,127,0.15)); color: var(--text-primary); }
-#rename-semantic .sr-ref-doc { white-space: nowrap; }
-#rename-semantic .sr-ref-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#rename-semantic .sr-check { color: var(--text-secondary); padding-top: 3px; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /* シグネチャ変更 (戻り値型・引数) をまとめて当てる欄 */
 #rename-signature { margin-top: 6px; font-size: 10px; }
 #rename-signature .sig-head { color: var(--text-secondary); padding-bottom: 3px; }
@@ -5835,39 +5470,15 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
 }
-/* 症状検索の列で開いた図の、当たった語と「流れ」で対応の無い名前の行。
-   DSL と図の相互ジャンプ (キャレット行の対応表示 peek) と同じ琥珀の破線 */
-#overlay-layer rect.selectable.sym-mark:not(.selected) {
-  fill: rgba(255, 190, 90, 0.16);
-  stroke: rgba(255, 190, 90, 0.85);
-  stroke-width: 1.5;
-  stroke-dasharray: 4 3;
-}
-/* 継承元の差分に対応する図形。peek (琥珀の破線) と
-   選択 (青) のどちらとも見分けが付くよう、緑の実線で太く囲う */
-#overlay-layer rect.selectable.lg-mark:not(.selected) {
-  fill: rgba(90, 220, 140, 0.18);
-  stroke: rgba(90, 220, 140, 0.95);
-  stroke-width: 2.5;
-}
 
-/* 色付けしたときに図の上に出る帯 */
-#lg-mark-overlay {
-  /* 右上にはズーム帯 (#zoom-hud) が浮いている。右端まで伸ばすと文が隠れる */
-  position: absolute; top: 8px; left: 8px; right: 230px; z-index: 6;
-  background: rgba(20, 46, 32, 0.95); color: #b7f0cd;
-  border: 1px solid rgba(90, 220, 140, 0.6); border-radius: 4px;
-  padding: 6px 8px; font-size: 11px; max-height: 40%; overflow-y: auto;
-}
-#lg-mark-overlay[hidden] { display: none; }
-#lg-mark-overlay .lgm-head { display: flex; align-items: flex-start; gap: 8px; }
-#lgm-summary { flex: 1; min-width: 0; }
-#lg-mark-overlay .lgm-head button {
-  background: transparent; color: inherit; border: 1px solid rgba(90, 220, 140, 0.5);
-  border-radius: 3px; cursor: pointer; font-size: 11px; padding: 1px 6px;
-}
-#lgm-list { margin: 4px 0 0; padding-left: 16px; font-family: var(--font-mono); }
-#lgm-list li { list-style: disc; }
+
+
+
+
+
+
+
+
 
 /* ── Properties Pane ───────────────────────────────────────────────────────── */
 /* ── 先輩の図の枠 ───────────────────────────
@@ -6409,41 +6020,16 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   color: var(--text-secondary);
 }
 
-/* ── Status Bar ────────────────────────────────────────────────────────────── */
-/* 影響の手当て列。状態バーの上に細く残し、
-   図を開いている間も「何枚目 / 残り何枚」と次への送りが手元にある */
-#fw-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 10px;
-  background: var(--bg-tertiary);
-  border-top: 1px solid var(--accent);
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-#fw-bar[hidden] { display: none; }
-#fw-label { flex: 1; color: var(--accent); }
-#fw-label.is-complete { color: var(--accent-green); }
-#fw-bar button {
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 0 6px;
-  cursor: pointer;
-}
-#fw-bar button:hover:not(:disabled) { border-color: var(--accent); }
-#fw-bar button:disabled { opacity: 0.4; cursor: default; }
-#fw-done { border-color: var(--accent); }
-/* 今の図を保存したら「✓ 直した · 次へ」を塗って目立たせる (印は付けない) */
-#fw-done.is-ready { background: var(--accent); color: #fff; font-weight: bold; box-shadow: 0 0 0 2px var(--accent); }
-/* 手当て済みの行は一覧でも済みと分かる (同じ図を二度開かない) */
-#dg-impact tr.dg-doc[data-fixed="1"] td.dg-doc-name { text-decoration: line-through; }
-#dg-impact tr.dg-doc[data-current="1"] td { background: var(--bg-tertiary); }
+
+
+
+
+
+
+
+
+
+
 
 #status-livediff.livediff-warn {
   color: #b00020;
@@ -6906,10 +6492,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- やり直し途中の控えに印を付け、📂 一覧で畳む -->
         <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、保存先の一覧から畳む">一時控え</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
-        <!-- 症状文を貼るだけで関連しそうな図を出す -->
-        <button class="tab-tool" id="btn-tab-symptom" title="不具合の症状文を貼ると、部品名を思い付かなくても関連しそうな図を関連度順に出す">⇄ 症状検索</button>
-        <!-- 部品名がどの版から入ったか (混入点) を全図の版から 1 回で出す -->
-        <button class="tab-tool" id="btn-tab-blame" title="部品名を入れると、保存フォルダの全図の過去版を一度に走査して「その名前が増えた版・消えた版」を時系列で出す。表記が混在し始めた版にも印が付く">◉ 混入点</button>
         <button class="tab-tool" id="btn-tab-apply" title="指摘に並んだ複数のクラスへ同じメソッド・属性を 1 回で追加する">⊞ 一括適用</button>
         <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
         <!-- 「⇔ 並べて見る」は「並べて比較」とタブ列で隣り合い、
@@ -6923,16 +6505,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button class="tab-tool" id="btn-tab-diff" title="前回保存した時点から変わった図の一覧">± 差分 −</button>
         <!-- 単発 diff では見えない「行って戻った」を履歴の上で見る -->
         <button class="tab-tool" id="btn-tab-versions" title="この図が保存のたびにどう変わったかを通しで並べる。前の版に戻った「往復」には印が付く">⟲ 変遷 −</button>
-        <!-- この図がどの図の後継かを 1 回登録し、継承元の更新を自動で言う -->
-        <button class="tab-tool" id="btn-tab-lineage" title="この図の継承元 (どの図から派生したか) を 1 回登録すると、継承元が更新されたときに差分の行数で知らせる">⇡ 継承元 −</button>
         <!-- 変わった図の変更前後をまとめて 1 画面に並べる -->
         <!-- レビューの指摘を図の該当行に貼り、未読/既読で追う -->
         <!-- 型の基準にした図と突き合わせて、書いている間ずっと見てもらう -->
         <button class="tab-tool" id="btn-tab-review" title="型の基準にした図と突き合わせて、この図のずれと図種特有の間違いを出す">レビュー −</button>
         <!-- 引き継ぎに要る確認結果と図を 1 つの zip に固める -->
         <!-- 図の束を 1 プロジェクトとして、部品名で辿れるように渡す -->
-        <!-- 🕸 参照関係の画面は ▤ 影響を見る 1 つに寄せた。ここは旧名で引いた人の案内 (押すと ▤ 影響を見る が開く) -->
-        <button class="tab-tool" id="btn-tab-xref" title="部品名が図をまたいでどこに出てくるかは ▤ 影響を見る で見る (名前を空のまま開くと、図をまたぐ部品名が枚数付きで並ぶ)">▤ 影響を見る</button>
         <!-- 📦 引き継ぎ / 📦 納品パッケージ はタブ列から外し、
              Export ▾ の「渡す」に集めた。実体のボタンは #toolbar-actions にある -->
       </div>
@@ -6962,25 +6540,16 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              (件数を読んでから「どの図のどの行か」を見るまでに画面を探させない) -->
         <div class="rename-hits-head">
           <span id="rename-hits-label"></span>
-          <button type="button" id="btn-rename-hits-impact" disabled title="当たった図の該当行と、変更なしの図の仕分けを 1 画面で見る (まだ置換はしません)">影響範囲を見る</button>
         </div>
         <div id="rename-hits"></div>
         <!-- 開いていない図も含めた影響範囲 (ヒットした図 / しなかった図) -->
         <div id="rename-folder"></div>
-        <!-- 置換を実行する前に、図種 × 関係の内訳で影響範囲を見る -->
-        <div id="rename-impact"></div>
-        <!-- 出現 1 個ずつを意味 (遷移イベント /
-             メソッド宣言 / 端点) で呼び分け、役割ごとに参照元の図を並べる -->
-        <div id="rename-semantic"></div>
         <!-- 綴りが変わらない仕様変更 (戻り値型・引数) を全図へ 1 回で当てる -->
         <div id="rename-signature"></div>
         <!-- この部品名がいつ・どの図で改名されたか -->
         <div id="rename-history"></div>
         <div id="rename-summary"></div>
         <div class="rename-actions">
-          <!-- 適用する前に、当たった図の該当行が
-               どう変わるかを変更サマリボードと同じ見た目で並べて確かめる -->
-          <button id="btn-rename-preview" disabled title="この部品名が出てくる図と行・参照元と参照先・連鎖で影響が届く図を 1 画面で見る。置換後を入れていれば、各図の該当行がどう変わるかも並ぶ (まだ置換はしません)">▤ 影響を見る</button>
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
         </div>
@@ -6993,53 +6562,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              (mousedown と mouseup が別の要素になり click が起きない)。
              あとから伸びるものは、動かされて困るものより下に置く -->
         <div id="rename-redo"></div>
-      </div>
-      <!-- 部品名がどの版から入ったか (混入点) を、全図の版を 1 回走査して時系列に並べる -->
-      <div id="blame-panel">
-        <label for="blame-term">探す部品名 (空白区切りで複数。混在を見るなら 2 つ)</label>
-        <input type="text" id="blame-term" autocomplete="off" spellcheck="false"
-          placeholder="SpiDrv Spi_Driver">
-        <div id="blame-head"></div>
-        <div id="blame-origin"></div>
-        <div id="blame-results"></div>
-        <div class="blame-actions">
-          <button id="btn-blame-run">探す</button>
-          <button id="btn-blame-close">閉じる</button>
-        </div>
-      </div>
-      <!-- 混入点で名指しされた版と、その直前の版を全文で並べて読む -->
-      <div id="vdiff-panel">
-        <div id="vdiff-title"></div>
-        <div id="vdiff-head"></div>
-        <div id="vdiff-jump"></div>
-        <div id="vdiff-body"></div>
-        <div class="vdiff-actions">
-          <button id="btn-vdiff-all">全文を出す</button>
-          <!-- 並べている左側 (前回保存版) に 1 クリックで戻す。比較から離れずに回復まで閉じる -->
-          <button id="btn-vdiff-restore" hidden>前回保存版に戻す</button>
-          <button id="btn-vdiff-open">この版を開く</button>
-          <button id="btn-vdiff-close">閉じる</button>
-        </div>
-      </div>
-      <!-- 症状文を貼って、関連しそうな図を関連度順に出す (部品名を思い付かなくても始められる) -->
-      <div id="symptom-panel">
-        <label for="symptom-text">症状 (そのまま貼る)</label>
-        <textarea id="symptom-text" spellcheck="false" autocomplete="off"
-          placeholder="DMA転送のFault通知でリトライが動かない"></textarea>
-        <div id="symptom-terms"></div>
-        <label class="sym-opt"><input type="checkbox" id="symptom-scan-folder"> 保存フォルダの図も探す (開いていない図も入る)</label>
-        <div id="symptom-head"></div>
-        <!-- 系統ごと。複数系統にまたがる不具合で、当たらなかった系統に気付くための段 -->
-        <div id="symptom-systems"></div>
-        <!-- 当たった図どうしの流れ突合。矛盾がある図だけを浮かせ、対応済みの図は「開かなくてよい」と名指しする -->
-        <label class="sym-opt"><input type="checkbox" id="symptom-cross" checked> 当たった図どうしの流れを突合する (メッセージ⇔状態/遷移)</label>
-        <div id="symptom-flow-head"></div>
-        <div id="symptom-flow"></div>
-        <div id="symptom-results"></div>
-        <div class="symptom-actions">
-          <button id="btn-symptom-clear">消す</button>
-          <button id="btn-symptom-close">閉じる</button>
-        </div>
       </div>
       <!-- 指摘に並んだ複数のクラスへ同じメンバーを 1 回で足す -->
       <div id="apply-panel">
@@ -7159,15 +6681,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <ul id="ssw-twins" hidden></ul>
           <button type="button" id="btn-ssw-restore" hidden></button>
           <ol id="ssw-log" hidden></ol>
-        </div>
-        <!-- 継承元の増減行に対応する図形を
-             図の上で色付けしたときの帯。当たらなかった行はここに並べる -->
-        <div id="lg-mark-overlay" role="status" hidden>
-          <div class="lgm-head">
-            <button type="button" id="btn-lgm-close" title="色付けを消す">✕</button>
-            <span id="lgm-summary"></span>
-          </div>
-          <ul id="lgm-list"></ul>
         </div>
         <div id="preview-svg"></div>
         <svg id="overlay-layer" width="0" height="0"></svg>
@@ -7388,16 +6901,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 
   </div><!-- /#main -->
 
-  <!-- 影響の手当て列。依存グラフ/変更チケットで洗った図を
-       1 枚ずつ開いて直す間、下端に残り続ける。閉じて開き直さずに次の図へ送れる。 -->
-  <div id="fw-bar" hidden>
-    <span id="fw-label" role="status"></span>
-    <button type="button" id="fw-prev" title="前の図へ戻る">◀ 前</button>
-    <button type="button" id="fw-done" title="この図は直した。まだ直していない次の図を開く">✓ 直した · 次へ</button>
-    <button type="button" id="fw-next" title="直した印を付けずに次の図へ送る">次へ ▶</button>
-    <button type="button" id="fw-list" title="手当ての一覧 (依存グラフ) を開く">一覧</button>
-    <button type="button" id="fw-close" title="手当ての列を閉じる">×</button>
-  </div>
 
   <!-- ── Status bar ──────────────────────────────────────────────────────── -->
   <div id="statusbar">
@@ -7693,7 +7196,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/finding-variant.js"></script>
 <script src="src/core/domain-verdict.js"></script>
 <script src="src/core/version-history.js"></script>
-<script src="src/core/blame-point.js"></script>
 <script src="src/core/version-diff.js"></script>
 <script src="src/core/version-fulldiff.js"></script>
 <script src="src/core/diagram-kind.js"></script>
@@ -7707,14 +7209,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/sync-state.js"></script>
 <script src="src/core/swap-queue.js"></script>
 <script src="src/core/bulk-rename.js"></script>
-<script src="src/core/impact-scan.js"></script>
-<script src="src/core/impact-thumbs.js"></script>
 <script src="src/core/folder-impact.js"></script>
-<script src="src/core/name-search.js"></script>
 <script src="src/core/signature-change.js"></script>
-<script src="src/core/symptom-search.js"></script>
-<script src="src/core/symptom-systems.js"></script>
-<script src="src/core/symptom-flow.js"></script>
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/export-name.js"></script>
 <script src="src/core/svg-export.js"></script>
@@ -7748,8 +7244,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/name-registry.js"></script>
 <script src="src/core/review-before-after.js"></script>
 <script src="src/core/save-dir-handoff.js"></script>
-<script src="src/core/semantic-refs.js"></script>
-<script src="src/core/xref-graph.js"></script>
 <script src="src/core/method-audit.js"></script>
 <script src="src/core/template-new.js"></script>
 <script src="src/core/part-reference.js"></script>
@@ -7765,7 +7259,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/swimlane-move.js"></script>
 <script src="src/core/save-diff.js"></script>
 <script src="src/core/version-timeline.js"></script>
-<script src="src/core/lineage.js"></script>
 <script src="src/core/svg-freshness.js"></script>
 <script src="src/core/svg-compare-row.js"></script>
 <script src="src/core/svg-cross.js"></script>
@@ -7806,10 +7299,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/compare-view.js"></script>
 <script src="src/core/cross-ref-diff.js"></script>
 <script src="src/core/count-compare.js"></script>
-<script src="src/core/change-board.js"></script>
 <script src="src/core/show-before-after.js"></script>
 <script src="src/core/export-select.js"></script>
-<script src="src/core/call-graph.js"></script>
 <script src="src/core/save-swap.js"></script>
 <script src="src/core/live-diff.js"></script>
 <script src="src/core/twin-restore.js"></script>
@@ -7817,11 +7308,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/component-deps.js"></script>
 <script src="src/core/component-starter.js"></script>
 <script src="src/core/usecase-source.js"></script>
-<script src="src/core/dep-graph.js"></script>
-<script src="src/core/dep-version-search.js"></script>
 <script src="src/core/bulk-note.js"></script>
-<script src="src/core/change-ticket.js"></script>
-<script src="src/core/fix-walk.js"></script>
 <script src="src/core/review-desk.js"></script>
 <script src="src/core/scaffold-notice.js"></script>
 <script src="src/core/state-branch.js"></script>
@@ -7853,7 +7340,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/sequence-group-range.js"></script>
 <script src="src/core/sequence-participant-zone.js"></script>
 <script src="src/core/line-peek.js"></script>
-<script src="src/core/lineage-mark.js"></script>
 <script src="src/core/label-colors.js"></script>
 <script src="src/core/sequence-autonumber.js"></script>
 <script src="src/core/class-scaffold.js"></script>
@@ -7906,168 +7392,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <div id="rd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="rd-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:1080px;max-height:88vh;overflow-y:auto;"></div>
 </div>
-<!-- ⇄ 一括置換の「▤ 影響を見る」。適用する前に、
-     ヒットした図の該当行が置換でどう変わるかを変更サマリボードと同じ見た目で並べる。
-     「この部品名がどの図のどこに効くか」を出す画面は
-     ここ 1 つ。部品名の依存グラフ (参照元・参照先・連鎖で影響が届く図、note の一括付与、
-     変更チケット、版履歴) は上段、出現行 (置換後があれば今 / 置換後) は下段に並ぶ。
-     Ctrl+K の「依存グラフ」「名前で図を探す」もこの画面を開く。 -->
-<div id="ri-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div class="board-modal">
-    <div class="board-head">
-      <strong>影響を見る</strong>
-      <span id="ri-summary"></span>
-      <!-- 何枚中何枚に変更ありか (残りは触らなくてよい) -->
-      <span id="ri-roster"></span>
-      <span class="board-tools">
-        <label title="ヒット行の前後だけでなく図の全文を出す"><input type="checkbox" id="ri-full"> 全文</label>
-        <!-- 会議の画面共有では、テキスト差分ではなく
-             「置換前の図」と「置換後 (仮適用) の図」を並べて見せたい -->
-        <label title="図ごとに 変更前 / 変更後 (仮適用) の図を並べて出す (押すと原寸)"><input type="checkbox" id="ri-svg" checked> 図で見る</label>
-        <span id="ri-svg-state" role="status"></span>
-        <!-- 旧 🕸 参照関係の「書き出す」。書き出しはこの 1 か所 -->
-        <button type="button" id="ri-export" title="この画面に載っている図 (開いているタブ + 保存フォルダ) の、図をまたぐ部品名と図どうしの繋がりを xref.md に書き出す。保存先ディレクトリの値も一緒に載る (受け取った側は ⚙設定の保存先ディレクトリにこの xref.md ごと貼れる)">書き出す (xref.md)</button>
-        <button type="button" id="dg-use" title="この画面で見ている名前を一括置換の「置換前」に入れて戻る">この名前を置換前に入れる</button>
-        <button type="button" id="ri-apply">この内容で置換する</button>
-        <button type="button" id="ri-close">閉じる</button>
-      </span>
-    </div>
-    <div id="ri-scroll">
-      <!-- 名前を 1 つ選ぶと参照元 (左) → 名前 (中央) →
-           参照先 (右) が矢印で並び、隣の名前を経由して影響が届く図まで一覧に出る。 -->
-      <section id="ri-refs" aria-label="参照の連鎖">
-        <div class="ri-refs-head">
-          <strong>参照の連鎖</strong>
-          <span id="dg-summary" role="status"></span>
-          <label for="dg-name">部品名</label>
-          <select id="dg-name" title="参照の本数が多い順に並ぶ"></select>
-          <label for="dg-hops" title="隣の名前を何段まで辿って影響が及ぶ図を数えるか">連鎖</label>
-          <select id="dg-hops">
-            <option value="0">直接だけ</option>
-            <option value="1">1 段</option>
-            <option value="2" selected>2 段</option>
-            <option value="3">3 段</option>
-          </select>
-        </div>
-        <div id="dg-body">
-          <div id="dg-canvas"></div>
-          <div id="dg-impact"></div>
-          <!-- 不具合対応の入口。影響が届く図まで出ても
-               「いつこの記述に変わったか」は各図を開いて目で追うしかなかった。
-               影響一覧の版履歴を 1 本の時系列に混ぜ、症状の語で絞って
-               「ここで書き換わった」版を名指しする。 -->
-          <div id="dg-ver">
-            <div class="dg-ver-head">
-              <strong>版履歴を症状の語で探す</strong>
-              <label for="dg-ver-kw">語</label>
-              <input type="text" id="dg-ver-kw"
-                placeholder="症状や部品名（下の「名前」と同じ語）"
-                title="この語を含む版だけを新しい順に並べる。上で選んでいる部品名なら影響が届く図に、それ以外の語なら保存フォルダの版全体から引く。下の「名前」にも同じ語が入る">
-              <label title="当たり行が書き換わった版だけに畳む（読むだけの版を外す）">
-                <input type="checkbox" id="dg-ver-changed" checked> 書き換わった版だけ
-              </label>
-              <button type="button" id="dg-ver-open" disabled
-                title="いちばん最近この語が書き換わった図を、その版の中身で開く">最初の 1 枚を開く</button>
-            </div>
-            <div id="dg-ver-summary" role="status"></div>
-            <div id="dg-ver-list"></div>
-          </div>
-          <!-- 影響先すべてに同じ note を 1 回で打つ。
-               「意図的な省略を note で明記する」対応は、影響が届く図の枚数だけ
-               同じ文言を打ち直す作業になっていた (1 図ずつ一覧から開き直す)。 -->
-          <!-- 旧 🕸 参照関係の「図どうしの繋がり」。参照の連鎖 (名前の矢印) には
-               図の組が無いので、連鎖の下に畳んで置く。 -->
-          <details id="ri-links-box">
-            <summary>図どうしの繋がり (同じ部品名が出てくる図の組) <span id="ri-links-count"></span></summary>
-            <div id="ri-links"></div>
-          </details>
-          <div id="dg-note-box" hidden>
-            <div class="dg-note-head">
-              <strong>同じ note を影響先へまとめて打つ</strong>
-              <span id="dg-note-summary" role="status"></span>
-              <button type="button" id="dg-note-run" disabled>この note を打つ</button>
-              <button type="button" id="dg-note-cancel">やめる</button>
-            </div>
-            <textarea id="dg-note-text" rows="2"
-              placeholder="例: ClockCtrl の呼び先は意図的に省略 (reviewer依頼2への回答)"></textarea>
-            <div class="dg-note-pick">
-              <label><input type="checkbox" id="dg-note-all" checked> 影響先すべて</label>
-            </div>
-            <div id="dg-note-targets"></div>
-          </div>
-        </div>
-      </section>
-      <div class="ri-occ-head"><strong>出てくる行</strong></div>
-      <!-- 部品名 / メソッド名から「その名前を使っている図の一覧」を引く。
-           置換後が空のとき (置換前だけ・Ctrl+K「名前で図を探す」) はこの出現箇所の一覧、
-           置換後を入れていれば下の 今 / 置換後 の並びになる。 -->
-      <div id="ri-occ" hidden>
-        <div class="ri-occ-tools">
-          <label for="ns-q">名前</label>
-          <input id="ns-q" type="text" list="ns-index" autocomplete="off" placeholder="部品名 / メソッド名"
-                 title="部品名でもメソッド名でも引ける。ClockCtrl.EnableClock のように修飾を付ければその書き方の行だけに当たる" />
-          <datalist id="ns-index"></datalist>
-          <span id="ns-summary" role="status"></span>
-        </div>
-        <div id="ns-rows"></div>
-        <div id="ns-hint">よく出る名前: <span id="ns-top"></span></div>
-      </div>
-      <div id="ri-body" class="diff-board"></div>
-    </div>
-  </div>
-  <!-- 質問の出た図だけを原寸で見せる (押した図をボードの上に重ねる) -->
-  <div id="ri-zoom"><div id="ri-zoom-inner"><div id="ri-zoom-head"></div><div id="ri-zoom-body"></div></div></div>
-</div>
 
-<!-- 変更チケット。1 回の仕様変更で直す図の一覧と
-     「直した」印を保存フォルダに残す。次の run は依存グラフを開き直さず、
-     この札の未チェックだけを見れば続きから直せる。 -->
-<div id="ct-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div class="board-modal">
-    <div class="board-head">
-      <strong>変更チケット</strong>
-      <span id="ct-summary" role="status"></span>
-      <span class="board-tools">
-        <label for="ct-pick">変更</label>
-        <select id="ct-pick" title="新しい変更が上に並ぶ"></select>
-        <button type="button" id="ct-refresh" title="今の図から影響を洗い直して札に取り込む (直した印は残る)">影響を洗い直す</button>
-        <button type="button" id="ct-delete" title="この札を畳む (図は消えない)">この札を畳む</button>
-        <button type="button" id="ct-close">閉じる</button>
-      </span>
-    </div>
-    <div id="ct-body"></div>
-  </div>
-</div>
 <!-- 提出用 zip に詰める図を選ぶ。
      絞り込みは変更サマリボードと同じ「変更図のみ / 要修正のみ」 -->
 <!-- 資料セット。書き出す対象を「今開いているタブ」から
      切り離し、名前で選べるようにする -->
 <!-- 引き継ぎチェックリスト。渡す 14 枚の
      置換済み / note最新 / SVG最新 / 指摘 を 1 画面で読み、赤い行だけを見る -->
-<!-- 呼び出しグラフ。クラス/メソッドを 1 つ選ぶと、
-     それを呼んでいる全シーケンス図・状態遷移図がドメインごとに並び、行まで辿れる -->
-<div id="cg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="cg-modal-content">
-    <div id="cg-head">
-      <strong>呼び出しグラフ</strong>
-      <span id="cg-sum" role="status"></span>
-      <span id="cg-tools">
-        <input type="search" id="cg-find" placeholder="クラス / メソッドで絞る" />
-        <button type="button" id="cg-copy" title="選んでいるメソッドの呼び出し元を指摘.md へ写す">指摘に写す</button>
-        <button type="button" id="cg-close">閉じる</button>
-      </span>
-    </div>
-    <div id="cg-cols">
-      <div id="cg-list" role="listbox" aria-label="クラス・メソッド"></div>
-      <div id="cg-detail">
-        <div id="cg-title"></div>
-        <div id="cg-verdict"></div>
-        <div id="cg-refs"></div>
-        <div id="cg-empty" style="display:none;"></div>
-      </div>
-    </div>
-  </div>
-</div>
 <div id="docset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
   <div id="docset-modal-content">
     <div id="docset-head">
@@ -8303,32 +7634,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </span>
     </div>
     <div id="vt-body"></div>
-  </div>
-</div>
-<!-- この図の継承元を覚え、更新されたら差分の行数で知らせる -->
-<div id="lg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="lg-modal-content">
-    <div id="lg-head">
-      <strong>継承元</strong>
-      <span id="lg-child"></span>
-      <span id="lg-summary"></span>
-      <span id="lg-tools">
-        <button type="button" id="lg-mark" title="増えた行・減った行に対応する図形を、いまの図の上で色付けする">差分を図で色付け</button>
-        <button type="button" id="lg-open" title="登録した継承元をタブで開く">継承元を開く</button>
-        <button type="button" id="lg-adopt" title="いまの継承元の中身を取り込み済みにする">取り込み済みにする</button>
-        <button type="button" id="lg-clear" title="この図の継承元の登録を外す">継承元を外す</button>
-        <button type="button" id="lg-close">閉じる</button>
-      </span>
-    </div>
-    <div id="lg-set-row">
-      <label for="lg-dir">継承元のフォルダ</label>
-      <input type="text" id="lg-dir" aria-label="継承元のフォルダ" placeholder="./autosave">
-      <label for="lg-parent">継承元にする図</label>
-      <select id="lg-parent" aria-label="継承元にする図"></select>
-      <button type="button" id="lg-set">この図を継承元にする</button>
-      <span id="lg-note"></span>
-    </div>
-    <div id="lg-body"></div>
   </div>
 </div>
 <!-- stale と出た 1 枚について、保存中の SVG と

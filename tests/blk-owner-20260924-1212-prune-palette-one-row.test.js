@@ -33,40 +33,25 @@ function commandOf(id) {
   return c;
 }
 
-var IDS = ['name-search', 'tab-versions', 'tab-lineage', 'tab-symptom', 'tab-blame', 'part-board', 'tab-senior'];
+var IDS = ['tab-versions', 'part-board', 'tab-senior', 'tab-rename'];
 function items() {
   return CP.buildItems(IDS.map(commandOf).filter(Boolean), '');
 }
 
-describe('BLK-owner-20260924-1212-prune ▤ 影響を見る は Ctrl+K に 1 行', function() {
-  test('旧名の行 (依存グラフ / 参照関係) はコマンド表に無い', function() {
-    expect(SRC.indexOf("{ id: 'dep-graph'")).toBe(-1);
-    expect(SRC.indexOf("{ id: 'tab-xref'")).toBe(-1);
-  });
-
-  test('▤ 影響を見る を開くコマンドは表に 1 つだけ', function() {
-    var n = SRC.split('run: function() { openImpactScreen(_nameSearchSeed()); } }').length - 1;
-    expect(n).toBe(1);
-  });
-
-  test('行の名前は画面の名前 (影響を見る) で、分類は 探す', function() {
-    var it = items().filter(function(i) { return /name-search$/.test(i.id); })[0];
-    expect(it.title.indexOf('影響を見る')).toBe(0);
-    expect(it.group).toBe('find');
-    expect(it.badge).toBe('探す');
-    expect(it.hint).toBe('');
-  });
-
-  ['影響', '依存', '依存グラフ', '参照関係', '名前で図', '名前で図を探す', '図をまたいで', 'xref', 'impact'].forEach(function(q) {
-    test('「' + q + '」で打つと 影響を見る の行が先頭に 1 行だけ出る', function() {
-      var got = CP.filter(items(), q);
-      var impact = got.filter(function(i) { return /影響を見る/.test(i.title + ' ' + i.hint); });
-      expect(impact.length).toBe(1);
-      expect(/name-search$/.test(got[0].id)).toBe(true);
+// TICKET-owner-20261115-2140-prune: 図をまたぐ調べ物 (▤ 影響を見る・症状検索・混入点・呼び出しグラフ・
+// 継承元・変更チケット) を外した。図をまたぐ操作は ⇄ 一括置換の 1 行だけが残る。
+describe('TICKET-owner-20261115-2140-prune 図をまたぐ調べ物の行は Ctrl+K に無い', function() {
+  ['name-search', 'dep-graph', 'tab-xref', 'tab-symptom', 'tab-blame', 'tab-lineage', 'call-graph', 'change-ticket'].forEach(function(id) {
+    test(id + ' の行はコマンド表に無い', function() {
+      expect(SRC.indexOf("{ id: '" + id + "'")).toBe(-1);
     });
   });
 
-  test('ツール ▾ の案内行 (→ ▤ 影響を見る) の文字は Ctrl+K の行に出ない', function() {
+  test('⇄ 一括置換の行は残る', function() {
+    expect(commandOf('tab-rename').button).toBe('btn-tab-rename');
+  });
+
+  test('ツール ▾ の案内行の文字 (→) は Ctrl+K の行に出ない', function() {
     items().forEach(function(i) {
       expect((i.title + i.hint).indexOf('→')).toBe(-1);
     });
