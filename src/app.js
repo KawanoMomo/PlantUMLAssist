@@ -5030,6 +5030,8 @@ function renderTabs() {
   });
   renderDiffBadge();
   try { renderLiveDiffChip(); } catch (e) {}
+  // 今の本文をタブに控える (以前は外した「整合」の札の数え直しがここで控えていた)。
+  try { saveActiveDoc(); } catch (e) {}
   // ▤ 影響を見る で見ている部品名の印は、タブを組み立て直すたびに付け直す。
   try { if (_riTabMarks.length) applyXrefHighlight(_riTabMarks); } catch (e) {}
   // 統一バッジ。旧称が残っているかは図の中身で
@@ -24121,6 +24123,10 @@ function syncEditedText() {
   try { if (window.MA.appGit) window.MA.appGit.refreshDiff(); } catch (e) {}
   // 「見てもらいながらその場で直す」ので、指摘は書き換えるたびに引き直す。
   try { renderReviewBadge(); } catch (e) {}
+  // 今の本文をタブ (workspace) に控える。以前は下端の「整合」の札を数え直すついでに
+  // ここで控えていて、右パネルのフォームだけで足した行もこれでタブ・自動保存・タブの印に届いていた。
+  // 札は TICKET-owner-20261115-1841-prune で外したので、控えだけを明示して残す。
+  try { saveActiveDoc(); } catch (e) {}
 }
 
 // 本文を入れ替えたが利用者の編集ではない経路 (図種の切り替えで見本・下書きを入れた) が、
