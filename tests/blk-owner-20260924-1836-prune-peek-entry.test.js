@@ -83,8 +83,10 @@ describe('窓の中のフォルダの一覧は外す', function() {
     expect(rv).toContain("FP.setSec('readonly', true)");
     expect(rv).toContain('.files-ro-folder[data-ro-dir]');
   });
-  test('ドメインで揃える・同名で並べるの間だけ左の列を使う', function() {
-    ['function renderCohortDomains', 'function renderSbsPairs'].forEach(function(fn) {
+  // TICKET-owner-20261115-1840-prune: 同名で並べるは外した (2 枚を左右に置く入口は「並べて比較」1 つ)。
+  test('ドメインで揃えるの間だけ左の列を使う', function() {
+    expect(app.indexOf('function renderSbsPairs')).toBe(-1);
+    ['function renderCohortDomains'].forEach(function(fn) {
       var b = app.slice(app.indexOf(fn), app.indexOf(fn) + 200);
       expect(b).toContain('_peekDirsShow()');
     });

@@ -758,8 +758,6 @@ API_INDEX = {
         {'endpoint': 'POST /git-pull', 'summary': '取得 (pull --ff-only)。押したときだけ', 'request': '{dir}'},
         {'endpoint': 'POST /git-push', 'summary': '送信 (push)。押したときだけ。認証は OS の git', 'request': '{dir}'},
         {'endpoint': 'POST /git-checkout', 'summary': 'ブランチ切り替え', 'request': '{dir, branch}'},
-        {'endpoint': 'GET /peek-notes', 'summary': '隣のフォルダに置かれた指摘 (.md) を読む',
-         'request': '?dir='},
         {'endpoint': 'GET /name-registry', 'summary': '保存フォルダの親にある正式表記の登録簿 (3 人で共有)',
          'request': '?dir='},
         {'endpoint': 'POST /name-registry', 'summary': '正式表記の登録簿を置き換える',
@@ -1480,9 +1478,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/peek-dirs':
             with _fs_lock:
                 return self._handle_peek_dirs()
-        if self.path.split('?')[0] == '/peek-notes':
-            with _fs_lock:
-                return self._handle_peek_notes()
         # BLK-human-20260923-1702 (design 10c): 保存先の Git を読む口。読むだけで通信しない。
         if self.path.split('?')[0] in ('/git-status', '/git-log', '/git-refs', '/git-show'):
             return self._handle_git_get()
@@ -1969,57 +1964,6 @@ class Handler(BaseHTTPRequestHandler):
         # 図が 1 枚も無いフォルダは行き先にならない (自分の保存先だけは空でも残す)。
         entries = [e for e in entries if e['files'] > 0 or e['current']]
         self._send_json(200, {'current': str(cur), 'parent': str(parent), 'dirs': entries})
-
-    def _handle_peek_notes(self):
-        """BLK-junior-20260913-0306-wish: 隣のフォルダに置かれた指摘 (.md) を読む。
-
-        reviewer の指摘は `.puml` ではないので /peek-dirs の行き先にも
-        /autosave の一覧にも出ない (指摘.md だけのフォルダは図が 0 枚)。
-        GUI から指摘を 1 件ずつ選べるようにするには本文が要るので、ここで
-        「保存先とその兄弟フォルダの直下にある .md」だけを読んで返す。
-        読むだけの口で、親より上は辿らないし書き込みもしない。
-        """
-        parsed = urllib.parse.urlparse(self.path)
-        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
-        cur = self._autosave_resolve_dir(params.get('dir'))
-        notes = []
-        seen = set()
-        # 1 ファイルの上限。指摘は人が書く文章なので、これを超えるものは
-        # 指摘ではない (巨大な生成物を GUI へ流し込まない)。
-        limit = 256 * 1024
-
-        def add_dir(path):
-            key = str(path)
-            if key in seen:
-                return
-            seen.add(key)
-            try:
-                if not (path.exists() and path.is_dir()):
-                    return
-                files = sorted(
-                    (f for f in path.iterdir() if f.is_file() and f.suffix.lower() == '.md'),
-                    key=lambda f: f.name.lower())
-            except OSError:
-                return
-            for f in files:
-                try:
-                    if f.stat().st_size > limit:
-                        continue
-                    text = f.read_text(encoding='utf-8', errors='replace')
-                except OSError:
-                    continue
-                notes.append({'folder': path.name, 'dir': str(path), 'name': f.name,
-                              'path': str(f), 'text': text,
-                              'current': str(path) == str(cur)})
-
-        add_dir(cur)
-        try:
-            for child in sorted(cur.parent.iterdir(), key=lambda p: p.name.lower()):
-                if child.is_dir():
-                    add_dir(child)
-        except OSError:
-            pass
-        self._send_json(200, {'current': str(cur), 'notes': notes})
 
     def _autosave_validate_type(self, dt):
         """Return True if dt is a safe filename component."""
@@ -3852,7 +3796,7 @@ class Handler(BaseHTTPRequestHandler):
         svg の最終更新時刻もここで返す (無ければ None)。
         """
         entry = {'name': path.stem, 'mtime': None, 'size': None, 'hash': None,
-                 'svgMtime': None, 'svgSource': None, 'svgHash': None, 'pins': None,
+                 'svgMtime': None, 'svgSource': None, 'svgHash': None,
                  'kind': ''}
         svg_path = path.with_suffix('.svg')
         try:
@@ -3874,11 +3818,6 @@ class Handler(BaseHTTPRequestHandler):
         try:
             raw = path.read_bytes()
             entry['hash'] = hashlib.sha1(raw).hexdigest()
-            # BLK-junior-20260908-0630-wish: レビュー指摘の反映状態は DSL の
-            # `' @pin` 行に入っている。一覧で「未反映 / 反映済み」を出すために
-            # 22 枚を 1 枚ずつ開き直すのは、別名保存を続けるのと同じ手間になる。
-            # 本文はここで既に読んでいるので、その場で数えて一覧に載せる。
-            entry['pins'] = self._pin_counts(raw)
             # BLK-junior-20260908-2003: 「状態遷移図が無い」を一覧の時点で言うために、
             # 1 枚ずつ開かなくても図種が分かるようにする (本文はここで既に読んでいる)。
             entry['kind'] = dsl_kind(raw.decode('utf-8', 'replace'))
@@ -3887,31 +3826,6 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             pass
         return entry
-
-    @staticmethod
-    def _pin_counts(raw):
-        """DSL の本文から {open, read, done, total} を数える。
-
-        指摘行は `' @pin {id}|{state}|...`。state が読めない行は open として数える
-        (数え落として「反映済み」と言うより、未反映側に倒す方が安全)。
-        壊れた本文でも一覧を落とさない。
-        """
-        counts = {'open': 0, 'read': 0, 'done': 0, 'total': 0}
-        try:
-            text = raw.decode('utf-8', 'replace')
-        except Exception:
-            return counts
-        for line in text.splitlines():
-            stripped = line.strip()
-            if not stripped.startswith("' @pin "):
-                continue
-            counts['total'] += 1
-            fields = stripped[len("' @pin "):].split('|')
-            state = fields[1].strip() if len(fields) > 1 else ''
-            if state not in ('read', 'done'):
-                state = 'open'
-            counts[state] += 1
-        return counts
 
     # --- autosave DELETE -----------------------------------------------------
 

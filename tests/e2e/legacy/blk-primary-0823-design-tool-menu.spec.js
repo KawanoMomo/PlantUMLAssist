@@ -73,10 +73,11 @@ test('タブ列から畳むと機能ボタンが消え、次に開いても畳�
 
 // BLK-builder-20260908-0858-2: パネル類 (外側 click で閉じる作りのもの) をメニューから開くと、
 // 選んだ click がそのまま document へ上がって開いた直後に閉じていた。
-test('メニューから「この図の指摘」を開くと、パネルが開いたまま残る', async ({ page }) => {
+// (この図の指摘 は TICKET-owner-20261115-1840-prune で外したので、同じ作りの「基準の図との指摘」で見る)
+test('メニューから「基準の図との指摘」を開くと、パネルが開いたまま残る', async ({ page }) => {
   await page.locator('#btn-tab-tools').click();
-  await pickTool(page, 'btn-tab-pins');
-  await expect(page.locator('#pin-panel')).toHaveClass(/open/);
+  await pickTool(page, 'btn-tab-review');
+  await expect(page.locator('#review-panel')).toHaveClass(/open/);
 });
 
 // BLK-human-20260923-1601 (design 9b): 左 6 分類・右小見出しの 2 段パネル。

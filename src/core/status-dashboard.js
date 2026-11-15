@@ -21,7 +21,6 @@
   var COLUMNS = [
     { key: 'doc', label: '図' },
     { key: 'findings', label: '指摘(未解消)' },
-    { key: 'pins', label: 'ピン' },
     { key: 'svg', label: 'SVG' },
     { key: 'registry', label: '表記(要決定)' },
     { key: 'diff', label: '前回控え' },
@@ -342,7 +341,7 @@
   function summaryLine(board) {
     var b = (board && board.totals) || { docs: 0 };
     if (!b.docs) return '対象の図がありません';
-    var s = b.docs + ' 枚 / 指摘 ' + b.findings + ' 件 / ピン ' + b.pins + ' 件'
+    var s = b.docs + ' 枚 / 指摘 ' + b.findings + ' 件'
       + ' / 表記 要決定 ' + b.registry + ' 組 / 作り直し要 ' + b.needsRender + ' 枚';
     if (b.formatOnly) s += '（体裁差のみ ' + b.formatOnly + ' 枚は作り直し不要）';
     if (b.changed) s += ' / 前回から変わった ' + b.changed + ' 枚';

@@ -269,63 +269,19 @@ window.MA.filesPanel = (function() {
     var it = document.querySelector(_itemSel(name));
     if (it) {
       var row = (it.closest && it.closest('.folder-row')) || it;
-      var rb = it.querySelector('.folder-review-badge');
-      if (rb && rb.getAttribute('data-review-state') !== 'applied') st.unapplied = true;
       if (row.classList && row.classList.contains('folder-row-draft')) st.draft = true;
       if (it.querySelector('[data-svg-status="stale"], .folder-svg-content-badge[data-svg-content="differ"]')) st.svgStale = true;
-      // 指摘.md の反映状況の札。確かめられない指摘がある図だけ
-      // (対象外・反映済みの図には札を出さない)。語・見出しは保存先の一覧の行のものをそのまま読む。
-      var nb = row.querySelector ? row.querySelector('.folder-note-badge[data-note-status="todo"]') : null;
-      if (nb) {
-        st.note = {
-          mark: nb.textContent || '',
-          head: nb.getAttribute('data-note-head') || '',
-          term: nb.getAttribute('data-note-term') || '',
-          open: Number(nb.getAttribute('data-note-open')) || 1,
-        };
-      }
     }
     return st;
   }
 
-  // 札の title: 指摘の 1 行目 (見出し) を出す。何件あるかと、押すと何が起きるかを添える。
-  function _noteTitle(note) {
-    var t = '指摘: ' + (note.head || '(見出しなし)');
-    if (note.open > 1) t += ' ほか ' + (note.open - 1) + ' 件';
-    t += note.term ? '（押すと図を開いて「' + note.term + '」を選びます）' : '（押すと図を開きます）';
-    return t;
-  }
-
-  function _noteEl(name, note) {
-    var n = document.createElement('span');
-    n.className = 'files-row-note';
-    n.setAttribute('role', 'button');
-    n.setAttribute('data-note-of', name);
-    n.setAttribute('data-note-status', 'todo');
-    if (note.term) n.setAttribute('data-note-term', note.term);
-    n.textContent = note.mark;
-    n.title = _noteTitle(note);
-    n.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      if (typeof window.MA.openNoteFinding === 'function') window.MA.openNoteFinding(name, note.term);
-      else _clickFolderItem(name);
-    });
-    return n;
-  }
-
-  // 部品のフォルダの見出しに出す札の数。図 1 枚は 1 回だけ数える
-  // (指摘の札が付いた図は ⚠ の側で数え、同じ図を 未反映 でもう 1 回数えない)。
+  // 部品のフォルダの見出しに出す札の数。図 1 枚は 1 回だけ数える。
   function _partNotes(files) {
-    var note = 0, unapplied = 0, mark = '';
+    var unapplied = 0;
     files.forEach(function(f) {
-      var st = _fileState(f.name);
-      if (st.note) { note++; if (!mark) mark = st.note.mark; }
-      else if (st.unapplied) unapplied++;
+      if (_fileState(f.name).unapplied) unapplied++;
     });
-    var parts = [];
-    if (note) parts.push(mark + ' ' + note);
-    if (unapplied) parts.push('未反映 ' + unapplied);
-    return parts.join(' · ');
+    return unapplied ? '未反映 ' + unapplied : '';
   }
 
   function _fileButton(f, loose) {
@@ -348,7 +304,6 @@ window.MA.filesPanel = (function() {
       b.appendChild(m);
       b.setAttribute('data-marks', mk);
     }
-    if (st.note) b.appendChild(_noteEl(f.name, st.note));
     b.addEventListener('click', function() { _clickFolderItem(f.name); });
     // design 10a: ダブルクリックでタブとして固定する。1 回押しは仮のタブのまま。
     // 固定の道は保存先の一覧の行のダブルクリックと同じ 1 本 (その行へ渡す)。

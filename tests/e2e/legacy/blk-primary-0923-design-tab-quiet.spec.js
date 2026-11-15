@@ -33,7 +33,7 @@ test('既定のタブ列にはボタンが 1 つも無い (図のタブと ＋ /
 // 件数を持たせると札が出て、押すとそのパネルが開く。
 test('件数を持つものは下端の状態表示に出て、押せばそのパネルが開く', async ({ page }) => {
   await open7b(page);
-  for (const id of ['status-diff', 'status-pins', 'status-inbox',
+  for (const id of ['status-diff',
                     'status-consistency', 'status-eventsync']) {
     await expect(page.locator('#' + id), id).toHaveCount(1);
   }

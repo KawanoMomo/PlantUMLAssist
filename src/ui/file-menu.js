@@ -416,7 +416,7 @@ window.MA.fileMenuUi = (function() {
       case 'change-target':
         if (typeof window.openChangeTarget === 'function') window.openChangeTarget();
         break;
-      // 読むだけのフォルダの道具 (部品ビュー・指摘から選ぶ…) は、
+      // 読むだけのフォルダの道具 (部品ビュー・ドメインで揃える…) は、
       // ツリーで選んだそのフォルダを開いた状態で覗く窓に出す。窓の中でフォルダを選び直させない。
       case 'peek':
         if (typeof window.openPeekFolder === 'function') window.openPeekFolder({ dir: folder && folder.dir });
