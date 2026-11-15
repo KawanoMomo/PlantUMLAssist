@@ -75,3 +75,26 @@ describe('hit-baseline: 版ごとの基準', function() {
     expect(Object.keys(b.files).length).toBeGreaterThan(100);
   });
 });
+
+// TICKET-human-20261115-0900-1: URL を取り込む図はネット次第で描画が変わるので、当て方の基準から外す。
+describe('hit-baseline: ネットから取り込む図を見分ける', function() {
+  var fs = require('fs');
+  var path = require('path');
+  var dir = path.join(__dirname, '..', 'test-results', 'unit-hit-baseline-net');
+  function put(name, lines) {
+    fs.mkdirSync(dir, { recursive: true });
+    var p = path.join(dir, name);
+    fs.writeFileSync(p, lines.join('\n'), 'utf8');
+    return p;
+  }
+  test('URL の !define + !include、!includeurl、!theme ... from URL はネットを使う', function() {
+    expect(HB.usesNetwork(put('a.puml', ['@startuml', '!define AWSPuml https://raw.githubusercontent.com/x/dist', '!include AWSPuml/AWSCommon.puml', '@enduml']))).toBe(true);
+    expect(HB.usesNetwork(put('b.puml', ['@startuml', '  !includeurl http://example.com/c.puml', '@enduml']))).toBe(true);
+    expect(HB.usesNetwork(put('c.puml', ['@startuml', '!theme cerulean from https://example.com/themes', '@enduml']))).toBe(true);
+  });
+  test('同梱の標準ライブラリ・相対パスの !include・本文中の URL はネットを使わない', function() {
+    expect(HB.usesNetwork(put('d.puml', ['@startuml', '!include <awslib/AWSCommon>', '!include common.iuml', '@enduml']))).toBe(false);
+    expect(HB.usesNetwork(put('e.puml', ['@startuml', 'A -> B : see https://example.com', "' !include https://example.com/x.puml", '@enduml']))).toBe(false);
+    expect(HB.usesNetwork(path.join(dir, 'no-such-file.puml'))).toBe(false);
+  });
+});

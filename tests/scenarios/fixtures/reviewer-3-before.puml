@@ -1,0 +1,11 @@
+@startuml
+title SPI 初期化シーケンス
+participant App
+participant SpiDrv
+participant Hw
+
+App -> SpiDrv : Spi_Init()
+SpiDrv -> Hw : WriteReg(CTRL)
+Hw --> SpiDrv : ack
+SpiDrv --> App : E_OK
+@enduml

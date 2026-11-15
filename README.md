@@ -420,6 +420,18 @@ npm run test:e2e    # Playwright — 80 E2E tests
 npm run test:all
 ```
 
+### scripts/ (準備・unit・台本の scenario をまとめて回す入口)
+
+Windows PowerShell から `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\<名前>.ps1` で呼ぶ。どれも exit 0 が緑。
+
+| 入口 | すること |
+|---|---|
+| `scripts\build.ps1 [-Force]` | `node_modules` が無いときだけ `npm ci`。Java と python が PATH にあること、`lib\plantuml.jar` があることを確かめる (git worktree で jar が無ければ本体のチェックアウトの `lib\` から写す。ダウンロードはしない) |
+| `scripts\test.ps1` | unit (`node tests/run-tests.js`) |
+| `scripts\verify.ps1 -Scenarios <dir\|files> -Out <絶対パス>` | Playwright で台本の scenario (`tests/scenarios/{persona}-{手順}-{場面}.spec.js`) を回し、`<Out>\summary.json` に scenario ごとの passed / failed・操作から描画までの ms (`renderMs`)・1 操作で動いた本文の行数 (`diffLines`) を書く。フォルダを渡すと既存の e2e のうち `tests/e2e/scenarios` も回す (`-NoE2E` で外す。`tests/e2e/legacy` は 4 worker で約 35 分かかるので `-E2EProject legacy\|all` のときだけ)。scenario のファイルだけ渡すとその scenario だけ、`tests/e2e/` の spec を渡すとその e2e だけ |
+
+試験のサーバは worker ごとに `PUA_DATA_ROOT` (`test-results\e2e-data\`) 付きで起こすので、利用者の本物の保存先と設定には触れない。ポートは `PUA_PORT` から空きを探す。
+
 ## 監査 CLI (`npm run audit`)
 
 GUI を開かずに、フォルダ内の `.puml` 一式へ監査 (名前突合・メソッド突合・整合チェック・

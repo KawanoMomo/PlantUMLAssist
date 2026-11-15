@@ -2686,6 +2686,17 @@ test('migrator 手順 4 — 枠 ok と記録した実物の図は、基準で枠
     expect(base, 'hit-baseline に基準がある (PUA_HIT_WRITE=1 で作る)').toBeTruthy();
     targets = Object.keys(base.files);
   }
+  // URL を !include する図はネット次第で描画が変わるので測らない (試験はネットを使わない)。
+  const online = targets.filter((rel) => HB.usesNetwork(path.join(HB.CORPUS_DIR, rel)));
+  if (online.length) {
+    console.log('hit-baseline: URL を取り込む図を外した: ' + online.join(', '));
+    targets = targets.filter((rel) => online.indexOf(rel) < 0);
+    if (base) {
+      const files = {};
+      targets.forEach((rel) => { if (base.files[rel]) files[rel] = base.files[rel]; });
+      base = Object.assign({}, base, { files: files });
+    }
+  }
 
   // 1 枚を開いて測る (migrator と同じ道: ファイルを開く → Fit → 要素を指す)。
   const measure = async (rel) => {
