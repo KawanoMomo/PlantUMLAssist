@@ -1,3 +1,4 @@
+- TICKET-owner-20261115-2100-1: unit の入口 `node tests/run-tests.js` が、自前で数える test ファイルの赤 (`process.exitCode = 1`・`process.exit(1)`・読み込みで投げる) も 1 件の失敗に数えて exit 1 で終え、最後に「赤のファイル: …」を 1 行で出す (残りのファイルは続けて回す)
 - TICKET-roadmap-20261115-2114-1: 整理表 `docs/spec/feature-triage.md` を足した。機能台帳の全 166 行と台帳に無い道具・配布の 173 行を 残す 73 / 統合 22 / 消す 78 に分け、根拠・束・状態・痕跡の語を 1 行ずつ付けた (配布 `packaging/` は出す)。unit が行数・判定・根拠・「済」の行の痕跡 0 件を確かめる
 - TICKET-releaser-20261116-0300-3: junior 場面 4 手順 4 の scenario (`tests/scenarios/junior-4-s4.spec.js`)。Import ▾ で開く → SVG → PNG を通しで行い、開いた回数 1・クリック 6 以下 (各手順 2 以下)・開いてから描けるまで 3 秒以内・本文の差分 0 行を守り、回数と待ちを summary.json に残す
 - TICKET-releaser-20261116-0300-2: junior 場面 4 手順 3 の scenario (`tests/scenarios/junior-3-s4.spec.js`)。同じ状態遷移図を Export ▾ → PNGとして保存 で書き出し、受けた .png が PNG の署名を持ち、描いた図と同じ寸法で、線と文字の画素があり (空同然でない)、失敗の知らせが出ず、本文が 1 行も動かないことを守る

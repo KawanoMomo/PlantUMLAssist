@@ -250,10 +250,38 @@ const files = testFiles.length > 0
   ? testFiles.map(f => path.resolve(f))
   : fs.readdirSync(__dirname).filter(f => f.endsWith('.test.js')).map(f => path.join(__dirname, f));
 
+// describe / test を使わず自前で数える test ファイルは、赤を `process.exitCode = 1` か
+// `process.exit(1)` で返す。ここが自分の数だけで終えるとその赤が消えるので、ファイルごとに
+// 終了コードを見て 1 件の失敗に数える。読み込みで投げたファイルも同じ (残りのファイルは続けて回す)。
+// TICKET-owner-20261115-2100-1。
+class FileExit extends Error {
+  constructor(code) { super('process.exit(' + code + ')'); this.code = code; }
+}
+const redFiles = [];
+const realExit = process.exit;
 for (const f of files) {
-  console.log(`\n── ${path.basename(f)} ──`);
-  require(f);
+  const name = path.basename(f);
+  console.log(`\n── ${name} ──`);
+  process.exitCode = 0;
+  process.exit = function(code) { throw new FileExit(code == null ? 0 : code); };
+  let why = '';
+  try {
+    require(f);
+  } catch (e) {
+    if (e instanceof FileExit) why = e.code ? e.message : '';
+    else why = '読み込みで投げた: ' + (e && e.message);
+  } finally {
+    process.exit = realExit;
+  }
+  if (!why && process.exitCode) why = 'process.exitCode = ' + process.exitCode;
+  process.exitCode = 0;
+  if (why) {
+    failed++;
+    redFiles.push(name + ' (' + why + ')');
+    console.log(`    ✗ ${name}: ${why}`);
+  }
 }
 
+if (redFiles.length) console.log(`\n  赤のファイル: ${redFiles.join(', ')}`);
 console.log(`\n  ${passed} passed, ${failed} failed\n`);
 process.exit(failed > 0 ? 1 : 0);
