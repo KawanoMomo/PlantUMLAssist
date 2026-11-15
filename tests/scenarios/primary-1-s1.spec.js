@@ -4,6 +4,7 @@
 // 期待 (principles.md「描ける」「手書きや他の道具で作った .puml は壊さず開ける」「操作コストは計る」):
 //   - 保存先の一覧から 6 枚を 1 枚ずつ開くと、どれも図種が本文どおりに選ばれ、エラー無しで描ける
 //   - 開いただけでは本文は 1 字も変わらず (字下げ・コメントもそのまま)、保存先のファイルも書き換わらない
+//   - FILES の保存先では 6 枚が部品フォルダに割れず直下に並び、「未作成」の札が出ない
 //   - 1 枚を開く手数は 4 (一覧を開く 2 + 図を選ぶ 1 + 一覧を閉じる 1)。開いてから描けるまでは上限 (3 秒) 以内
 // 図: tests/scenarios/fixtures/ の 6 枚 (手で整えた小さい図。コメントと字下げを持つ)。
 const { test, expect } = require('@playwright/test');
@@ -36,6 +37,17 @@ test('primary 手順1 保存先の 6 図種の図を 1 枚ずつ開くと、本�
 
   await S.bootWithSaveDir(page, S.dirFor(__filename));
   let ops = 0;
+
+  // TICKET-owner-20261115-1827-2: FILES の保存先は seq-1 などの先頭の図種の語を部品名に読まない。
+  // 6 枚は部品フォルダ (SEQ 1 / 6・STATE 1 / 6 …) に割れず直下に 6 行で並び、「未作成」の札も出ない。
+  const tree = page.locator('#files-parts');
+  for (const d of DOCS) {
+    await expect(tree.locator('.files-loose-file[data-file-name="' + d.name + '"]'), d.name + ' は保存先の直下').toHaveCount(1, { timeout: 10000 });
+  }
+  await expect(tree.locator('.files-loose-file')).toHaveCount(DOCS.length);
+  await expect(tree.locator('.files-part-head')).toHaveCount(0);
+  await expect(tree.locator('.files-part-missing')).toHaveCount(0);
+  await expect(tree).not.toContainText('未作成');
 
   for (const d of DOCS) {
     const text = originals[d.name];
