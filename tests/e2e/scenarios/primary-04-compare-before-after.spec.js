@@ -205,7 +205,7 @@ test('手順4 保存フォルダへ直接書いた回を、後から履歴で選
 
 // BLK-owner-20260924-1712-prune: 「前回保存版と比べる」入口が Ctrl+K に 3 行並び (うち 2 行は同じ枠を開く)、
 // 下端の「± 差分」は変わった図ではなく開いている図の総数を出し、変更サマリボードの見出しは基準を 3 通りに言っていた。
-test('手順4 前回保存からの差分は変わった図の数で出て、Ctrl+K は 2 行', async ({ page }) => {
+test('手順4 前回保存からの差分は変わった図の数で出て、Ctrl+K は 1 行', async ({ page }) => {
   const A = '@startuml\nparticipant SpiDrv\nSpiDrv -> Reg : write(CR1)\n@enduml';
   const B = '@startuml\nparticipant AdcDrv\nAdcDrv -> Reg : read(DR)\n@enduml';
   const C = '@startuml\nclass SpiDrv\nclass AdcDrv\n@enduml';
@@ -232,23 +232,15 @@ test('手順4 前回保存からの差分は変わった図の数で出て、Ctr
   // 到達条件その1: 下端の差分は変わった図の数 (2)。開いている図の総数 (3) を拾わない。
   await expect(page.locator('#status-diff')).toHaveText(/差分 2$/);
 
-  // 到達条件その2: Ctrl+K で「前回保存」と打つと、変わった図の一覧と、この図を前回保存版と比べる行の 2 つ。
-  // どちらも分類は「レビュー」で、旧名 (並べて比較 (この図の前回保存版)) でも引ける。
+  // 到達条件その2: Ctrl+K で「前回保存」と打つと、変わった図の一覧の 1 行 (分類はレビュー)。
+  // 「前回保存版と比較」の行は TICKET-owner-20261115-2141-prune で外した (前の版と比べるのは この図の履歴 から)。
   await page.keyboard.press('Control+k');
   await page.waitForSelector('#cp-modal');
   const input = page.locator('#cp-input');
   await input.fill('前回保存');
-  const rows = page.locator('#cp-list .cp-item');
-  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:compare-before"]')).toHaveCount(1);
-  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:compare-before"] .cp-kind')).toHaveText('レビュー');
-  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:compare-before"] .cp-title')).toHaveText('前回保存版と比較 / Compare with last save');
   await expect(page.locator('#cp-list .cp-item[data-cp-id="review:tab-diff"]')).toHaveCount(1);
+  await expect(page.locator('#cp-list .cp-item[data-cp-id$=":compare-before"]')).toHaveCount(0);
   await expect(page.locator('#cp-list .cp-item[data-cp-id="command:livediff"]')).toHaveCount(0);
-  await expect(page.locator('#cp-list .cp-item[data-cp-id="command:compare-before"]')).toHaveCount(0);
-  await input.fill('並べて比較 (この図の前回保存版)');
-  await expect(rows.first()).toHaveAttribute('data-cp-id', 'review:compare-before');
-  await input.fill('レビュー');
-  await expect(page.locator('#cp-list .cp-item[data-cp-id="review:compare-before"]')).toHaveCount(1);
   await page.keyboard.press('Escape');
   // (変更サマリボードの「変更前 =」は TICKET-owner-20261115-1828-prune で外した)
 });

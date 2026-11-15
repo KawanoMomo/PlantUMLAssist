@@ -33,6 +33,7 @@ function commandOf(id) {
   return c;
 }
 
+// part-board・tab-senior は TICKET-owner-20261115-2141-prune で外した (commandOf が null を返し filter で落ちる)。
 var IDS = ['tab-versions', 'part-board', 'tab-senior', 'tab-rename'];
 function items() {
   return CP.buildItems(IDS.map(commandOf).filter(Boolean), '');

@@ -3756,12 +3756,6 @@ function initCommandPalette() {
       // (id 'tab-cross') の語に「名前突合」「表記揺れ」「name audit」を入れ、その語で引いたときは
       // ボードを「名前/表記揺れ」で絞って開く。
       { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], button: 'btn-tab-lines', run: function() { clickById('btn-tab-lines'); } },
-      // 並べる面は 1 つに統合した。パレットの項目は
-      // 「誰と並べるか」で 3 つに分かれ、どれも旧称 (並べて見る / 先輩 / 変更前後) で引ける。
-      { id: 'tab-compare', title: '並べて比較 (別タブの図) / Compare', hint: 'Compare', keywords: ['compare', 'side', 'ならべて', 'みくらべ', 'べつたぶ'], run: function() { openCompareTarget('tabs'); } },
-      // 「この図を前回保存版と比べる」行は 1 つ。旧 command:livediff (前回保存版との比較) と
-      // この行は同じ枠を同じ「± 差分」で開いていた。消した方の名前は語に残し、分類は ± 差分の一覧と同じ「レビュー」にする。
-      { id: 'compare-before', title: '前回保存版と比較 / Compare with last save', hint: 'Compare', group: 'review', keywords: ['並べて比較 (この図の前回保存版)', '前回保存版との比較', 'Compare with last save', '差分', '前回保存', 'レビュー', 'diff', 'compare', 'before', 'after', 'last', 'save', 'ならべて', 'ひかく', 'ぜんかいほぞん', 'ぜんかい', 'ほぞん', 'へんこうぜんご', 'さぶん', 'みくらべ'], run: function() { openCompareTarget('before'); } },
       // 部品を起こす・テンプレート・骨格・セット複製の 4 行を 1 行にした。何から起こすかは窓の上端で選ぶ。
       // 旧名はこの行を引く語に残す (別の行として並べない)。
       { id: 'tab-template', title: '既存の図や雛形から新しい図を起こす… / New from…', hint: 'Tabs', keywords: ['template', 'copy', 'てんぷれ', 'ふくせい', 'テンプレートから作る', 'テンプレート', '部品を起こす', '6 図種まとめて', 'part', 'starter', 'new', 'ぶひん', 'おこす', 'したがき', '6', 'ろく', 'ずしゅ', '骨格から作る', '骨格', 'skeleton', 'こっかく', 'ひな形', 'セット複製', '系統ごと複製する', '系統ごと複製', 'set', 'clone', 'family', 'せっと'], button: 'btn-tab-template', run: function() { clickById('btn-tab-template'); } },
@@ -3771,13 +3765,6 @@ function initCommandPalette() {
       // 「メニューにはあるがパレットに無かった」道具。題はメニューの言い換えに揃える。
       { id: 'tab-draft', title: '一時控えにする / Draft', hint: 'Tabs', keywords: ['draft', 'ひかえ', 'いちじ'], button: 'btn-tab-draft', run: function() { clickById('btn-tab-draft'); } },
       { id: 'tab-apply', title: '複数クラスに一括適用 / Bulk apply', hint: 'Tabs', keywords: ['apply', 'bulk', 'いっかつ', 'てきよう'], button: 'btn-tab-apply', run: function() { clickById('btn-tab-apply'); } },
-      // 「⇔ 先輩」を「並べて比較」に改名したので、
-      // Ctrl+K も新しい名前で引ける。旧称 (先輩) でも当たるように語を残す。
-      // 10a: 入口は FILES ツリーの「読むだけ」節にあるので題もそちらに読み替えるが、
-      // 走らせるのは master 側の openCompareTarget('folder') (相手を選ぶ所まで一息で開く)。
-      // 保存先の一覧の参照タブ列を外したので、旧名「参照」「先輩のフォルダ」もこの行で引き、
-      // FILES「読むだけ」節も開く (隣のフォルダを読む入口は節 1 か所)。
-      { id: 'tab-senior', title: 'FILES: 読むだけの図と並べて比較 / Files: compare', hint: 'Files', keywords: ['compare', 'files', 'readonly', 'senior', 'side', 'ならべて', 'ひかく', 'よむだけ', 'あいて', 'せんぱい', 'ふぉるだ', '参照', 'さんしょう', '参照フォルダ', '参照タブ', '先輩のフォルダ', 'せんぱいのふぉるだ'], button: 'btn-tab-senior', run: function() { revealReadonlySection(); openCompareTarget('folder'); } },
       // design 9a: 手元の .puml を開く入口は上部バーの Import ▾ へ移した。
       { id: 'import-clipboard', title: 'クリップボードの DSL から開く / Open from clipboard', hint: 'File', keywords: ['clipboard', 'paste', 'import', 'くりっぷ', 'はりつけ', 'ひらく'], run: function() { clickById('imp-clipboard'); } },
       // この図の履歴 を開く行は「この図の履歴を見る」1 行。旧名「変遷」は語に落とす。
