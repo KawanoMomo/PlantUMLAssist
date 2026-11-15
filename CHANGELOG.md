@@ -1,3 +1,4 @@
+- TICKET-builder-20261115-1635-1: `scripts\verify.ps1` を PUA_PORT 無しで呼んでも、試験サーバを OS の空きポートから起こし (他ループの 87xx の帯を踏まない)、e2e の再試行で trace を取らない。primary-09 の資料セットの scenario は対象の枚数が出てから登録する (全体実行の負荷の下で、読み込み前に押して前の test のセットを掴む赤を除いた)
 - TICKET-human-20261115-0900-1: 入口 `scripts/build.ps1` `test.ps1` `verify.ps1` (summary.json に scenario ごとの合否・描画までの ms・差分行数) と、台本の scenario `tests/scenarios/` (junior-1-s1・primary-2-s1・reviewer-3) で準備・unit・実機の操作をまとめて確かめられる
 - BLK-owner-20260930-0711-1: クラス図・コンポーネント図・ユースケース図の境界 (package / rectangle / cloud など) の中を通る関係を、線・矢じり・ラベルを押して選べる。境界は中の空所・枠線・見出しの札で選ぶ
 ## v4.0 (2026-10-07) 仕上げ期間を終えたメジャー。v3.0 以降の機能一覧は loop/releases/v4.0.md

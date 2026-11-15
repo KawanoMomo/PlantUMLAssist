@@ -17,6 +17,16 @@ async function exportOpenDocs(page, timeout) {
   return dl;
 }
 
+// TICKET-builder-20261115-1635-1: 資料セットの画面は開いてから保存フォルダを読み、読み終えると対象の枚数を出す。
+// 読み終える前に「今の対象を登録する」を押すと 0 枚で断られ、前の test が同じ名前で登録したセットが
+// そのまま残る (全体実行の負荷の下でだけ赤になっていた)。人と同じく枚数が出てから押し、登録できたことを確かめる。
+async function createDocSet(page, name, count) {
+  await expect(page.locator('#docset-pick-count')).toHaveText(new RegExp('^' + count + ' 枚'), { timeout: 20000 });
+  await page.locator('#docset-name').fill(name);
+  await page.locator('#docset-create').click();
+  await expect(page.locator('#docset-status')).toContainText('「' + name + '」を ' + count + ' 枚で登録しました', { timeout: 20000 });
+}
+
 // BLK-builder-20260924-2152-4-red: 保存先の一覧の 1 回押しは仮のタブで開き、次の 1 回押しで入れ替わる
 // (BLK-primary-20260924-0805-design)。「開いている全図」を揃えるには、ダブルクリックで固定のタブにして開く。
 async function openPinned(page, name) {
@@ -250,8 +260,7 @@ test('手順9 貼る前に、資料セットの順序・見出し・1 行説明�
   await page.waitForSelector('#export-menu', { state: 'visible' });
   await page.locator('#exp-docset').click();
   await page.waitForSelector('#docset-modal', { state: 'visible' });
-  await page.locator('#docset-name').fill('顧客資料');
-  await page.locator('#docset-create').click();
+  await createDocSet(page, '顧客資料', NAMES.length);
 
   const row = page.locator('.ds-row[data-set-name="顧客資料"]');
   await expect(row).toHaveCount(1);
@@ -334,10 +343,9 @@ test('手順9 資料セットの図が保存フォルダから減ると、書き
   await page.waitForSelector('#export-menu', { state: 'visible' });
   await page.locator('#exp-docset').click();
   await page.waitForSelector('#docset-modal', { state: 'visible' });
-  await page.locator('#docset-name').fill('顧客資料');
-  await page.locator('#docset-create').click();
+  await createDocSet(page, '顧客資料', NAMES.length);
 
-  const sum0 = page.locator('.ds-row[data-set-name="顧客資料"] .ds-sum');
+  const sum0 =page.locator('.ds-row[data-set-name="顧客資料"] .ds-sum');
   await expect(sum0).toHaveClass(/ds-ready/);
   const expected = Number(await sum0.getAttribute('data-expected'));
   expect(expected).toBeGreaterThanOrEqual(NAMES.length);
@@ -380,8 +388,7 @@ test('手順9 書き出した資料を客先の体裁のまま見返し、直す
   await page.waitForSelector('#export-menu', { state: 'visible' });
   await page.locator('#exp-docset').click();
   await page.waitForSelector('#docset-modal', { state: 'visible' });
-  await page.locator('#docset-name').fill('顧客資料');
-  await page.locator('#docset-create').click();
+  await createDocSet(page, '顧客資料', NAMES.length);
 
   const row = page.locator('.ds-row[data-set-name="顧客資料"]');
   await expect(row).toHaveCount(1);
@@ -480,8 +487,7 @@ test('手順4 書き出す前に、見出し・注記の有無が図ごとに �
   await page.waitForSelector('#export-menu', { state: 'visible' });
   await page.locator('#exp-docset').click();
   await page.waitForSelector('#docset-modal', { state: 'visible' });
-  await page.locator('#docset-name').fill('顧客資料-手順4');
-  await page.locator('#docset-create').click();
+  await createDocSet(page, '顧客資料-手順4', NAMES.length);
   await page.locator('.ds-row[data-set-name="顧客資料-手順4"] .ds-layout').click();
   await expect(page.locator('#docset-layout')).toBeVisible();
 
