@@ -466,130 +466,6 @@ window.MA.modules.plantumlUsecase = (function() {
     });
   }
 
-  // シーケンス図からアクター・ユースケース候補。
-  // 判断は core/usecase-source.js に置き、ここは並べて選ばせるだけ。
-  // アクターとユースケースを 1 枚の一覧に混ぜず 2 段に分けるのは、
-  // 「誰が使うか」と「何をするか」が別の問いだから — 混ぜると選ぶ側が読み分ける。
-  function _renderSourceCandidates(parsedData, ctx) {
-    var US = window.MA.usecaseSource;
-    var P = window.MA.properties;
-    var esc = window.MA.htmlUtils.escHtml;
-    var sumEl = document.getElementById('uc-src-summary');
-    var bodyEl = document.getElementById('uc-src-body');
-    if (!US || !sumEl || !bodyEl) return;
-
-    var ws = window.MA.workspace;
-    var docs = (ws && ws.list) ? ws.list() : [];
-    var activeId = (ws && ws.getActiveId) ? ws.getActiveId() : null;
-    var dsl = ctx.getMmdText();
-
-    var subjOpts0 = US.subjects(docs, activeId);
-    if (!subjOpts0.length) {
-      sumEl.textContent = '同じ部品のシーケンス図がまだありません';
-      sumEl.setAttribute('data-actors', '0');
-      sumEl.setAttribute('data-usecases', '0');
-      bodyEl.innerHTML = '';
-      return;
-    }
-
-    // 起点になる部品。既定は今の図の名前と語が重なるもの。選び直したら引き直す。
-    var activeName = '';
-    for (var di = 0; di < docs.length; di++) {
-      if (docs[di] && docs[di].id === activeId) activeName = docs[di].name || '';
-    }
-    var hint = activeName + ' ' + ((parsedData && parsedData.meta && parsedData.meta.title) || '');
-    var subjEl0 = document.getElementById('uc-src-subject');
-    var subject = (subjEl0 && subjEl0.value) || US.defaultSubject(docs, activeId, hint);
-    var res = US.candidates(dsl, docs, activeId, subject);
-
-    sumEl.textContent = US.summaryText(res);
-    sumEl.setAttribute('data-actors', String(res.actors.length));
-    sumEl.setAttribute('data-usecases', String(res.usecases.length));
-
-    var rowsAll = res.actors.concat(res.usecases);
-    var subjOpts = subjOpts0.map(function(s) {
-      return { value: s.id, label: s.label, selected: s.id === subject };
-    });
-
-    function rowHtml(r) {
-      var i = rowsAll.indexOf(r);
-      return '<label class="uc-src-row" data-src-key="' + esc(r.key) + '" data-src-kind="' + esc(r.kind) + '"'
-        + ' style="display:flex;align-items:flex-start;gap:6px;padding:3px 4px;border-radius:3px;cursor:pointer;">'
-        + '<input type="checkbox" class="uc-src-check" data-i="' + i + '" style="margin-top:2px;">'
-        + '<span style="flex:1;">'
-          + '<span style="font-size:12px;color:var(--text-primary);">' + esc(r.name) + '</span>'
-          + '<span style="display:block;font-size:10px;color:var(--text-secondary);line-height:1.4;">'
-            + esc(r.why) + '</span>'
-        + '</span>'
-      + '</label>';
-    }
-
-    function section(title, list, emptyText, id) {
-      return '<div style="margin-top:6px;">'
-        + '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + title + '</div>'
-        + '<div id="' + id + '" style="max-height:150px;overflow-y:auto;border:1px solid var(--border);'
-          + 'border-radius:3px;padding:4px;">'
-        + (list.length ? list.map(rowHtml).join('')
-            : '<div style="font-size:10px;color:var(--text-secondary);">' + emptyText + '</div>')
-        + '</div></div>';
-    }
-
-    bodyEl.innerHTML =
-      P.selectFieldHtml('部品 (起点)', 'uc-src-subject', subjOpts) +
-      section('アクター候補 — 誰が使うか', res.actors, '候補はすべて図にあります', 'uc-src-actors') +
-      section('ユースケース候補 — 何をするか', res.usecases, '候補はすべて図にあります', 'uc-src-usecases') +
-      P.primaryButtonHtml('uc-src-add', '+ 選んだ候補を追加') +
-      '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
-        'アクターと、そのアクターが呼んでいるユースケースを一緒に選ぶと関連の線も引かれます</div>';
-
-    P.bindEvent('uc-src-subject', 'change', function() {
-      _renderSourceCandidates(parsedData, ctx);
-    });
-
-    P.bindEvent('uc-src-add', 'click', function() {
-      var picks = [];
-      var checks = document.querySelectorAll('#uc-src-body .uc-src-check');
-      for (var i = 0; i < checks.length; i++) {
-        if (checks[i].checked) picks.push(rowsAll[Number(checks[i].getAttribute('data-i'))]);
-      }
-      if (!picks.length) { alert('追加する候補を選んでください'); return; }
-      var block = US.blockFor(picks);
-      var t = ctx.getMmdText();
-      var out = addBulk(t, block, parsedData);
-      if (out === t) { alert('追加できる行がありません'); return; }
-      window.MA.history.pushHistory();
-      ctx.setMmdText(out);
-      ctx.onUpdate();
-    });
-  }
-
-  // ひな形は「白紙 (新規タブのサンプルのまま)」に置く
-  // ものなので、既に描き始めている図では黙って捨てない。3 件以上の要素があるときだけ
-  // 確認する (サンプルの actor User / usecase Login は白紙とみなす)。
-  function _bindStarter(parsedData, ctx) {
-    var P = window.MA.properties;
-    var DS = window.MA.driverUsecaseStarter;
-    var inputEl = document.getElementById('uc-starter-subject');
-    var hintEl = document.getElementById('uc-starter-hint');
-    if (!DS || !inputEl || !hintEl) return;
-    var refresh = function() {
-      hintEl.textContent = DS.summary(DS.plan(inputEl.value));
-    };
-    inputEl.addEventListener('input', refresh);
-    refresh();
-
-    P.bindEvent('uc-starter-add', 'click', function() {
-      var plan = DS.plan(inputEl.value);
-      if (!plan) { alert('題材名を入れてください (例: GPIO)'); return; }
-      var count = (parsedData.elements || []).length;
-      if (count >= 3 && !window.confirm('今の図の ' + count + ' 件を、'
-        + plan.display + ' ドライバのひな形で置き換えます。よろしいですか')) return;
-      window.MA.history.pushHistory();
-      ctx.setMmdText(DS.dsl(inputEl.value));
-      ctx.onUpdate();
-    });
-  }
-
   function _renderNoSelection(parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var GP = window.MA.groupPlace;
@@ -611,36 +487,10 @@ window.MA.modules.plantumlUsecase = (function() {
         ]) +
         '<div id="uc-tail-detail" style="margin-top:6px;"></div>' +
       '</div>' +
-      // 同じ部品のシーケンス図から、誰が使うか
-      // (アクター) と何をするか (ユースケース) の候補を出す。白紙から考えて
-      // 一括入力欄に打つ代わり。
-      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
-          'シーケンス図から候補</label>' +
-        '<div id="uc-src-summary" style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;"></div>' +
-        '<div id="uc-src-body"></div>' +
-      '</div>' +
-      // 手本になる図が 1 枚も無いところから始まる場面。
-      // ドライバのユースケース図は題材が替わっても骨格が同じなので、題材名 1 語で
-      // 下書きを作る (アクター・ユースケース・関連の 15 行を打ち直させない)。
-      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
-          '白紙から: ドライバのひな形</label>' +
-        P.fieldHtml('題材名', 'uc-starter-subject', '', '例: GPIO / UART / CAN') +
-        '<div id="uc-starter-hint" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px;line-height:1.5;"></div>' +
-        P.primaryButtonHtml('uc-starter-add', '＋ ひな形を作る') +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
-          '開発者・RTOS と、初期化 / ピンモード設定 / 読み取り / 書き込み / 割り込み設定 / 割り込み通知 の下書きです。' +
-          '要らない行はそのまま消して使えます</div>' +
-      '</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;color:var(--text-secondary);font-size:11px;">' +
         'DSL エディタで行をクリックすると編集パネルが開きます (v0.5.0 で SVG クリック対応予定)' +
       '</div>';
     propsEl.innerHTML = html;
-
-    _bindStarter(parsedData, ctx);
-
-    _renderSourceCandidates(parsedData, ctx);
 
 
     // 末尾追加 detail switcher

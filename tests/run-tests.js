@@ -90,7 +90,6 @@ const sourceFiles = [
   'src/core/insert-marker.js',
   'src/core/label-colors.js',
   'src/core/component-deps.js',
-  'src/core/usecase-source.js',
   'src/ui/properties.js',
   'src/ui/reuse-modal.js',
   'src/modules/sequence.js',
