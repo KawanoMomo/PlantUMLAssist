@@ -54,10 +54,14 @@ window.MA.properties = (function() {
     return window.MA.htmlUtils.escHtml(s);
   };
 
+  // 欄の見出しは `for` で欄の id に結び付ける (TICKET-junior-20261116-0601)。見出しを押すと欄にフォーカスが移り、
+  // 見出しの語で欄を引ける (支援技術・Playwright の getByRole(…, { name }) )。見た目・欄の id は変えない。
+  function _for(id) { return ' for="' + escHtml(id) + '"'; }
+
   // fieldHtml: standard text input field with label
   function fieldHtml(label, id, value, placeholder) {
     return '<div style="margin-bottom:8px;">' +
-      '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
+      '<label' + _for(id) + ' style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
       '<input id="' + id + '" type="text" value="' + escHtml(value || '') + '" placeholder="' + escHtml(placeholder || '') + '" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;">' +
     '</div>';
   }
@@ -84,9 +88,10 @@ window.MA.properties = (function() {
         + (options[i].sub ? '<br><span style="font-size:9px;opacity:0.75;">' + escHtml(options[i].sub) + '</span>' : '')
         + '</button>';
     }
+    // ボタンの並びは label の for で指せないので、見出しに id を振り、並びを名前付きの group にする。
     return '<div style="margin-bottom:8px;">' +
-      '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
-      '<div id="' + id + '" style="display:flex;gap:3px;">' + btns + '</div>' +
+      '<label id="' + escHtml(id) + '-label" style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
+      '<div id="' + id + '" role="group" aria-labelledby="' + escHtml(id) + '-label" style="display:flex;gap:3px;">' + btns + '</div>' +
     '</div>';
   }
 
@@ -486,7 +491,7 @@ window.MA.properties = (function() {
     }
     var fontStyle = monoFont ? 'font-family:var(--font-mono);' : '';
     return '<div style="margin-bottom:8px;">' +
-      '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
+      '<label' + _for(id) + ' style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
       '<select id="' + id + '" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;' + fontStyle + '">' + opts + '</select>' +
     '</div>';
   }

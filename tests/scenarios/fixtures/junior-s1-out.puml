@@ -1,0 +1,6 @@
+@startuml
+participant "利用者" as User
+participant "画面" as Ui
+participant "制御部" as Ctrl
+participant "サーバ" as Srv
+@enduml
