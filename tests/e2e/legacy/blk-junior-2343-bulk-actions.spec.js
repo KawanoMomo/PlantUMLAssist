@@ -46,7 +46,9 @@ test.describe('BLK-junior-2343 アクションの一括末尾追加', () => {
     await expect(page.locator('#ac-tail-add-lines')).toHaveCount(0);
     await expect(page.locator('#ac-tail-reuse')).toHaveCount(0);
     await openBulk(page);
-    await expect(page.locator('#ac-tail-reuse')).toBeVisible();
+    // 「⧉ 他の図から取り込む」は TICKET-owner-20261116-0321-prune で外した。
+    await expect(page.locator('#ac-tail-reuse')).toHaveCount(0);
+    await expect(page.locator('#ac-tail-bulk')).toBeVisible();
     await expect(page.locator('#ac-tail-add')).toHaveText('+ まとめて追加');
   });
 

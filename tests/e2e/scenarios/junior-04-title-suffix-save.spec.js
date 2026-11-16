@@ -87,14 +87,14 @@ test('手順4 先輩のシーケンス図から活動図を組み立て、(資�
   expect(fresh).toContain('start');
   expect(fresh).toContain('stop');
 
-  // 工程名は先輩の図の矢印ラベルから借りる (打ち直さない)。
-  // BLK-owner-20260925-0341-prune: 1 行 1 アクションの欄と「⧉ 他の図から取り込む」は種別チップ「まとめて」の中。
+  // BLK-owner-20260925-0341-prune: 1 行 1 アクションの欄は種別チップ「まとめて」の中。
+  // 「⧉ 他の図から取り込む」は TICKET-owner-20261116-0321-prune で外した。工程名は欄に打つ。
   await page.locator('#ac-tail-kind-chip-bulk').click();
-  await page.locator('#ac-tail-reuse').click();
-  await page.waitForSelector('#reuse-modal');
-  await page.locator('#reuse-all').click();
-  await page.locator('#reuse-confirm').click();
-  await page.waitForTimeout(200);
+  await expect(page.locator('#ac-tail-reuse')).toHaveCount(0);
+  await page.locator('#ac-tail-bulk').click();
+  await page.keyboard.type('Gpio_Init');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Gpio_Done');
   expect(await page.locator('#ac-tail-bulk').inputValue()).toContain('Gpio_Init');
 
   await page.locator('#ac-tail-add').click();

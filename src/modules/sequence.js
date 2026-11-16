@@ -3012,7 +3012,6 @@ window.MA.modules.plantumlSequence = (function() {
               // (まとめて足す入口を種別チップの「まとめて」1 つに畳んだ)。
               '<button id="seq-scaffold-open" style="width:100%;font-size:11px;padding:5px 10px;margin-bottom:6px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⌗ 名前と本文だけの表で組む…</button>' +
               '<div style="margin-bottom:4px;font-size:10px;color:var(--text-secondary);">または 1 行 1 件で書く。参加者とメッセージを混ぜて書けます</div>' +
-              window.MA.reuseModal.buttonHtml('seq-tail-reuse') +
               '<textarea id="seq-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
               P.primaryButtonHtml('seq-tail-add', '+ まとめて追加') +
               '<div id="seq-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
@@ -3025,8 +3024,6 @@ window.MA.modules.plantumlSequence = (function() {
           P.bindEvent('seq-scaffold-open', 'click', function() {
             _showSeqScaffoldModal(parsedData, ctx);
           });
-          // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
-          window.MA.reuseModal.bindButton('seq-tail-reuse', 'plantuml-sequence', 'seq-tail-bulk');
           var rleObj = null;
           if (kind === 'message') rleObj = window.MA.richLabelEditor.mount(document.getElementById('seq-tail-label-rle'), '');
           else if (kind === 'note') {

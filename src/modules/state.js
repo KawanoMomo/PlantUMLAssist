@@ -1414,7 +1414,6 @@ window.MA.modules.plantumlState = (function() {
       } else if (kind === 'bulk') {
         html2 =
           '<label style="display:block;font-size:10px;color:var(--text-secondary);">state と遷移を 1 行 1 件で</label>' +
-          window.MA.reuseModal.buttonHtml('st-tail-reuse') +
           '<textarea id="st-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
           P.primaryButtonHtml('st-tail-add', '+ まとめて追加') +
           '<div id="st-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
@@ -1446,8 +1445,6 @@ window.MA.modules.plantumlState = (function() {
       if ((kind === 'state' || kind === 'composite') && window.MA.tailMemory) {
         window.MA.tailMemory.bindSelect('st-tail-where');
       }
-      // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
-      window.MA.reuseModal.bindButton('st-tail-reuse', 'plantuml-state', 'st-tail-bulk');
       renderWhereDetail();
       P.bindEvent('st-tail-where', 'change', renderWhereDetail);
 
