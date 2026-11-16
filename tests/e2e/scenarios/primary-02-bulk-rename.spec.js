@@ -190,8 +190,8 @@ test('手順2 ヒット 0 件で打った組も保存フォルダに残り、次
   await page.locator('#rename-to').blur();
   await page.waitForTimeout(900);
 
-  // 別のブラウザ・別のプロファイルで開き直した状況を作る。localStorage の
-  // 改名履歴は消えるが、フォルダ側の組は図と一緒に残っているはず。
+  // 別のブラウザ・別のプロファイルで開き直した状況を作る。このブラウザの
+  // localStorage は消えるが、フォルダ側の組は図と一緒に残っているはず。
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
   await page.waitForSelector('#preview-svg');

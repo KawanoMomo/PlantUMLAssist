@@ -2061,9 +2061,6 @@ window.MA.modules.plantumlClass = (function() {
         // design 4a「種別 / Kind」: 宣言のキーワードをその場で切り替える
         _kindToggleHtml(element.kind) +
         P.fieldHtml('名前 (id)', 'cl-edit-id', element.id) +
-        // クラス名を打つのはここ。登録簿の
-        // 正式表記を欄の下に出し、揺れた綴りならその場で揃える先を言う。
-        P.vocabPickerHtml('cl-edit-id-vocab', { roles: ['type'] }) +
         P.fieldHtml('表示名', 'cl-edit-label', element.label || '') +
         P.fieldHtml('ステレオタイプ', 'cl-edit-stereo', element.stereotype || '', '例: entity') +
         P.primaryButtonHtml('cl-edit-apply', '変更を反映') +
@@ -2213,8 +2210,6 @@ window.MA.modules.plantumlClass = (function() {
     P.bindEvent('cl-derive-open', 'click', function() {
       _showDeriveModal(element, parsedData, ctx);
     });
-
-    P.bindVocabPicker('cl-edit-id-vocab', 'cl-edit-id');
 
     P.bindEvent('cl-edit-apply', 'click', function() {
       window.MA.history.pushHistory();

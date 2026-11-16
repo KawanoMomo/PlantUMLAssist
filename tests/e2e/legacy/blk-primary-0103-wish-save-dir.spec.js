@@ -20,8 +20,9 @@ async function setDsl(page, text) {
   await page.waitForTimeout(700);
 }
 
-// 書き出し側 (xref.md) は TICKET-owner-20261115-2140-prune で外した。以前に渡された md を
-// 保存先を変える所 (パンくずのフォルダ名 → ⚙設定の「保存先ディレクトリ」) の入力欄に貼る受け口は残す。
+// 書き出し側は TICKET-owner-20261115-2140-prune で、渡された文面を貼る受け口は
+// TICKET-owner-20261116-0621-prune で外した。残すのは、保存先の欄にパスを打つ (貼る) と
+// 直せる崩れは直して反映し、直せない崩れは断ること。
 
 // 保存先を変える所。パンくずのフォルダ名 (FILES の保存先の一番上) を押すと ⚙設定が開く。
 async function openSaveDirSetting(page) {
@@ -35,12 +36,6 @@ async function openSaveDirSetting(page) {
 
 // 保存先の値。持ち主の居る persona-data を指さないよう、test-results の下の相対パスにする。
 const DIR = 'test-results/xref-handoff';
-const XREF_MD = [
-  '# 参照関係 (14 枚)', '',
-  '## 保存先ディレクトリ', '',
-  '- 保存先ディレクトリ: `' + DIR + '`', '',
-  '## 図', '- spi (sequence)',
-].join('\n');
 
 async function setSaveDir(page, dir) {
   await page.evaluate((d) => {
@@ -73,28 +68,17 @@ test.describe('BLK-primary-20260908-0103-wish 保存先つきの引き継ぎ', (
     await resetSaveDir(page).catch(() => {});
   });
 
-  test('受け取る側: 保存先ディレクトリの欄に xref.md をそのまま貼ると、値だけが入って反映される', async ({ page }) => {
+  test('保存先の欄にパスを貼って「設定を保存」すると、その値に替わる', async ({ page }) => {
     await gotoApp(page);
     await resetSaveDir(page);
     await openSaveDirSetting(page);
-    // 実際の貼り付け (Ctrl+V)。改行入りの全文でも値だけを拾う。
+    // 実際の貼り付け (Ctrl+V)。パス 1 行はそのまま入る。
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-    await page.evaluate((t) => navigator.clipboard.writeText(t), XREF_MD);
+    await page.evaluate((t) => navigator.clipboard.writeText(t), DIR);
     await page.locator('#cfg-file-dir').fill('');
     await page.locator('#cfg-file-dir').click();
     await page.keyboard.press('Control+v');
     await expect(page.locator('#cfg-file-dir')).toHaveValue(DIR);
-    await expect(page.locator('#cfg-file-dir-msg')).toContainText('値だけを入れました');
-    await page.locator('#cfg-ok').click();
-    await expect(page.locator('#cfg-modal')).toBeHidden();
-    expect(await getSaveDir(page)).toBe('file|' + DIR);
-  });
-
-  test('受け取る側: 改行が落ちて 1 行に続いた xref.md でも、保存時に値だけを拾う', async ({ page }) => {
-    await gotoApp(page);
-    await resetSaveDir(page);
-    await openSaveDirSetting(page);
-    await page.locator('#cfg-file-dir').fill(XREF_MD.replace(/\n/g, ''));
     await page.locator('#cfg-ok').click();
     await expect(page.locator('#cfg-modal')).toBeHidden();
     expect(await getSaveDir(page)).toBe('file|' + DIR);

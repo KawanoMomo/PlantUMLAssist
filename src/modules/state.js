@@ -1377,10 +1377,8 @@ window.MA.modules.plantumlState = (function() {
           '<button id="st-tx-pick-from" type="button" style="font-size:10px;padding:2px 8px;margin:-2px 0 6px 0;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">図で From を選び直す</button>' +
           P.selectFieldHtml('終点 (To)', 'st-tail-to', toOpts) +
           P.fieldHtml('きっかけ / trigger', 'st-tail-trig', '', '例: start') +
-          P.vocabPickerHtml('st-tail-trig-vocab', { roles: ['method', 'event'] }) +
           P.fieldHtml('条件 / guard', 'st-tail-guard', '', '例: retry > 3') +
           P.fieldHtml('実行する処理 / action', 'st-tail-act', '', '例: log()') +
-          P.vocabPickerHtml('st-tail-act-vocab', { roles: ['method'] }) +
           _previewBoxHtml('st-tail-preview') +
           P.selectFieldHtml('次の 1 本の From', 'st-tx-next-mode', [
             { value: 'to', label: '直前の遷移先から', selected: _tx.mode !== 'same' },
@@ -1507,8 +1505,6 @@ window.MA.modules.plantumlState = (function() {
           preview: 'st-tail-preview', from: 'st-tail-from', to: 'st-tail-to',
           trigger: 'st-tail-trig', guard: 'st-tail-guard', action: 'st-tail-act',
         });
-        P.bindVocabPicker('st-tail-trig-vocab', 'st-tail-trig', tailPreview);
-        P.bindVocabPicker('st-tail-act-vocab', 'st-tail-act', tailPreview);
         var TXc = window.MA.stateTxEntry;
         var cands = TXc ? TXc.candidates(parsedData) : { triggers: [], guards: [], actions: [] };
         var confirm = function() {
@@ -2087,8 +2083,6 @@ window.MA.modules.plantumlState = (function() {
       '<div id="st-sel-head" style="font-size:10px;color:var(--accent);margin-bottom:8px;font-weight:bold;">' +
       window.MA.htmlUtils.escHtml((st.stereotype ? st.stereotype + ' ' : '') + P.lineHead('State', st.line)) + '</div>' +
       P.fieldHtml('名前 (id)', 'st-id', st.id) +
-      // 状態名も同じ部品の他の図と揃える。
-      P.vocabPickerHtml('st-id-vocab', { roles: ['state'] }) +
       P.fieldHtml('ラベル', 'st-label', st.label || '') +
       P.selectFieldHtml('ステレオタイプ', 'st-stereo', stereoOptions(st)) +
       // 入れ子の中の状態を選んだとき、どの親の中に
@@ -2163,8 +2157,6 @@ window.MA.modules.plantumlState = (function() {
       P.primaryButtonHtml('st-delete', '✕ 削除 (出入りする遷移も消す)') +
       '</div>';
     propsEl.innerHTML = html;
-
-    P.bindVocabPicker('st-id-vocab', 'st-id');
 
     P.bindEvent('st-update', 'click', function() {
       window.MA.history.pushHistory();
@@ -2377,11 +2369,8 @@ window.MA.modules.plantumlState = (function() {
       '<button id="st-tr-swap" title="From と To を入れ替える" style="width:100%;font-size:11px;padding:3px 8px;margin-bottom:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⇄ 向きを入れ替え</button>' +
       P.selectFieldHtml('To', 'st-tr-to', toOpts) +
       P.fieldHtml('きっかけ / trigger', 'st-tr-trig', tr.trigger || '', '例: start') +
-      // 正式表記のチップ (登録簿に語があるときだけ。役割 method / event には出ない)。
-      P.vocabPickerHtml('st-tr-trig-vocab', { roles: ['method', 'event'] }) +
       P.fieldHtml('条件 / guard', 'st-tr-guard', tr.guard || '', '例: retry > 3') +
       P.fieldHtml('実行する処理 / action', 'st-tr-act', tr.action || '', '例: log()') +
-      P.vocabPickerHtml('st-tr-act-vocab', { roles: ['method'] }) +
       _previewBoxHtml('st-tr-preview') +
       // 線の色も「その他… ▾」に畳む。
       P.colorPaletteHtml('st-tr-more', {
@@ -2418,8 +2407,6 @@ window.MA.modules.plantumlState = (function() {
       trigger: 'st-tr-trig', guard: 'st-tr-guard', action: 'st-tr-act',
     });
 
-    P.bindVocabPicker('st-tr-trig-vocab', 'st-tr-trig', refreshPreview);
-    P.bindVocabPicker('st-tr-act-vocab', 'st-tr-act', refreshPreview);
 
     P.bindEvent('st-tr-swap', 'click', function() {
       var fromEl = document.getElementById('st-tr-from');

@@ -1263,9 +1263,7 @@ window.MA.modules.plantumlActivity = (function() {
       var html = '';
       if (k === 'action') {
         html = '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">アクション本文 (改行可)</label>' +
-               '<textarea id="act-mod-text" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>' +
-               // 正式表記のチップ (登録簿に語があるときだけ。役割 method には出ない)。
-               P.vocabPickerHtml('act-mod-text-vocab', { roles: ['method'], callSuffix: true });
+               '<textarea id="act-mod-text" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>';
       } else if (k === 'if') {
         html = P.fieldHtml('Condition', 'act-mod-cond', '', '例: 認証成功?') +
                P.fieldHtml('Then label', 'act-mod-thenlbl', 'yes') +
@@ -1289,7 +1287,6 @@ window.MA.modules.plantumlActivity = (function() {
         '<textarea id="act-mod-text" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>';
       }
       fEl.innerHTML = html;
-      P.bindVocabPicker('act-mod-text-vocab', 'act-mod-text', null, { insert: 'caret' });
     }
     renderFields();
     P.bindEvent('act-mod-kind', 'change', renderFields);
@@ -2847,9 +2844,7 @@ window.MA.modules.plantumlActivity = (function() {
         // (data-enter="submit" を modal-keys が見る)。複数のアクションを 1 度に入れるのは種別チップ「まとめて」。
         html2 =
           lbl('処理 (Enter で追加 / Shift+Enter で改行)') +
-          '<textarea id="ac-tail-text" data-enter="submit" rows="2" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>' +
-          // 正式表記のチップ (登録簿に語があるときだけ。役割 method には出ない)。
-          P.vocabPickerHtml('ac-tail-text-vocab', { roles: ['method'], callSuffix: true });
+          '<textarea id="ac-tail-text" data-enter="submit" rows="2" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>';
       } else if (kind === 'if') {
         html2 =
           P.fieldHtml('条件', 'ac-tail-cond', '', '例: 認証成功?') +
@@ -2875,8 +2870,7 @@ window.MA.modules.plantumlActivity = (function() {
         // (他の図の行を持ち込むボタンは TICKET-owner-20261116-0321-prune で外した。欄は打って埋める)。
         html2 =
           lbl('アクションを 1 行 1 件で') +
-          '<textarea id="ac-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
-          P.vocabPickerHtml('ac-tail-bulk-vocab', { roles: ['method'], callSuffix: true });
+          '<textarea id="ac-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>';
       } else if (kind === 'other') {
         html2 = P.selectFieldHtml('足すもの', 'ac-tail-other', OTHER_BARE.map(function(o, i) {
           return { value: o.value, label: o.label, selected: i === 0 };
@@ -2893,9 +2887,6 @@ window.MA.modules.plantumlActivity = (function() {
       }
       detailEl.innerHTML = html2;
       restoreDrafts();
-      P.bindVocabPicker('ac-tail-text-vocab', 'ac-tail-text', null, { insert: 'caret' });
-      // 一括欄では、チップは欄を置き換えずカーソル位置に差し込む。
-      P.bindVocabPicker('ac-tail-bulk-vocab', 'ac-tail-bulk', null, { insert: 'caret' });
       P.bindEvent('ac-tail-other', 'change', paintAllowed);
 
       function commit(out, t) {
@@ -3263,8 +3254,6 @@ window.MA.modules.plantumlActivity = (function() {
         '<label for="ac-action-text" style="display:block;font-size:10px;color:var(--text-secondary);">ラベル / Label</label>' +
         '<textarea id="ac-action-text" style="width:100%;min-height:60px;">' + esc(node.text || '') + '</textarea>' +
       '</div>' +
-      // 正式表記のチップ (登録簿に語があるときだけ。役割 method には出ない)。
-      P.vocabPickerHtml('ac-action-text-vocab', { roles: ['method'], callSuffix: true }) +
       P.primaryButtonHtml('ac-action-update', '更新') +
       _actionColorHtml(node.color || '') +
       // design 4b: スイムレーンは読むだけでなく、チップで選び直せる。
@@ -3303,7 +3292,6 @@ window.MA.modules.plantumlActivity = (function() {
             P.primaryButtonHtml('ac-action-delete', '削除 / Delete') +
           '</div>';
     propsEl.innerHTML = html;
-    P.bindVocabPicker('ac-action-text-vocab', 'ac-action-text', null, { insert: 'caret' });
 
     // design 4b:「↑ ↓」— 同じ親の中の兄弟と入れ替える。行が動くので、
     // 選択は id ではなく移動先の行番号から引き直す (id は文書順の連番で振り直される)。

@@ -2558,26 +2558,6 @@ function init() {
 
     btn.addEventListener('click', open);
 
-    // 旧 🕸 参照関係の「保存先を貼る」はここに移した。保存先を変える所
-    // (パンくずのフォルダ名 / FILES の保存先の一番上 → この欄) が、渡された xref.md 全文でも
-    // パス 1 行でも受け、値だけを拾って入れる (受け取った側が打ち直さない)。
-    var dirPasteEl = document.getElementById('cfg-file-dir');
-    if (dirPasteEl) dirPasteEl.addEventListener('paste', function(ev) {
-      var SDH0 = window.MA.saveDirHandoff;
-      var cd = ev.clipboardData || window.clipboardData;
-      var text = cd ? cd.getData('text') : '';
-      // パス 1 行はそのまま貼らせる (入力欄の既定の貼り付けで足りる)。
-      if (!SDH0 || !text || !/[\r\n]|保存先ディレクトリ/.test(text)) return;
-      var picked = SDH0.fromText(text);
-      if (!picked) return;
-      ev.preventDefault();
-      dirPasteEl.value = picked;
-      var msg0 = document.getElementById('cfg-file-dir-msg');
-      if (msg0) {
-        msg0.style.color = 'var(--text-secondary)';
-        msg0.textContent = '貼った文面から' + SDH0.LABEL + 'の値だけを入れました: ' + picked;
-      }
-    });
     // 上部バーからモードの select を外した
     // 代わりに、状態表示から設定の「レンダリング」タブへ直接開ける口を出す。
     // タブ指定で開けるようにしておくと、他の入口も同じ経路を使える。
@@ -2687,16 +2667,12 @@ function init() {
       for (var j = 0; j < backendRadios.length; j++) if (backendRadios[j].checked) { backend = backendRadios[j].value; break; }
       var fileDirEl = document.getElementById('cfg-file-dir');
       var fileDir = fileDirEl ? (fileDirEl.value.trim() || './autosave') : './autosave';
-      // 渡された xref.md を貼ったまま (1 行の欄では改行が落ちて続いた形) でも、値だけを拾う。
-      if (window.MA.saveDirHandoff && fileDirEl && /保存先ディレクトリ|`/.test(fileDir)) {
-        fileDir = window.MA.saveDirHandoff.fromText(fileDir) || fileDir;
-      }
       // バックスラッシュ区切りの絶対パスは往復で
       // 壊れることがあり、壊れた値のまま保存されると 📂一覧が黙って空になる。
       // 保存する前にここで直せる崩れは直し (\ → /)、直せない崩れは保存しない。
       var dirMsgEl = document.getElementById('cfg-file-dir-msg');
       if (dirMsgEl) { dirMsgEl.textContent = ''; dirMsgEl.style.color = ''; }
-      var SDH = window.MA.saveDirHandoff;
+      var SDH = window.MA.saveDirCheck;
       if (SDH && backend === 'file') {
         var chk = SDH.check(fileDir);
         if (!chk.ok) {
@@ -5493,7 +5469,7 @@ function refreshReadonlyTree(force) {
 function changeSaveTarget(dir) {
   var v = String(dir == null ? '' : dir).trim();
   if (!v) return Promise.resolve({ ok: false, reason: 'フォルダを選ぶか、パスを入れてください' });
-  var SDH = window.MA.saveDirHandoff;
+  var SDH = window.MA.saveDirCheck;
   if (SDH) {
     var chk = SDH.check(v);
     if (!chk.ok) return Promise.resolve({ ok: false, reason: chk.reason });
@@ -6395,7 +6371,7 @@ function setupTabs() {
         how.className = 'folder-empty';
         how.id = 'folder-missing-hint';
         how.textContent = '⚙設定 → 自動保存 → 保存先ディレクトリを確かめてください'
-          + '(区切りは / が安全です)。渡された xref.md があれば、そのまま保存先ディレクトリの欄に貼れば値だけが入ります。';
+          + '(区切りは / が安全です)。';
         panel.appendChild(how);
         return;
       }
@@ -7450,142 +7426,6 @@ function jumpToDocLine(docId, line) {
   _traceScrollToLine(line);
 }
 
-// 「戻り値型を void から StatusType に変える」
-// のような仕様変更は、綴りが変わらないので一括置換では当てられない。宣言行が
-// 見つかったときだけ、戻り値・引数を 1 回で全図に当てる欄を出す。
-function renderSignatureApply(docs, from) {
-  var wrap = document.getElementById('rename-signature');
-  var SC = window.MA.signatureChange;
-  if (!wrap || !SC) return;
-  wrap.textContent = '';
-  var hits = from ? SC.findAll(docs, from) : [];
-  wrap.setAttribute('data-hits', String(hits.length));
-  if (hits.length === 0) return;
-
-  var head = document.createElement('div');
-  head.className = 'sig-head';
-  head.textContent = from + '() の宣言 ' + hits.length + ' 行 / 現在の戻り値: '
-    + SC.returnTypes(docs, from).join('・');
-  wrap.appendChild(head);
-
-  var row = document.createElement('div');
-  row.className = 'sig-row';
-  var retLabel = document.createElement('label');
-  retLabel.setAttribute('for', 'sig-return');
-  retLabel.textContent = '戻り値';
-  var ret = document.createElement('input');
-  ret.id = 'sig-return';
-  ret.autocomplete = 'off';
-  ret.spellcheck = false;
-  ret.placeholder = 'StatusType';
-  ret.value = _sigReturn;
-  var parLabel = document.createElement('label');
-  parLabel.setAttribute('for', 'sig-params');
-  parLabel.textContent = '引数';
-  var par = document.createElement('input');
-  par.id = 'sig-params';
-  par.autocomplete = 'off';
-  par.spellcheck = false;
-  par.placeholder = '変更しないなら空欄';
-  par.value = _sigParams;
-  row.appendChild(retLabel);
-  row.appendChild(ret);
-  row.appendChild(parLabel);
-  row.appendChild(par);
-  wrap.appendChild(row);
-
-  var preview = document.createElement('div');
-  preview.className = 'sig-preview';
-  wrap.appendChild(preview);
-
-  var btn = document.createElement('button');
-  btn.type = 'button';
-  btn.id = 'btn-sig-apply';
-  btn.className = 'sig-apply';
-  btn.textContent = 'まとめて適用';
-  wrap.appendChild(btn);
-
-  function spec() {
-    var s = {};
-    if (_sigReturn.trim()) s.returnType = _sigReturn.trim();
-    if (_sigParams.trim()) s.params = _sigParams.trim();
-    return s;
-  }
-
-  function draw() {
-    preview.textContent = '';
-    var sp = spec();
-    var changes = 0;
-    if (sp.returnType == null && sp.params == null) {
-      var none = document.createElement('div');
-      none.className = 'sig-note';
-      none.textContent = '新しい戻り値か引数を入れると、当たる行が出ます';
-      preview.appendChild(none);
-    } else {
-      SC.plan(docs, from, sp).forEach(function(p) {
-        if (p.status !== 'change') return;
-        changes++;
-        var line = document.createElement('div');
-        line.className = 'sig-line';
-        line.setAttribute('data-doc-name', p.docName);
-        line.setAttribute('data-line', String(p.line));
-        line.textContent = p.docName + ':' + p.line + '  ' + p.before.trim() + ' → ' + p.after.trim();
-        preview.appendChild(line);
-      });
-      if (changes === 0) {
-        var same = document.createElement('div');
-        same.className = 'sig-note';
-        same.textContent = 'すべて既にその形です';
-        preview.appendChild(same);
-      }
-    }
-    preview.setAttribute('data-changes', String(changes));
-    btn.disabled = changes === 0;
-  }
-
-  ret.addEventListener('input', function() { _sigReturn = ret.value; draw(); });
-  par.addEventListener('input', function() { _sigParams = par.value; draw(); });
-  btn.addEventListener('click', function() { applySignatureChange(from, spec()); });
-  draw();
-}
-
-var _sigReturn = '';
-var _sigParams = '';
-
-// 当てたあとは一括置換と同じ経路で書き戻す (undo 1 手・保存フォルダへの書き出し)。
-function applySignatureChange(name, spec) {
-  var SC = window.MA.signatureChange;
-  if (!SC || !window.MA.workspace) return null;
-  var docs = _renameDocs();
-  var activeId = window.MA.workspace.getActiveId();
-  // 「開いている図すべてに適用」のチェックは一括置換と共通の的を決める。
-  if (!(document.getElementById('rename-all-docs') || {}).checked) {
-    docs = docs.filter(function(d) { return d.id === activeId; });
-  }
-  var res = SC.apply(docs, name, spec);
-  if (res.changed.length === 0) return res;
-  if (window.MA.history) window.MA.history.pushHistory();
-  res.changed.forEach(function(c) {
-    if (c.id === activeId) {
-      mmdText = c.dsl;
-      suppressSync = true;
-      editorEl.value = c.dsl;
-      suppressSync = false;
-    }
-    window.MA.workspace.updateDoc(c.id, { dsl: c.dsl });
-  });
-  updateLineNumbers();
-  scheduleRefresh();
-  renderTabs();
-  // 保存フォルダ運用時は、置換が当たった図だけを書き出す。
-  writeChangedToFolder(res.changed);
-  if (window.MA.toast) {
-    try { window.MA.toast.show(res.updated + ' 行 / ' + res.changed.length + ' 枚に適用しました'); } catch (e) {}
-  }
-  updateRenamePreview();
-  return res;
-}
-
 // ── 開いていない図も含めた影響範囲 ─────────────────────────────────────────
 // ヒット数が今開いているタブ分しか出ないので、
 // 「仕様変更が全図に及んだか」を確かめるには残りを 1 枚ずつ開き直すしかなかった。
@@ -7663,26 +7503,6 @@ function _fiRows() {
   return FI.merge(open, _fiFileDocs, _fiRoles);
 }
 
-// ── 改名履歴タイムライン ────────────────────
-// 影響プレビューは「今」のヒット数しか出さないので、ヒット 0 件が「置換済みだから 0」
-// なのか「元から無いから 0」なのかを区別できず、旧称が残っていないかを確かめるには
-// 図を 1 枚ずつ開いて中身を読むしかなかった。置換したときの記録を残し、部品名で
-// 引いて「いつ・どの図で・何件」を出す。開くのは名前が挙がった図だけで済む。
-function _renameHistoryList() {
-  var RH = window.MA.renameHistory;
-  return RH ? RH.load(_reviewStore(), _wsFileDir()) : [];
-}
-
-// 置換の結果を履歴に足す。開いている図とフォルダ直書きの両方が同じ 1 件になる
-// (利用者にとっては 1 回の置換なので、経路の違いで 2 行に割らない)。
-function _recordRename(from, to, docs) {
-  var RH = window.MA.renameHistory;
-  if (!RH || !from || !to) return;
-  try {
-    RH.record(_reviewStore(), _wsFileDir(), RH.makeEntry(from, to, docs, new Date().toISOString()));
-  } catch (e) { /* 履歴が残せなくても置換自体は通す */ }
-}
-
 // 置換を当てる直前の本文を、当たった図だけ控える。
 // docs は置換前の [{ id, name, dsl }]、changed は置換で変わった [{ id, dsl }]。
 function _captureBeforeRename(from, to, docs, changed) {
@@ -7725,21 +7545,16 @@ function _renameRedoDocs() {
   return _fiEnabled() ? _fiRows() : _renameDocs();
 }
 
-// 組はフォルダ側にも置く。localStorage の
-// 改名履歴は「当たった置換」しか残さず、ブラウザが変われば消える。同じ組を
-// 週をまたいで当て直す運用では、それだと毎回 from/to を打ち直すことになる。
+// 保存フォルダ運用では組をフォルダ側に置く。ブラウザが変わっても、同じ組を
+// 週をまたいで当て直すときに from/to を打ち直さずに済む。
 var _rpRows = [];
 var _rpDir = null;
 var _rpLoading = false;
 
 // 入れた組の理由を出す 1 行。黙って欄が埋まっていると、自分が打ったのか前回の
-// 残りなのかを確かめるために結局履歴を開くことになる。
+// 残りなのかを確かめられない。
 var _seedRenamePairAgain = null;
 var _seededPair = null;   // 入れた組。打ち替えられたら案内を消すために覚える
-// 入れただけでまだ触られていない間は true。履歴・意味的参照は「利用者が尋ねた名前」
-// を答える欄なので、こちらが入れておいただけの組でそれを絞り込まない
-// (絞り込むと、開いただけの回に履歴が 1 件しか無いように見える)。
-var _seedUntouched = false;
 
 function renderRenameSeedNote(pair) {
   var RS = window.MA.renameSeed;
@@ -7752,7 +7567,12 @@ function renderRenameSeedNote(pair) {
 }
 
 function loadRenamePairs(force) {
-  if (!_fiFolderMode()) { _rpRows = []; _rpDir = null; return Promise.resolve([]); }
+  if (!_fiFolderMode()) {
+    var RPL = window.MA.renamePairs;
+    _rpRows = RPL ? RPL.loadLocal(_reviewStore(), _wsFileDir()) : [];
+    _rpDir = null;
+    return Promise.resolve(_rpRows);
+  }
   var dir = _wsFileDir();
   // 読み込み中は待つ。描画のたびに往復すると、パネルを開いた直後に同じ GET が
   // 何本も飛ぶ。
@@ -7789,7 +7609,9 @@ function rememberRenamePair(from, to, hits, applied) {
   var now = new Date().toISOString();
   var row = { from: String(from).trim(), to: String(to).trim(), at: now,
     appliedAt: applied ? now : '' };
-  _rpRows = RP.merge([row], _rpRows);
+  // 保存フォルダを使わない運用では、組はこのブラウザに保存先ごとに残す。
+  _rpRows = _fiFolderMode() ? RP.merge([row], _rpRows)
+    : RP.rememberLocal(_reviewStore(), _wsFileDir(), row);
   if (typeof renderRenameRedo === 'function') renderRenameRedo();
   // 組が増えた・当たった直後は下端の統一バッジも数え直す (次に開くまで
   // 「統一 −」のままだと、済んだことをパネルでしか確かめられない)。
@@ -7803,14 +7625,9 @@ function rememberRenamePair(from, to, hits, applied) {
   }).then(function(r) { return r.ok ? r.json() : null; }, function() { return null; });
 }
 
-// renameRedo に渡す組。フォルダの組が先 (run をまたいで残る方が正本)。
+// renameRedo に渡す組 (保存フォルダの組か、このブラウザに残した組)。
 function _renameRedoPairs() {
-  var RP = window.MA.renamePairs;
-  // 改名履歴は当たった置換だけが残る記録なので、その日時が「当てた日時」。
-  var hist = (_renameHistoryList() || []).map(function(e) {
-    return e ? { from: e.from, to: e.to, at: e.at, appliedAt: e.at } : e;
-  });
-  return RP ? RP.merge(_rpRows, hist) : hist;
+  return _rpRows;
 }
 
 function renderRenameRedo() {
@@ -7863,85 +7680,6 @@ function renderRenameRedo() {
       updateRenamePreview();
     });
     host.appendChild(b);
-  });
-  box.appendChild(host);
-}
-
-function renderRenameHistory(from) {
-  var box = document.getElementById('rename-history');
-  var RH = window.MA.renameHistory;
-  if (!box || !RH) return;
-  box.textContent = '';
-  var list = _renameHistoryList();
-  var name = String(from == null ? '' : from);
-  var rows = name ? RH.forName(list, name) : list;
-
-  var head = document.createElement('div');
-  head.className = 'rh-head';
-  var label = document.createElement('span');
-  label.className = 'rh-head-label';
-  label.textContent = '改名履歴';
-  head.appendChild(label);
-  var copy = document.createElement('button');
-  copy.type = 'button';
-  copy.className = 'rh-copy';
-  copy.id = 'btn-rename-history-copy';
-  copy.textContent = '控える';
-  copy.title = '改名履歴の表をクリップボードに写す。不具合票にそのまま貼れます';
-  copy.disabled = !rows.length;
-  copy.addEventListener('click', function(ev) {
-    ev.stopPropagation();
-    var text = RH.text(list, name);
-    var done = function() { if (window.MA.toast) window.MA.toast.show('改名履歴を控えました'); };
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done, done);
-        return;
-      }
-    } catch (e) {}
-    done();
-  });
-  head.appendChild(copy);
-  box.appendChild(head);
-
-  var sum = document.createElement('div');
-  sum.className = 'rh-summary ' + RH.summaryClass(list, name);
-  sum.id = 'rename-history-summary';
-  sum.setAttribute('data-rh-entries', String(rows.length));
-  sum.setAttribute('data-rh-docs', String(RH.docNames(rows).length));
-  sum.textContent = RH.summary(list, name);
-  box.appendChild(sum);
-  if (!rows.length) return;
-
-  var host = document.createElement('div');
-  host.className = 'rh-rows';
-  host.id = 'rename-history-rows';
-  rows.forEach(function(e) {
-    var entry = document.createElement('div');
-    entry.className = 'rh-entry';
-    entry.setAttribute('data-rh-from', e.from);
-    entry.setAttribute('data-rh-to', e.to);
-    var line = document.createElement('div');
-    line.className = 'rh-line';
-    line.textContent = RH.line(e);
-    entry.appendChild(line);
-    var docs = document.createElement('div');
-    docs.className = 'rh-docs';
-    e.docs.forEach(function(d) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'rh-doc';
-      b.setAttribute('data-rh-doc', d.name);
-      b.textContent = d.name + ' (' + d.count + ')';
-      b.title = d.name + ' を開く（この図で ' + d.count + ' 件 改名しています）';
-      b.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        openFromFolderByName(d.name);
-      });
-      docs.appendChild(b);
-    });
-    entry.appendChild(docs);
-    host.appendChild(entry);
   });
   box.appendChild(host);
 }
@@ -8098,11 +7836,7 @@ function updateRenamePreview() {
     hits.appendChild(row);
   });
 
-  // 入れておいただけの組は「尋ねた名前」ではない。履歴と意味的参照はそれで絞らない。
-  var asked = _seedUntouched ? '' : from;
-  renderSignatureApply(docs, from);
   renderRenameFolder();
-  renderRenameHistory(asked);
   renderRenameRedo();
 
   // 開いていない図しか当たらない語でも置換できるようにする。フォルダを数えて
@@ -8226,12 +7960,11 @@ function setupBulkRename() {
     rememberRenamePair(fromEl && fromEl.value, toEl && toEl.value, _renameGrandTotal());
     // 当てずに閉じた組は欄に残さない。残すと次に開いたとき「前回の組」の代わりに
     // その組が居座り、本来の組を確かめるたびに消して打ち直すことになる
-    // 打った組は上の行で履歴の行に残るので、
+    // 打った組は上の行で過去の置換の組に残るので、
     // 要るときは行を 1 回押せば戻る。
     if (fromEl) fromEl.value = '';
     if (toEl) toEl.value = '';
     _seededPair = null;
-    _seedUntouched = false;
     renderRenameSeedNote(null);
   }
 
@@ -8259,13 +7992,14 @@ function setupBulkRename() {
       fromEl.value = window.MA.bulkRename.seedFromSelection(
         editorEl.value.slice(editorEl.selectionStart, editorEl.selectionEnd));
     }
-    // 前回の組を入れておく。履歴の行は在るのに、焦点が空欄に入るので利用者は
+    // 前回の組を入れておく。過去の組の行は在るのに、焦点が空欄に入るので利用者は
     // 打ち始めてしまう —— 打ち直す 17 打を開いた時点で消す
     if (!fromEl.value && !toEl.value) { _seededPair = null; renderRenameSeedNote(null); }
-    // 利用者が選んで入った値 (図の選択・エディタの選択) は「尋ねた名前」なので、
-    // 入れ直しの印はここで必ず落としてから seed に判断させる。
-    _seedUntouched = false;
     _seedArmed = true;
+    // 過去の組はフォルダ側にも溜まっている。開いた時点で読み直す
+    // (前の run が別のブラウザ・別のプロファイルでも、組はここに残っている)。
+    // フォルダを使わない運用ではこのブラウザの組をその場で読むので、入れる組にすぐ間に合う。
+    loadRenamePairs(true);
     seedRenamePair();
     var rect = btn.getBoundingClientRect();
     // ツール列が畳まれているとこのボタンは幅 0・座標 0 になる。そのときはタブ列の
@@ -8281,9 +8015,6 @@ function setupBulkRename() {
     if (scanRow && scanRow.parentNode) {
       scanRow.parentNode.style.display = _fiFolderMode() ? '' : 'none';
     }
-    // 過去の組はフォルダ側にも溜まっている。開いた時点で読み直す
-    // (前の run が別のブラウザ・別のプロファイルでも、組はここに残っている)。
-    loadRenamePairs(true);
     updateRenamePreview();
     // 保存フォルダは開いた時点で数え始める。押してから待たせると、
     // 「まず全ファイルを数えさせる」ための 1 手が増えるだけになる。
@@ -8295,7 +8026,7 @@ function setupBulkRename() {
   });
 
   // 前回の組を欄に入れる。フォルダ側の組は非同期に届くので、届いた後にもう一度試す
-  // (開いた瞬間は localStorage の履歴だけで決まる)。
+  // (開いた瞬間は先に読めている組だけで決まる)。
   function seedRenamePair() {
     var RS = window.MA.renameSeed;
     var RR = window.MA.renameRedo;
@@ -8308,7 +8039,6 @@ function setupBulkRename() {
     fromEl.value = pair.from;
     toEl.value = pair.to;
     _seededPair = pair;
-    _seedUntouched = true;
     renderRenameSeedNote(pair);
     updateRenamePreview();
     return pair;
@@ -8329,7 +8059,6 @@ function setupBulkRename() {
     // 打ち替えたらその案内はもう自分の組の話ではない。描き直しより先に印を落とす
     // (後に回すと、その回の描き直しだけが「入れただけ」の扱いのまま残る)。
     el.addEventListener('input', function() {
-      _seedUntouched = false;
       if (!_seededPair) return;
       if (fromEl.value === _seededPair.from && toEl.value === _seededPair.to) return;
       // 片側だけ打ち替えられたら、もう片側に残った前回の値は捨てる。
@@ -8347,7 +8076,7 @@ function setupBulkRename() {
     // 打ち終わり = 欄から離れたとき。
     el.addEventListener('blur', function() {
       // こちらが入れておいた組は「打った組」ではない。覚え直すと、確かめただけの
-      // 回が新しい置換として履歴の先頭に積まれる。
+      // 回が新しい置換として過去の組の先頭に積まれる。
       if (_seededPair && fromEl.value === _seededPair.from && toEl.value === _seededPair.to) return;
       rememberRenamePair(fromEl.value, toEl.value, _renameGrandTotal());
     });
@@ -8378,10 +8107,6 @@ function setupBulkRename() {
       // 当たっても当たらなくても組は覚える。次の run はこの行を押すだけで済む。
       rememberRenamePair(from, to, total, total > 0);
       if (total === 0) return;
-      // 履歴は「1 回の置換」で 1 件。開いている図とフォルダ直書きを 1 つにまとめる。
-      _recordRename(from, to, ((res && res.changed) || []).map(function(c) {
-        return { name: c.name, count: c.count };
-      }).concat(f.rows || []));
       // 前後の本文も 1 件として控える。会議で「今日のこの回」を選んで並べられる。
       _recordWrite('rename', { from: from, to: to },
         ((res && res.pairs) || []).concat((f.rows || []).map(function(r) {
@@ -10993,27 +10718,6 @@ function updatePropsTabLabel(sel) {
   btn.title = PTL.titleFor(n);
 }
 
-// 表記揺れの「揃える先」は reviewer が 1 度だけ
-// 決めて保存フォルダの親 (作業フォルダ) の `_names.json` に置く。junior/primary は
-// それを読むだけで、入力欄が揺れた綴りをその場で正式表記へ指す。
-var _registryDir = null;
-
-function refreshNameRegistry(force) {
-  var NR = window.MA.nameRegistry;
-  if (!NR || !window.fetch) return;
-  var dir = _wsFileDir();
-  if (!force && _registryDir === dir) return;
-  _registryDir = dir;
-  window.fetch('/name-registry?dir=' + encodeURIComponent(dir))
-    .then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(data) {
-      NR.setCurrent(data ? { entries: (data && data.entries) || [] } : null);
-      try { renderProps(); } catch (e) { /* 描けなければ次の描画で出る */ }
-    })
-    // 登録簿が読めないだけで名前を打つ手順を止めない (登録簿なしと同じ扱い)。
-    .catch(function() { NR.setCurrent(null); });
-}
-
 // 選んだ部品が「その部品 1 つだけを書いた行」から描かれていない (!while・!foreach の中、
 // 手続きの中身・呼び出し、$変数・%関数で名前が決まる行、展開後の行から読んだ部品) なら、どの行が作っているかを返す
 // (src/core/generated-part.js)。右パネル・キー操作・参加者のドラッグは、そういう部品を書き換えない。
@@ -11060,7 +10764,6 @@ function _refuseGenerated(gen) {
 
 function renderProps(parsed) {
   if (!parsed) parsed = currentParsed;
-  refreshNameRegistry();
   var sel = window.MA.selection.getSelected();
   updatePropsTabLabel(sel);
   // フォームが読めない記法の要素 (overlay-builder.addUnclaimed) は、
