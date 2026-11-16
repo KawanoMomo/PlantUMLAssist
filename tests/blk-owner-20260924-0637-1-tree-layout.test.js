@@ -23,9 +23,10 @@ describe('保存先節のツリーの形', function() {
     expect(lay.groups[0].missing).not.toContain('class');
   });
 
-  test('ファイル行の札は 未保存 ● / 未反映 / 控え / SVG 古い の順', function() {
+  // 「控え」「SVG 古い」の札は TICKET-owner-20261116-0241-prune で外した。
+  test('ファイル行の札は 未保存 ● / 未反映 の順 (控え・SVG 古い は出さない)', function() {
     expect(FT.fileMarks({})).toBe('');
-    expect(FT.fileMarks({ dirty: true, svgStale: true })).toBe('● SVG 古い');
-    expect(FT.fileMarks({ dirty: true, unapplied: true, draft: true, svgStale: true })).toBe('● 未反映 控え SVG 古い');
+    expect(FT.fileMarks({ dirty: true, svgStale: true })).toBe('●');
+    expect(FT.fileMarks({ dirty: true, unapplied: true, draft: true, svgStale: true })).toBe('● 未反映');
   });
 });

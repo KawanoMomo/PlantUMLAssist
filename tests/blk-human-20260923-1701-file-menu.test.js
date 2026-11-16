@@ -17,7 +17,8 @@ describe('ファイルの右クリック (design 10b)', function() {
       // 右に並べて開く・比較の 3 行は TICKET-owner-20261115-2141-prune で外した。
       'open', '-',
       'history', '-',
-      'rename', 'copy', 'move', 'draft', '-',
+      // 一時控えにする は TICKET-owner-20261116-0241-prune で外した。
+      'rename', 'copy', 'move', '-',
       'export-svg', 'reveal', '-',
       'delete',
     ]);
@@ -38,11 +39,11 @@ describe('ファイルの右クリック (design 10b)', function() {
     });
   });
 
-  test('一時控えは今の状態で言い換える', function() {
-    var a = FM.fileItems({ draft: false }).filter(function(it) { return it.id === 'draft'; })[0];
-    var b = FM.fileItems({ draft: true }).filter(function(it) { return it.id === 'draft'; })[0];
-    expect(a.label).toBe('一時控えにする');
-    expect(b.label).toBe('一時控えを外す');
+  test('一時控えの行は出さない (TICKET-owner-20261116-0241-prune)', function() {
+    [{ draft: false }, { draft: true }].forEach(function(ctx) {
+      var hit = FM.fileItems(ctx).filter(function(it) { return it.id === 'draft' || /一時控え/.test(it.label || ''); });
+      expect(hit.length).toBe(0);
+    });
   });
 
   test('呼び出し側が書き換えても次の呼び出しに漏れない', function() {
@@ -165,14 +166,15 @@ describe('元の入口 (ツール ▾) は右クリックへの案内に落と�
   });
 
   test('ボタンの実体は畳んだまま残り、Ctrl+K / Ctrl+P からは「ファイル」の見出しで引ける', function() {
-    expect(TM.isFoldable('btn-tab-draft')).toBe(true);
+    // 一時控え (btn-tab-draft) は TICKET-owner-20261116-0241-prune で外した。
+    expect(TM.isFoldable('btn-tab-versions')).toBe(true);
     expect(TM.labelOf('btn-tab-versions')).toBe('この図の履歴を見る'); // BLK-owner-20260924-1212-prune: 行名は画面の名前にそろえた
     var items = CP.buildItems([
-      { id: 'tab-draft', title: '一時控えにする / Draft', button: 'btn-tab-draft', run: function() {} },
+      { id: 'tab-versions', title: 'この図の履歴を見る / History', button: 'btn-tab-versions', run: function() {} },
       { id: 'spi_state', group: 'file', badge: 'ファイル', title: 'spi_state', run: function() {} },
     ], '');
-    var draft = items.filter(function(i) { return i.id === 'file:tab-draft'; })[0];
-    expect(draft.group).toBe('file');
+    var hist = items.filter(function(i) { return i.id === 'file:tab-versions'; })[0];
+    expect(hist.group).toBe('file');
     expect(CP.groupsOf(items)).toContain('file');
     expect(CP.filterByGroup(items, 'file').length).toBe(2);
     expect(CP.groupLabel('file')).toBe('ファイル / Files');

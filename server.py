@@ -406,15 +406,6 @@ IDLE_SHUTDOWN_SEC = 300
 # Windows アプリ (app.py) は設定しないので今までどおり止まる。
 NO_IDLE_EXIT = os.environ.get('PUA_NO_IDLE_EXIT') == '1'
 NO_IDLE_EXIT_SEC = 3 * 60 * 60
-# BLK-reviewer-20260908-1203-wish: 食い違いの中身を言うために /verify-svg に添える材料の上限。
-# puml は数 KB、text 要素は 1 枚の図で数十〜数百なので、この上限に当たるのは
-# 図でない何かを掴んだときだけ。当たっても応答が肥らないようにするための蓋。
-MAX_DIFF_PUML_CHARS = 65536
-MAX_DIFF_LABELS = 2000
-# BLK-reviewer-20260914-2106-wish: 可視差分プレビューに渡す SVG 本体の上限。
-# 1 枚だけを確かめるときにしか添えない (withSvg) ので、実データの 1 枚ぶん
-# (数十〜数百 KB) が収まれば足りる。超える図は添えずに理由を返す。
-MAX_VISUAL_SVG_BYTES = 2 * 1024 * 1024
 
 _state_lock = threading.Lock()
 _last_heartbeat = time.time()
@@ -512,8 +503,7 @@ DSL_FIELD_ALIASES = ('dsl', 'source', 'uml', 'puml', 'diagram')
 # 「保存中の svg とこの応答をバイト比較する」使い方を、応答の側で止めるためのもの。
 SVG_STAMP_HEADER = ('none; saved {name}.svg ends with <!-- @pua-source-sha1 ... --> '
                     'which this response never carries, so byte-comparing them always differs. '
-                    'Compare GET /autosave entry.svgSource with entry.hash instead, '
-                    'or POST /verify-svg to re-render and compare contents')
+                    'Compare GET /autosave entry.svgSource with entry.hash instead')
 
 RENDER_API_DOC = {
     'endpoint': 'POST /render',
@@ -524,9 +514,6 @@ RENDER_API_DOC = {
             'mode': "任意。'local' (既定、同梱 Java) または 'online' (plantuml.com へ送信)",
             'dir': ("任意。その図の .puml のあるフォルダ。相対の !include / !includesub をここから探す"
                     "(省略すると server の作業フォルダ)。本文は書き換えない。読めないときの 422 は探したフォルダを言う"),
-            'withSvg': ("任意。true にすると、保存中の svg (印を外したもの) と描き直した svg の"
-                        "本文そのものを savedSvg / drawnSvg として返す。可視差分プレビュー用。"
-                        "応答が重いので types が 1 件のときだけ効く"),
         },
         'aliases': {
             'fields': list(DSL_FIELD_ALIASES),
@@ -544,19 +531,8 @@ RENDER_API_DOC = {
         'note': ('この応答には @pua-source-sha1 の印が付かない。保存された {name}.svg には'
                  '末尾に印があるため、生のバイト比較は内容が同じでも必ず食い違う'),
         'how': ('保存中の svg が今の puml から作られたかは、GET /autosave の entry の'
-                'svgSource (svg に刻まれた印) と hash (今の puml の sha1) を比べる。'
-                '印が無い svg は POST /verify-svg が描き直して中身で確かめる'),
+                'svgSource (svg に刻まれた印) と hash (今の puml の sha1) を比べる'),
         'header': 'X-PlantUMLAssist-Svg-Stamp',
-        # BLK-reviewer-20260908-0103 (1903 追記): POST /verify-svg の status は
-        # 生バイト比較そのものではない。何を意味するかをここで言う。
-        'verifyStatus': {
-            'match': 'バイトまで一致した',
-            'differ-format': ('描かれる中身 (文字・図形の数) は一致し、体裁'
-                              '(ヘッダ属性・XML 宣言の書式) だけが違う。作り直さなくても読める'),
-            'differ-content': '描かれるものが違う。作り直しが要る',
-            'missing': 'svg が無い',
-            'error': '描けなかった (判定していない)',
-        },
     },
     'response': {
         '200': ('image/svg+xml — 描画された SVG。X-PlantUMLAssist-Svg-Stamp ヘッダで'
@@ -570,57 +546,6 @@ RENDER_API_DOC = {
         '-H "Content-Type: application/json" '
         """-d '{"text": "@startuml\\nA -> B\\n@enduml", "mode": "local"}'"""
     ) % PORT,
-}
-
-# BLK-reviewer-20260909-0403: POST /verify-svg の要求の形が呼び出し側 (src/app.js) に
-# しか無く、curl / node から叩く人は `{puml, svg}` を渡して 400 を 2 回踏み、
-# src/app.js を grep してようやく `{dir, types, mode}` に辿り着いていた。毎 tick 同じ
-# 調べ直しが起きるので、/render と同じく「窓口自身が仕様を返す」形にする:
-#   - GET /verify-svg は仕様そのものを返す
-#   - POST /verify-svg の 400 には expected と example を必ず添える
-#   - GET /api は全エンドポイントの索引を返す (どこから読み始めるかを迷わせない)
-VERIFY_SVG_API_DOC = {
-    'endpoint': 'POST /verify-svg',
-    'summary': ('保存フォルダの {name}.svg が、今の {name}.puml を描いた結果そのものかを'
-                '1 枚ずつ描き直して中身で確かめる。puml と svg は server が dir から読むので'
-                '本文には渡さない'),
-    'request': {
-        'content-type': 'application/json',
-        'fields': {
-            'types': "必須。確かめる図の名前 (拡張子なし) の配列。1〜200 件",
-            'dir': "任意。保存フォルダ。省略すると既定の保存フォルダ",
-            'mode': "任意。'local' (既定、同梱 Java) または 'online' (plantuml.com へ送信)",
-        },
-        'note': ('puml / svg そのものは受け取らない (dir と types から server が読む)。'
-                 '1 枚あたり数百 ms かかるので、確かめる図は呼ぶ側が絞って渡す'),
-    },
-    'response': {
-        '200': ('application/json {ok, results: {<name>: {status, ...}}, verified} — '
-                'status は match / differ-format / differ-content / missing / error'),
-        '400': "application/json {error, expected, example} — types が無い / 201 件以上 / mode が不正",
-    },
-    'status': RENDER_API_DOC['comparison']['verifyStatus'],
-    'example': (
-        'curl -sS -X POST http://127.0.0.1:%d/verify-svg '
-        '-H "Content-Type: application/json" '
-        """-d '{"dir": "E:/01_Loop/persona-data/primary", "types": ["spi_init_sequence"], "mode": "local"}'"""
-    ) % PORT,
-}
-
-# 400 に必ず添える「何を期待しているか」。呼ぶ側が 1 回目の失敗で形を直せるようにする。
-VERIFY_SVG_EXPECTED = {
-    'fields': VERIFY_SVG_API_DOC['request']['fields'],
-    'doc': 'GET /verify-svg',
-    'example': VERIFY_SVG_API_DOC['example'],
-    # BLK-reviewer-20260914-1606: 日本語の説明は端末が cp932 だと化けて読めない。
-    # **化けた応答をそのまま読んでも形が分かる**ように、同じ内容を ASCII でも併記する
-    # (読み直しの打鍵をゼロにする。文字コードを選ぶ逃げ道は二の矢)。
-    'fieldsAscii': {
-        'types': "required. array of diagram names without extension, 1 to 200",
-        'dir': "optional. save folder, full path. default: the default save folder",
-        'mode': "optional. 'local' (default, bundled Java) or 'online' (sends to plantuml.com)",
-    },
-    'charset': "garbled? add ?charset=ascii to the URL (or send Accept-Charset: shift_jis)",
 }
 
 # BLK-reviewer-20260914-1606: 応答本文は常に utf-8 で返しているが、cp932 のコンソールから
@@ -730,9 +655,6 @@ API_INDEX = {
          'request': "{text, mode}"},
         {'endpoint': 'POST /preproc', 'summary': 'DSL を同梱の plantuml.jar のプリプロセッサだけに通し、展開後の行を返す (外へ送らない)',
          'request': "{text}"},
-        {'endpoint': 'GET /verify-svg', 'summary': 'POST /verify-svg の仕様'},
-        {'endpoint': 'POST /verify-svg', 'summary': '保存中の svg が今の puml の結果かを中身で確かめる',
-         'request': "{dir, types: [名前...], mode}"},
         {'endpoint': 'GET /autosave', 'summary': '保存フォルダの図の一覧 (dsl・hash・svgSource)',
          'request': '?dir=&type='},
         {'endpoint': 'POST /autosave', 'summary': '図の DSL を保存する', 'request': "{type, dir, dsl}"},
@@ -1460,8 +1382,6 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(200, fetch_latest_release())
         if self.path.split('?')[0] == '/render':
             return self._send_json(200, RENDER_API_DOC)
-        if self.path.split('?')[0] == '/verify-svg':
-            return self._send_json(200, VERIFY_SVG_API_DOC)
         if self.path.split('?')[0] == '/api':
             return self._send_json(200, API_INDEX)
         if self.path.split('?')[0] == '/prefs':
@@ -1518,9 +1438,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/file-roles':
             with _fs_lock:
                 return self._handle_file_roles_post()
-        if self.path == '/verify-svg':
-            with _fs_lock:
-                return self._handle_verify_svg_post()
         # BLK-human-20260923-1701 (design 10b): FILES ツリーの右クリック・ドラッグから
         # ファイル単位の操作 (名前変更 / 複製 / 別フォルダへ移動 / 場所を開く) を受ける口。
         if self.path == '/file-op':
@@ -2006,99 +1923,6 @@ class Handler(BaseHTTPRequestHandler):
             return {}
         roles = data.get('roles') if isinstance(data, dict) else None
         return roles if isinstance(roles, dict) else {}
-
-    @classmethod
-    def _strip_svg_stamp(cls, svg_bytes):
-        """書き出し元の印を外した svg。描画の結果と比べられる形にする。
-
-        BLK-reviewer-20260908-1903-wish: 印の前の改行だけを見て探すと、CRLF に
-        変換されて保存された svg (Windows の write_text の既定) では印が見つからず、
-        印を含んだままバイト比較して全件 differ になる。改行の形は問わずに探し、
-        直前の改行も一緒に外す。
-        """
-        mark = cls.SVG_STAMP_PREFIX.encode('utf-8')
-        at = svg_bytes.rfind(mark)
-        if at < 0:
-            return svg_bytes
-        while at > 0 and svg_bytes[at - 1:at] in (b'\n', b'\r'):
-            at -= 1
-        return svg_bytes[:at]
-
-    @staticmethod
-    def _svg_text_labels(svg_bytes):
-        """svg に実際に書かれている文字列 (text 要素の中身) を、出てくる順に重複なく。
-
-        BLK-reviewer-20260908-1203-wish: 食い違いの中身を言うには「その svg に何と
-        書いてあるか」が要る。svg 全文を返すと 1 枚あたり数百 KB になるので、
-        描かれている文字だけを抜いて渡す。読めない svg は空で返す (落とさない)。
-        """
-        try:
-            text = svg_bytes.decode('utf-8', errors='replace')
-        except Exception:
-            return []
-        out, seen = [], set()
-        for raw in re.findall(r'<text[^>]*>(.*?)</text>', text, re.S):
-            s = re.sub(r'<[^>]*>', '', raw)
-            # PlantUML は ASCII 以外を数値参照 (&#21463; など) で書く。
-            # 戻さないと「受注サービス」が図の中に無いことになってしまう。
-            s = re.sub(r'&#(x[0-9a-fA-F]+|[0-9]+);',
-                       lambda m: chr(int(m.group(1)[1:], 16) if m.group(1)[0] in 'xX'
-                                     else int(m.group(1))), s)
-            s = (s.replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
-                  .replace('&apos;', "'").replace('&amp;', '&')).strip()
-            if not s or s in seen:
-                continue
-            seen.add(s)
-            out.append(s)
-            if len(out) >= MAX_DIFF_LABELS:
-                break
-        return out
-
-    # BLK-reviewer-20260908-1303: 文字に現れない差 (矢印の向き・note の位置・
-    # 要素の並び) を数として掴むための、図形の内訳。svg 全文を GUI に渡さずに
-    # 「保存中の svg と、今 描いた svg で何個違うか」を言えるようにする。
-    SHAPE_TAGS = ('path', 'polygon', 'line', 'rect', 'ellipse', 'circle', 'text', 'polyline')
-
-    @classmethod
-    def _svg_shape_counts(cls, svg_bytes):
-        """svg に含まれる図形要素をタグごとに数える。読めない svg は空で返す。"""
-        try:
-            text = svg_bytes.decode('utf-8', errors='replace')
-        except Exception:
-            return {}
-        out = {}
-        for tag in cls.SHAPE_TAGS:
-            n = len(re.findall(r'<%s[\s/>]' % tag, text))
-            if n:
-                out[tag] = n
-        return out
-
-    def _svg_verify_path(self, save_dir):
-        """BLK-reviewer-20260908-1103-wish: 「この svg は本当に今の puml の姿か」の控え。
-
-        時刻ではなく指紋で持つ。{name: {pumlHash, svgHash, result, at}} で、
-        突き合わせた 2 つの指紋も一緒に控えるので、あとで puml か svg が動けば
-        その控えは今の 2 つについては何も言っていないことが GUI 側で分かる。
-        """
-        return save_dir / '_svg-verify.json'
-
-    def _read_svg_verify(self, save_dir):
-        p = self._svg_verify_path(save_dir)
-        if not p.exists():
-            return {}
-        try:
-            data = json.loads(p.read_text(encoding='utf-8'))
-        except (ValueError, OSError):
-            return {}
-        recs = data.get('verified') if isinstance(data, dict) else None
-        return recs if isinstance(recs, dict) else {}
-
-    def _write_svg_verify(self, save_dir, records):
-        try:
-            self._svg_verify_path(save_dir).write_text(
-                json.dumps({'verified': records}, ensure_ascii=False), encoding='utf-8')
-        except OSError:
-            pass  # 控えは best-effort。書けなければ次に確かめ直すだけ
 
     def _autosave_file_path(self, save_dir, dt):
         return save_dir / (dt + '.puml')
@@ -2952,138 +2776,6 @@ class Handler(BaseHTTPRequestHandler):
         digest = rest[:end].strip()
         return digest if len(digest) == 40 and all(c in '0123456789abcdef' for c in digest) else None
 
-    def _handle_verify_svg_post(self):
-        """保存中の {name}.svg が、今の {name}.puml を描いた結果そのものかを中身で確かめる。
-
-        BLK-reviewer-20260908-1103-wish: 時刻の比較では「puml が後に触られたか」しか
-        分からず、実データ 16 枚のうち中身まで食い違っていたのは 7 枚だった。
-        ここで 1 枚ずつ描き直してバイト比較し、結果を指紋つきで控える。
-        描画は重い (1 枚あたり数百 ms) ので、確かめる図は呼び出し側が選んで渡す。
-        """
-        length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(length).decode('utf-8')
-        try:
-            data = json.loads(body)
-        except ValueError:
-            self._send_json(400, {'error': 'invalid JSON',
-                                  'errorAscii': 'request body is not valid JSON',
-                                  'expected': VERIFY_SVG_EXPECTED})
-            return
-        names = data.get('types')
-        if not isinstance(names, list) or not names:
-            self._send_json(400, {
-                'error': ("'types' に確かめる図の名前を 1 つ以上入れてください "
-                          "(puml / svg は渡さない。server が dir から読む)"),
-                # 化けても読める言い直し (BLK-reviewer-20260914-1606)。
-                'errorAscii': "'types' is required: a non-empty array of diagram names",
-                'expected': VERIFY_SVG_EXPECTED,
-            })
-            return
-        if len(names) > 200:
-            self._send_json(400, {'error': '一度に確かめられるのは 200 枚までです',
-                                  'errorAscii': "'types' holds at most 200 names",
-                                  'expected': VERIFY_SVG_EXPECTED})
-            return
-        save_dir = self._autosave_resolve_dir(data.get('dir'))
-        mode = data.get('mode', 'local')
-        if mode not in ('local', 'online'):
-            self._send_json(400, {
-                'error': "unknown mode: %r — 'local' か 'online' です" % (mode,),
-                'errorAscii': "'mode' is 'local' or 'online'",
-                'expected': VERIFY_SVG_EXPECTED,
-            })
-            return
-        # BLK-reviewer-20260914-2106-wish: stale と出た 1 枚について、旧 SVG と
-        # 描き直した SVG を並べて可視差分を見る画面のための材料。server は
-        # 既に両方を手元に持っているので、ここで返せば GUI は /render を
-        # 別に叩き直さずに済む (reviewer が使い捨てスクリプトを書いていた所)。
-        # 一覧ぶん (最大 200 枚) を毎回返すと応答が肥るので 1 枚のときだけ。
-        with_svg = bool(data.get('withSvg')) and len(names) == 1
-        results = {}
-        recs = self._read_svg_verify(save_dir)
-        for name in names:
-            if not isinstance(name, str) or not self._autosave_validate_type(name):
-                results[str(name)] = {'status': 'error', 'error': 'invalid type'}
-                continue
-            puml_path = self._autosave_file_path(save_dir, name)
-            svg_path = puml_path.with_suffix('.svg')
-            try:
-                puml_bytes = puml_path.read_bytes()
-            except OSError:
-                results[name] = {'status': 'error', 'error': 'その名前の図が保存フォルダにありません'}
-                continue
-            try:
-                svg_bytes = svg_path.read_bytes()
-            except OSError:
-                results[name] = {'status': 'missing'}
-                continue
-            text = puml_bytes.decode('utf-8', errors='replace')
-            drawn, err = render_local(text, save_dir) if mode == 'local' else render_online(text)
-            if drawn is None:
-                # 描けなかったものを「一致」とも「食い違い」とも言わない。控えも残さない。
-                results[name] = {'status': 'error', 'error': err or 'render failed'}
-                continue
-            # 保存中の svg には書き出し元の印 (BLK-reviewer-20260908-1103) が付いている。
-            # 印は描画の結果ではないので、比べる前に外す。
-            stripped = self._strip_svg_stamp(svg_bytes)
-            # BLK-reviewer-20260908-0103 (1903 追記): 生バイト比較だけで differ と言うと、
-            # 書き出し経路の違い (contentStyleType の大小・style="max-width…" の有無・
-            # XML 宣言の書式) しか差が無い svg も「食い違い」になる。実データ 7 枚が
-            # ラベル・図形数まで完全一致なのに differ と出て、reviewer は毎回
-            # labels/shape を目で見比べて判定し直していた。ここで中身の一致を先に見て、
-            #   differ-format  — 中身は一致。体裁 (ヘッダ属性など) だけが違う
-            #   differ-content — 描かれるものが違う。作り直しが要る
-            # に分ける。'match' は今までどおりバイトまで一致した図だけ。
-            if drawn == stripped:
-                status = 'match'
-            elif (self._svg_text_labels(drawn) == self._svg_text_labels(stripped)
-                  and self._svg_shape_counts(drawn) == self._svg_shape_counts(stripped)):
-                status = 'differ-format'
-            else:
-                status = 'differ-content'
-            recs[name] = {
-                'pumlHash': hashlib.sha1(puml_bytes).hexdigest(),
-                'svgHash': hashlib.sha1(svg_bytes).hexdigest(),
-                'result': status,
-                'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-            }
-            results[name] = {'status': status, 'contentMatch': status != 'differ-content'}
-            if status == 'differ-format':
-                # 何が違ったのかを結果自身が言う。reviewer が server.py を読みに行かない。
-                results[name]['note'] = (
-                    '描かれる中身 (文字・図形の数) は今の puml と一致します。'
-                    '違うのは書き出し経路による体裁 (ヘッダ属性・XML 宣言の書式) だけなので、'
-                    '作り直さなくても読めます')
-            if status.startswith('differ'):
-                # BLK-reviewer-20260908-1203-wish: 「ずれている」だけでは、reviewer は
-                # 食い違った図を 1 枚ずつ開いて grep で中身を突き止めることになる。
-                # 中身を言うのに要る材料 — 今の puml の本文と、保存中の svg に実際に
-                # 書かれている文字列 — をこの結果に添える。突き合わせと言葉づかいは
-                # GUI 側 (src/core/svg-diff-summary.js) が受け持つ。
-                results[name]['pumlText'] = text[:MAX_DIFF_PUML_CHARS]
-                results[name]['svgLabels'] = self._svg_text_labels(svg_bytes)
-                # BLK-reviewer-20260908-1303: puml と保存中の svg を突き合わせるだけでは、
-                # 「矢印の向き・note の位置・要素の並び」のように文字が同じまま構造だけ
-                # 変わった差を見分けられず、「文字の上での違い無し」が「実害なし」と
-                # 誤読される。ここでは描き直した結果そのもの (drawn) が手元にあるので、
-                # 保存中の svg と描き直した svg を直に比べる材料も添える。
-                results[name]['drawnLabels'] = self._svg_text_labels(drawn)
-                results[name]['svgShape'] = self._svg_shape_counts(
-                    self._strip_svg_stamp(svg_bytes))
-                results[name]['drawnShape'] = self._svg_shape_counts(drawn)
-            if with_svg:
-                # 印は描画の結果ではないので、外した形で渡す (印が付いたままだと
-                # 「差がある」と見えるのは印のせいなのか中身なのかが濁る)。
-                if len(stripped) > MAX_VISUAL_SVG_BYTES or len(drawn) > MAX_VISUAL_SVG_BYTES:
-                    results[name]['svgOmitted'] = (
-                        'SVG が大きすぎるため本文は添えていません (上限 %d bytes)'
-                        % MAX_VISUAL_SVG_BYTES)
-                else:
-                    results[name]['savedSvg'] = stripped.decode('utf-8', errors='replace')
-                    results[name]['drawnSvg'] = drawn.decode('utf-8', errors='replace')
-        self._write_svg_verify(save_dir, recs)
-        self._send_json(200, {'ok': True, 'results': results, 'verified': recs})
-
     def _handle_file_roles_post(self):
         """保存フォルダの _roles.json を丸ごと置き換える。
 
@@ -3198,13 +2890,9 @@ class Handler(BaseHTTPRequestHandler):
         # BLK-reviewer-20260908-0203-wish: 実データ / テンプレの宣言は一覧と同時に要る。
         # 別呼び出しにすると、印が付く前の一覧が一瞬出て「未分類 22 枚」に見える。
         roles = self._read_file_roles(save_dir) if exists else {}
-        # BLK-reviewer-20260908-0923-wish: 「この図は直近 N 分以内に更新された」を
-        # GUI が言うには、mtime を刻んだのと同じ時計の「今」が要る。閲覧している端末の
-        # 時計と比べると、数分ずれているだけで全部が更新中にも全部が静止にも見える。
-        now = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-        # BLK-reviewer-20260908-1103-wish: 中身まで突き合わせた控えも一覧と同時に返す。
-        # 別呼び出しにすると「未確認 22 枚」の一覧が一瞬出て、確かめた図まで疑わせる。
-        verified = self._read_svg_verify(save_dir) if exists else {}
+        # 「直近 N 分以内に更新された図」の今の時刻 (now) と、SVG を描き直して比べた控え
+        # (_svg-verify.json の verified) は TICKET-owner-20261116-0241-prune で返すのをやめた。
+        # 前の版が保存先に残した _svg-verify.json は読まず、消しもしない。
         # BLK-junior-20260912-2103-wish: 保存したときの図種の控え。一覧と同時に返す
         # (別呼び出しにすると、図種の印が付く前の一覧が一瞬出る)。
         saved_kinds = self._read_saved_kinds(save_dir) if exists else {}
@@ -3213,7 +2901,7 @@ class Handler(BaseHTTPRequestHandler):
         self._resolve_unstamped_svg_sources(save_dir, entries)
         self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
                               'dir': str(save_dir), 'exists': exists, 'roles': roles,
-                              'verified': verified, 'now': now, 'gone': gone,
+                              'gone': gone,
                               'kinds': saved_kinds})
 
     def _resolve_unstamped_svg_sources(self, save_dir, entries):
@@ -3393,10 +3081,6 @@ class Handler(BaseHTTPRequestHandler):
                     encoding='utf-8')
             except OSError:
                 pass
-        verified = self._read_svg_verify(save_dir)
-        if dt in verified:
-            del verified[dt]
-            self._write_svg_verify(save_dir, verified)
         self._send_json(200, {'ok': True, 'deleted': dt,
                               'versions': self._version_counts(save_dir).get(dt, 0)})
 

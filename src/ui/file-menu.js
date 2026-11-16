@@ -3,13 +3,13 @@ window.MA = window.MA || {};
 
 // file-menu (UI) — FILES ツリーの右クリック・キーボード・ドラッグ (design 10b)。
 //
-// ファイル 1 枚に対する操作 (一時控え・変遷・名前変更・削除…) が
+// ファイル 1 枚に対する操作 (変遷・名前変更・削除…) が
 // タブ列・ツール ▾・下端の札に散らばっていた。ツリーの
 // ファイルを右クリックすれば全部そこにある、を作る。中身 (どの操作を並べるか・キーの
 // 読み替え・名前の組み立て) は src/core/file-menu.js、ここは DOM と結線だけ。
 //
 // 操作の実体は app.js の既存の道 (openFromFolderByName /
-// exportSVG / _draftToggleName / タブのダブルクリック改名) を
+// exportSVG / タブのダブルクリック改名) を
 // そのまま呼ぶ。同じ操作を 2 通りに実装しない。
 window.MA.fileMenuUi = (function() {
   var ROW_SEL = '.files-sec-head, .files-row, .files-part-head, .files-part-file, .files-ro-folder, .files-ro-file, #folder-panel .folder-item[data-file-name]';
@@ -301,14 +301,6 @@ window.MA.fileMenuUi = (function() {
     });
   }
 
-  function toggleDraft(name) {
-    if (typeof window._draftToggleName !== 'function') return;
-    var on = window._draftToggleName(name);
-    try { if (typeof window.syncDraftButton === 'function') window.syncDraftButton(); } catch (e) {}
-    toast(on ? '「' + name + '」を一時控えにしました' : '「' + name + '」の一時控えを外しました');
-    refreshLists();
-  }
-
   function deleteFile(name) {
     if (!window.confirm('「' + name + '」を保存フォルダから削除します。過去版は残ります。よろしいですか?')) {
       return Promise.resolve();
@@ -346,7 +338,6 @@ window.MA.fileMenuUi = (function() {
       case 'rename': return renameFile(name);
       case 'copy': return copyFile(name);
       case 'move': return moveFile(name);
-      case 'draft': toggleDraft(name); return Promise.resolve();
       case 'export-svg':
         return ensureOpen(name).then(function() { if (typeof window.exportSVG === 'function') window.exportSVG(); });
       case 'reveal': return reveal(name);
@@ -417,16 +408,12 @@ window.MA.fileMenuUi = (function() {
   function openMenu(ctx, x, y) {
     if (!menu) return;
     menuCtx = ctx;
-    var draft = false;
-    if (ctx.type === 'file' && typeof window._draftHas === 'function') {
-      try { draft = !!window._draftHas(ctx.name); } catch (e) {}
-    }
     if (ctx.type === 'move') {
       var cand = moveCandidates();
       menuItems = FM().moveTargets(ctx.name, cand.parts, cand.dirs);
     } else {
       menuItems = ctx.type === 'file'
-        ? FM().fileItems({ git: _isGit(), draft: draft })
+        ? FM().fileItems({ git: _isGit() })
         : FM().folderItems({ kind: ctx.folder.kind });
     }
     menu.textContent = '';

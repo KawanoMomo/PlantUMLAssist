@@ -1006,7 +1006,7 @@ html, body {
   display: none;
   position: absolute;
   z-index: 40;
-  /* 240px では見出し・絞り込み・対象set で埋まり、
+  /* 240px では見出し・絞り込み・選ぶバーで埋まり、
      棚卸しの 8 行が窓の外に出ていた。画面の高さに合わせて伸ばす。 */
   max-height: min(70vh, 620px);
   overflow-y: auto;
@@ -1087,37 +1087,6 @@ html, body {
   border-bottom: 1px solid var(--border);
   margin-bottom: 3px;
 }
-/* 対象 set との突合 */
-#folder-panel .folder-target-summary {
-  font-size: 10px;
-  padding: 3px 6px;
-  color: var(--text-secondary);
-}
-#folder-panel .folder-target-summary.target-set-ok { color: var(--accent); }
-#folder-panel .folder-target-summary.target-set-short { color: var(--accent-red); font-weight: bold; }
-#folder-panel .folder-target-bar { padding: 0 6px 4px; display: flex; gap: 4px; }
-#folder-panel button.folder-target-set,
-#folder-panel button.folder-target-clear {
-  flex: 0 0 auto;
-  font-size: 10px;
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-#folder-panel button.folder-target {
-  flex: 0 0 auto;
-  font-size: 10px;
-  padding: 1px 5px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-#folder-panel button.folder-target.folder-target-on { border-color: var(--accent); color: var(--accent); }
 /* 上書きされる前の版。行の末尾に付き、押すと
    すぐ下に版が開く。版のある図にしか出ないので、普段の一覧は今までのまま。 */
 #folder-panel button.folder-versions {
@@ -1310,140 +1279,7 @@ html, body {
   padding: 2px 6px;
 }
 #folder-panel .folder-role-summary.has-dirty { color: var(--accent-red); }
-/* レビュー指摘の反映状態。
-   名前の右に置き、「(レビュー反映)」という別名保存の代わりにする */
-/* 指摘.md から見た 1 枚の立場。
-   対象外もはっきり出す — 印が無いだけだと「まだ読めていない」と区別できず、
-   開かずに飛ばす根拠にならない */
-/* SVG が puml に追いついているか */
-#folder-panel .folder-svg-badge {
-  font-size: 9px;
-  border: 1px solid var(--accent-red);
-  color: var(--accent-red);
-  border-radius: 2px;
-  padding: 0 3px;
-  white-space: nowrap;
-}
-#folder-panel .folder-svg-badge.svg-unknown { border-color: var(--text-secondary); color: var(--text-secondary); }
-/* mtime だけが古く、中身は追いついている図。
-   作り直しの催促ではないので、赤ではなく控えめな色で出す。 */
-#folder-panel .folder-svg-badge.svg-stale-settled {
-  border-color: var(--text-secondary); color: var(--text-secondary); font-weight: normal;
-}
-/* 内容での判定。mtime の「古い」より強い印 —
-   こちらは中身を突き合わせた結果なので、作り直しが要ることが確実に分かる。 */
-#folder-panel .folder-svg-badge.svg-differ {
-  border-color: var(--accent-red); color: var(--accent-red); font-weight: bold;
-}
-#folder-panel .folder-svg-names.svg-differ .folder-svg-names-label { color: var(--accent-red); }
-#folder-panel .folder-svg-names.svg-differ button.folder-svg-name { border-color: var(--accent-red); }
-#folder-panel .folder-svg-summary {
-  font-size: 10px;
-  color: var(--text-secondary);
-  padding: 2px 6px;
-}
-#folder-panel .folder-svg-summary.has-stale { color: var(--accent-red); }
-/* 書き出し漏れ・作り直しが要る図の名前 */
-#folder-panel .folder-svg-names {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
-  font-size: 10px; padding: 1px 6px 3px;
-}
-#folder-panel .folder-svg-names-label { color: var(--text-secondary); }
-#folder-panel .folder-svg-names.svg-missing .folder-svg-names-label { color: var(--accent-red); }
-#folder-panel button.folder-svg-name {
-  border: 1px solid var(--border); border-radius: 3px; background: var(--bg-tertiary);
-  color: var(--text-primary); font-size: 10px; padding: 0 5px; width: auto; cursor: pointer;
-}
-#folder-panel .folder-svg-names.svg-missing button.folder-svg-name { border-color: var(--accent-red); }
-#folder-panel button.folder-svg-name:hover { border-color: var(--accent); }
-/* その行の図だけを作り直す */
-#folder-panel button.folder-svg-names-render {
-  border: 1px solid var(--accent); border-radius: 3px; background: var(--bg-tertiary);
-  color: var(--accent); font-size: 10px; padding: 0 6px; width: auto; cursor: pointer;
-  margin-left: auto; white-space: nowrap;
-}
-#folder-panel button.folder-svg-names-render:disabled { border-color: var(--border); color: var(--text-secondary); cursor: default; }
-/* 内容での 1 行と、内容を確かめるボタン */
-#folder-panel .folder-svg-content {
-  font-size: 10px;
-  color: var(--text-secondary);
-  padding: 0 6px 2px;
-}
-#folder-panel .folder-svg-content.has-stale { color: var(--accent-red); }
-/* 判定の根拠 (の 1403 追記)。上の 1 行より一段弱く出す */
-#folder-panel .folder-svg-basis {
-  font-size: 9px;
-  color: var(--text-secondary);
-  opacity: 0.85;
-  padding: 0 6px 3px;
-  line-height: 1.4;
-}
-#folder-panel .folder-svg-content-badge {
-  font-size: 9px;
-  border: 1px solid var(--accent-red);
-  color: var(--accent-red);
-  font-weight: bold;
-  border-radius: 2px;
-  padding: 0 3px;
-  white-space: nowrap;
-}
-/* 未刻印 / 体裁差のみ は「直せ」ではなく「この一覧では言えない」なので赤にしない
- */
-#folder-panel .folder-svg-content-badge[data-svg-content="unverified"],
-#folder-panel .folder-svg-content-badge[data-svg-content="format"] {
-  border-color: var(--border);
-  color: var(--text-secondary);
-  font-weight: normal;
-}
-/* 未刻印の図だけを確かめる */
-#folder-panel button.folder-svg-names-verify {
-  border: 1px solid var(--border); border-radius: 3px; background: var(--bg-tertiary);
-  color: var(--text-primary); font-size: 10px; padding: 0 6px; width: auto; cursor: pointer;
-  margin-left: auto; white-space: nowrap;
-}
-#folder-panel button.folder-svg-names-verify:disabled { color: var(--text-secondary); cursor: default; }
-#folder-panel .folder-svg-mtime { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); opacity: 0.85; }
-/* puml 変更 / SVG 書き出し と並べる labels の突合結果。
-   時刻の隣に置くので、時刻と同じ大きさで、色だけで一致・不一致を分ける。 */
-#folder-panel .folder-svg-labels {
-  flex: 0 0 auto; font-size: 9px; white-space: nowrap;
-  border: 1px solid var(--border); border-radius: 2px; padding: 0 3px;
-  color: var(--text-secondary);
-}
-#folder-panel .folder-svg-labels[data-tone="ok"] { border-color: var(--accent); color: var(--accent); }
-#folder-panel .folder-svg-labels[data-tone="bad"] { border-color: var(--accent-red); color: var(--accent-red); font-weight: bold; }
-#folder-panel .folder-svg-labels-summary {
-  font-size: 10px; color: var(--text-secondary); padding: 0 6px 2px;
-}
-#folder-panel .folder-svg-labels-summary.has-stale { color: var(--accent-red); }
-/* 出力先のクロス。「内容ずれ」より強い断定なので、
-   行の中でいちばん目に付く印にする — 相手の名前は title に入れる。 */
-#folder-panel .folder-svg-cross {
-  flex: 0 0 auto; font-size: 9px; white-space: nowrap; font-weight: bold;
-  border: 1px solid var(--accent-red); border-radius: 2px; padding: 0 3px;
-  color: var(--accent-red);
-}
-#folder-panel .folder-svg-cross-summary {
-  font-size: 10px; color: var(--accent-red); font-weight: bold; padding: 0 6px 2px;
-}
-/* 中身が同じ図の統合と 1 枚削除。
-   重複が 0 組なら行ごと出さないので、普段の一覧は今までのまま。 */
-#folder-panel .folder-dupe-summary {
-  font-size: 10px; color: var(--accent); padding: 2px 6px;
-}
-#folder-panel .folder-dupe-row {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 6px 3px;
-}
-#folder-panel .folder-dupe-label { font-size: 10px; color: var(--text-secondary); }
-#folder-panel button.folder-dupe-merge {
-  flex: 0 0 auto; width: auto; font-size: 9px; white-space: nowrap;
-  border: 1px solid var(--accent); border-radius: 3px; padding: 1px 6px;
-  background: transparent; color: var(--accent); cursor: pointer;
-}
-#folder-panel button.folder-dupe-merge:disabled { opacity: 0.5; cursor: default; }
-#folder-panel .folder-dupe-badge { font-size: 9px; margin-left: 3px; white-space: nowrap; }
-#folder-panel .folder-dupe-copy { color: var(--accent); }
-#folder-panel .folder-dupe-keep { color: var(--text-secondary); }
+/* 行の 1 枚削除 */
 #folder-panel button.folder-delete {
   flex: 0 0 auto; width: auto; font-size: 9px; white-space: nowrap;
   border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px;
@@ -1452,282 +1288,12 @@ html, body {
 #folder-panel button.folder-delete.folder-delete-armed {
   border-color: var(--accent-red); color: var(--accent-red); font-weight: bold;
 }
-/* 本体 / 編集中 / SVG の反映状況。
-   反映漏れが 0 枚でも見出しの 1 行は出す (節が無いことを「揃っている」と読ませない)。 */
-#folder-panel .folder-sync-summary {
-  font-size: 10px; color: var(--text-secondary); padding: 2px 6px;
-}
-#folder-panel .folder-sync-summary.has-stale { color: var(--accent-red); font-weight: bold; }
-#folder-panel .folder-sync-row { padding: 0 6px 4px; }
-#folder-panel .folder-sync-label { font-size: 10px; color: var(--text-primary); }
-#folder-panel .folder-sync-arts {
-  display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0;
-}
-#folder-panel .folder-sync-art {
-  font-size: 9px; border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px;
-  color: var(--text-secondary); white-space: nowrap;
-}
-#folder-panel .folder-sync-art.folder-sync-latest { border-color: var(--accent); color: var(--accent); }
-#folder-panel .folder-sync-art.folder-sync-old { border-color: var(--accent-red); color: var(--accent-red); }
-#folder-panel .folder-sync-acts { display: flex; flex-wrap: wrap; gap: 4px; }
-#folder-panel button.folder-sync-diff, #folder-panel button.folder-sync-open {
-  flex: 0 0 auto; width: auto; font-size: 9px; white-space: nowrap;
-  border: 1px solid var(--accent); border-radius: 3px; padding: 1px 6px;
-  background: transparent; color: var(--accent); cursor: pointer;
-}
-#folder-panel button.folder-sync-open { border-color: var(--border); color: var(--text-secondary); }
-#folder-panel .folder-sync-diff-box {
-  margin-top: 3px; max-height: 180px; overflow: auto;
-  border: 1px solid var(--border); border-radius: 3px; padding: 3px 5px;
-  font-family: var(--font-mono, monospace); font-size: 10px;
-}
-#folder-panel .folder-sync-diff-line { white-space: pre-wrap; }
-#folder-panel .folder-sync-diff-add { color: var(--accent); }
-#folder-panel .folder-sync-diff-del { color: var(--accent-red); }
-#folder-panel .folder-sync-diff-ctx { color: var(--text-secondary); }
-#folder-panel .folder-sync-diff-note { font-size: 9px; color: var(--text-secondary); padding-top: 2px; }
-#folder-panel .folder-sync-badge { font-size: 9px; margin-left: 3px; white-space: nowrap; color: var(--accent-red); }
-#folder-panel .folder-sync-badge-base-ahead, #folder-panel .folder-sync-badge-unknown {
-  color: var(--text-secondary);
-}
-/* 宛先の書かれていない指摘。
-   自分宛だけを目立たせる。他の人宛・宛先不明も隠さない (隠すと指摘が落ちる)。 */
-/* 下書き ↔ 本体の差し替え待ちキュー。
-   反映漏れの節が「食い違う図」だけを出すのに対し、ここは下書きの全部を台帳にする。
-   削除予定は落ち着いた色にする (消してよい行が赤く並ぶと、直す行と見分けられない)。 */
-#folder-panel .folder-swapq-summary {
-  font-size: 10px; color: var(--text-secondary); padding: 2px 6px;
-}
-#folder-panel .folder-swapq-summary.has-pending { color: var(--accent); font-weight: bold; }
-#folder-panel .folder-swapq-row {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 6px 3px;
-}
-#folder-panel .folder-swapq-label { font-size: 10px; color: var(--text-primary); }
-#folder-panel .folder-swapq-drop .folder-swapq-label { color: var(--text-secondary); }
-#folder-panel .folder-swapq-apply .folder-swapq-label,
-#folder-panel .folder-swapq-restore .folder-swapq-label { color: var(--accent); }
-#folder-panel button.folder-swapq-open, #folder-panel button.folder-swapq-report-btn {
-  flex: 0 0 auto; width: auto; font-size: 9px; white-space: nowrap;
-  border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px;
-  background: transparent; color: var(--text-secondary); cursor: pointer;
-}
-#folder-panel button.folder-swapq-report-btn { border-color: var(--accent); color: var(--accent); }
-#folder-panel .folder-swapq-acts { padding: 0 6px 3px; }
-#folder-panel textarea.folder-swapq-report {
-  width: calc(100% - 12px); margin: 0 6px 4px; resize: vertical;
-  font-family: var(--font-mono, monospace); font-size: 10px;
-  border: 1px solid var(--border); border-radius: 3px;
-  background: transparent; color: var(--text-primary);
-}
-#folder-panel .folder-swapq-badge { font-size: 9px; margin-left: 3px; white-space: nowrap; color: var(--text-secondary); }
-#folder-panel .folder-swapq-badge-apply, #folder-panel .folder-swapq-badge-restore { color: var(--accent); }
-#folder-panel button.folder-svg-proof-btn,
-#folder-panel button.folder-svg-render {
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  margin: 2px 6px 4px;
-  width: auto;
-}
-/* 上書きせずに中身を確かめるボタン */
-#folder-panel button.folder-svg-verify-btn {
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  margin: 0 6px 4px;
-  width: auto;
-}
-#folder-panel .folder-svg-verify-note { color: var(--text-primary); }
-/* 食い違いの中身 */
-#folder-panel .folder-svg-diff {
-  margin: 0 6px 4px;
-  border: 1px solid var(--accent-red);
-  border-radius: 3px;
-  padding: 3px 5px;
-  font-size: 10px;
-  color: var(--text-primary);
-}
-#folder-panel .folder-svg-diff-name { font-weight: bold; color: var(--accent-red); }
-#folder-panel .folder-svg-diff-sum { color: var(--text-secondary); margin-left: 4px; }
-#folder-panel .folder-svg-diff-row { padding-left: 8px; white-space: normal; word-break: break-all; }
-#folder-panel .folder-svg-diff-row.diff-missing::before { content: '欠落 '; color: var(--accent-red); }
-#folder-panel .folder-svg-diff-row.diff-leftover::before { content: '残存 '; color: var(--accent); }
-/* 文字に現れない差 (図形の数・並び順)。 */
-#folder-panel .folder-svg-diff-row.diff-structural::before { content: '構造 '; color: var(--accent-orange, var(--accent)); }
-#folder-panel textarea.folder-svg-diff-report {
-  width: calc(100% - 12px);
-  margin: 0 6px 4px;
-  height: 90px;
-  font-family: inherit;
-  font-size: 10px;
-  background: var(--bg-input, var(--bg-panel));
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-}
-#folder-panel button.folder-svg-diff-scan {
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  margin: 0 6px 4px;
-  width: auto;
-}
-#folder-panel button.folder-svg-diff-copy {
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  margin: 0 6px 4px;
-  width: auto;
-}
-/* 他の人が今も書き込み中かもしれない図 */
-#folder-panel .folder-write-badge {
-  font-size: 9px;
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  border-radius: 2px;
-  padding: 0 3px;
-  white-space: nowrap;
-}
-#folder-panel .folder-write-badge.write-unknown { border-color: var(--text-secondary); color: var(--text-secondary); }
-#folder-panel .folder-write-summary {
-  font-size: 10px;
-  color: var(--text-secondary);
-  padding: 2px 6px;
-}
-#folder-panel .folder-write-summary.has-active { color: var(--accent); }
-#folder-panel .folder-write-names {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
-  font-size: 10px; padding: 1px 6px 3px;
-}
-#folder-panel .folder-write-names-label { color: var(--accent); }
-#folder-panel button.folder-write-name {
-  border: 1px solid var(--accent); border-radius: 3px; background: var(--bg-tertiary);
-  color: var(--text-primary); font-size: 10px; padding: 0 5px; width: auto; cursor: pointer;
-}
-#folder-panel button.folder-write-name:hover { border-color: var(--accent); }
-#folder-panel .folder-write-actions {
-  display: flex; flex-wrap: wrap; gap: 4px; padding: 0 6px 4px;
-}
-#folder-panel .folder-write-actions button {
-  border: 1px solid var(--border); border-radius: 3px; width: auto; font-size: 10px;
-}
 #folder-panel button.folder-item {
   display: flex;
   align-items: baseline;
   gap: 5px;
 }
 #folder-panel .folder-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
-#folder-panel .folder-badge { flex: 0 0 auto; font-size: 9px; line-height: 1; }
-#folder-panel .folder-badge-changed { color: var(--accent); }
-#folder-panel .folder-badge-new { color: var(--accent); font-weight: 700; }
-/* 前回控えから変わっていない図の印。
-   読み飛ばしてよい行なので、変更の ● より弱い色で置く。 */
-#folder-panel .folder-stamp {
-  flex: 0 0 auto; font-size: 9px; line-height: 1; padding: 1px 4px;
-  border: 1px solid var(--border); border-radius: 8px;
-  color: var(--text-secondary); white-space: nowrap;
-}
-#folder-panel .folder-stamp-summary { color: var(--text-secondary); }
-#folder-panel .folder-stamp-hide {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: 11px; color: var(--text-secondary); white-space: nowrap;
-}
-#folder-panel .folder-mtime { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); }
-#folder-panel button[data-review-status="unchanged"] .folder-name { color: var(--text-secondary); }
-#folder-panel .folder-gone { color: var(--text-secondary); font-style: italic; }
-/* 変更図の旧DSL/新DSL を並べて読む */
-#folder-panel button.folder-diff {
-  flex: 0 0 auto;
-  width: auto;
-  font-size: 9px;
-  color: var(--accent);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 1px 5px;
-}
-#folder-panel button.folder-pick-changed {
-  width: auto;
-  font-size: 10px;
-  color: var(--accent);
-}
-#folder-panel button.folder-pick-changed:disabled {
-  color: var(--text-secondary);
-  cursor: default;
-}
-#folder-panel button.folder-pick-changed:disabled:hover { background: transparent; }
-#rd-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
-#rd-head .rd-title { font-size: 13px; font-weight: 600; flex: 1 1 auto; }
-#rd-head .rd-stats { font-size: 11px; color: var(--text-secondary); }
-#rd-list { border: 1px solid var(--border); border-radius: 4px; overflow: auto; max-height: 62vh; }
-#rd-list .rd-cols {
-  display: flex;
-  font-size: 10px;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  background: var(--bg-secondary);
-}
-#rd-list .rd-cols span { flex: 1 1 50%; padding: 3px 8px; }
-#rd-list .rd-row { display: flex; font-family: var(--font-mono); font-size: 11px; }
-#rd-list .rd-side {
-  flex: 1 1 50%;
-  min-width: 0;
-  display: flex;
-  gap: 6px;
-  padding: 1px 6px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  border-left: 1px solid var(--border);
-}
-#rd-list .rd-side:first-child { border-left: none; }
-#rd-list .rd-no { flex: 0 0 28px; text-align: right; color: var(--text-secondary); font-size: 10px; }
-#rd-list .rd-text { flex: 1 1 auto; min-width: 0; }
-#rd-list .rd-row-del .rd-side-left,
-#rd-list .rd-row-change .rd-side-left { background: rgba(220, 80, 80, 0.16); }
-#rd-list .rd-row-add .rd-side-right,
-#rd-list .rd-row-change .rd-side-right { background: rgba(80, 180, 110, 0.16); }
-#rd-list .rd-skip {
-  font-size: 10px;
-  color: var(--text-secondary);
-  padding: 2px 8px;
-  background: var(--bg-secondary);
-  text-align: center;
-}
-#rd-foot { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
-#rd-foot .rd-note { flex: 1 1 auto; font-size: 10px; color: var(--text-secondary); }
-#rd-head .rd-close,
-#rd-foot button {
-  font-size: 11px;
-  padding: 3px 10px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  cursor: pointer;
-}
-#rd-foot button:hover, #rd-head .rd-close:hover { background: var(--bg-secondary); }
-/* 一時控え: 成果物と控えを一覧で分ける */
-#folder-panel button.folder-draft {
-  flex: 0 0 auto;
-  width: auto;
-  font-size: 9px;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 1px 5px;
-  white-space: nowrap;
-}
-#folder-panel button.folder-draft.folder-draft-on { color: var(--accent); border-color: var(--accent); }
-#folder-panel .folder-draft-head {
-  border-top: 1px solid var(--border);
-  margin-top: 4px;
-  padding-top: 3px;
-}
-#folder-panel button.folder-draft-toggle {
-  width: 100%;
-  font-size: 10px;
-  color: var(--text-secondary);
-  text-align: left;
-}
-#folder-panel .folder-row-draft .folder-name { color: var(--text-secondary); font-style: italic; }
-#tab-bar .tab-tool.tab-tool-on { color: var(--accent); }
 
 /* 機能ボタンを「ツール」1 か所に畳む。
    畳んだ状態では機能ボタンがタブ列から消え、6 分類のメニューから選ぶ。 */
@@ -1919,13 +1485,6 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   font-family: var(--font-mono, monospace);
 }
 .tool-menu-key + .tool-menu-badge { margin-left: 6px; }
-#folder-panel button.folder-mark-seen {
-  margin-top: 4px;
-  border-top: 1px solid var(--border);
-  color: var(--text-secondary);
-  font-size: 10px;
-  text-align: center;
-}
 /* まとめて開く: 印の欄と名前を 1 行に並べる */
 #folder-panel .folder-row { display: flex; align-items: center; gap: 6px; }
 #folder-panel .folder-row .folder-item { flex: 1 1 auto; min-width: 0; }
@@ -4878,7 +4437,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
                 title="畳んでいるツールを分類から選ぶ (Ctrl+K でも同じ操作が引ける)">ツール ▾</button>
         <!-- 隣のフォルダの図は FILES ツリーの「読むだけ」節から開く -->
         <!-- やり直し途中の控えに印を付け、📂 一覧で畳む -->
-        <button class="tab-tool" id="btn-tab-draft" aria-pressed="false" title="この図に一時控え(下書き / やり直し途中)の印を付けて、保存先の一覧から畳む">一時控え</button>
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
         <button class="tab-tool" id="btn-tab-apply" title="指摘に並んだ複数のクラスへ同じメソッド・属性を 1 回で追加する">⊞ 一括適用</button>
         <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
@@ -5426,9 +4984,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/autosave-options.js"></script>
 <script src="src/core/autosave-status.js"></script>
 <script src="src/core/workspace.js"></script>
-<script src="src/core/review-watch.js"></script>
-<script src="src/core/change-stamp.js"></script>
-<script src="src/core/review-diff.js"></script>
 <script src="src/core/selected-endpoints.js"></script>
 <script src="src/core/folder-select.js"></script>
 <script src="src/core/folder-filter.js"></script>
@@ -5437,8 +4992,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/peek-settled.js"></script>
 <script src="src/core/side-pane.js"></script>
 <script src="src/core/senior-pane.js"></script>
-<script src="src/core/peek-freshness.js"></script>
-<script src="src/core/audit-scope.js"></script>
 <script src="src/core/blank-doc.js"></script>
 <script src="src/core/text-sync.js"></script>
 <script src="src/core/finding-variant.js"></script>
@@ -5448,13 +5001,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/diagram-kind.js"></script>
 <script src="src/core/saved-kind.js"></script>
 <script src="src/core/kind-mismatch.js"></script>
-<script src="src/core/draft-mark.js"></script>
-<script src="src/core/target-set.js"></script>
 <script src="src/core/folder-reopen.js"></script>
 <script src="src/core/recent-files.js"></script>
-<script src="src/core/dupe-merge.js"></script>
-<script src="src/core/sync-state.js"></script>
-<script src="src/core/swap-queue.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/folder-impact.js"></script>
 <script src="src/core/signature-change.js"></script>
@@ -5493,13 +5041,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/swimlane-move.js"></script>
 <script src="src/core/save-diff.js"></script>
 <script src="src/core/version-timeline.js"></script>
-<script src="src/core/svg-freshness.js"></script>
-<script src="src/core/svg-compare-row.js"></script>
-<script src="src/core/svg-cross.js"></script>
-<script src="src/core/svg-diff-summary.js"></script>
-<script src="src/core/svg-visual-diff.js"></script>
-<script src="src/core/dsl-visible-diff.js"></script>
-<script src="src/core/write-activity.js"></script>
 <script src="src/core/file-role.js"></script>
 <script src="src/core/command-palette.js"></script>
 <script src="src/core/diagram-rail.js"></script>
@@ -5611,10 +5152,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/svg-text-diff.js"></script>
 <script src="src/ui/git-ui.js"></script>
 <script src="src/ui/file-menu.js"></script>
-<!-- 変更サマリボード。変わった図を全件、変更前後で並べる -->
-<div id="rd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div id="rd-modal-content" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:20px;min-width:720px;max-width:1080px;max-height:88vh;overflow-y:auto;"></div>
-</div>
 
 <!-- 名前を付けた図の組・提出用 zip の図選び・部品の図をまとめて資料化・1 枚を資料化・部品の資料一式の窓は
      TICKET-owner-20261116-0140-prune で外した -->
@@ -5633,47 +5170,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       </span>
     </div>
     <div id="vt-body"></div>
-  </div>
-</div>
-<!-- stale と出た 1 枚について、保存中の SVG と
-     今の puml を描き直した SVG を並べ、可視差分 (追加・削除・移動) だけを光らせる。
-     これが無い間、reviewer は 1 枚ごとに /render を叩いて `<?plantuml-src ?>` を
-     取り除いた文字列 diff を書いていた。中身は src/core/svg-visual-diff.js -->
-<div id="svg-visual-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1001;align-items:center;justify-content:center;">
-  <div id="svg-visual-content" style="background:#fff;color:#222;width:92vw;height:88vh;display:flex;flex-direction:column;border-radius:6px;overflow:hidden;">
-    <style>
-      /* 判定は 3 つとも色で分ける。文字だけだと、一覧に戻ってから
-         「どちらの答えだったか」を読み直すことになる。 */
-      #svg-visual-verdict { font-weight: bold; }
-      #svg-visual-verdict[data-verdict="same"] { color: #0a7d00; }
-      #svg-visual-verdict[data-verdict="moved"] { color: #b06000; }
-      #svg-visual-verdict[data-verdict="changed"] { color: #c00000; }
-      #svg-visual-verdict[data-verdict="unknown"] { color: #555; }
-      .svg-visual-name { font-family: monospace; }
-      .svg-visual-name[data-visual-name-mark="added"] { color: #0a7d00; }
-      .svg-visual-name[data-visual-name-mark="removed"] { color: #c00000; }
-      .svg-visual-name[data-visual-name-mark="moved"] { color: #b06000; }
-      .svg-visual-pane-head { color: #444; font-weight: bold; }
-    </style>
-    <div id="svg-visual-head" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #ddd;flex-wrap:wrap;">
-      <strong id="svg-visual-title">可視差分</strong>
-      <span id="svg-visual-verdict"></span>
-      <span id="svg-visual-counts" style="color:#555;"></span>
-      <button type="button" id="svg-visual-copy" title="この判定を primary への指摘文としてコピーする">指摘文をコピー</button>
-      <button type="button" id="svg-visual-close" style="margin-left:auto;">閉じる</button>
-    </div>
-    <div id="svg-visual-names" style="padding:4px 12px;max-height:22%;overflow:auto;"></div>
-    <div id="svg-visual-panes" style="display:flex;flex:1;min-height:0;">
-      <div class="svg-visual-pane" style="flex:1;min-width:0;overflow:auto;border-right:1px solid #ddd;">
-        <div class="svg-visual-pane-head" style="padding:4px 8px;background:#f4f4f4;">保存中の SVG（旧）</div>
-        <div id="svg-visual-old" style="position:relative;padding:8px;"></div>
-      </div>
-      <div class="svg-visual-pane" style="flex:1;min-width:0;overflow:auto;">
-        <div class="svg-visual-pane-head" style="padding:4px 8px;background:#f4f4f4;">今の puml を描き直した SVG（新）</div>
-        <div id="svg-visual-new" style="position:relative;padding:8px;"></div>
-      </div>
-    </div>
-    <textarea id="svg-visual-report" readonly style="height:0;opacity:0;position:absolute;left:-9999px;"></textarea>
   </div>
 </div>
 </body>

@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // file-menu — FILES ツリーのファイル・フォルダの右クリックに集める操作 (design 10b)。
 //
-// ファイル 1 枚に対する操作が、タブ列 (一時控え)、
+// ファイル 1 枚に対する操作が、
 // ツール ▾ (この図の変遷)、下端の札 (前回保存版) と散らばっていて、「この図に何ができるか」を
 // 入口ごとに探し直していた。10b はファイルの右クリックに全部を集める。
 // フォルダの右クリックは「そこに作る」「そこを保存先 / 読むだけにする」。
@@ -25,7 +25,7 @@ window.MA.fileMenu = (function() {
     { id: 'rename', label: '名前を変更', key: 'F2' },
     { id: 'copy', label: '複製' },
     { id: 'move', label: '別のフォルダへ移動…' },
-    { id: 'draft', label: '一時控えにする' },
+    // 下書きの印を付ける行は TICKET-owner-20261116-0241-prune で外した (保存先の一覧で畳む仕分けごと)。
     { sep: true },
     { id: 'export-svg', label: 'SVG で書き出す' },
     { id: 'reveal', label: 'エクスプローラで場所を開く' },
@@ -48,7 +48,7 @@ window.MA.fileMenu = (function() {
     // 保存先の行・「保存先」見出しから別のフォルダを保存先に替える
     // (隣のフォルダから選ぶか、パスを入れる)。今は ⚙ 設定 → 自動保存 → ファイル → パス の 5 手だった。
     { id: 'change-target', label: '別のフォルダを保存先にする…', targetOnly: true },
-    // 旧 📂 一覧 (要約・選ぶバー・対象 set・SVG の鮮度…) はツリーから外し、
+    // 旧 📂 一覧 (要約・選ぶバー・SVG の鮮度…) はツリーから外し、
     // 今の保存先の右クリックからだけ中央の枠に開く。
     { sep: true, targetOnly: true },
     { id: 'open-list', label: '保存先の一覧を開く', targetOnly: true },
@@ -60,7 +60,7 @@ window.MA.fileMenu = (function() {
     return o;
   }
 
-  // ctx: { git, draft, isCurrentTarget }
+  // ctx: { git, isCurrentTarget }
   function fileItems(ctx) {
     var c = ctx || {};
     return FILE_ITEMS.map(function(it) {
@@ -69,8 +69,6 @@ window.MA.fileMenu = (function() {
         o.disabled = true;
         o.title = '保存先が Git リポジトリのときに使えます';
       }
-      // 一時控えは裏返す操作なので、今の状態に合わせて言い換える。
-      if (o.id === 'draft' && c.draft) o.label = '一時控えを外す';
       return o;
     });
   }

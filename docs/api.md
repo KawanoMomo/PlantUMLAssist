@@ -7,22 +7,17 @@ grep しなくて済む。
 ```
 curl -sS http://127.0.0.1:8766/api            # 索引
 curl -sS http://127.0.0.1:8766/render         # POST /render の仕様
-curl -sS http://127.0.0.1:8766/verify-svg     # POST /verify-svg の仕様
 ```
 
 ポートは `PUA_PORT` で変わる (既定 8766)。
 
 ## 応答の文字コード
 
-`POST /verify-svg` の 400 は、日本語の `error` / `expected.fields` と並べて
-**ASCII だけの言い直し** (`errorAscii` と `expected.fieldsAscii`、それに ASCII の `example`) を必ず返す。
-端末の文字コードが何であれ、返ってきた応答をそのまま読めば正しい形が分かる (打ち直しは要らない)。
-
 JSON の応答は既定で utf-8 (`Content-Type: application/json; charset=utf-8`)。日本語が
 端末で化けるときは、呼ぶ側が文字コードを選べる。宣言する charset と実バイト列は常に一致する。
 
 ```
-curl -sS "http://127.0.0.1:8766/verify-svg?charset=ascii"          # \uXXXX 逃がしの純 ASCII
+curl -sS "http://127.0.0.1:8766/render?charset=ascii"              # \uXXXX 逃がしの純 ASCII
 curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日本語 Windows の端末)
 ```
 
@@ -46,33 +41,6 @@ curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日�
 この応答の SVG には `<!-- @pua-source-sha1 ... -->` の印が**付かない**。保存済みの
 `{name}.svg` には付くので、この 2 つの生バイト比較は内容が同じでも必ず食い違う。
 
-## 保存中の svg の検証
-
-| 窓口 | 要求 | 返り |
-| --- | --- | --- |
-| `GET /verify-svg` | — | `POST /verify-svg` の仕様 |
-| `POST /verify-svg` | `{dir, types: [名前...], mode}` | 200 `{ok, results, verified}` / 400 `{error, errorAscii, expected}` |
-
-**puml と svg は本文に渡さない。** server が `dir` と `types` (拡張子なしの図の名前) から読む。
-`types` は 1〜200 件の必須。`dir` を省くと既定の保存フォルダ。1 枚あたり数百 ms かかる。
-
-```
-curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/json" \
-  -d '{"dir": "E:/01_Loop/persona-data/primary", "types": ["spi_init_sequence"], "mode": "local"}'
-```
-
-`results[name].status`:
-
-| status | 意味 |
-| --- | --- |
-| `match` | バイトまで一致した |
-| `differ-format` | 描かれる中身 (文字・図形の数) は一致。体裁だけが違うので作り直さなくても読める |
-| `differ-content` | 描かれるものが違う。作り直しが要る |
-| `missing` | svg が無い |
-| `error` | 描けなかった (判定していない) |
-
-`differ-*` のときは中身を言うための材料 (`pumlText` `svgLabels` `drawnLabels` `svgShape`
-`drawnShape`) が付く。
 
 ## 保存フォルダ
 
@@ -100,7 +68,7 @@ curl -sS -X POST http://127.0.0.1:8766/verify-svg -H "Content-Type: application/
 | `POST /file-roles` | `{dir, roles}` | `_roles.json` を丸ごと置き換える |
 
 保存中の svg が今の puml から作られたかは、`GET /autosave` の `svgSource` (svg に刻まれた印) と
-`hash` (今の puml の sha1) を比べる。印が無い svg は `POST /verify-svg` が描き直して確かめる。
+`hash` (今の puml の sha1) を比べる (描き直して比べる窓口 `/verify-svg` は TICKET-owner-20261116-0241-prune で外した)。
 
 ## 保管庫・設定・生存
 

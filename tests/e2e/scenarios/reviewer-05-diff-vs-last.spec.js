@@ -91,52 +91,6 @@ test('手順5 中身が別名の図と入れ替わった保存を、その場で
   expect(await log.locator('li').count()).toBeGreaterThan(1);
 });
 
-// BLK-reviewer-20260914-1506-wish: 手順5 の突合には、前回 run の控えとのバイト比較とは別に
-// 「同じ図の対になる成果物のうち片方だけを直した」向きの事故がある。
-// (1) 直した内容が `{name}-編集中.puml` にしか入っていない、
-// (2) 本体は直ったが `{name}.svg` が旧内容のまま。
-// どちらも手で diff を取るまで気付けなかったので、📂 一覧が向きまで言い、
-// 差分はその場 (1 操作) で開けるようにした。
-const BASE_CLASS = ['@startuml', 'title driver_common_class',
-  'class AdcRegs {\n  +WriteConfig()\n}', 'class SpiRegs', '@enduml'].join('\n');
-// 下書きにだけ入った修正 (EnableDmaReq のメソッド化)。
-const DRAFT_CLASS = BASE_CLASS.replace('class SpiRegs', 'class SpiRegs {\n  +EnableDmaReq()\n}');
-
-test('手順5 直した内容が編集中の下書きにしか入っていない図を、一覧が向きごと名指しする', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.clearDir(page, DIR);
-  await S.putDoc(page, DIR, 'driver_common_class', BASE_CLASS);
-  // 下書きは本体より後に保存される (直したのは下書きの方)。
-  await page.waitForTimeout(1100);
-  await S.putDoc(page, DIR, 'driver_common_class-編集中', DRAFT_CLASS);
-  // 中身も時刻も同じ図は反映漏れに数えない (片付けは ⧉ 重複の節の職掌)。
-  await S.putDoc(page, DIR, 'timer_init_sequence', BASE_CLASS);
-
-  await S.openFolder(page);
-  const sum = page.locator('#folder-sync-summary');
-  await expect(sum).toBeVisible();
-  await expect(sum).toContainText('反映待ち 1 枚');
-  await expect(sum).toContainText('本体に未反映の下書き 1 枚');
-
-  const row = page.locator('.folder-sync-row[data-sync-name="driver_common_class"]');
-  await expect(row).toHaveAttribute('data-sync-issue', 'draft-ahead');
-  // 到達条件その1: 3 つの成果物のどれが最新でどれが古いかを、時刻を読み比べずに言う。
-  await expect(row.locator('.folder-sync-art[data-sync-role="base"]')).toContainText('本体 古い');
-  await expect(row.locator('.folder-sync-art[data-sync-role="draft"]')).toContainText('編集中 最新');
-
-  // 到達条件その2: 本体⇔編集中の差分が、一覧を離れずに 1 操作で開く。
-  await row.locator('.folder-sync-diff').click();
-  const box = page.locator('#folder-sync-diff-box');
-  await expect(box).toBeVisible();
-  await expect(box.locator('.folder-sync-diff-add').filter({ hasText: 'EnableDmaReq' })).toHaveCount(1);
-  await expect(box.locator('.folder-sync-diff-note')).toContainText('driver_common_class-編集中');
-
-  // 到達条件その3: 下書きの行だけを見ている人にも「本体に入っていない」が届く。
-  await expect(page.locator('.folder-sync-badge[data-sync-badge-of="driver_common_class-編集中"]'))
-    .toContainText('未反映');
-  // 揃っている図は名指ししない (全行に印が付くと印でなくなる)。
-  expect(await page.locator('.folder-sync-row[data-sync-name="timer_init_sequence"]').count()).toBe(0);
-});
 
 // BLK-reviewer-20260915-2346-wish: 手順5 の突合のうち「前回保存版から中身が大きく
 // 消えた」向きは、reviewer が手元の複製と diff を手で打って初めて分かった。
@@ -228,49 +182,6 @@ test('手順5 前回保存版から何行消えるかが、保存を押す前に
 // 印の付いていない図だけを読めばよいようにした。
 const STAMP_A = ['@startuml', 'title alpha_state', '[*] --> Idle', 'Idle --> Busy : start', '@enduml'].join('\n');
 const STAMP_B = ['@startuml', 'title beta_state', '[*] --> Off', 'Off --> On : power', '@enduml'].join('\n');
-
-test('手順5 前回控えから変わっていない図に「変化なし」の印が常時出る', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.clearDir(page, DIR);
-  await S.putDoc(page, DIR, 'alpha_state', STAMP_A);
-  await S.putDoc(page, DIR, 'beta_state', STAMP_B);
-
-  await S.openFolder(page);
-  // 控えを取る前は印を出さない (「今回の控えと同じ」までしか言えない)。
-  expect(await page.locator('#folder-panel .folder-stamp').count()).toBe(0);
-  await page.locator('.folder-mark-seen').click();
-  await page.waitForTimeout(1200);
-
-  // 到達条件その1: 控えを取り直すと、中身の変わっていない図に印が出る。
-  await page.locator('.folder-mark-seen').click();
-  await page.waitForTimeout(1200);
-  const alpha = page.locator('#folder-panel .folder-item[data-file-name="alpha_state"]');
-  await expect(alpha.locator('.folder-stamp')).toHaveAttribute('data-change-stamp', '2');
-  // 何回続けて変わっていないかも行の上で読める (2 tick 分か、今回だけかが分かる)。
-  await expect(alpha.locator('.folder-stamp')).toHaveText('＝2');
-  await expect(alpha.locator('.folder-stamp')).toHaveAttribute('data-stamp-text', '変化なし ×2');
-
-  // 到達条件その2: 読む枚数が一覧の頭に出る (audit をフルで打ち直さずに決まる)。
-  await expect(page.locator('#folder-stamp-summary')).toContainText('変化なし 2 枚');
-  await expect(page.locator('#folder-stamp-summary')).toContainText('読むのは 0 枚');
-
-  // 1 枚だけ中身を直すと、その図からは印が消え、もう 1 枚は印を保つ。
-  await S.putDoc(page, DIR, 'beta_state', STAMP_B.replace('power', 'power_on'));
-  await page.locator('#btn-tab-folder').click();          // 畳んで
-  await S.openFolder(page);                                // 開き直す
-  await page.waitForTimeout(600);
-  expect(await page.locator('#folder-panel .folder-item[data-file-name="beta_state"] .folder-stamp')
-    .count()).toBe(0);
-  await expect(page.locator('#folder-panel .folder-item[data-file-name="alpha_state"] .folder-stamp'))
-    .toHaveAttribute('data-stamp-text', '変化なし ×2');
-  await expect(page.locator('#folder-stamp-summary')).toContainText('読むのは 1 枚');
-
-  // 到達条件その3: 印の付いた図を 1 操作で畳み、読む図だけを残せる。
-  await page.locator('#folder-stamp-hide').check();
-  await page.waitForTimeout(300);
-  await expect(page.locator('#folder-panel .folder-item[data-file-name="alpha_state"]')).toBeHidden();
-  await expect(page.locator('#folder-panel .folder-item[data-file-name="beta_state"]')).toBeVisible();
-});
 
 // BLK-reviewer-20260917-0123-wish: 手順 5 (意図しない変更の混入確認) と手順 6 (SVG の
 // レイアウト崩れ確認) は、前回 run の控えを自分で複製し、テキスト差分と

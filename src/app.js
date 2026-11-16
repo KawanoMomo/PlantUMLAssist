@@ -3742,7 +3742,6 @@ function initCommandPalette() {
       // design 7b: タブ列を畳むと Ctrl+K だけが手掛かりになるので、ツールメニューに
       // 載っている道具はすべてパレットからも引けなければならない。ここは
       // 「メニューにはあるがパレットに無かった」道具。題はメニューの言い換えに揃える。
-      { id: 'tab-draft', title: '一時控えにする / Draft', hint: 'Tabs', keywords: ['draft', 'ひかえ', 'いちじ'], button: 'btn-tab-draft', run: function() { clickById('btn-tab-draft'); } },
       { id: 'tab-apply', title: '複数クラスに一括適用 / Bulk apply', hint: 'Tabs', keywords: ['apply', 'bulk', 'いっかつ', 'てきよう'], button: 'btn-tab-apply', run: function() { clickById('btn-tab-apply'); } },
       // design 9a: 手元の .puml を開く入口は上部バーの Import ▾ へ移した。
       { id: 'import-clipboard', title: 'クリップボードの DSL から開く / Open from clipboard', hint: 'File', keywords: ['clipboard', 'paste', 'import', 'くりっぷ', 'はりつけ', 'ひらく'], run: function() { clickById('imp-clipboard'); } },
@@ -4480,68 +4479,9 @@ function _holdOpenDocsBeforeTargetChange(prevCfg, nextBackend, nextDir) {
   });
 }
 
-// 「前回見た版」の控えの置き場。使えない環境でもフォルダ一覧は出る。
+// 保存先ごとの小さな控え (改名の記録・書き込み履歴など) の置き場。使えない環境でもフォルダ一覧は出る。
 function _reviewStore() {
   try { return window.localStorage || null; } catch (e) { return null; }
-}
-
-// ── 一時控えの印 ────────────────────────────
-// やり直しの練習で作る控えが保存フォルダに溜まり、📂 一覧で成果物と同じ並びに
-// 混ざっていた。印を付けた図は一覧で畳み、成果物だけが並ぶようにする。
-// 印は保存フォルダごとに localStorage に持つ (判定は draft-mark が唯一の規約)。
-var _draftCollapsed = true;   // 一覧を開いたときは畳んだ状態から始める
-
-function _draftLoad() {
-  var DM = window.MA.draftMark;
-  return DM ? DM.load(_reviewStore(), _wsFileDir()) : [];
-}
-
-function _draftStore(names) {
-  var DM = window.MA.draftMark;
-  return DM ? DM.save(_reviewStore(), _wsFileDir(), names) : false;
-}
-
-function _draftHas(name) {
-  var DM = window.MA.draftMark;
-  return !!(DM && DM.has(_draftLoad(), name));
-}
-
-// 名前 1 つの印を裏返して控える。戻り値は裏返した後に控えかどうか。
-function _draftToggleName(name) {
-  var DM = window.MA.draftMark;
-  if (!DM || !name) return false;
-  var next = DM.toggle(_draftLoad(), name);
-  _draftStore(next);
-  return DM.has(next, name);
-}
-
-// 上部バーの「🗂 一時控え」。開いている図そのものに印を付ける。
-// 保存の前でも後でも押せる (印は名前に付くので、次の保存にもそのまま効く)。
-function toggleActiveDraft() {
-  var DM = window.MA.draftMark;
-  if (!DM || !window.MA.workspace) return;
-  var doc = window.MA.workspace.getActive();
-  if (!doc || !doc.name) return;
-  var isDraft = _draftToggleName(doc.name);
-  syncDraftButton();
-  setSaveStatus(DM.activeMessage(doc.name, isDraft));
-  if (window.MA.toast) window.MA.toast.show(DM.activeMessage(doc.name, isDraft));
-}
-
-// ボタンの文言を、今開いている図が控えかどうかに合わせる。
-function syncDraftButton() {
-  var DM = window.MA.draftMark;
-  var btn = document.getElementById('btn-tab-draft');
-  if (!btn || !DM) return;
-  var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
-  var name = doc && doc.name;
-  var isDraft = !!(name && _draftHas(name));
-  btn.textContent = DM.activeLabel(isDraft);
-  btn.setAttribute('aria-pressed', isDraft ? 'true' : 'false');
-  btn.classList.toggle('tab-tool-on', isDraft);
-  btn.title = name
-    ? DM.rowTitle(isDraft) + '（' + name + '）'
-    : 'この図に一時控え(下書き / やり直し途中)の印を付けて、保存先の一覧から畳む';
 }
 
 // 「この名前のファイルに書いてよいか」を答える門。
@@ -4880,7 +4820,6 @@ function renderTabs() {
   var docs = window.MA.workspace.list();
   var activeId = window.MA.workspace.getActiveId();
   updateTopFileName();
-  syncDraftButton();
   syncSeniorPane();
   var tabs = bar.querySelectorAll('.tab');
   for (var i = 0; i < tabs.length; i++) bar.removeChild(tabs[i]);
@@ -6169,26 +6108,6 @@ function setupTabs() {
   // 行ごとに印・役割・差分のボタンが付くので、目的の 1 枚を一発で押し分けにくい。
   var folderQuery = '';
   var folderFocusFilter = false;   // 一覧を開いた直後だけ絞り込み欄にカーソルを置く
-  // 図名 → new/changed/unchanged。
-  // 「変更のある図だけ選ぶ」と行ごとの [差分] がここを見る。
-  var folderStatus = {};
-  // 図名 → {hash, runs, since}。前回控えから
-  // 1 バイトも変わっていない図に「変化なし」の印を出すための控え。
-  var stampStore = {};
-  // 図名 → 行に出す印 (印の付かない図は入らない)。
-  var stampMarks = {};
-  // 「変化なし」の付いた図を畳んで、読む図だけを残す絞り込み。
-  var stampHide = false;
-  // 一時控えの印が付いた図名。畳んでいる間は
-  // folderNames に入れない (「全部選ぶ」や「変更図だけ選ぶ」が控えを掴まない)。
-  var draftNames = [];
-  // 「揃っているべき一式」として登録した図名と、
-  // 今の一覧との突合結果。手順 1 の「14 枚あるか」を目で数えずに済ませる。
-  var targetNames = [];
-  var targetScan = null;
-  // 棚卸しで見ている部品。null は「まだ選んでいない」で、
-  // このときだけ今開いている図の部品を自動で選ぶ。'' は「選択を外した」であり、
-  // 自動選択で埋め直さない (外したのに別の部品が出ると、見ている棚卸しを取り違える)。
   // 図名 → 上書き前に控えてある版の数と、本体がもう
   // 無いのに版だけ残っている図。server が一覧と同じ呼び出しで返す。
   var versionCounts = {};
@@ -6237,28 +6156,6 @@ function setupTabs() {
   var kindBodyByName = {};
   var kindBodyBusy = false;
   var kindBodySig = null;
-  // 図名 → SVG が puml に追いついているか。
-  // `ls -l` で puml と svg を 1 枚ずつ突き合わせる代わりに、一覧が答える。
-  var svgStatus = {};
-  var svgContent = {};
-  // 図名 → その内容判定の根拠 ('stamp' / 'rerender')。何を見た答えかを印にも書く。
-  var svgBasis = {};
-  // 図名 → 行に並べる 3 つの値 (puml 変更 / SVG 書き出し / labels 一致) と印の有無。
-  var svgCompare = {};
-  // {name}.svg に刻まれた元 puml の sha1 が、
-  // 同じフォルダの別の図のものだったとき、その相手を名指しするための判定。
-  var svgCross = null;
-  // 図名 → SVG の書き出し時刻 (ISO8601)。puml の保存時刻と並べて行に出す。
-  var svgMtimes = {};
-  var svgScan = null;
-  // 作り直した結果の 1 行。一覧を開き直すまで残す (押した結果が消えない)。
-  var svgRenderNote = '';
-  // 描き直して比べた結果の 1 行。
-  var svgVerifyNote = '';
-  // 食い違った図の中身。図名 → svgDiffSummary.compare の結果。
-  // 「ずれ」と分かった直後に材料が手に入るので、その場で持っておく
-  // (もう一度描き直さないと中身が言えない、では手順が 1 つ増える)。
-  var svgVerifyDiffs = {};
   // 図名 → {role, status}。実データ / テンプレの宣言と、
   // テンプレの中身が宣言時から変わっていないか。22 枚を毎回同列に扱わなくて済むように。
   var fileRoles = {};        // 保存フォルダの _roles.json の中身
@@ -6266,26 +6163,6 @@ function setupTabs() {
   var roleScan = null;
   var roleEntries = [];      // 役割を決めた瞬間の指紋を取るための一覧
   var roleNote = '';
-  // 図名 → 直近 N 分以内に更新されたか。
-  // 他の人が同じ時間帯に書き込み続けている図を、読む前に見分ける。
-  var writeStatus = {};
-  var writeAge = {};
-  var writeScan = null;
-  // 中身が byte 単位で同じ図の束。
-  // 「-編集中」が本体と同一のまま積み上がっても、一覧には開く・名前を変えるしか
-  // 無かったので、片付けるには保存フォルダを直接触るしかなかった。
-  var dupeGroups = [];
-  // 本体 / 編集中の下書き / 書き出した SVG のうち
-  // どれが取り残されているか。dupe-merge が「同じ中身」を扱うのに対し、こちらは
-  // 中身が違うときの向き (直したのに本体へ入っていない / 本体だけ直した) を出す。
-  var syncScan = null;
-  // 反映状況の節で差分を開いている図の名前 (もう一度押すと畳む)。
-  var syncOpen = '';
-  var syncDiffCache = {};
-  // 下書き ↔ 本体の差し替え待ちキュー。
-  var swapQueue = null;
-  // キューのまとめ (手順7 で primary に渡す文面) を開いているか。
-  var swapReportOpen = false;
   // 行の 🗑 を 1 回押した名前 (2 回目で消す)。描き直すと白紙に戻る。
   var deleteArmed = '';
 
@@ -6515,16 +6392,6 @@ function setupTabs() {
     });
   }
 
-  // 上部バーの「🗂 一時控え」。
-  var btnDraft = document.getElementById('btn-tab-draft');
-  if (btnDraft) {
-    btnDraft.addEventListener('click', function() {
-      toggleActiveDraft();
-      if (panel.classList.contains('open')) renderFolderPanel();
-    });
-    syncDraftButton();
-  }
-
   btnFolder.addEventListener('click', function() {
     if (panel.classList.contains('open')) {
       panel.classList.remove('is-list');
@@ -6560,10 +6427,7 @@ function setupTabs() {
     if (window.MA.workspace) {
       window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType });
     }
-    svgRenderNote = '';   // 前に押した結果は持ち越さない
-    svgVerifyNote = '';
-    svgVerifyDiffs = {};
-    roleNote = '';
+    roleNote = '';   // 前に押した結果は持ち越さない
     folderQuery = '';           // 絞り込みは開き直すたびに白紙に戻す
     folderFocusFilter = !!focus;   // 押して開いたらそのまま名前を打ち始められる
     panel.textContent = '';
@@ -6638,8 +6502,6 @@ function setupTabs() {
   function renderFolderPanel() {
     var myGen = ++_folderRenderGen;
     var dir = _wsFileDir();
-    var RW = window.MA.reviewWatch;
-    var store = _reviewStore();
     window.MA.workspace.listFolder(dir).then(function(res) {
       if (myGen !== _folderRenderGen) return;
       var entries = (res && res.entries) || [];
@@ -6697,49 +6559,9 @@ function setupTabs() {
         fileRoles = {}; roleScan = null; roleStatus = {};
       }
 
-      // SVG の追いつきは、図の中身とは別に一覧の時点で分かる。
-      var SF = window.MA.svgFreshness;
-      // 印の無い svg でも、上書きせずに描き直して
-      // 比べた控えがあれば内容で言い切れる。server が一覧と一緒に返す。
-      svgScan = SF ? SF.scan(entries, (res && res.verified) || {}) : null;
-      svgStatus = SF ? SF.statusMap(svgScan) : {};
-      // mtime とは別に、内容 (svg に刻んだ元 puml の sha1) での判定。
-      svgContent = SF && SF.contentMap ? SF.contentMap(svgScan) : {};
-      svgBasis = SF && SF.basisMap ? SF.basisMap(svgScan) : {};
-      // 行に「puml 変更 / SVG 書き出し / labels 一致」を
-      // 並べ、印を持たない図に「未刻印」を出すための 1 行ぶんの値。
-      var SCR = window.MA.svgCompareRow;
-      svgCompare = SCR ? SCR.map(entries, (res && res.verified) || {}) : {};
-      // 「今の puml の絵ではない」の先の
-      // 「では どの図の絵なのか」。印を同じフォルダの他の図の sha1 と突き合わせる。
-      var SX = window.MA.svgCross;
-      svgCross = SX ? SX.scan(entries) : null;
-      _svgCrossLatest = svgCross;
-      // puml の保存時刻と SVG の書き出し時刻を
-      // 同じ行に並べる。片方しか出ていない間は「いつ書き出した SVG か」を
-      // ls -l で見に行くことになっていた。
-      svgMtimes = SF && SF.svgMtimeMap ? SF.svgMtimeMap(svgScan) : {};
-
-      // 束ねる判定は一覧が既に持っている hash だけで
-      // 済む (本文を取り直さないので、一覧を開いた時点で言い切れる)。
-      var DPM = window.MA.dupeMerge;
-      dupeGroups = DPM ? DPM.scan(entries) : [];
-
-      // 対になる成果物の反映漏れ。判定に要るのは
-      // 一覧が既に持っている mtime・hash・svg の刻印だけなので、本文を取り直さない
-      // (取り寄せるのは [差分] を押した 1 枚ぶんだけ)。
-      var SS = window.MA.syncState;
-      syncScan = SS ? SS.scan(entries, (res && res.verified) || {}) : null;
-
-      // 下書きと本体の差し替え待ちキュー。
-      // sync-state は「反映漏れのある図」だけを名指しするので、中身が揃って
-      // もう消してよい下書きは一覧から消える。キューはそれも載せて
-      // 「下書きが何枚・うち何枚が反映待ちで何枚が削除予定か」を全部言う。
-      var SQ = window.MA.swapQueue;
-      swapQueue = SQ ? SQ.build(entries, (res && res.verified) || {}) : null;
-
-      // 「今読んでいる版が、読み始めた瞬間のものか」は中身では分からない。
-      // server が返した「今」と各図の更新時刻の差だけで判定する。
+      // 保存先の一覧は 並べる・絞る・印を付けてまとめて開く・最近開いた図 だけ。
+      // SVG の鮮度・前回控えとの比較・中身が同じ図の統合・反映状況・直近の更新・下書きの印での仕分けは
+      // TICKET-owner-20261116-0241-prune で外した (保存先に前の版が書いた控えが残っていても読まない)。
       // 上書きで消えた中身の控え。一覧の時点で
       // 「この図には前の版がある」「本体は消えたが版は残っている」を出す。
       versionCounts = {};
@@ -6771,131 +6593,16 @@ function setupTabs() {
         kindBodyByName = {};
       }
 
-      var WA = window.MA.writeActivity;
-      writeScan = WA ? WA.scan(entries, res && res.now) : null;
-      writeStatus = WA ? WA.statusMap(writeScan) : {};
-      writeAge = WA ? WA.ageMap(writeScan) : {};
-
-      // 消えた図の一時控えの印は捨てる (印だけが残り続けないようにする)。
-      var DM = window.MA.draftMark;
-      draftNames = DM ? DM.keepExisting(DM.load(store, dir), entries) : [];
-      if (DM) DM.save(store, dir, draftNames);
-
-      // 対象 set は「今そこにあるもの」ではなく利用者が決めた期待値なので、
-      // 消えた図の名前を落とさない (落とすと「足りない」が言えなくなる)。
-      var TS = window.MA.targetSet;
-      targetNames = TS ? TS.load(store, dir) : [];
-      targetScan = TS ? TS.reconcile(targetNames, entries) : null;
-
-      if (!RW) {
-        var plain = DM ? DM.split(entries, draftNames) : { items: entries, drafts: [] };
-        setFolderNames(plain);
-        folderStatus = {};
-        appendRecentSection(panel, entries);
-        panel.appendChild(folderFilterBar());
-        panel.appendChild(folderPickBar());
-        appendTargetSection(panel, dir);
-        appendRoleSection(panel, dir);
-        appendSvgSection(panel, dir);
-        appendWriteSection(panel, dir);
-        appendDupeSection(panel, dir);
-      appendSyncSection(panel, dir);
-        appendSwapQueueSection(panel, dir);
-        appendKindSummary(panel);
-        appendKindMismatchSummary(panel);
-        plain.items.forEach(function(e) { panel.appendChild(folderRow(e.name || e, null, null)); });
-        appendDraftSection(plain.drafts, function(e) { return folderRow(e.name || e, null, null); });
-        appendGoneVersionsSection(panel);
-        raiseRowsInTree();
-        syncFolderPickUi();
-        applyFolderFilter();
-        focusFolderFilter();
-        return;
-      }
-      var seen = RW.load(store, dir);
-      var first = !RW.hasSeen(store, dir);
-      var rows = RW.diff(seen, entries);
-      // 「前回控えから 1 バイトも変わっていない」図に
-      // 印を付ける。印が無い状態は「変わっていない」と「まだ確かめていない」の
-      // どちらにも読めるので、言い切れる方にだけ印を出す。
-      var CS = window.MA.changeStamp;
-      stampStore = CS ? CS.load(store, dir) : {};
-      stampMarks = {};
-      if (CS) {
-        rows.forEach(function(r) {
-          var st = CS.stamp(stampStore, r, RW.formatMtime);
-          if (st) stampMarks[r.name] = st;
-        });
-      }
-      // 一時控えは成果物とは別扱い。読む枚数の要約も成果物だけで数える
-      // (畳んだ控えの「変更 3 枚」を出すと、読むものが増えたように見える)。
-      var sp = DM ? DM.split(rows, draftNames) : { items: rows, drafts: [] };
-      setFolderNames(sp);
-
-      var head = document.createElement('div');
-      head.className = 'folder-summary';
-      head.textContent = first ? '前回見た版の控えがありません（全部を新規として出しています）' : RW.summary(sp.items);
-      panel.appendChild(head);
-      // 読む枚数は「印の付いていない図」の枚数。audit をフルで打ち直さずに
-      // 今日どれだけ読むかがここで決まる。
-      if (CS && !first) {
-        var stampHead = document.createElement('div');
-        stampHead.className = 'folder-summary folder-stamp-summary';
-        stampHead.id = 'folder-stamp-summary';
-        stampHead.textContent = CS.summary(stampStore, sp.items);
-        panel.appendChild(stampHead);
-      }
+      setFolderNames(entries);
       appendRecentSection(panel, entries);
       panel.appendChild(folderFilterBar());
       panel.appendChild(folderPickBar());
-      appendTargetSection(panel, dir);
       appendRoleSection(panel, dir);
-      appendSvgSection(panel, dir);
-      appendWriteSection(panel, dir);
-      appendDupeSection(panel, dir);
-      appendSyncSection(panel, dir);
-      appendSwapQueueSection(panel, dir);
-
-      folderStatus = {};
-      rows.forEach(function(r) { folderStatus[r.name] = r.status; });
-      syncFolderPickUi();
-      function rowOf(r) {
-        return folderRow(r.name, RW.badge(r.status), RW.formatMtime(r.mtime), r.status);
-      }
       appendKindSummary(panel);
       appendKindMismatchSummary(panel);
-      sp.items.forEach(function(r) { panel.appendChild(rowOf(r)); });
-      appendDraftSection(sp.drafts, rowOf);
+      entries.forEach(function(e) { panel.appendChild(folderRow(e.name || e)); });
       appendGoneVersionsSection(panel);
-
-      RW.removed(seen, entries).forEach(function(name) {
-        var gone = document.createElement('div');
-        gone.className = 'folder-empty folder-gone';
-        gone.setAttribute('data-file-name', name);
-        gone.textContent = '— ' + name + '（前回はあった図が今はありません）';
-        panel.appendChild(gone);
-      });
       raiseRowsInTree();
-
-      var mark = document.createElement('button');
-      mark.className = 'folder-mark-seen';
-      mark.setAttribute('type', 'button');
-      mark.textContent = 'ここまで見たことにする';
-      mark.title = '今の一覧を「前回見た版」として控える。次に開いたときは、これ以降に変わった図だけにバッジが付く';
-      mark.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        RW.save(store, dir, RW.snapshot(entries));
-        // 控えを取り直した回を 1 回と数える。次に開いたときの「変化なし ×N」は
-        // 「N 回続けて控えを取って中身が同じだった」を指す。
-        if (CS) CS.save(store, dir, CS.advance(stampStore, rows, new Date().toISOString()));
-        // 指紋だけでなく本文も控える。次に開いたとき、変更図の旧DSL を
-        // 取り直さずに並べて出せる。
-        mark.disabled = true;
-        mark.textContent = '控えを取っています…';
-        saveSeenBodies(dir, folderNames).then(function() { renderFolderPanel(); },
-                                              function() { renderFolderPanel(); });
-      });
-      panel.appendChild(mark);
       syncFolderPickUi();
       applyFolderFilter();
       focusFolderFilter();
@@ -6917,24 +6624,17 @@ function setupTabs() {
     if (input && input.focus) { try { input.focus(); } catch (e) {} }
   }
 
-  // 一覧の「選ぶ」対象は、今この場に出ている図だけ。畳んでいる一時控えを
-  // folderNames に入れると、「全部選ぶ」が見えていない控えまで開いてしまう。
-  function setFolderNames(sp) {
-    var vis = (sp.items || []).map(function(e) { return e.name || e; });
-    if (!_draftCollapsed) {
-      (sp.drafts || []).forEach(function(e) { vis.push(e.name || e); });
-    }
-    folderNames = vis;
+  // 一覧の「選ぶ」対象は、一覧に並べた図。
+  function setFolderNames(entries) {
+    folderNames = (entries || []).map(function(e) { return e.name || e; });
     if (window.MA.folderSelect) {
       folderPicked = window.MA.folderSelect.keepExisting(folderPicked, folderNames);
     }
   }
 
-  // 一時控えは成果物の下にまとめ、既定では畳む。畳んだ枚数は必ず言葉で出す
-  // (一覧に出ていないことを「保存できていない」と読み違えないため)。
   // FILES ツリーの「保存先」節 (幅 208px) では、ファイルの行を入口
-  // (ファイルを開く・保存先タブ・絞り込み) のすぐ下へ上げる。棚 (選ぶバー・対象 set・SVG の鮮度…) はその下。
-  // 行は約 35 個の棚の後ろに積まれ、節を開いた位置から約 2,300px 下にあった。要素・id は動かすだけで作り直さない。
+  // (ファイルを開く・保存先タブ・絞り込み) のすぐ下へ上げる。棚 (選ぶバー・図種の内訳…) はその下。
+  // 要素・id は動かすだけで作り直さない。
   function raiseRowsInTree() {
     if (!panel || !panel.closest || !panel.closest('#files-panel')) return;
     var kids = Array.prototype.slice.call(panel.children);
@@ -6947,89 +6647,14 @@ function setupTabs() {
     kids.forEach(function(c) {
       var cl = c.classList;
       if (!cl) return;
-      if (cl.contains('folder-row') || cl.contains('folder-draft-head') || cl.contains('folder-draft-body') || cl.contains('folder-gone') ||
+      if (cl.contains('folder-row') ||
           (cl.contains('folder-item') && c.hasAttribute('data-file-name'))) {
         panel.insertBefore(c, ref);
       }
     });
   }
 
-  function appendDraftSection(drafts, factory) {
-    var DM = window.MA.draftMark;
-    if (!DM || !drafts || drafts.length === 0) return;
-    var bar = document.createElement('div');
-    bar.className = 'folder-draft-head';
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-draft-toggle';
-    b.setAttribute('data-draft-count', String(drafts.length));
-    b.textContent = DM.toggleLabel(drafts.length, _draftCollapsed);
-    b.title = DM.summary(drafts.length, _draftCollapsed);
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      _draftCollapsed = !_draftCollapsed;
-      renderFolderPanel();
-    });
-    bar.appendChild(b);
-    panel.appendChild(bar);
-    // FILES ツリーはこの一覧の行を読んで組む。
-    // 畳んだ控えの行を作らないと、控えにした図がツリーから消え、部品の枚数・未作成の略号・下端の「N 図」から
-    // 外れていた。畳んでいる間も行は作り、見えない入れ物 (.folder-draft-body) に入れる。一覧では見えず、
-    // 絞り込みの数 (applyFolderFilter) と「全部選ぶ」(setFolderNames) にも入らない。
-    var host = panel;
-    if (_draftCollapsed) {
-      host = document.createElement('div');
-      host.className = 'folder-draft-body';
-      host.hidden = true;
-      host.style.display = 'none';
-      panel.appendChild(host);
-    }
-    drafts.forEach(function(e) {
-      var row = factory(e);
-      if (row && row.classList) row.classList.add('folder-row-draft');
-      host.appendChild(row);
-    });
-  }
-
-  // 行ごとの「控えにする / 控え」。既に溜まっている控えも 1 クリックで畳める
-  // (名前の付け方を規約にすると、規約から外れた控えを取りこぼす)。
-  function folderDraftButton(name) {
-    var DM = window.MA.draftMark;
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-draft';
-    b.setAttribute('data-draft-name', name);
-    var isDraft = !!(DM && DM.has(draftNames, name));
-    if (isDraft) b.classList.add('folder-draft-on');
-    b.textContent = DM ? DM.rowLabel(isDraft) : '控え';
-    b.title = DM ? DM.rowTitle(isDraft) : '';
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      _draftToggleName(name);
-      syncDraftButton();
-      renderFolderPanel();
-    });
-    return b;
-  }
-
-  // 印を付ける欄と、名前を押して 1 枚だけ開く従来のボタンを 1 行に並べる。
-  // 名前を押したときの動きは変えない (1 枚だけ開くのが今までどおり最短)。
-  // SVG が puml に追いついているかの要約と、
-  // 追いついていない図だけを 1 押しで作り直すボタン。
-  // 22 枚全部を毎回描き直すのではなく、古い枚数だけを描き直す。
-  // 他の人が今も書き込み中かもしれない図。
-  // 読み始めた版と読み終えた版が混ざると、古い版と新しい版が混ざった指摘になる。
-  // 「直近 N 分以内に更新された図」を名指しし、後回しにする / 取り直すの
-  // どちらかをその場で選べるようにする。
-  // 状態遷移図の遷移ラベルとクラス図のメソッドの
-  // 対応は、これまで tools/audit.js を実行して JSON を読み解くしかなかった。
-  // 部品ごとに 3 枚を束ねた行を一覧の頭に置き、宣言の無い名前を赤字で名指しする。
-  // ── 中身が同じ図の統合と、1 枚だけの削除 ──
-  // 指摘.md は毎回「can_init_sequence-編集中 が本体と byte 単位で同一のまま」の
-  // 整理を求めるのに、📂一覧には開く・名前を変えるしか無く、実現するには保存
-  // フォルダを直接触るしかなかった (体験の規律で禁止)。ここで「統合」を 1 押しに
-  // する。消した図の過去版は server に残るので、取り違えても版から戻せる。
-
+  // ── 1 枚だけの削除 ── 消した図の過去版は server に残るので、取り違えても版から戻せる。
   // 名前を順に消す。1 枚しくじっても残りは続ける (途中で止まると、
   // どこまで消えたのかを保存フォルダで数え直すことになる)。
   function deleteFolderFiles(names, dir) {
@@ -7059,325 +6684,6 @@ function setupTabs() {
     });
   }
 
-  function appendDupeSection(host, dir) {
-    var DPM = window.MA.dupeMerge;
-    if (!DPM || !dupeGroups.length) return;
-    var WS = window.MA.workspace;
-    var sum = document.createElement('div');
-    sum.className = 'folder-dupe-summary';
-    sum.id = 'folder-dupe-summary';
-    sum.textContent = DPM.summary(dupeGroups);
-    sum.title = '保存フォルダの中で本文が byte 単位で同じ図です。'
-      + '「統合」を押すと残す 1 枚だけにします（消した図の過去版は残ります）';
-    host.appendChild(sum);
-    dupeGroups.forEach(function(g) {
-      var row = document.createElement('div');
-      row.className = 'folder-dupe-row';
-      row.setAttribute('data-dupe-hash', g.hash);
-      var txt = document.createElement('span');
-      txt.className = 'folder-dupe-label';
-      txt.textContent = DPM.label(g);
-      row.appendChild(txt);
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'folder-dupe-merge';
-      b.setAttribute('data-dupe-keep', g.keep);
-      b.textContent = '統合';
-      b.title = g.keep + ' を残し、' + g.drop.join('・') + ' を保存フォルダから消します';
-      if (!WS || !WS.deleteFile) { b.disabled = true; b.title = 'この保存先では消せません'; }
-      b.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        b.disabled = true;
-        b.textContent = '統合中…';
-        deleteFolderFiles(g.drop, dir);
-      });
-      row.appendChild(b);
-      host.appendChild(row);
-    });
-    if (dupeGroups.length > 1) {
-      var all = document.createElement('div');
-      all.className = 'folder-dupe-row';
-      var ab = document.createElement('button');
-      ab.type = 'button';
-      ab.className = 'folder-dupe-merge';
-      ab.id = 'folder-dupe-merge-all';
-      var drops = dupeGroups.reduce(function(acc, g) { return acc.concat(g.drop); }, []);
-      ab.textContent = 'すべて統合（' + drops.length + ' 枚を消す）';
-      ab.title = drops.join('・') + ' を消します（それぞれの本体は残ります）';
-      ab.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        ab.disabled = true;
-        ab.textContent = '統合中…';
-        deleteFolderFiles(drops, dir);
-      });
-      all.appendChild(ab);
-      host.appendChild(all);
-    }
-  }
-
-  // 「本体 / 編集中 / SVG」の反映状況。
-  // 直した内容が下書きにしか入っていない事故は、手で diff を取るまで誰も気付けなかった。
-  // 一覧の時点で向きまで言い、差分はその場で開く (1 操作で突合が終わる)。
-  function appendSyncSection(host, dir) {
-    var SS = window.MA.syncState;
-    if (!SS || !syncScan || !syncScan.counts.total) return;
-    var bad = SS.hasIssue(syncScan);
-    var sum = document.createElement('div');
-    sum.className = 'folder-sync-summary' + (bad ? ' has-stale' : '');
-    sum.id = 'folder-sync-summary';
-    sum.textContent = SS.summary(syncScan);
-    sum.title = '同じ図の「本体 .puml」「編集中の下書き」「書き出した .svg」を突き合わせた結果です。'
-      + '中身が同じ下書きは反映漏れに数えません（片付けは ⧉ 重複の節）';
-    host.appendChild(sum);
-    if (!bad) return;
-
-    syncScan.issues.forEach(function(r) {
-      var row = document.createElement('div');
-      row.className = 'folder-sync-row';
-      row.setAttribute('data-sync-name', r.name);
-      row.setAttribute('data-sync-issue', r.issue);
-
-      var head = document.createElement('div');
-      head.className = 'folder-sync-head';
-      var txt = document.createElement('span');
-      txt.className = 'folder-sync-label';
-      txt.textContent = r.name + ' — ' + SS.issueText(r);
-      head.appendChild(txt);
-      row.appendChild(head);
-
-      // 3 つの成果物を、どれが最新かが読める並びで出す。
-      var arts = document.createElement('div');
-      arts.className = 'folder-sync-arts';
-      SS.lines(r).forEach(function(l) {
-        var a = document.createElement('span');
-        a.className = 'folder-sync-art folder-sync-' + l.state;
-        a.setAttribute('data-sync-role', l.role);
-        a.textContent = l.label + ' ' + SS.stateMark(l.state)
-          + (l.at ? '（' + l.at + '）' : '');
-        a.title = l.name + ': ' + SS.stateMark(l.state);
-        arts.appendChild(a);
-      });
-      row.appendChild(arts);
-
-      var acts = document.createElement('div');
-      acts.className = 'folder-sync-acts';
-      if (r.draft) {
-        var d = document.createElement('button');
-        d.type = 'button';
-        d.className = 'folder-sync-diff';
-        d.setAttribute('data-sync-diff', r.name);
-        d.textContent = syncOpen === r.name ? '差分を閉じる' : SS.diffLabel(r);
-        d.title = SS.diffTitle(r);
-        d.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          if (syncOpen === r.name) { syncOpen = ''; renderFolderPanel(); return; }
-          syncOpen = r.name;
-          loadSyncDiff(r, dir);
-        });
-        acts.appendChild(d);
-      }
-      // 直す先をその場で開く。名指しの後に一覧から目で探し直すなら手間は残る。
-      [r.baseMissing ? null : r.name, r.draftName].forEach(function(n) {
-        if (!n) return;
-        var o = document.createElement('button');
-        o.type = 'button';
-        o.className = 'folder-sync-open';
-        o.setAttribute('data-sync-open', n);
-        o.textContent = '開く: ' + n;
-        o.title = n + '.puml を開きます';
-        o.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          openFromFolder(n);
-        });
-        acts.appendChild(o);
-      });
-      row.appendChild(acts);
-
-      if (syncOpen === r.name) {
-        var box = document.createElement('div');
-        box.className = 'folder-sync-diff-box';
-        box.id = 'folder-sync-diff-box';
-        var cached = syncDiffCache[_syncSig(r)];
-        if (!cached) box.textContent = '本文を読んでいます…';
-        else if (cached.error) box.textContent = cached.error;
-        else if (!cached.lines.length) box.textContent = '本文の違いはありません（改行・行末の空白だけの差）';
-        else {
-          cached.lines.forEach(function(l) {
-            var li = document.createElement('div');
-            li.className = 'folder-sync-diff-line folder-sync-diff-'
-              + (l.mark === '+' ? 'add' : l.mark === '-' ? 'del' : 'ctx');
-            li.textContent = l.mark + ' ' + l.text;
-            box.appendChild(li);
-          });
-          var note = document.createElement('div');
-          note.className = 'folder-sync-diff-note';
-          note.textContent = '− ' + r.name + ' / ＋ ' + r.draftName;
-          box.appendChild(note);
-        }
-        row.appendChild(box);
-      }
-      host.appendChild(row);
-    });
-  }
-
-  // 差し替え待ちキュー。
-  // 反映漏れの節 (appendSyncSection) が出すのは「食い違っている図」だけなので、
-  // 下書きの全体像 —— 何枚あって、どれが本体待ちで、どれがもう消してよいか —— は
-  // `-編集中` を ls して目で拾うしかなかった。ここはその台帳を 1 つの節にまとめ、
-  // 手順7 で primary へ渡す文面をそのまま取り出せるようにする。
-  function appendSwapQueueSection(host, dir) {
-    var SQ = window.MA.swapQueue;
-    if (!SQ || !swapQueue) return;
-    var sec = document.createElement('div');
-    sec.className = 'folder-swapq';
-    sec.id = 'folder-swapq';
-    sec.setAttribute('data-swapq-total', String(swapQueue.counts.total));
-
-    var sum = document.createElement('div');
-    sum.className = 'folder-swapq-summary'
-      + (swapQueue.counts.apply || swapQueue.counts.restore ? ' has-pending' : '');
-    sum.id = 'folder-swapq-summary';
-    sum.textContent = SQ.summary(swapQueue);
-    sum.title = '`-編集中` などの下書きと、その本体の対応表です。'
-      + '「削除予定」は本体に中身が入っている下書きで、消しても内容は失われません';
-    sec.appendChild(sum);
-
-    swapQueue.rows.forEach(function(r) {
-      var row = document.createElement('div');
-      row.className = 'folder-swapq-row folder-swapq-' + r.action;
-      row.setAttribute('data-swapq-name', r.name);
-      row.setAttribute('data-swapq-action', r.action);
-
-      var txt = document.createElement('span');
-      txt.className = 'folder-swapq-label';
-      txt.textContent = r.draft + ' → ' + r.base + ' … ' + r.label
-        + (r.reason ? '（' + r.reason + '）' : '');
-      row.appendChild(txt);
-
-      // 直す先をその場で開く (名指しの後に一覧から目で探し直さない)。
-      [r.baseMissing ? null : r.name, r.draftName].forEach(function(n) {
-        if (!n) return;
-        var o = document.createElement('button');
-        o.type = 'button';
-        o.className = 'folder-swapq-open';
-        o.setAttribute('data-swapq-open', n);
-        o.textContent = '開く: ' + n;
-        o.title = n + '.puml を開きます';
-        o.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          openFromFolder(n);
-        });
-        row.appendChild(o);
-      });
-      sec.appendChild(row);
-    });
-
-    var acts = document.createElement('div');
-    acts.className = 'folder-swapq-acts';
-    var rb = document.createElement('button');
-    rb.type = 'button';
-    rb.className = 'folder-swapq-report-btn';
-    rb.id = 'folder-swapq-report-btn';
-    rb.textContent = swapReportOpen ? 'まとめを閉じる' : '依頼のまとめを出す';
-    rb.title = '「下書きは用意済み、反映待ち」を、ファイル名込みの文面で出します'
-      + '（手順7 で primary にそのまま渡せます）';
-    rb.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      swapReportOpen = !swapReportOpen;
-      renderFolderPanel();
-    });
-    acts.appendChild(rb);
-    sec.appendChild(acts);
-
-    if (swapReportOpen) {
-      var box = document.createElement('textarea');
-      box.className = 'folder-swapq-report';
-      box.id = 'folder-swapq-report';
-      box.readOnly = true;
-      box.rows = Math.min(12, swapQueue.rows.length + 2);
-      box.value = SQ.reportText(swapQueue);
-      box.addEventListener('click', function(ev) { ev.stopPropagation(); box.select(); });
-      sec.appendChild(box);
-    }
-    host.appendChild(sec);
-  }
-
-  // 行に付く「本体 / 差し替え待ち / 削除予定」。下書きのある図とその下書きにだけ付く
-  // (全行に付くと印でなくなる)。手順1 はこの 1 語で役割が読める。
-  function folderSwapBadge(name) {
-    var SQ = window.MA.swapQueue;
-    if (!SQ || !swapQueue || !swapQueue.byName[name]) return null;
-    var st = SQ.fileState(swapQueue, name);
-    var el = document.createElement('span');
-    el.className = 'folder-swapq-badge folder-swapq-badge-' + (st.action || 'none');
-    el.setAttribute('data-swapq-badge-of', name);
-    el.setAttribute('data-swapq-state', st.state);
-    el.textContent = st.state;
-    el.title = st.title;
-    return el;
-  }
-
-  // 差分の控えは本文が書き換わったら捨てる (古い diff を今の中身として見せない)。
-  function _syncSig(row) {
-    return row.name + '@' + ((row.base && row.base.mtime) || '')
-      + '/' + ((row.draft && row.draft.mtime) || '');
-  }
-
-  // 差分に要る本文は、押された 1 枚ぶんだけ取り寄せる。
-  function loadSyncDiff(row, dir) {
-    var SD = window.MA.saveDiff;
-    function read(name) {
-      var url = '/autosave?dir=' + encodeURIComponent(dir || _wsFileDir())
-        + '&type=' + encodeURIComponent(name);
-      return window.fetch(url).then(function(r) { return r.ok ? r.text() : null; });
-    }
-    renderFolderPanel();
-    Promise.all([row.baseMissing ? Promise.resolve('') : read(row.name), read(row.draftName)])
-      .then(function(texts) {
-        if (texts[1] == null || texts[0] == null) {
-          syncDiffCache[_syncSig(row)] = { error: '本文を読めませんでした' };
-        } else {
-          syncDiffCache[_syncSig(row)] = {
-            lines: SD ? SD.diffBetween(texts[0], texts[1], 1) : [],
-          };
-        }
-        renderFolderPanel();
-      }, function() {
-        syncDiffCache[_syncSig(row)] = { error: '本文を読めませんでした' };
-        renderFolderPanel();
-      });
-  }
-
-  // 行に付く反映漏れの印。本体の行にも下書きの行にも同じ印を出す。
-  function folderSyncBadge(name) {
-    var SS = window.MA.syncState;
-    if (!SS || !syncScan) return null;
-    var b = SS.badge(syncScan, name);
-    if (!b) return null;
-    var el = document.createElement('span');
-    el.className = 'folder-sync-badge folder-sync-badge-' + b.kind;
-    el.setAttribute('data-sync-badge-of', name);
-    el.setAttribute('data-sync-badge', b.kind);
-    el.textContent = b.mark;
-    el.title = b.title;
-    return el;
-  }
-
-  // 行に付く「本体 / 写し」の印。重複のある図にしか出ない。
-  function folderDupeBadge(name) {
-    var DPM = window.MA.dupeMerge;
-    if (!DPM || !dupeGroups.length) return null;
-    var b = DPM.badge(dupeGroups, name);
-    if (!b) return null;
-    var el = document.createElement('span');
-    el.className = 'folder-dupe-badge folder-dupe-' + b.kind;
-    el.setAttribute('data-dupe-of', name);
-    el.setAttribute('data-dupe-kind', b.kind);
-    el.textContent = b.mark;
-    el.title = b.title;
-    return el;
-  }
-
   // 行ごとの「1 枚だけ消す」。重複していない図も消せる (⚙設定の全削除しか
   // 無かったので、1 枚を消すには保存フォルダを直接触るしかなかった)。
   // 1 回目は身構えるだけ、2 回目で消す (押し間違いで図が消えない)。
@@ -7400,502 +6706,6 @@ function setupTabs() {
       deleteFolderFiles([name], _wsFileDir());
     });
     return b;
-  }
-
-  function appendWriteSection(panel, dir) {
-    var WA = window.MA.writeActivity;
-    if (!WA || !writeScan || !writeScan.rows.length) return;
-    var active = writeScan.counts.active > 0 || writeScan.counts.unknown > 0;
-    var sum = document.createElement('div');
-    sum.className = 'folder-write-summary' + (active ? ' has-active' : '');
-    sum.id = 'folder-write-summary';
-    sum.textContent = WA.summary(writeScan);
-    panel.appendChild(sum);
-    if (!active) return;
-
-    // 件数だけでは「どの図を後回しにするか」が 22 行の中の目視に戻る。
-    // 名前と「何分前か」を並べる (30 秒前と 5 分前では判断が変わる)。
-    var names = document.createElement('div');
-    names.className = 'folder-write-names';
-    var label = document.createElement('span');
-    label.className = 'folder-write-names-label';
-    label.textContent = '更新中の可能性';
-    names.appendChild(label);
-    writeScan.activeNames.forEach(function(name) {
-      var link = document.createElement('button');
-      link.type = 'button';
-      link.className = 'folder-write-name';
-      link.setAttribute('data-write-name', name);
-      link.textContent = name + '（' + WA.ageText(writeAge[name]) + '）';
-      link.title = '今も書き込みが続いているかもしれません。後回しにするか、一覧を取り直してから読んでください';
-      link.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        openFromFolder(name);
-      });
-      names.appendChild(link);
-    });
-    if (writeScan.activeNames.length) panel.appendChild(names);
-
-    var bar = document.createElement('div');
-    bar.className = 'folder-write-actions';
-
-    // 「後回しにする」の実体。落ち着いている図だけに印を付ければ、
-    // まとめて開く操作がそのまま「今読んでよい図だけを読む」になる。
-    var skip = document.createElement('button');
-    skip.type = 'button';
-    skip.className = 'folder-write-skip';
-    skip.textContent = '更新中を除いて選ぶ（' + WA.settledNames(writeScan).length + ' 枚）';
-    skip.title = '直近の窓に更新された図と、時刻が取れない図を外して印を付ける。'
-      + '書き込み中かもしれない図を後回しにしたまま、残りを読み進められる';
-    skip.disabled = !window.MA.folderSelect || WA.settledNames(writeScan).length === 0;
-    skip.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      var FS = window.MA.folderSelect;
-      if (!FS) return;
-      folderPicked = FS.selectAll(WA.settledNames(writeScan).filter(function(n) {
-        return folderNames.indexOf(n) >= 0;
-      }));
-      syncFolderPickUi();
-    });
-    bar.appendChild(skip);
-
-    // 「取り直す」の実体。時刻は開いた瞬間のもので止まっているので、
-    // 押した時点の更新時刻で判定し直す。
-    var again = document.createElement('button');
-    again.type = 'button';
-    again.className = 'folder-write-refresh';
-    again.textContent = '一覧を取り直す';
-    again.title = '保存フォルダの更新時刻をもう一度読み、この印を今の時刻で付け直す';
-    again.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      renderFolderPanel();
-    });
-    bar.appendChild(again);
-    panel.appendChild(bar);
-  }
-
-  function appendSvgSection(panel, dir) {
-    var SF = window.MA.svgFreshness;
-    if (!SF || !svgScan || !svgScan.rows.length) return;
-    var sum = document.createElement('div');
-    var stale = svgScan.needsRender.length > 0;
-    sum.className = 'folder-svg-summary' + (stale ? ' has-stale' : '');
-    sum.textContent = SF.summary(svgScan);
-    panel.appendChild(sum);
-
-    // mtime の 1 行だけでは「見た目が読めるか」は言えない。
-    // svg に刻んだ元 puml の sha1 と今の puml を突き合わせた結果を、その下に 1 行で出す。
-    if (SF.contentSummary) {
-      var csum = document.createElement('div');
-      var differ = (svgScan.contentCounts && svgScan.contentCounts.differ) > 0;
-      csum.className = 'folder-svg-content' + (differ ? ' has-stale' : '');
-      csum.id = 'folder-svg-content';
-      csum.textContent = SF.contentSummary(svgScan);
-      panel.appendChild(csum);
-    }
-
-    // 上の 1 行が「印の突合」で出た答えなのか
-    // 「描き直してのバイト比較」で出た答えなのかが画面に無く、同じ判定を自分で
-    // やろうとすると、印の付かない /render の応答とバイト比較して全件ずれに見える。
-    // 何を見た答えかをその場に書く (server.py を読みに行かせない)。
-    // 上の 2 行は「mtime で古いか」「内容が一致するか」を
-    // 別々に言う。reviewer が手順4.10・6 で毎回作っていたのは、この 2 つを図ごとに
-    // 突き合わせた「labels が一致しているか」の一覧なので、その集計をそのまま 1 行にする。
-    var SCR = window.MA.svgCompareRow;
-    if (SCR) {
-      var cmpRows = [];
-      svgScan.rows.forEach(function(r) {
-        var c = svgCompare[r.name];
-        if (c) cmpRows.push(c);
-      });
-      var lsum = document.createElement('div');
-      var lbad = SCR.counts(cmpRows);
-      lsum.className = 'folder-svg-labels-summary' + (lbad.differ || lbad.missing ? ' has-stale' : '');
-      lsum.id = 'folder-svg-labels-summary';
-      lsum.textContent = SCR.summary(cmpRows);
-      lsum.title = '各図の行に「puml の保存時刻 / SVG の書き出し時刻 / labels 一致」が並んでいます。'
-        + '未確認の図は「未刻印」の行から確かめられます';
-      panel.appendChild(lsum);
-    }
-
-    // 出力先がクロスした図は、上の 3 行では
-    // どれも「内容ずれ」にしか見えない。相手を名指しした 1 行をその下に出す。
-    var SX2 = window.MA.svgCross;
-    if (SX2 && svgCross && svgCross.rows.length) {
-      var xsum = document.createElement('div');
-      xsum.className = 'folder-svg-cross-summary has-stale';
-      xsum.id = 'folder-svg-cross-summary';
-      xsum.textContent = SX2.summaryLine(svgCross);
-      xsum.title = '印 (@pua-source-sha1) が、同じフォルダの別の図の puml のものになっています。'
-        + '行の「他図の絵 / 絵が入れ替わり」で相手が分かります';
-      panel.appendChild(xsum);
-    }
-
-    if (SF.basisNote) {
-      var bnote = document.createElement('div');
-      bnote.className = 'folder-svg-basis';
-      bnote.id = 'folder-svg-basis';
-      bnote.textContent = SF.basisNote(svgScan);
-      panel.appendChild(bnote);
-    }
-
-    // 件数だけだと「どの図か」を 22 行の中から
-    // 目で探すことになり、SVG の書き出し漏れに気付くのが偶然に戻る。
-    // 無い図・古い図の名前をここに並べ、押せばその図を開けるようにする。
-    var short = SF.shortfall ? SF.shortfall(svgScan) : [];
-    short.forEach(function(g) {
-      var row = document.createElement('div');
-      row.className = 'folder-svg-names svg-' + g.status;
-      row.setAttribute('data-svg-status', g.status);
-      var label = document.createElement('span');
-      label.className = 'folder-svg-names-label';
-      label.textContent = g.label;
-      row.appendChild(label);
-      g.names.forEach(function(name) {
-        var link = document.createElement('button');
-        link.type = 'button';
-        link.className = 'folder-svg-name';
-        link.textContent = name;
-        link.title = g.title;
-        link.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          openFromFolder(name);
-        });
-        row.appendChild(link);
-      });
-      // 下の「古い SVG を作り直す」は古い・無い・内容ずれを
-      // まとめて作り直すので、この行に名指しされた図だけを狙えない。行の末尾に
-      // 「この N 枚だけ作り直す」を置き、reviewer に指摘された分だけを 1 押しで直せるようにする。
-      if (SF.groupRenderLabel) {
-        var only = document.createElement('button');
-        only.type = 'button';
-        only.className = 'folder-svg-names-render';
-        only.setAttribute('data-svg-status', g.status);
-        only.textContent = SF.groupRenderLabel(g);
-        only.title = SF.groupRenderTitle(g);
-        only.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          only.disabled = true;
-          renderStaleSvgs(dir, g.names, only);
-        });
-        row.appendChild(only);
-      }
-      panel.appendChild(row);
-    });
-
-    // 印の無い図の名前。要約の「未確認 N 枚」だけでは
-    // どの 1 枚かが分からず、毎回 audit.js を挟んで突き止めていた (実データ 22 枚中 1 枚)。
-    // 行末の押しでその図だけを、上書きせずに描き直して確かめる。
-    var un = SF.unstamped ? SF.unstamped(svgScan) : null;
-    if (un) {
-      var urow = document.createElement('div');
-      urow.className = 'folder-svg-names svg-unverified';
-      urow.id = 'folder-svg-unstamped';
-      urow.setAttribute('data-svg-status', 'unverified');
-      var ulabel = document.createElement('span');
-      ulabel.className = 'folder-svg-names-label';
-      ulabel.textContent = un.label;
-      urow.appendChild(ulabel);
-      un.names.forEach(function(name) {
-        var link = document.createElement('button');
-        link.type = 'button';
-        link.className = 'folder-svg-name';
-        link.textContent = name;
-        link.title = un.title;
-        link.addEventListener('click', function(ev) {
-          ev.stopPropagation();
-          openFromFolder(name);
-        });
-        urow.appendChild(link);
-      });
-      var uonly = document.createElement('button');
-      uonly.type = 'button';
-      uonly.className = 'folder-svg-names-verify';
-      uonly.setAttribute('data-svg-status', 'unverified');
-      uonly.textContent = SF.unstampedVerifyLabel(un);
-      uonly.title = 'この行の図だけを、保存中の SVG を上書きせずに 1 回描き直して比べる。'
-        + '一致すれば「内容一致」になり、以後この一覧だけで判定できる';
-      uonly.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        uonly.disabled = true;
-        verifySvgContents(dir, un.names, uonly);
-      });
-      urow.appendChild(uonly);
-      panel.appendChild(urow);
-    }
-
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'folder-svg-render';
-    // 集計行と同じ枚数を言っているかを外から見られるようにする
-    // (この 2 つが違う基準で数えていた)。
-    btn.id = 'folder-svg-render';
-    btn.textContent = SF.renderLabel(svgScan);
-    btn.title = '保存フォルダの puml から SVG を描き直す。puml には触らないので、'
-      + '「SVG が古い」がこの 1 押しで消える';
-    if (svgRenderNote) {
-      var note = document.createElement('div');
-      note.className = 'folder-svg-summary folder-svg-note';
-      note.textContent = svgRenderNote;
-      panel.appendChild(note);
-    }
-    btn.disabled = !stale;
-    btn.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      btn.disabled = true;
-      renderStaleSvgs(dir, svgScan.needsRender, btn);
-    });
-    panel.appendChild(btn);
-
-    // 印の無い svg は、mtime が揃っていても中身までは言えない。
-    // 1 押しで作り直せば印が付き、以後はこの一覧だけで内容の一致を言い切れる
-    // (22 枚を curl + diff で確かめ直す手順が要らなくなる)。
-    if (SF.proofLabel) {
-      var pbtn = document.createElement('button');
-      pbtn.type = 'button';
-      pbtn.className = 'folder-svg-proof-btn';
-      pbtn.id = 'folder-svg-proof';
-      pbtn.textContent = SF.proofLabel(svgScan);
-      pbtn.title = '内容の一致を言い切れない SVG を puml から作り直し、'
-        + 'どの puml から作ったかを SVG に刻む。次からは一覧を見るだけで済む';
-      pbtn.disabled = !(svgScan.needsProof && svgScan.needsProof.length);
-      pbtn.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        pbtn.disabled = true;
-        renderStaleSvgs(dir, svgScan.needsProof, pbtn);
-      });
-      panel.appendChild(pbtn);
-    }
-
-    // 作り直しは「今そう見える」に揃えるだけで、
-    // 保存されていた絵が正しかったかは分からなくなる。こちらは上書きせずに
-    // 裏で 1 回描き直してバイト比較し、結果だけを控える。実データ 22 枚を
-    // curl と diff で 1 枚ずつ確かめ直す手順が、この 1 押しに置き換わる。
-    if (SF.verifyLabel) {
-      if (svgVerifyNote) {
-        var vnote = document.createElement('div');
-        vnote.className = 'folder-svg-summary folder-svg-verify-note';
-        vnote.id = 'folder-svg-verify-note';
-        vnote.textContent = svgVerifyNote;
-        panel.appendChild(vnote);
-      }
-      var vbtn = document.createElement('button');
-      vbtn.type = 'button';
-      vbtn.className = 'folder-svg-verify-btn';
-      vbtn.id = 'folder-svg-verify';
-      vbtn.textContent = SF.verifyLabel(svgScan);
-      vbtn.title = '内容で言い切れない SVG を、上書きせずに裏で 1 回描き直して'
-        + 'バイト単位で比べる。食い違った図は「内容ずれ」として名指しされる';
-      vbtn.disabled = !(svgScan.needsVerify && svgScan.needsVerify.length);
-      vbtn.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        vbtn.disabled = true;
-        verifySvgContents(dir, svgScan.needsVerify, vbtn);
-      });
-      panel.appendChild(vbtn);
-    }
-
-    // 印だけで「内容ずれ」と分かった図は、確かめ直して
-    // いないので中身の材料が手元に無い。ここを押せば、その図だけをもう一度
-    // (上書きせずに) 突き合わせて、何が食い違うのかまで出す。
-    if (SF.diffLabel) {
-      var pending = (svgScan.needsDiff || []).filter(function(n) { return !svgVerifyDiffs[n]; });
-      var dbtn = document.createElement('button');
-      dbtn.type = 'button';
-      dbtn.className = 'folder-svg-diff-scan';
-      dbtn.id = 'folder-svg-diff-scan';
-      dbtn.textContent = SF.diffLabel(pending);
-      dbtn.title = '内容ずれの図をもう一度描き直して、欠落した要素と SVG に残る古い名前を出す';
-      dbtn.disabled = !pending.length;
-      dbtn.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        dbtn.disabled = true;
-        verifySvgContents(dir, pending, dbtn);
-      });
-      panel.appendChild(dbtn);
-    }
-
-    appendSvgDiffSection(panel);
-  }
-
-  // 「内容ずれ」と分かった図の、食い違いの中身。
-  // ここが無かった頃は、ずれた 7 枚を 1 枚ずつ開いて旧 participant 名や欠けた遷移を
-  // grep で突き止めていた (1 枚あたり 10 行前後)。欠落と残存を図ごとに並べ、
-  // primary へ渡す指摘文をその場でコピーできるようにする。
-  function appendSvgDiffSection(panel) {
-    var SD = window.MA.svgDiffSummary;
-    if (!SD) return;
-    var names = Object.keys(svgVerifyDiffs);
-    if (!names.length) return;
-    names.sort();
-    var head = document.createElement('div');
-    head.className = 'folder-svg-content has-stale';
-    head.id = 'folder-svg-diff-head';
-    head.textContent = '内容ずれの中身（' + names.length + ' 枚）';
-    panel.appendChild(head);
-
-    names.forEach(function(name) {
-      var diff = svgVerifyDiffs[name];
-      var box = document.createElement('div');
-      box.className = 'folder-svg-diff';
-      box.setAttribute('data-svg-diff', name);
-      var title = document.createElement('div');
-      var nm = document.createElement('span');
-      nm.className = 'folder-svg-diff-name';
-      nm.textContent = name;
-      title.appendChild(nm);
-      var sm = document.createElement('span');
-      sm.className = 'folder-svg-diff-sum';
-      sm.textContent = SD.summary(diff);
-      title.appendChild(sm);
-      box.appendChild(title);
-      diff.missing.forEach(function(r) {
-        var row = document.createElement('div');
-        row.className = 'folder-svg-diff-row diff-missing';
-        row.textContent = SD.kindLabel(r.kind) + ': ' + r.label;
-        box.appendChild(row);
-      });
-      diff.leftover.forEach(function(s) {
-        var row = document.createElement('div');
-        row.className = 'folder-svg-diff-row diff-leftover';
-        row.textContent = s;
-        box.appendChild(row);
-      });
-      // 文字に現れない差 (図形の数・並び順) も並べる。
-      // 「文字の上での違い無し」だけを見せると、レイアウトだけの差と誤読される。
-      (diff.structural || []).forEach(function(r) {
-        var row = document.createElement('div');
-        row.className = 'folder-svg-diff-row diff-structural';
-        row.textContent = r.text;
-        box.appendChild(row);
-      });
-      panel.appendChild(box);
-    });
-
-    // 指摘文はコピーする前に読めるようにする。読まずに渡す文は指摘にならない。
-    var report = document.createElement('textarea');
-    report.className = 'folder-svg-diff-report';
-    report.id = 'folder-svg-diff-report';
-    report.readOnly = true;
-    report.value = SD.reportAll(svgVerifyDiffs);
-    report.addEventListener('click', function(ev) { ev.stopPropagation(); });
-    panel.appendChild(report);
-
-    var copy = document.createElement('button');
-    copy.type = 'button';
-    copy.className = 'folder-svg-diff-copy';
-    copy.id = 'folder-svg-diff-copy';
-    copy.textContent = '指摘文をコピー';
-    copy.title = '食い違いの一覧を primary への指摘文としてコピーする';
-    copy.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      report.select();
-      var done = function() { copy.textContent = 'コピーしました'; };
-      // クリップボードが使えない場面 (権限なし・http 以外) でも、
-      // 選択済みの本文が残るので手で copy すれば渡せる。
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(report.value).then(done, function() { done(); });
-          return;
-        }
-      } catch (e) {}
-      done();
-    });
-    panel.appendChild(copy);
-  }
-
-  // 描画は 1 枚あたり数百 ms かかる。何枚目まで進んだかを押したボタンに出しながら、
-  // 10 枚ずつ server に渡す (1 枚ずつだと往復が、全部一度だと無反応が長い)。
-  function verifySvgContents(dir, names, btn) {
-    var queue = names.slice();
-    var total = queue.length;
-    var counts = { match: 0, differ: 0, missing: 0, error: 0 };
-    var mode = (document.getElementById('render-mode') || {}).value || 'local';
-    function step() {
-      if (queue.length === 0) {
-        var parts = [];
-        if (counts.match) parts.push('一致 ' + counts.match + ' 枚');
-        // 体裁だけの差を「食い違い」に
-        // 混ぜると、作り直す必要の無い図が件数を膨らませる。別の数として言う。
-        if (counts['differ-format']) parts.push('体裁差のみ ' + counts['differ-format'] + ' 枚');
-        if (counts['differ-content']) parts.push('食い違い ' + counts['differ-content'] + ' 枚');
-        if (counts.differ) parts.push('食い違い ' + counts.differ + ' 枚');
-        if (counts.missing) parts.push('SVG 無し ' + counts.missing + ' 枚');
-        if (counts.error) parts.push('描き直せず ' + counts.error + ' 枚');
-        svgVerifyNote = total + ' 枚を描き直して比べました（' + parts.join(' / ') + '）';
-        renderFolderPanel();
-        return;
-      }
-      var chunk = queue.splice(0, 10);
-      btn.textContent = '描き直して比べています…（残り ' + queue.length + ' 枚）';
-      fetch('/verify-svg', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dir: dir, types: chunk, mode: mode }),
-      }).then(function(resp) {
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        return resp.json();
-      }).then(function(res) {
-        var results = (res && res.results) || {};
-        var SD = window.MA.svgDiffSummary;
-        chunk.forEach(function(name) {
-          var r = results[name] || {};
-          var st = r.status || 'error';
-          if (counts[st] === undefined) counts[st] = 0;
-          counts[st]++;
-          // 食い違った図は、その場で中身まで言う。
-          // 材料 (今の puml と svg に書かれている文字) は server が添えてくる。
-          if (st === 'differ-content' && SD && typeof r.pumlText === 'string') {
-            // 保存中の SVG と描き直した SVG を直に
-            // 比べる材料も渡す。渡さないと「文字の上で差なし」を「差なし」と
-            // 言ってしまう (render は決定的なので、バイトが違う以上 差はある)。
-            svgVerifyDiffs[name] = SD.compare(r.pumlText, r.svgLabels, {
-              drawnLabels: r.drawnLabels,
-              svgShape: r.svgShape,
-              drawnShape: r.drawnShape,
-            });
-          }
-        });
-      }).catch(function() {
-        counts.error += chunk.length;
-      }).then(step);
-    }
-    step();
-  }
-
-  // 古い SVG を 1 枚ずつ直列に作り直す。1 枚失敗しても残りは進める
-  // (1 枚のために全部が止まると、結局手で確かめ直すことになる)。
-  function renderStaleSvgs(dir, names, btn) {
-    var queue = names.slice();
-    var done = 0;
-    var failed = [];
-    function step() {
-      if (queue.length === 0) {
-        svgRenderNote = failed.length
-          ? (done + ' 枚を作り直しました（' + failed.join(' / ') + ' は失敗）')
-          : (done + ' 枚を作り直しました');
-        renderFolderPanel();
-        return;
-      }
-      var name = queue.shift();
-      btn.textContent = '作り直しています… ' + name + '（残り ' + queue.length + ' 枚）';
-      window.MA.workspace.loadFile(name, dir).then(function(dsl) {
-        if (dsl === null) throw new Error('読めません');
-        return renderDslToSvg(dsl, dir);
-      }).then(function(svg) {
-        return fetch('/autosave-svg', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: name, dir: dir, svg: svg }),
-        });
-      }).then(function(resp) {
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        done++;
-      }).catch(function() {
-        failed.push(name);
-      }).then(step);
-    }
-    step();
   }
 
   // 実データ / テンプレの内訳と、汚染したテンプレの名指し。
@@ -8127,9 +6937,9 @@ function setupTabs() {
     }
   })();
 
-  function folderRow(name, bdg, mtime, status) {
+  function folderRow(name) {
     var FS = window.MA.folderSelect;
-    var b = folderButton(name, bdg, mtime, status);
+    var b = folderButton(name);
     if (!FS) return b;
     var row = document.createElement('div');
     row.className = 'folder-row';
@@ -8156,12 +6966,6 @@ function setupTabs() {
       row.classList.add('folder-kind-bad');
     }
     if ((roleStatus[name] || {}).status === 'dirty') row.appendChild(folderRoleAcceptButton(name));
-    if (status === 'changed' || status === 'new') row.appendChild(folderDiffButton(name, status));
-    if (svgMtimes[name] && svgContent[name] !== 'match') {
-      row.appendChild(folderSvgVisualButton(name));
-    }
-    if (window.MA.targetSet) row.appendChild(folderTargetButton(name));
-    row.appendChild(folderDraftButton(name));
     // 同じ図種の枠に版が並ぶようになったので、
     // 版は行の上で 1 文字で分かるようにする (名前の末尾を読み比べない)。
     var vr = folderVariantBadge(name);
@@ -8178,15 +6982,6 @@ function setupTabs() {
     if (ck) b.setAttribute('data-content-kind', ck);
     var vb = folderVersionButton(name);
     if (vb) row.appendChild(vb);
-    // 中身が同じ図の印と、1 枚だけ消すボタン。
-    var db = folderDupeBadge(name);
-    if (db) row.appendChild(db);
-    // 本体に入っていない下書きの印。
-    var sb = folderSyncBadge(name);
-    if (sb) row.appendChild(sb);
-    // 本体 / 差し替え待ち / 削除予定。
-    var qb = folderSwapBadge(name);
-    if (qb) row.appendChild(qb);
     var xb = folderDeleteButton(name);
     if (xb) row.appendChild(xb);
     return row;
@@ -8518,155 +7313,6 @@ function setupTabs() {
     });
   }
 
-  // 前回見た版から変わった図にだけ付く [差分]。押すと旧DSL/新DSL を並べて出す。
-  // 図を開かずに読めるので、変更箇所の確認だけならタブを増やさずに済む。
-  function folderDiffButton(name, status) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-diff';
-    b.setAttribute('data-diff-name', name);
-    b.textContent = '差分';
-    b.title = status === 'new'
-      ? '前回見たときには無かった図です。今の中身を全部追加として出します'
-      : '前回見た版と今の中身を左右に並べて、変わった行だけ色を付けて出します';
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      openReviewDiff(name);
-    });
-    return b;
-  }
-
-  // 印 (@pua-source-sha1) が食い違った 1 枚に付く [可視差分]。
-  // 印だけでは「コメント行を足しただけの見かけ上の stale」と「実質的な内容変更」が
-  // 同じ「内容ずれ」に見える。旧 SVG と描き直した SVG を並べて切り分ける画面をここから開く。
-  function folderSvgVisualButton(name) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-svg-visual';
-    b.setAttribute('data-visual-name', name);
-    b.textContent = '可視差分';
-    b.title = '保存中の SVG と、今の puml を描き直した SVG を並べ、'
-      + '追加・削除・移動したものだけを光らせる'
-      + '（コメント行だけの差なら「可視内容は同一」と出ます）';
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      openSvgVisualDiff(name);
-    });
-    return b;
-  }
-
-  // 変更のある図の名前 (一覧の並びのまま)。
-  function changedNames() {
-    return folderNames.filter(function(n) {
-      return folderStatus[n] === 'changed' || folderStatus[n] === 'new';
-    });
-  }
-
-  // 「変更図だけ選ぶ」。無変更の図に印を付けずに済むので、
-  // 変更のある図だけをまとめて開くのが 2 クリックで終わる。
-  function folderChangedButton() {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-pick-changed';
-    b.textContent = '変更図だけ選ぶ（0 枚）';
-    b.title = '前回見た版から変わった図と新しい図にだけ印を付ける';
-    b.disabled = true;
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      var FS = window.MA.folderSelect;
-      if (!FS) return;
-      folderPicked = FS.selectAll(changedNames());
-      syncFolderPickUi();
-    });
-    return b;
-  }
-
-  // 一覧を開いた瞬間に「対象 14 枚のうち何枚あるか /
-  // どれが足りないか」を見出しで言う。未登録のときも黙らず、登録の入口を出す
-  // (「まだ数えていない」と「揃っている」を取り違えないため)。
-  function appendTargetSection(host, dir) {
-    var TS = window.MA.targetSet;
-    if (!TS) return;
-    var rec = targetScan || TS.reconcile(targetNames, []);
-    var line = document.createElement('div');
-    line.className = 'folder-target-summary ' + TS.summaryClass(rec);
-    line.id = 'folder-target-summary';
-    line.setAttribute('data-target-expected', String(rec.expected));
-    line.setAttribute('data-target-present', String(rec.present));
-    line.textContent = TS.summary(rec);
-    host.appendChild(line);
-
-    var bar = document.createElement('div');
-    bar.className = 'folder-target-bar';
-    var set = document.createElement('button');
-    set.type = 'button';
-    set.className = 'folder-target-set';
-    set.id = 'folder-target-set';
-    set.textContent = TS.buttonLabel(rec);
-    set.title = TS.buttonTitle(rec);
-    set.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      // 一時控えは成果物ではないので対象 set に入れない (畳んだ控えが
-      // 期待枚数を押し上げると、翌日の過不足が読めなくなる)。
-      var DM = window.MA.draftMark;
-      var pick = folderNames.filter(function(n) { return !(DM && DM.has(draftNames, n)); });
-      TS.save(_reviewStore(), dir, pick);
-      renderFolderPanel();
-    });
-    bar.appendChild(set);
-    if (rec.configured) {
-      var off = document.createElement('button');
-      off.type = 'button';
-      off.className = 'folder-target-clear';
-      off.id = 'folder-target-clear';
-      off.textContent = TS.clearLabel();
-      off.title = 'このフォルダの対象 set を外す。見出しの過不足は出なくなる';
-      off.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        TS.clear(_reviewStore(), dir);
-        renderFolderPanel();
-      });
-      bar.appendChild(off);
-    }
-    host.appendChild(bar);
-  }
-
-  // 行ごとの「対象 / 対象にする」。取り直しをせずに 1 枚だけ足す / 外せる。
-  function folderTargetButton(name) {
-    var TS = window.MA.targetSet;
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-target';
-    b.setAttribute('data-target-name', name);
-    var inSet = TS.has(targetNames, name);
-    if (inSet) b.classList.add('folder-target-on');
-    b.textContent = TS.rowLabel(inSet);
-    b.title = TS.rowTitle(inSet);
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      targetNames = TS.toggle(targetNames, name);
-      TS.save(_reviewStore(), _wsFileDir(), targetNames);
-      renderFolderPanel();
-    });
-    return b;
-  }
-
-  // 一覧に出ている図の本文を全部読んで「前回見た版」として控える。
-  function saveSeenBodies(dir, names) {
-    var RD = window.MA.reviewDiff;
-    if (!RD || !window.MA.workspace) return Promise.resolve(false);
-    var bodies = {};
-    var jobs = (names || []).map(function(n) {
-      return window.MA.workspace.loadFile(n, dir).then(function(text) {
-        if (typeof text === 'string') bodies[n] = text;
-      }, function() {});
-    });
-    return Promise.all(jobs).then(function() {
-      var ok = RD.save(_reviewStore(), dir, bodies);
-      return ok;
-    });
-  }
-
   // 名前で絞り込む欄。数文字打てば候補がその 1 枚になり、Enter でそのまま開ける。
   // 一覧の上端に「最近開いた図」を置く。同じ図への出戻りは
   // 20 枚超の行から名前を目で探すのではなく、ここを 1 回押せば済む。
@@ -8732,25 +7378,6 @@ function setupTabs() {
       if (only) openFromFolder(only);
     });
     bar.appendChild(input);
-    // 「変化なし」の付いた図を畳む。
-    // 印が付いた図は前回の指摘をそのまま転記するので、読む図だけが残る。
-    var hide = document.createElement('label');
-    hide.className = 'folder-stamp-hide';
-    var hbox = document.createElement('input');
-    hbox.type = 'checkbox';
-    hbox.id = 'folder-stamp-hide';
-    hbox.checked = stampHide;
-    hbox.title = '前回控えから変わっていない図を畳む。残った行だけを詳しく読めばよい';
-    hbox.addEventListener('click', function(ev) { ev.stopPropagation(); });
-    hbox.addEventListener('change', function() {
-      stampHide = hbox.checked;
-      applyFolderFilter();
-    });
-    hide.appendChild(hbox);
-    var htext = document.createElement('span');
-    htext.textContent = '変化なしを隠す';
-    hide.appendChild(htext);
-    bar.appendChild(hide);
     var state = document.createElement('span');
     state.className = 'folder-filter-state';
     state.id = 'folder-filter-state';
@@ -8800,17 +7427,12 @@ function setupTabs() {
     var FF = window.MA.folderFilter;
     if (!FF) return;
     var shown = 0;
-    // 畳んだ一時控え (.folder-draft-body。FILES ツリーが読むためだけに置く行) は一覧に出ていないので数えない。
-    var rows = Array.prototype.filter.call(panel.querySelectorAll('[data-file-name]'), function(el) {
-      return !(el.closest && el.closest('.folder-draft-body'));
-    });
+    var rows = panel.querySelectorAll('[data-file-name]');
     for (var i = 0; i < rows.length; i++) {
       var el = rows[i];
       var name = el.getAttribute('data-file-name');
       var host = (el.parentNode && el.parentNode.className === 'folder-row') ? el.parentNode : el;
       var on = FF.match(name, folderQuery);
-      // 「変化なしを隠す」は名前の絞り込みと重ねて効く (どちらも行を減らすだけ)。
-      if (on && stampHide && stampMarks[name]) on = false;
       host.style.display = on ? '' : 'none';
       if (on) shown++;
       // 打った名前と丸ごと同じ図は「完全一致」の印を付けて先頭に出す
@@ -8839,7 +7461,6 @@ function setupTabs() {
       syncFolderPickUi();
     });
     bar.appendChild(all);
-    bar.appendChild(folderChangedButton());
     // 一覧は長いと縦にスクロールする。開くボタンを末尾に置くと 14 枚のときに
     // 画面の外へ出るので、印を付ける行の上に固定して常に見えるようにする。
     bar.appendChild(folderOpenButton());
@@ -8878,12 +7499,6 @@ function setupTabs() {
       all.textContent = FS.allPicked(folderPicked, folderNames)
         ? '印を全部外す' : '全部選ぶ（' + folderNames.length + ' 枚）';
     }
-    var changed = panel.querySelector('.folder-pick-changed');
-    if (changed) {
-      var chNames = changedNames();
-      changed.textContent = '変更図だけ選ぶ（' + chNames.length + ' 枚）';
-      changed.disabled = chNames.length === 0;
-    }
     var open = panel.querySelector('.folder-open-many');
     if (open) {
       open.textContent = FS.openLabel(folderPicked, folderNames, _openDocNames());
@@ -8891,139 +7506,14 @@ function setupTabs() {
     }
   }
 
-  function folderButton(name, bdg, mtime, status) {
+  function folderButton(name) {
     var b = document.createElement('button');
     b.className = 'folder-item';
     b.setAttribute('data-file-name', name);
-    if (status) b.setAttribute('data-review-status', status);
-    if (bdg && bdg.mark) {
-      var badge = document.createElement('span');
-      badge.className = 'folder-badge folder-badge-' + status;
-      badge.textContent = bdg.mark;
-      badge.title = bdg.title;
-      b.appendChild(badge);
-    }
-    // 前回控えから 1 バイトも変わっていない図の印。
-    // ＋ / ● と同じ位置に置く —— 行を上から舐めるとき、印の有無が 1 列で読める。
-    var sm = stampMarks[name];
-    if (sm) {
-      var stampBadge = document.createElement('span');
-      stampBadge.className = 'folder-stamp';
-      stampBadge.setAttribute('data-change-stamp', String(sm.runs));
-      stampBadge.textContent = sm.short;
-      stampBadge.setAttribute('data-stamp-text', sm.text);
-      stampBadge.title = sm.title;
-      b.appendChild(stampBadge);
-      b.setAttribute('data-change-stamp', String(sm.runs));
-    }
     var label = document.createElement('span');
     label.className = 'folder-name';
     label.textContent = name;
     b.appendChild(label);
-    // 印は内容での判定を優先する。mtime が古くても
-    // 中身が今の puml と一致している図は読める図なので、印を付けない
-    // (逆に、内容がずれている図は mtime に関わらず名指しする)。
-    var SF = window.MA.svgFreshness;
-    var content = svgContent[name];
-    // 印の無い図 (unverified) もここに出す。
-    // 出ていない間、その 1 枚がどれかは行からは分からず、audit.js を回して
-    // 突き止めるしかなかった。「未刻印」は作り直しの催促ではなく、
-    // 「この一覧では言えない 1 枚」の名指しとして出す。
-    if (SF && (content === 'differ' || content === 'format' || content === 'unverified')) {
-      var cb = SF.contentBadge(content, svgBasis[name]);
-      var contentBadge = document.createElement('span');
-      contentBadge.className = 'folder-svg-content-badge';
-      contentBadge.setAttribute('data-svg-content', content);
-      contentBadge.textContent = cb.mark;
-      contentBadge.title = cb.title;
-      b.appendChild(contentBadge);
-    }
-    // 内容で一致が取れた図からは印が全部消えるので、
-    // 「mtime も新しい図」と「mtime は古いが中身は追いついている図」が同じ無印になる。
-    // reviewer は指摘.md を書く前にその区別を付けるため、9 枚を render API で
-    // 描き直してバイト比較していた。第三の印として行に出す (作り直しの催促ではない)。
-    if (SF && SF.isStaleSettled && SF.isStaleSettled(svgStatus[name], content)) {
-      var ssb = SF.staleSettledBadge(svgBasis[name]);
-      var settledBadge = document.createElement('span');
-      settledBadge.className = 'folder-svg-badge svg-stale-settled';
-      settledBadge.setAttribute('data-svg-status', 'stale-settled');
-      settledBadge.textContent = ssb.mark;
-      settledBadge.title = ssb.title;
-      b.appendChild(settledBadge);
-    }
-    if (SF && !SF.isSettled(content) && svgStatus[name] && svgStatus[name] !== 'fresh') {
-      var sb = SF.badge(svgStatus[name]);
-      var svgBadge = document.createElement('span');
-      svgBadge.className = 'folder-svg-badge svg-' + svgStatus[name];
-      svgBadge.setAttribute('data-svg-status', svgStatus[name]);
-      svgBadge.textContent = sb.mark;
-      svgBadge.title = sb.title;
-      b.appendChild(svgBadge);
-    }
-    // 読み始める前に、その 1 枚が今も
-    // 書き換えられている最中かどうかが行の上で分かるようにする。
-    var WA = window.MA.writeActivity;
-    if (WA && writeStatus[name] && writeStatus[name] !== 'settled') {
-      var wb = WA.badge(writeStatus[name]);
-      var writeBadge = document.createElement('span');
-      writeBadge.className = 'folder-write-badge write-' + writeStatus[name];
-      writeBadge.setAttribute('data-write-status', writeStatus[name]);
-      writeBadge.textContent = wb.mark;
-      writeBadge.title = writeStatus[name] === 'active'
-        ? wb.title + '（最終更新 ' + WA.ageText(writeAge[name]) + '）'
-        : wb.title;
-      b.appendChild(writeBadge);
-    }
-    if (mtime) {
-      var t = document.createElement('span');
-      t.className = 'folder-mtime';
-      t.textContent = mtime;
-      t.title = 'puml の最終保存時刻';
-      b.appendChild(t);
-    }
-    // puml の保存時刻の隣に SVG の書き出し時刻。
-    // 「puml は直っているが SVG だけ古い」を、行を見るだけで言えるようにする。
-    var RW = window.MA.reviewWatch;
-    if (RW && RW.formatMtime) {
-      var svgAt = RW.formatMtime(svgMtimes[name]);
-      var st = document.createElement('span');
-      st.className = 'folder-svg-mtime';
-      st.setAttribute('data-svg-mtime', svgAt || '');
-      st.textContent = svgAt ? 'SVG ' + svgAt : 'SVG —';
-      st.title = svgAt ? 'SVG を書き出した時刻' : 'この図の SVG が保存フォルダにありません';
-      b.appendChild(st);
-    }
-    // 2 つの時刻の隣に、その SVG の
-    // 文字が今の puml と一致しているか。時刻だけでは「保存し直しただけ」と「中身が
-    // 追いついていない」が同じ「古い」に見えるので、突合の答えを行に置く。
-    var cmp = svgCompare[name];
-    if (cmp) {
-      var lb = document.createElement('span');
-      lb.className = 'folder-svg-labels labels-' + cmp.labels;
-      lb.setAttribute('data-svg-labels', cmp.labels);
-      lb.setAttribute('data-tone', cmp.tone);
-      lb.textContent = cmp.labelsText;
-      // 3 つの値は行の上で 1 まとまりとして読む。説明 (title) には 3 つを並べて書く —
-      // 幅の狭い行では時刻が省かれることがあるため。
-      var SCR2 = window.MA.svgCompareRow;
-      lb.title = SCR2 && SCR2.rowTitle ? SCR2.rowTitle(cmp) : cmp.title;
-      b.appendChild(lb);
-    }
-    // その svg が「どの図の絵か」。
-    // 相手が分かる図にだけ出す (分からない図は上の「内容ずれ」のまま)。
-    var SX3 = window.MA.svgCross;
-    var xrow = SX3 ? SX3.nameOf(svgCross, name) : null;
-    if (xrow) {
-      var xb = document.createElement('span');
-      xb.className = 'folder-svg-cross';
-      xb.setAttribute('data-svg-cross', xrow.kind);
-      xb.setAttribute('data-svg-cross-of', xrow.of);
-      var xbd = SX3.badge(xrow);
-      xb.textContent = xbd.mark;
-      xb.title = xbd.title;
-      b.appendChild(xb);
-    }
-    if (bdg && bdg.title) b.title = bdg.title + (mtime ? '（最終保存 ' + mtime + '）' : '');
     // 1 回押しは仮のタブで開き (見て回るだけならタブが積もらない)、
     // ダブルクリックで固定のタブにする。
     b.addEventListener('click', function() { openFromFolder(name, { preview: true }); });
@@ -9038,23 +7528,11 @@ function setupTabs() {
     // design 10a: 一覧はレール右のツリーの中にある。ツリーの他の節を押した
     // だけで畳むと、「開いている図」を 1 つ選ぶたびに保存先を開き直すことになる。
     if (ev.target && ev.target.closest && ev.target.closest('#files-panel')) return;
-    // 可視差分は一覧の行から開く。ここで一覧まで
-    // 閉じると、2 枚目を確かめるたびに一覧を開き直すことになる (確かめる図は複数ある)。
-    var vm = document.getElementById('svg-visual-modal');
-    // 閉じるを押した時点でモーダルは既に display:none なので、表示中かどうかは見ない
-    // (見ると「閉じた瞬間の 1 クリック」で一覧まで閉じる)。
-    if (vm && vm.contains(ev.target)) return;
     closePanel();
   });
 }
 
-// ── 変更図の差分ビュー ──────────────────
-// 一覧の [差分] から開く。前回「見たことにする」で控えた本文を旧版として、
-// 保存フォルダの今の本文と左右に並べる。変わっていない行は畳んでおく
-// (無変更の行を読み直す作業そのものを無くすのがこの画面の目的)。
-var _rdFoldAll = true;
-var _rdName = '';
-// 一覧のパネルは自前の関数で図を開く。差分ビューからも同じ道で開けるように、
+// 一覧のパネルは自前の関数で図を開く。パネルの外からも同じ道で開けるように、
 // パネル側で実体を差し込む (パネルを作る前に押される画面は無い)。
 var openFromFolderByName = function() {};
 // 資料化のように、パネルの外で保存フォルダを書き換える操作から一覧を描き直すための口
@@ -9071,291 +7549,6 @@ var filterFolderPanelNow = function() {};
 // 直前に開いた図の名前 (新しい順)。Ctrl+K からも
 // 一覧を開かずに同じ図へ戻れるように、パネルの外へ読み口だけ出す。
 var recentOpenedNames = function() { return []; };
-
-function _rdModal() { return document.getElementById('rd-modal'); }
-
-document.addEventListener('keydown', function(ev) {
-  if (ev.key !== 'Escape') return;
-  var m = _rdModal();
-  if (m && m.style.display === 'flex') { closeReviewDiff(); ev.stopPropagation(); }
-}, true);
-
-function closeReviewDiff() {
-  var m = _rdModal();
-  if (m) m.style.display = 'none';
-}
-
-// ── 可視差分プレビュー ────────
-// 一覧の行の [可視差分] から開く。保存中の SVG と、今の puml を描き直した SVG を
-// 左右に並べ、追加・削除・移動したものだけを光らせる。
-// stale (印の不一致) が出たとき、それがコメント行の追加などによる
-// 見かけ上の stale なのか、実質的な内容変更なのかをこの 1 画面で言い切る
-// (前は 1 枚ごとに /render を叩いて `<?plantuml-src ?>` を除いた文字列 diff を書いていた)。
-var _svdName = '';
-
-function _svdModal() { return document.getElementById('svg-visual-modal'); }
-
-function closeSvgVisualDiff() {
-  var m = _svdModal();
-  if (m) m.style.display = 'none';
-}
-
-// 描かれている文字に印を付ける。mark は added / removed / moved。
-// 同じ文字が複数ある図でも、先頭から順に数だけ付ける
-// (どの 1 つかまでは言わない。言えないことを言い切らない)。
-var _SVD_COLOR = { added: '#0a7d00', removed: '#c00000', moved: '#b06000' };
-
-function _svdMark(host, texts, mark) {
-  if (!host || !texts || !texts.length) return;
-  var nodes = host.querySelectorAll('text');
-  var want = {};
-  texts.forEach(function(t) { want[t] = (want[t] || 0) + 1; });
-  for (var i = 0; i < nodes.length; i++) {
-    var t = (nodes[i].textContent || '').replace(/\s+/g, ' ').trim();
-    if (!want[t]) continue;
-    want[t]--;
-    nodes[i].setAttribute('data-visual-mark', mark);
-    nodes[i].setAttribute('fill', _SVD_COLOR[mark] || '#c00000');
-    nodes[i].setAttribute('font-weight', 'bold');
-  }
-}
-
-function _svdRender(name, result, savedSvg, drawnSvg) {
-  var VD = window.MA.svgVisualDiff;
-  var head = document.getElementById('svg-visual-verdict');
-  var counts = document.getElementById('svg-visual-counts');
-  var title = document.getElementById('svg-visual-title');
-  var names = document.getElementById('svg-visual-names');
-  var oldHost = document.getElementById('svg-visual-old');
-  var newHost = document.getElementById('svg-visual-new');
-  var report = document.getElementById('svg-visual-report');
-  if (!VD || !head || !counts || !names || !oldHost || !newHost) return;
-  if (title) title.textContent = '可視差分: ' + name;
-  head.setAttribute('data-verdict', result.verdict);
-  head.className = 'svg-visual-verdict verdict-' + result.verdict;
-  head.textContent = VD.verdictText(result);
-  head.title = VD.verdictTitle(result);
-  counts.textContent = VD.countsText(result);
-  names.textContent = '';
-  function row(mark, label, text) {
-    var d = document.createElement('div');
-    d.className = 'svg-visual-name';
-    d.setAttribute('data-visual-name-mark', mark);
-    d.textContent = label + ' ' + text;
-    names.appendChild(d);
-  }
-  result.addedLabels.forEach(function(t) { row('added', '＋', t); });
-  result.removedLabels.forEach(function(t) { row('removed', '－', t); });
-  result.movedLabels.forEach(function(m) {
-    row('moved', '〜', m.text + '（' + (m.dx >= 0 ? '+' : '') + m.dx
-      + ', ' + (m.dy >= 0 ? '+' : '') + m.dy + '）');
-  });
-  oldHost.innerHTML = savedSvg || '';
-  newHost.innerHTML = drawnSvg || '';
-  // 旧にしか無いものは旧の側で、新にしか無いものは新の側で光らせる。
-  // 両方に出すと「どちらにあるのか」を読み取る作業が残る。
-  _svdMark(oldHost, result.removedLabels, 'removed');
-  _svdMark(newHost, result.addedLabels, 'added');
-  var moved = result.movedLabels.map(function(m) { return m.text; });
-  _svdMark(oldHost, moved, 'moved');
-  _svdMark(newHost, moved, 'moved');
-  if (report) report.value = VD.report(name, result);
-}
-
-function openSvgVisualDiff(name) {
-  var m = _svdModal();
-  var VD = window.MA.svgVisualDiff;
-  if (!m || !VD) return;
-  _svdName = name;
-  m.style.display = 'flex';
-  if (!m.getAttribute('data-svd-bound')) {
-    m.setAttribute('data-svd-bound', '1');
-    m.addEventListener('click', function(ev) { if (ev.target === m) closeSvgVisualDiff(); });
-    var close = document.getElementById('svg-visual-close');
-    if (close) close.addEventListener('click', closeSvgVisualDiff);
-    var copy = document.getElementById('svg-visual-copy');
-    if (copy) {
-      copy.addEventListener('click', function() {
-        var ta = document.getElementById('svg-visual-report');
-        if (!ta) return;
-        ta.select();
-        var done = function() { copy.textContent = 'コピーしました'; };
-        try {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(ta.value).then(done, done);
-            return;
-          }
-        } catch (e) {}
-        done();
-      });
-    }
-  }
-  var head = document.getElementById('svg-visual-verdict');
-  if (head) {
-    head.removeAttribute('data-verdict');
-    head.textContent = '描き直して見比べています…';
-  }
-  var oldHost = document.getElementById('svg-visual-old');
-  var newHost = document.getElementById('svg-visual-new');
-  if (oldHost) oldHost.textContent = '';
-  if (newHost) newHost.textContent = '';
-  var mode = (document.getElementById('render-mode') || {}).value || 'local';
-  fetch('/verify-svg', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dir: _wsFileDir(), types: [name], mode: mode, withSvg: true }),
-  }).then(function(resp) {
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    return resp.json();
-  }).then(function(res) {
-    var r = ((res && res.results) || {})[name] || {};
-    if (typeof r.savedSvg !== 'string' || typeof r.drawnSvg !== 'string') {
-      if (head) {
-        head.setAttribute('data-verdict', 'unknown');
-        head.textContent = r.svgOmitted || r.error
-          || (r.status === 'missing' ? 'SVG が保存フォルダにありません'
-            : '比べられませんでした');
-      }
-      return;
-    }
-    _svdRender(name, VD.compare(r.savedSvg, r.drawnSvg), r.savedSvg, r.drawnSvg);
-  }).catch(function() {
-    if (head) {
-      head.setAttribute('data-verdict', 'unknown');
-      head.textContent = '比べられませんでした';
-    }
-  });
-}
-
-function openReviewDiff(name) {
-  var m = _rdModal();
-  var box = document.getElementById('rd-modal-content');
-  var RD = window.MA.reviewDiff;
-  if (!m || !box || !RD || !window.MA.workspace) return;
-  _rdName = name;
-  _rdFoldAll = true;
-  m.style.display = 'flex';
-  if (!m.getAttribute('data-rd-bound')) {
-    m.setAttribute('data-rd-bound', '1');
-    m.addEventListener('click', function(ev) { if (ev.target === m) closeReviewDiff(); });
-  }
-  box.textContent = '';
-  var loading = document.createElement('div');
-  loading.className = 'rd-note';
-  loading.textContent = '読み込み中…';
-  box.appendChild(loading);
-  var dir = _wsFileDir();
-  window.MA.workspace.loadFile(name, dir).then(function(text) {
-    var bodies = RD.load(_reviewStore(), dir);
-    renderReviewDiff(name, RD.compare(bodies, name, text == null ? '' : text));
-  }, function() {
-    renderReviewDiff(name, { hasBefore: false, rows: [], stats: null });
-  });
-}
-
-function renderReviewDiff(name, cmp) {
-  var box = document.getElementById('rd-modal-content');
-  var RD = window.MA.reviewDiff;
-  if (!box || !RD) return;
-  box.textContent = '';
-
-  var head = document.createElement('div');
-  head.id = 'rd-head';
-  var title = document.createElement('span');
-  title.className = 'rd-title';
-  title.textContent = name;
-  head.appendChild(title);
-  var stats = document.createElement('span');
-  stats.className = 'rd-stats';
-  stats.textContent = cmp.hasBefore ? RD.statsText(cmp.stats) : '前回見た版の控えがありません（全部を新しい行として出しています）';
-  head.appendChild(stats);
-  var close = document.createElement('button');
-  close.type = 'button';
-  close.className = 'rd-close';
-  close.textContent = '閉じる';
-  close.addEventListener('click', closeReviewDiff);
-  head.appendChild(close);
-  box.appendChild(head);
-
-  var list = document.createElement('div');
-  list.id = 'rd-list';
-  var cols = document.createElement('div');
-  cols.className = 'rd-cols';
-  var l = document.createElement('span');
-  l.textContent = cmp.hasBefore ? '前回見た版' : '（控えなし）';
-  var r = document.createElement('span');
-  r.textContent = '今の版';
-  cols.appendChild(l);
-  cols.appendChild(r);
-  list.appendChild(cols);
-
-  var rows = _rdFoldAll ? RD.fold(cmp.rows, 2) : cmp.rows;
-  if (rows.length === 0) {
-    var none = document.createElement('div');
-    none.className = 'rd-skip';
-    none.textContent = '中身がありません';
-    list.appendChild(none);
-  }
-  rows.forEach(function(row) { list.appendChild(_rdRow(row)); });
-  box.appendChild(list);
-
-  var foot = document.createElement('div');
-  foot.id = 'rd-foot';
-  var note = document.createElement('span');
-  note.className = 'rd-note';
-  note.textContent = _rdFoldAll
-    ? '変わった行の前後 2 行だけ出しています'
-    : '同じ行も含めて全部出しています';
-  foot.appendChild(note);
-  var toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'rd-toggle';
-  toggle.textContent = _rdFoldAll ? '同じ行も出す' : '変わった行だけにする';
-  toggle.addEventListener('click', function() {
-    _rdFoldAll = !_rdFoldAll;
-    renderReviewDiff(name, cmp);
-  });
-  foot.appendChild(toggle);
-  var open = document.createElement('button');
-  open.type = 'button';
-  open.className = 'rd-open';
-  open.textContent = 'この図を開く';
-  open.title = '差分で見た変更をその場で直すときに押す';
-  open.addEventListener('click', function() {
-    closeReviewDiff();
-    openFromFolderByName(name);
-  });
-  foot.appendChild(open);
-  box.appendChild(foot);
-}
-
-function _rdRow(row) {
-  var el = document.createElement('div');
-  if (row.kind === 'skip') {
-    el.className = 'rd-skip';
-    el.textContent = '… 同じ行 ' + row.count + ' 行';
-    return el;
-  }
-  el.className = 'rd-row rd-row-' + row.kind;
-  el.setAttribute('data-rd-kind', row.kind);
-  el.appendChild(_rdSide('left', row.leftNo, row.left));
-  el.appendChild(_rdSide('right', row.rightNo, row.right));
-  return el;
-}
-
-function _rdSide(side, no, text) {
-  var d = document.createElement('div');
-  d.className = 'rd-side rd-side-' + side;
-  var n = document.createElement('span');
-  n.className = 'rd-no';
-  n.textContent = no == null ? '' : String(no);
-  var t = document.createElement('span');
-  t.className = 'rd-text';
-  t.textContent = text == null ? '' : text;
-  d.appendChild(n);
-  d.appendChild(t);
-  return d;
-}
 
 // ── 一括置換 ───────────────────────────────────────────────────────────────
 // 部品名は複数の図に同じ綴りで現れる。図ごとに全文を打ち直すと手数が枚数に
@@ -12711,10 +10904,6 @@ function saveFile() {
 //
 // 直前の中身は、この画面がその図を最後に保存したときのものを覚えておく
 // (server 側の _versions/ は中身は残るが「どの操作で」が残らない)。
-// 一覧を読んだときのクロス判定の控え。
-// 保存の直後に「この図の SVG は別の図の絵だ」とその場で言うために使う。
-var _svgCrossLatest = null;
-
 var _sswPrev = {};       // 図の名前 → この画面が最後に保存した中身
 var _sswLogOpen = false;
 
@@ -12890,14 +11079,6 @@ function runSaveSwapCheck(docName, dsl) {
           new Date().toISOString(), SS.lineCount(dsl)));
     } catch (e) {}
     try { renderSaveSwap(res); } catch (e) {}
-    // 出力先がクロスしていることに、保存した本人が
-    // その場で気付けるようにする (reviewer の突合を待たない)。一覧を読んでいない
-    // 間は控えが無いので何も言わない。
-    try {
-      var SX = window.MA.svgCross;
-      var line = SX ? SX.saveLine(_svgCrossLatest, docName) : '';
-      if (line) appendSaveStatus(line);
-    } catch (e) {}
     return res;
   }
 

@@ -107,7 +107,7 @@ window.MA.filesPanel = (function() {
     return f ? f.value : '';
   }
 
-  // 未保存 ● / 指摘が未反映 / 一時控え。印の内容は 📂 一覧のバッジと同じものを読む。
+  // 未保存 ● / 指摘が未反映。印の内容は 📂 一覧のバッジと同じものを読む。
   // 未保存の印はタブと同じ判定 (app.js の docSaveStatus) を読む。
   // 以前は doc.dirty を読んでいたが、この値はどこでも立たず、ツリーに ● が出たことが無かった。
   function _saveMark(doc) {
@@ -121,7 +121,6 @@ window.MA.filesPanel = (function() {
     var sm = _saveMark(doc);
     if (sm) out.push(sm);
     if (doc.reviewPending) out.push('未反映');
-    if (doc.draft) out.push('控え');
     return out.join(' ');
   }
 
@@ -256,21 +255,14 @@ window.MA.filesPanel = (function() {
   // ツリーのファイル行の札。保存先の一覧の行のバッジと同じ事実を読む
   // (数える所を 2 つにしない)。開いている図の未保存 ● は作業中のタブから読む。
   function _fileState(name) {
-    var st = { dirty: false, unapplied: false, draft: false, svgStale: false };
+    var st = { dirty: false, unapplied: false };
     // 保存先の行: その名前の図が開いていて、前回保存から変わっていれば ● (タブと同じ判定)。
     var byName = window.MA.docSaveStatusByName;
     if (typeof byName === 'function' && byName(name) === 'changed') st.dirty = true;
     _docs().forEach(function(d) {
       if (String(d.name || '') !== name) return;
       if (d.reviewPending) st.unapplied = true;
-      if (d.draft) st.draft = true;
     });
-    var it = document.querySelector(_itemSel(name));
-    if (it) {
-      var row = (it.closest && it.closest('.folder-row')) || it;
-      if (row.classList && row.classList.contains('folder-row-draft')) st.draft = true;
-      if (it.querySelector('[data-svg-status="stale"], .folder-svg-content-badge[data-svg-content="differ"]')) st.svgStale = true;
-    }
     return st;
   }
 
@@ -654,7 +646,7 @@ window.MA.filesPanel = (function() {
       return;
     }
     setSummary(FT.summaryOf(_docs().map(function(d) {
-      return { unapplied: !!d.reviewPending, draft: !!d.draft };
+      return { unapplied: !!d.reviewPending };
     })));
   }
 
