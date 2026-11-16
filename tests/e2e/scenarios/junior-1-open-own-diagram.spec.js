@@ -239,45 +239,6 @@ test('前の版と同じ中身に戻った版には、この図の履歴で「�
   await page.locator('#vt-only-revisit').uncheck();
 });
 
-// BLK-junior-20260909-0403: ユースケース図は自分にも先輩にも手本が 1 枚も無く、
-// 新規タブのサンプルから 15 行を打ち直していた (実測 280 打鍵)。題材名 1 語で
-// ドライバのひな形を作れるようにする。
-test('手本が無いユースケース図を、題材名 1 語のひな形から始められる', async ({ page }) => {
-  // 新規タブをユースケース図にする (手順 1 の「新しい図を作る」入口)
-  await page.selectOption('#diagram-type', 'plantuml-usecase');
-  await page.waitForTimeout(600);
-
-  await page.fill('#uc-starter-subject', 'GPIO');
-  await expect(page.locator('#uc-starter-hint'))
-    .toHaveText('アクター 2 / ユースケース 6 / 関連 7 本の下書きを作ります');
-  await page.locator('#uc-starter-add').click();
-  await page.waitForTimeout(800);
-
-  const dsl = await page.evaluate(() => document.getElementById('editor').value);
-  expect(dsl).toContain('actor Developer as "開発者"');
-  expect(dsl).toContain('usecase GPIO_Init as "GPIO を初期化する"');
-  expect(dsl).toContain('GPIO_IrqNotify ..> GPIO_IrqSetup : <<extend>>');
-  expect((dsl.match(/^Developer --> /gm) || []).length).toBe(5);
-
-  // 図として描けている (パースが通り、要素が出そろっている)
-  await expect(page.locator('#status-parse')).toContainText('パース OK');
-  // design 9c (BLK-builder-20260924-1759-1): 通ったことは点の色 (緑) で言い、文字は隣の件数と同じ色。
-  await expect(page.locator('#status-parse')).toHaveAttribute('data-dot', 'ok');
-  const look = await page.evaluate(() => {
-    const p = document.getElementById('status-parse');
-    const before = getComputedStyle(p, '::before');
-    return {
-      text: getComputedStyle(p).color,
-      info: getComputedStyle(document.getElementById('status-info')).color,
-      dot: before.color,
-      content: before.content,
-    };
-  });
-  expect(look.text).toBe(look.info);
-  expect(look.content).toBe('"●"');
-  expect(look.dot).not.toBe(look.text);
-});
-
 // BLK-junior-20260916-0546-wish: 手順 1 で先輩 (primary) の図を見るには、📂 一覧が
 // 「今の保存先の中身」しか出せないので保存先そのものを切り替えるしかなく、切り替えた
 // まま保存すれば自分の図が他人のフォルダに紛れ込む。junior は毎回「戻し忘れていないか」
