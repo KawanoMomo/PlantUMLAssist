@@ -2716,7 +2716,7 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
   background: var(--bg-primary);
 }
 #compare-pane[hidden] { display: none; }
-/* 見比べ方のタブ。差分タブの間は参照側 (選択・整合チェック…) を丸ごと畳む */
+/* 見比べ方のタブ。差分タブの間は参照側 (相手の選択・前の版の図) を丸ごと畳む */
 #compare-modes {
   display: flex;
   gap: 4px;
@@ -2783,22 +2783,6 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
   cursor: pointer;
 }
 #compare-status { white-space: nowrap; }
-#compare-hist-bar {
-  display: flex; align-items: center; gap: 6px;
-  padding: 3px 8px; flex-shrink: 0; font-size: 10px;
-  border-bottom: 1px solid var(--border);
-}
-#compare-hist-bar button { font-size: 10px; padding: 1px 6px; cursor: pointer; }
-#compare-hist-summary { color: var(--text-secondary); }
-#compare-hist-list {
-  max-height: 140px; overflow-y: auto; flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
-}
-#compare-hist-list[hidden] { display: none; }
-.wh-entry { padding: 4px 8px; border-bottom: 1px solid var(--border); }
-.wh-head { font-size: 10px; color: var(--text-secondary); margin-bottom: 2px; }
-.wh-file, .wh-drop { font-size: 10px; padding: 1px 5px; margin: 1px 3px 1px 0; cursor: pointer; }
-.wh-drop { float: right; }
 #btn-compare-close {
   border: 1px solid var(--border);
   background: var(--bg-primary);
@@ -2816,70 +2800,6 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
   background: var(--bg-primary);
 }
 #compare-svg svg { max-width: none; }
-
-/* 整合チェック */
-#check-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  flex-shrink: 0;
-}
-#btn-check-run {
-  border: 1px solid var(--border);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 2px 8px;
-  white-space: nowrap;
-}
-#btn-check-run:hover { background: var(--bg-tertiary); }
-#check-summary { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#check-summary.clean { color: var(--accent-green); }
-#check-summary.dirty { color: var(--accent-orange); }
-#check-list {
-  max-height: 34%;
-  overflow: auto;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-primary);
-  flex-shrink: 0;
-}
-#check-list[hidden] { display: none; }
-
-
-.check-row {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 3px 8px;
-  font-size: 11px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--bg-tertiary);
-}
-.check-row:hover { background: var(--bg-tertiary); }
-.check-row .check-kind {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  width: 62px;
-  flex-shrink: 0;
-  color: var(--accent);
-}
-.check-row .check-no {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-secondary);
-  width: 28px;
-  flex-shrink: 0;
-  text-align: right;
-}
-.check-row .check-msg { flex: 1; color: var(--text-primary); }
-#check-empty { padding: 6px 8px; font-size: 11px; color: var(--accent-green); }
 
 /* ── 関係を追加 / Add relation (design 3a) ───────────────────────────────── */
 /* 2 要素を選んだときの右ペイン。UML 名称を主・説明を副に置き、右端に矢印の見本。 */
@@ -4549,21 +4469,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <span id="compare-status"></span>
         <button type="button" id="btn-compare-close" title="並べて見るのをやめる">✕</button>
       </div>
-      <!-- ⇄一括置換・🔖[適用] は保存フォルダへ直接書くので、
-           開き直すと前後が出せなかった。書き込み 1 回ぶんの前後をここに並べ、会議で
-           見せたい回を選べるようにする。 -->
-      <div id="compare-hist-bar">
-        <button type="button" id="btn-compare-hist" aria-expanded="false"
-                title="保存フォルダへ書いた操作の前後を、後から呼び出して並べる">書き込み履歴</button>
-        <span id="compare-hist-summary"></span>
-      </div>
-      <div id="compare-hist-list" hidden></div>
-      <!-- 参照図と編集中の図の食い違いを保存前に挙げる -->
-      <div id="check-bar">
-        <button type="button" id="btn-check-run" title="参照図と突き合わせて食い違いを探す">⚖ 整合チェック</button>
-        <span id="check-summary"></span>
-      </div>
-      <div id="check-list" hidden></div>
       <div id="compare-container">
         <div id="compare-svg"></div>
       </div>
@@ -4875,7 +4780,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
 <script src="src/core/ref-folders.js"></script>
-<script src="src/core/peek-settled.js"></script>
 <script src="src/core/side-pane.js"></script>
 <script src="src/core/senior-pane.js"></script>
 <script src="src/core/blank-doc.js"></script>
@@ -4942,14 +4846,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/tail-memory.js"></script>
 <script src="src/core/tail-kind-chips.js"></script>
 <script src="src/core/before-snapshot.js"></script>
-<script src="src/core/write-history.js"></script>
 <script src="src/core/compare-view.js"></script>
 <script src="src/core/count-compare.js"></script>
 <script src="src/core/show-before-after.js"></script>
 <script src="src/core/save-swap.js"></script>
 <script src="src/core/live-diff.js"></script>
 <script src="src/core/twin-restore.js"></script>
-<script src="src/core/consistency-check.js"></script>
 <script src="src/core/component-deps.js"></script>
 <script src="src/core/scaffold-notice.js"></script>
 <script src="src/core/state-branch.js"></script>

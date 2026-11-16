@@ -96,40 +96,6 @@ window.MA.peekFolder = (function() {
   }
 
 
-  // 覗いている 1 枚を、そのままテンプレート新規作成の材料にする。
-  // 読むだけで見た先輩の図は画面上のテキストの
-  // ままで自分のタブへは何も引き継がれず、見た構成を覚えて新しいタブに打ち直す
-  // (実測 360 字) しかなかった。覗いた図そのものをテンプレートの選択肢にすれば、
-  // 打つのは部品名だけになり、写し違いも起きない。
-  // 中身が空の図は材料にならない (置換する語が無く、押しても何も作れない)。
-  function templateSeed(dir, name, dsl) {
-    var n = _s(name), text = _s(dsl);
-    if (!n || !text.replace(/\s/g, '')) return null;
-    var folder = baseName(dir);
-    return {
-      value: 'peek:' + folder + '/' + n,
-      folder: folder,
-      dir: _s(dir),
-      name: n,
-      label: folder + ' / ' + n + '（他のフォルダ）',
-      dsl: text,
-    };
-  }
-
-  // 置換元にいちばん近い候補。ファイル名 (timer_init_sequence.puml) に出てくる語を
-  // 優先する。図の本文だけで数えると、どの図にも出る App のような語が
-  // 出現数で勝ってしまい、写したい部品名 (Timer) が選ばれない。
-  // 候補は templateNew.candidates の並び (出現数の多い順) をそのまま受ける。
-  function seedHint(fileName, candidates) {
-    var base = _s(fileName).toLowerCase();
-    var list = candidates || [];
-    for (var i = 0; i < list.length; i++) {
-      var n = _s(list[i] && list[i].name);
-      if (n && base.indexOf(n.toLowerCase()) >= 0) return n;
-    }
-    return list.length ? _s(list[0].name) : '';
-  }
-
   // 覗き一覧の 1 行に出す図種の印。
   // junior は先輩のフォルダにコンポーネント図があるかを見に行くのに、名前だけの
   // 一覧を 30 行読んで語尾 (_state / _sequence) から図種を推測していた。
@@ -151,12 +117,6 @@ window.MA.peekFolder = (function() {
              title: 'この図の図種（本文から判定）' };
   }
 
-  // テンプレートとして開けるかどうかの 1 行。押せないときは理由を出す。
-  function seedNotice(seed) {
-    if (!seed) return '図を選ぶとテンプレートとして開けます';
-    return seed.folder + ' の ' + seed.name + ' をテンプレートにして新しい図を作ります';
-  }
-
   return {
     baseName: baseName,
     choices: choices,
@@ -167,8 +127,5 @@ window.MA.peekFolder = (function() {
     noticeText: noticeText,
     step: step,
     kindBadge: kindBadge,
-    templateSeed: templateSeed,
-    seedNotice: seedNotice,
-    seedHint: seedHint,
   };
 })();
