@@ -226,6 +226,10 @@ test.describe('primary 手順 4 (c)④: 共通定義を !include の共通ファ
 
   test('共通ファイルが無いと、帯が探したフォルダを言う', async ({ page }) => {
     fs.rmSync(path.join(ABS, 'common_defs.puml'), { force: true });
+    // TICKET-releaser-20261116-0945-1: 帯は「直前の図の上に重ねる」もの。起動直後の最初の図がまだ描けていない
+    // (プレビューが空の) うちに開くと、理由は帯ではなく図の場所そのものに出る (render-error の設計どおり)。
+    // どちらに出るかが最初の描画との競争で揺れていたので、利用者と同じく起動した図が描けてから開く。
+    await expect(page.locator('#preview-svg svg').first()).toBeVisible({ timeout: 15000 });
     await openSaved(page, 'spi', 'spi_init_sequence');
     const band = page.locator('#render-error-overlay');
     await expect(band).toContainText('cannot include common_defs.puml', { timeout: 15000 });
