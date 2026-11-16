@@ -22,8 +22,8 @@ test('既定のタブ列に「ツール ▾」の札が出る (展開用の ツ�
   const m = /畳んでいるツール (\d+) 件/.exec(title);
   expect(m).not.toBeNull();
   // 整理 (1828-prune・TICKET-owner-20261115-2140-prune で「探す」を外した) で道具が減った。
-  // 件数は 0 でなく、ツール ▾ の項目 (6) 以上を数える。
-  expect(Number(m && m[1])).toBeGreaterThanOrEqual(6);
+  // 件数は 0 でなく、ツール ▾ の項目以上を数える (図をつくる は TICKET-owner-20261116-0321-prune で外した)。
+  expect(Number(m && m[1])).toBeGreaterThanOrEqual(4);
 });
 
 test('札を 1 クリックで畳んだ一覧が開く', async ({ page }) => {
@@ -33,7 +33,7 @@ test('札を 1 クリックで畳んだ一覧が開く', async ({ page }) => {
   // 「渡す」(引き継ぎ・納品) は TICKET-owner-20261115-1828-prune で外した。
   await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
     // 確かめる は 1841-prune、探す は TICKET-owner-20261115-2140-prune、レビュー は 2141-prune で外した
-    '図をつくる', '書き換える',
+    '書き換える',
   ]);
 });
 
