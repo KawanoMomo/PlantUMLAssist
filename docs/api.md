@@ -75,8 +75,6 @@ curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日�
 | `GET /tickets` | `?dir=` | 変更チケットの一覧 |
 | `POST /tickets` | `{dir, ticket}` | 変更チケットを 1 枚書く (id ごと置き換え) |
 | `DELETE /tickets` | `?dir=&id=` | 変更チケットを 1 枚消す |
-| `GET /peek-settled` | `?dir=` | 手本なしで確定した (相手, 図種) の一覧。確定した組は 👀他フォルダで聞き直さない |
-| `POST /peek-settled` | `{dir, peer, kind, settled}` / `{dir, clear: true}` | 確定を 1 つ足す (`settled: false` で外す) / 全部外す |
 | `GET /rename-pairs` | `?dir=` | そのフォルダで打たれた置換の組 (新しい順) |
 | `POST /rename-pairs` | `{dir, from, to, hits}` | 置換の組を 1 つ覚える (同じ組は 1 行) |
 | `GET /version` | — | アプリの版・コミット・日付 (`{version, commit, date}`。git tag が正本) |

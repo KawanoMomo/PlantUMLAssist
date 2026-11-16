@@ -122,7 +122,6 @@ window.MA.saveDiff = (function() {
 
   // 変わった行だけを拾う。パネルに「どこが変わったか」を 1 行で出すため。
   // 基準を外から渡す形 (countBetween) と、この図の基準を使う形 (changedLines) の 2 つを出す。
-  // 保存フォルダへ直接書いた回の控え (write-history) と比べるときは前者を使う。
   function countBetween(beforeDsl, dsl) {
     var now = normalize(dsl).split('\n');
     var bs = beforeDsl == null ? '' : normalize(beforeDsl);

@@ -4358,7 +4358,7 @@ function _holdOpenDocsBeforeTargetChange(prevCfg, nextBackend, nextDir) {
   });
 }
 
-// 保存先ごとの小さな控え (改名の記録・書き込み履歴など) の置き場。使えない環境でもフォルダ一覧は出る。
+// 保存先ごとの小さな控え (過去の置換の組・変更前の控えなど) の置き場。使えない環境でもフォルダ一覧は出る。
 function _reviewStore() {
   try { return window.localStorage || null; } catch (e) { return null; }
 }
@@ -7519,23 +7519,6 @@ function _captureBeforeRename(from, to, docs, changed) {
   } catch (e) { /* 控えが残せなくても置換自体は通す */ }
 }
 
-// ── 保存フォルダへの書き込み履歴 ───────────
-// ⇄ 一括置換・🔖 指摘から選ぶの [適用] はタブを開かずに保存フォルダへ書き戻すので、
-// 「その図を開いていたセッション」の中でしか残らない変更前の控え (before-snapshot)
-// では後から前後を出せない。書き込み操作 1 回ぶんを、当たった図の前後の本文ごと
-// 控える。ブラウザを開き直しても、その図を一度も開いていなくても並べられる。
-function _recordWrite(kind, meta, pairs) {
-  var WH = window.MA.writeHistory;
-  if (!WH) return null;
-  try {
-    var entry = WH.makeEntry(kind, meta, pairs, new Date().toISOString());
-    if (!entry) return null;
-    WH.record(_reviewStore(), _wsFileDir(), entry);
-    if (typeof renderWriteHistory === 'function') renderWriteHistory();
-    return entry;
-  } catch (e) { return null; }   // 控えが残せなくても書き込み自体は通す
-}
-
 // ── 過去の置換の組 ─────────────────────
 // ヒット件数は置換前・置換後を打ち終えてからしか出ないので、同じ組を当て直す
 // 運用では「もう残っていないこと」を確かめるためだけに毎回打ち直していた。
@@ -7894,14 +7877,6 @@ function renamePairsAcrossDocs(pairs, docs) {
   // する (Ctrl+Z で戻すと変更後が消えるので、往復では見せられない)。
   _captureBeforeRename(from, to, docs, res.changed);
 
-  // 前後の組を res に添える。保存フォルダへ書いた回として控えるのは呼び出し側
-  // (開いている図とフォルダ直書きを 1 回の置換として 1 件にまとめるため)。
-  var _before = {};
-  (docs || []).forEach(function(d) { if (d && d.id != null) _before[d.id] = String(d.dsl == null ? '' : d.dsl); });
-  res.pairs = res.changed.map(function(c) {
-    return { name: c.name, before: _before[c.id] || '', after: String(c.dsl == null ? '' : c.dsl) };
-  });
-
   // アクティブな図はエディタごと差し替える。undo は 1 手で戻せるようにする。
   if (window.MA.history) window.MA.history.pushHistory();
   res.changed.forEach(function(c) {
@@ -8107,11 +8082,6 @@ function setupBulkRename() {
       // 当たっても当たらなくても組は覚える。次の run はこの行を押すだけで済む。
       rememberRenamePair(from, to, total, total > 0);
       if (total === 0) return;
-      // 前後の本文も 1 件として控える。会議で「今日のこの回」を選んで並べられる。
-      _recordWrite('rename', { from: from, to: to },
-        ((res && res.pairs) || []).concat((f.rows || []).map(function(r) {
-          return { name: r.name, before: r.before, after: r.after };
-        })));
       fromEl.value = '';
       toEl.value = '';
       // 欄を空けたら「前回の組を入れました」も下ろす (空の欄の上に残すと食い違う)。
@@ -8736,29 +8706,6 @@ function setCompareMode(mode) {
 }
 
 // 「± 差分」タブ: 編集中の図の前回保存時点からの行差分と、他に変わった図の一覧。
-// 保存フォルダへ直接書いた回を ± 差分の基準に使えるか。
-// 使うのは「前回保存時点という基準が役に立たないとき」だけ:
-//  - 基準がまだ無い (開き直した図・一度も保存していない図)
-//  - 基準はあるが今と同じ (書いた後が基準になっていて、直した前後が出ない)
-// どちらでもなければ従来どおり前回保存時点と比べる (意味を勝手にすり替えない)。
-function _diffFallbackBasis(active, st) {
-  var WH = window.MA.writeHistory;
-  var SD = window.MA.saveDiff;
-  if (!WH || !SD || !active || (st !== 'new' && st !== 'same')) return null;
-  try {
-    var entries = WH.forDoc(_reviewStore(), _wsFileDir(), active.name);
-    for (var i = 0; i < entries.length; i++) {
-      var pair = WH.pairOf(entries[i], active.name);
-      if (!pair || SD.normalize(pair.before) === SD.normalize(active.dsl)) continue;
-      return {
-        dsl: pair.before,
-        label: WH.kindLabel(entries[i].kind) + ' ' + WH.when(entries[i]) + ' の前',
-      };
-    }
-  } catch (e) {}
-  return null;
-}
-
 function renderCompareDiffView() {
   var view = document.getElementById('compare-diff-view');
   var SD = window.MA.saveDiff;
@@ -8777,19 +8724,10 @@ function renderCompareDiffView() {
     var at = SD.markedAt(active.name);
     var c = SD.changedLines(active.name, active.dsl);
     var head = esc(active.name) + ' ・ ';
-    // 保存フォルダへ直接書いた図は「前回保存時点」が
-    // 無い (または書いた後と同じ) ので、これまでは「まだ保存していない (基準なし)」
-    // としか出ず、レビュー会議でその図の前後を出せなかった。基準が無い/変わって
-    // いないときは、書き込み履歴の直近の回の **書く前** を基準に据える。
-    var fb = _diffFallbackBasis(active, st);
     if (st === 'new') head += 'まだ保存していない (基準なし)';
     else if (st === 'same') head += '前回保存時点から変更なし';
     else head += '前回保存時点から +' + c.added + ' −' + c.removed;
     if (at) head += ' ・ ' + esc(_savedHeadLabel(at));
-    // 前回保存時点では前後が出せないとき、書き込み履歴の回を **足して** 出す。
-    // 「前回保存時点と比べてどうか」は言い切ったままにする (意味をすり替えない)。
-    var fc = fb ? SD.countBetween(fb.dsl, active.dsl) : null;
-    if (fb) head += ' ・ ' + esc(fb.label) + 'から +' + fc.added + ' −' + fc.removed;
     // 下端の札から寄せてきた分 (消える向きの警告と
      // 「前回保存版に戻す」) は、この ± 差分タブが引き受ける。別の比較画面を開かせない。
     var LDm = window.MA.liveDiff;
@@ -8797,19 +8735,16 @@ function renderCompareDiffView() {
     var warn = (LDm && pair && pair.has && LDm.verdict(pair.before, pair.now, pair.has) === 'shrink')
       ? LDm.warnText(pair.name, pair.before, pair.now) : '';
     html += '<div class="cd-head" id="compare-diff-head"'
-      + (fb ? ' data-basis="write-history"' : '')
       + ' data-vd-warn="' + (warn ? '1' : '0') + '"'
-      + ' data-vd-added="' + (fb ? fc.added : (st === 'changed' ? c.added : 0)) + '"'
-      + ' data-vd-removed="' + (fb ? fc.removed : (st === 'changed' ? c.removed : 0)) + '"'
+      + ' data-vd-added="' + (st === 'changed' ? c.added : 0) + '"'
+      + ' data-vd-removed="' + (st === 'changed' ? c.removed : 0) + '"'
       + '>' + (warn ? esc(warn) + ' / ' : '') + head + '</div>';
     if (LDm && pair && pair.has && LDm.canRestore(pair.before, pair.now, pair.has)) {
       html += '<button type="button" id="btn-compare-restore" class="cd-restore" title="'
         + esc(LDm.restoreTitle(pair.name, pair.before, pair.now)) + '">'
         + esc(LDm.restoreLabel()) + '</button>';
     }
-    var rowsOut = fb
-      ? SD.diffBetween(fb.dsl, active.dsl)
-      : (st === 'changed' ? SD.diffLines(active.name, active.dsl) : []);
+    var rowsOut = st === 'changed' ? SD.diffLines(active.name, active.dsl) : [];
     rowsOut.forEach(function(r) {
       var cls = r.mark === '+' ? 'add' : (r.mark === '-' ? 'del' : (r.mark === '…' ? 'skip' : ''));
       html += '<div class="cd-line ' + cls + '">' + esc(r.mark + ' ' + r.text) + '</div>';
@@ -8859,114 +8794,6 @@ function renderCompareDiffView() {
   }
 }
 
-// ── 書き込み履歴から並べる ─────────────────
-// 保存フォルダへ直接書いた操作は、その図を開いていなくても前後が残っている。
-// 編集中の図に当たる回を、参照ペインの候補として出す。
-function _activeWriteHistory(docs, activeId) {
-  var WH = window.MA.writeHistory;
-  if (!WH || activeId == null) return [];
-  var active = null;
-  (docs || []).forEach(function(d) { if (d && d.id === activeId) active = d; });
-  if (!active) return [];
-  try {
-    return WH.forDoc(_reviewStore(), _wsFileDir(), active.name).map(function(e) {
-      var pair = WH.pairOf(e, active.name) || {};
-      return {
-        id: e.id,
-        name: active.name,
-        dsl: pair.before || '',
-        label: WH.optionLabel(e, active.name),
-      };
-    }).filter(function(h) { return h.dsl; });
-  } catch (e) { return []; }
-}
-
-// 一覧: そのフォルダで行った書き込み操作を新しい順に並べる。行を押すと
-// その図を開き、その回の変更前を並べた状態にする (会議の「見せたい回を選ぶ」)。
-function renderWriteHistory() {
-  var WH = window.MA.writeHistory;
-  var listEl = document.getElementById('compare-hist-list');
-  var sum = document.getElementById('compare-hist-summary');
-  if (!WH || !listEl) return;
-  var entries = [];
-  try { entries = WH.list(_reviewStore(), _wsFileDir()); } catch (e) { entries = []; }
-  if (sum) sum.textContent = entries.length ? entries.length + ' 回' : '記録なし';
-  listEl.textContent = '';
-  if (!entries.length) {
-    var empty = document.createElement('div');
-    empty.id = 'compare-hist-empty';
-    empty.style.cssText = 'font-size:10px;color:var(--text-secondary);padding:4px 8px;';
-    empty.textContent = '⇄ 一括置換・[適用] で保存フォルダへ書くと、'
-      + 'その回の前後がここに残ります (ブラウザを開き直しても残ります)。';
-    listEl.appendChild(empty);
-    return;
-  }
-  entries.forEach(function(e) {
-    var row = document.createElement('div');
-    row.className = 'wh-entry';
-    row.setAttribute('data-hist-id', e.id);
-    var head = document.createElement('div');
-    head.className = 'wh-head';
-    head.textContent = WH.label(e);
-    row.appendChild(head);
-    (e.files || []).forEach(function(f) {
-      var fr = document.createElement('button');
-      fr.type = 'button';
-      fr.className = 'wh-file';
-      fr.setAttribute('data-doc-name', f.name);
-      fr.textContent = f.name;
-      fr.title = f.name + ' のこの回の変更前を並べて見る';
-      fr.addEventListener('click', function() { showWriteHistoryPair(e.id, f.name); });
-      row.appendChild(fr);
-    });
-    var drop = document.createElement('button');
-    drop.type = 'button';
-    drop.className = 'wh-drop';
-    drop.textContent = '捨てる';
-    drop.title = 'この回の控えを捨てる';
-    drop.addEventListener('click', function() {
-      try { WH.drop(_reviewStore(), _wsFileDir(), e.id); } catch (err) {}
-      if (_compareRefId === (window.MA.compareView.HIST_PREFIX + e.id)) {
-        _compareRefId = null;
-        _compareShownDsl = null;
-      }
-      renderWriteHistory();
-      renderCompareView();
-    });
-    row.appendChild(drop);
-    listEl.appendChild(row);
-  });
-}
-
-// その回・その図を並べた状態にする。開いていない図はフォルダから開く
-// (開いてからでないと「今」の側が出せない)。
-function showWriteHistoryPair(entryId, name) {
-  var WS = window.MA.workspace;
-  var CV = window.MA.compareView;
-  if (!CV) return;
-  var target = null;
-  ((WS && WS.list()) || []).forEach(function(d) { if (d.name === name) target = d; });
-  var go = function() {
-    _compareRefId = CV.HIST_PREFIX + entryId;
-    _compareShownDsl = null;
-    toggleCompareView(true, 'ref');
-    renderCompareView();
-  };
-  if (target) { switchToDoc(target.id); go(); return; }
-  openFromFolderByName(name);
-  window.setTimeout(go, 400);
-}
-
-function toggleWriteHistory(open) {
-  var listEl = document.getElementById('compare-hist-list');
-  var btn = document.getElementById('btn-compare-hist');
-  if (!listEl) return;
-  var show = (open == null) ? listEl.hidden : !!open;
-  listEl.hidden = !show;
-  if (btn) btn.setAttribute('aria-expanded', show ? 'true' : 'false');
-  if (show) renderWriteHistory();
-}
-
 // 編集中の図の「変更前スナップショット」。
 // 一括置換を当てたときにだけ控えられる。今の本文と同じなら null を返す
 // (並べても何も見えない候補を選択肢に出さない)。
@@ -8990,7 +8817,7 @@ function _renderCompareBeforeNote(snap, ref) {
   var sel = document.getElementById('compare-select');
   if (!pane || !sel) return;
   var note = document.getElementById('compare-before-note');
-  var showing = !!(snap && ref && ref.isBefore && !ref.isHistory);
+  var showing = !!(snap && ref && ref.isBefore);
   if (!showing) { if (note) note.remove(); return; }
   if (!note) {
     note = document.createElement('div');
@@ -9041,10 +8868,8 @@ function renderCompareView() {
   var docs = _compareDocs();
   var activeId = window.MA.workspace ? window.MA.workspace.getActiveId() : null;
   var snap = _activeBeforeSnapshot(docs, activeId);
-  var hist = _activeWriteHistory(docs, activeId);
-  var ref = cv.pick(docs, activeId, _compareRefId, snap, hist);
-  var opts = cv.options(docs, activeId, snap, hist);
-  renderWriteHistory();
+  var ref = cv.pick(docs, activeId, _compareRefId, snap);
+  var opts = cv.options(docs, activeId, snap);
 
   sel.textContent = '';
   opts.forEach(function(o) {
@@ -9054,8 +8879,7 @@ function renderCompareView() {
     // 図種まで並ぶと別の図と読み違える。
     op.textContent = o.isBefore ? o.name
       : o.name + ' (' + String(o.diagramType || '').replace('plantuml-', '') + ')';
-    if (o.isBefore && !o.isHistory) op.setAttribute('data-before', '1');
-    if (o.isHistory) op.setAttribute('data-hist', '1');
+    if (o.isBefore) op.setAttribute('data-before', '1');
     if (o.isVersion) op.setAttribute('data-version', '1');
     if (ref && o.id === ref.id) op.selected = true;
     sel.appendChild(op);
@@ -9078,7 +8902,7 @@ function renderCompareView() {
   }
 
   _compareRefId = ref.id;
-  var full = cv.doc(docs, ref.id, activeId, snap, hist) || {};
+  var full = cv.doc(docs, ref.id, activeId, snap) || {};
   var dsl = full.dsl || '';
   if (dsl === _compareShownDsl) return;   // 中身が変わっていなければ描き直さない
   _compareShownDsl = dsl;
@@ -9101,93 +8925,16 @@ function renderCompareView() {
   });
 }
 
-// ── 整合チェック ──────────────────────────
-// 同じ雛形を部品名だけ替えて書き写す業務では、打ち間違い・並べ間違いが毎回起きる。
-// 参照図と突き合わせて食い違いを保存前に挙げ、行を押すとその行へ飛ぶ。
-// 判断は consistency-check が持ち、ここは押した結果を並べるだけ。
-var _checkFindings = [];
-
-// 参照図を替えたら前の指摘は捨てる (どの図に対する指摘か分からなくなるため)。
-function _clearCheckList() {
-  _checkFindings = [];
-  var listEl = document.getElementById('check-list');
-  var sumEl = document.getElementById('check-summary');
-  if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
-  if (sumEl) { sumEl.textContent = ''; sumEl.classList.remove('clean', 'dirty'); }
-}
-
-function renderCheckList() {
-  var listEl = document.getElementById('check-list');
-  var sumEl = document.getElementById('check-summary');
-  var cc = window.MA.consistencyCheck;
-  if (!listEl || !sumEl || !cc) return;
-
-  listEl.textContent = '';
-  listEl.hidden = false;
-  sumEl.textContent = cc.summary(_checkFindings);
-  sumEl.classList.remove('clean', 'dirty');
-  sumEl.classList.add(_checkFindings.length === 0 ? 'clean' : 'dirty');
-
-  if (_checkFindings.length === 0) {
-    var ok = document.createElement('div');
-    ok.id = 'check-empty';
-    ok.textContent = '参照図との食い違いはありません。';
-    listEl.appendChild(ok);
-    return;
-  }
-  var LABEL = { order: '並び', suffix: '語尾', typo: '打ち間違い' };
-  _checkFindings.forEach(function(f) {
-    var row = document.createElement('div');
-    row.className = 'check-row';
-    row.setAttribute('data-check-kind', f.kind);
-    if (f.line != null) row.setAttribute('data-check-line', String(f.line));
-    var kind = document.createElement('span');
-    kind.className = 'check-kind';
-    kind.textContent = LABEL[f.kind] || f.kind;
-    var no = document.createElement('span');
-    no.className = 'check-no';
-    no.textContent = f.line == null ? '—' : String(f.line + 1);
-    var msg = document.createElement('span');
-    msg.className = 'check-msg';
-    msg.textContent = f.message;
-    row.appendChild(kind); row.appendChild(no); row.appendChild(msg);
-    if (f.line != null) {
-      row.addEventListener('click', function() { gotoOutlineLine(f.line); });
-    }
-    listEl.appendChild(row);
-  });
-}
-
-function runConsistencyCheck() {
-  var cc = window.MA.consistencyCheck;
-  var cv = window.MA.compareView;
-  var sumEl = document.getElementById('check-summary');
-  var listEl = document.getElementById('check-list');
-  if (!cc || !cv || !sumEl) return;
-  var ref = _compareRefId ? cv.doc(_compareDocs(), _compareRefId) : null;
-  if (!ref) {
-    _checkFindings = [];
-    sumEl.classList.remove('clean', 'dirty');
-    sumEl.textContent = '参照図を選んでください';
-    if (listEl) { listEl.textContent = ''; listEl.hidden = true; }
-    return;
-  }
-  _checkFindings = cc.check(ref.dsl || '', mmdText).findings;
-  renderCheckList();
-}
-
 // 参照ペインの別フォルダとの突き合わせ (名前の組・雛形・系統・増分の取り込み) は
-// TICKET-owner-20261115-2141-prune で外した (2 枚を比べるのは「この図の履歴」の版との比較)。
+// TICKET-owner-20261115-2141-prune で、参照図との打ち間違い・並びの突き合わせと
+// 保存フォルダへ書いた回の控えは TICKET-owner-20261116-0821-prune で外した
+// (2 枚を比べるのは「この図の履歴」の版との比較)。
 function setupCompareView() {
-  var checkBtn = document.getElementById('btn-check-run');
-  if (checkBtn) checkBtn.addEventListener('click', runConsistencyCheck);
   var btn = document.getElementById('btn-tab-compare');
   var sel = document.getElementById('compare-select');
   var close = document.getElementById('btn-compare-close');
   if (btn) btn.addEventListener('click', function() { toggleCompareView(null, 'ref'); });
   if (close) close.addEventListener('click', function() { toggleCompareView(false); });
-  var histBtn = document.getElementById('btn-compare-hist');
-  if (histBtn) histBtn.addEventListener('click', function() { toggleWriteHistory(); });
   var mRef = document.getElementById('compare-mode-ref');
   var mDiff = document.getElementById('compare-mode-diff');
   if (mRef) mRef.addEventListener('click', function() { setCompareMode('ref'); });
@@ -9196,7 +8943,6 @@ function setupCompareView() {
     sel.addEventListener('change', function() {
       _compareRefId = sel.value;
       _compareShownDsl = null;
-      _clearCheckList();
       renderCompareView();
     });
   }
