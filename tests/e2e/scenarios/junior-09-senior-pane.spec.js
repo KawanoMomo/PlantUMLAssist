@@ -447,10 +447,11 @@ test('手順9 保存先の図が多くても、読むだけの見出しはツリ
   const roBox = await ro.boundingBox();
   const sumBox = await page.locator('#files-summary').boundingBox();
   expect(roBox && sumBox && Math.abs(roBox.y + roBox.height - sumBox.y) < 4).toBe(true);
-  // 保存先の一覧はその上で流れる (最後の部品は見出しの下に潜らず、流せば見える)。
+  // 保存先の一覧はその上で流れる (最後の図は見出しの下に潜らず、流せば見える)。
   // ツリーは保存先の読み込み・Git の数え直しのたびに描き直されるので (全体実行の負荷で遅れて届くと、
   // 掴んだ行が DOM から外れて scrollIntoViewIfNeeded が落ちていた)、描き直しを挟んでも測り直す。
-  const last = page.locator('#files-parts .files-part-head').last();
+  // 部品のフォルダは TICKET-owner-20261116-0321-prune で外した (図は直下に並ぶ)。
+  const last = page.locator('#files-parts .files-part-file').last();
   await expect(async () => {
     await last.scrollIntoViewIfNeeded({ timeout: 2000 });
     const lastBox = await last.boundingBox();

@@ -16,8 +16,9 @@ var dom = new jsdom.JSDOM('<!DOCTYPE html><html><body></body></html>');
 global.window = dom.window;
 global.document = dom.window.document;
 
-// part-vocab / name-pairing は TICKET-owner-20261115-2141-prune、dupe-merge は TICKET-owner-20261116-0241-prune で外した。
-['../src/core/html-utils.js', '../src/core/dsl-utils.js', '../src/core/part-reference.js',
+// part-vocab / name-pairing は TICKET-owner-20261115-2141-prune、dupe-merge は TICKET-owner-20261116-0241-prune、
+// part-reference は TICKET-owner-20261116-0321-prune で外した。
+['../src/core/html-utils.js', '../src/core/dsl-utils.js',
  '../src/core/name-audit.js', '../src/core/name-registry.js',
  '../src/ui/properties.js']
   .forEach(function(m) {

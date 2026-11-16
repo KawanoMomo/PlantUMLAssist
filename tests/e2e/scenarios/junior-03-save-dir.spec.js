@@ -21,7 +21,7 @@ test('手順3 設定で保存先を変えると、上部バーの表示がその
   await page.reload();
   await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
   await expect(page.locator('#folder-panel .folder-item[data-file-name="diagram1"]')).toHaveCount(1);
-  await expect(page.locator('#files-parts .files-part-head', { hasText: 'DIAGRAM1' })).toHaveCount(1);
+  await expect(page.locator('#files-parts .files-part-file[data-file-name="diagram1"]')).toHaveCount(1);
   // 未設定ならダウンロードになることが先に出る。
   await expect(page.locator('#top-save-target')).toHaveAttribute('data-mode', 'download');
   // 保存先の無い新規の図は、上部バーにフォルダの段を出さない (ファイル名だけ)。
@@ -42,7 +42,7 @@ test('手順3 設定で保存先を変えると、上部バーの表示がその
   // design 10a (BLK-builder-20260924-1715-1): 上部バー左のパンくずにも保存先のフォルダ名が出る。
   await expect(page.locator('#top-crumbs .top-crumb')).toHaveText([DIR.replace(/[\\/]+$/, '').split(/[\\/]/).pop()]);
   await expect(page.locator('#folder-panel .folder-item[data-file-name="diagram1"]')).toHaveCount(0);
-  await expect(page.locator('#files-parts .files-part-head', { hasText: 'DIAGRAM1' })).toHaveCount(0);
+  await expect(page.locator('#files-parts .files-part-file[data-file-name="diagram1"]')).toHaveCount(0);
 
   // 到達条件その2: 保存は上部バーのボタン 1 押しで済む (コマンド名を打たない)。
   const save = page.locator('#top-save');
@@ -164,8 +164,9 @@ test('手順3 起動すると保存先の一覧が開いていて、読むだけ
   // 保存先: 押さずに開いている (見出しの ▾ と一覧の行)。
   await expect(page.locator('#folder-panel')).toHaveClass(/\bopen\b/);
   await expect(page.locator('#btn-tab-folder')).toHaveAttribute('aria-expanded', 'true');
-  // BLK-owner-20260924-0637-1: 保存先節の中はツリー (部品のフォルダ → ファイルの行) だけ。旧 📂 一覧は節に出さない。
-  await expect(page.locator('#files-parts .files-part-head[data-part="j03"]')).toBeVisible();
+  // BLK-owner-20260924-0637-1: 保存先節の中はツリー (ファイルの行) だけ。旧 📂 一覧は節に出さない。
+  // 部品のフォルダは TICKET-owner-20261116-0321-prune で外した (図は保存先の直下に並ぶ)。
+  await expect(page.locator('#files-parts .files-part-file[data-file-name="J03_tree_state"]')).toBeVisible();
   await expect(page.locator('#folder-panel .folder-item[data-file-name="J03_tree_state"]')).toHaveCount(1);
   await expect(page.locator('#folder-panel')).toBeHidden();
   // 起動時に開いても、カーソルは絞り込み欄へ飛ばない (エディタに打った文字が吸われない)。
@@ -206,10 +207,8 @@ test('手順3 保存先の図を直すと窓を出さずにそのファイルへ
   // 保存先を読み直して、置いた図がツリーに並んだ状態にする。
   await S.openFolder(page);
   await S.closeFolderList(page);
-  const partHead = page.locator('#files-parts .files-part-head[data-part="spi"], #files-parts .files-part-head[data-part="SPI"]').first();
-  await expect(partHead).toBeVisible({ timeout: 10000 });
-  if ((await partHead.getAttribute('aria-expanded')) !== 'true') await partHead.click();
   const fileRow = page.locator('#files-parts .files-part-file[data-file-name="spi_state"]');
+  await expect(fileRow).toBeVisible({ timeout: 10000 });
   await fileRow.click();
   await expect(page.locator('#editor')).toHaveValue(/Idle/);
 

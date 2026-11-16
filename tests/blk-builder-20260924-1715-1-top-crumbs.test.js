@@ -30,41 +30,23 @@ function fresh() {
 }
 
 describe('上部バーのパンくず (design 10a)', function() {
-  test('保存先があれば 保存先 → 部品 の段を返し、部品の無い図は保存先だけ', function() {
+  // 部品の段 (ファイル名から部品名を読んだ段) は TICKET-owner-20261116-0321-prune で外した。段は保存先だけ。
+  test('保存先があれば保存先の段だけを返す (ファイル名から部品の段を足さない)', function() {
     var W = fresh();
     try {
       var TS = W.MA.topStatus;
-      var two = TS.crumbs('junior', { part: 'spi', label: 'SPI' });
-      expect(two.map(function(c) { return c.kind + ':' + c.label; })).toEqual(['target:junior', 'part:SPI']);
-      expect(two[1].part).toBe('spi');
-      expect(TS.crumbs('junior', null).map(function(c) { return c.label; })).toEqual(['junior']);
+      var one = TS.crumbs('junior', { part: 'spi', label: 'SPI' });
+      expect(one.map(function(c) { return c.kind + ':' + c.label; })).toEqual(['target:junior']);
+      expect(TS.crumbs('junior').map(function(c) { return c.label; })).toEqual(['junior']);
+      expect(W.MA.fileTree.partFor).toBe(undefined);
     } finally { global.window = prevWindow; global.document = prevDocument; }
   });
 
   test('保存先が無い (ダウンロード) 新規の図はフォルダの段を出さない', function() {
     var W = fresh();
     try {
-      expect(W.MA.topStatus.crumbs('', { part: 'spi', label: 'SPI' })).toEqual([]);
-      expect(W.MA.topStatus.crumbs(null, null)).toEqual([]);
-    } finally { global.window = prevWindow; global.document = prevDocument; }
-  });
-
-  test('部品の段はツリーと同じ束ね方で決まる (一覧に無い図・図種の読めない図は null)', function() {
-    var W = fresh();
-    try {
-      var FT = W.MA.fileTree;
-      var entries = [
-        { name: 'spi_state', kind: 'state' },
-        { name: 'spi_init_sequence', kind: '' },
-        { name: 'diagram2', kind: '' },
-        { name: 'diagram1', kind: 'sequence' },
-      ];
-      expect(FT.partFor('spi_state', entries)).toEqual({ part: 'spi', label: 'SPI' });
-      expect(FT.partFor('spi_init_sequence.puml', entries)).toEqual({ part: 'spi', label: 'SPI' });
-      expect(FT.partFor('diagram1', entries)).toEqual({ part: 'diagram1', label: 'DIAGRAM1' });
-      expect(FT.partFor('diagram2', entries)).toBe(null);
-      expect(FT.partFor('can_state', entries)).toBe(null);
-      expect(FT.partFor('', entries)).toBe(null);
+      expect(W.MA.topStatus.crumbs('')).toEqual([]);
+      expect(W.MA.topStatus.crumbs(null)).toEqual([]);
     } finally { global.window = prevWindow; global.document = prevDocument; }
   });
 
@@ -94,39 +76,27 @@ describe('パンくずから FILES ツリーのフォルダを見せる (design 
   }
   function restore() { global.window = prevWindow; global.document = prevDocument; }
 
-  test('部品の段: 畳んだパネルを開き、部品のフォルダを開いて、その見出しへ移る', function() {
-    var W = boot();
-    try {
-      var head = W.document.querySelector('#files-parts .files-part-head[data-part="spi"]');
-      expect(head.getAttribute('aria-expanded')).toBe('false');
-      expect(W.MA.filesPanel.isOpen()).toBe(false);
-      expect(W.MA.filesPanel.reveal('part', 'spi')).toBe(true);
-      head = W.document.querySelector('#files-parts .files-part-head[data-part="spi"]');
-      expect(W.MA.filesPanel.isOpen()).toBe(true);
-      expect(head.getAttribute('aria-expanded')).toBe('true');
-      expect(W.document.activeElement).toBe(head);
-      expect(head.classList.contains('files-revealed')).toBe(true);
-    } finally { restore(); }
-  });
-
-  test('保存先の段: ツリーの保存先の行へ移る (保存先を変える画面は開かない)', function() {
+  test('保存先の段: 畳んだパネルを開き、ツリーの保存先の行へ移る (保存先を変える画面は開かない)', function() {
     var W = boot();
     try {
       var clicked = 0;
       W.document.getElementById('top-save-target').addEventListener('click', function() { clicked++; });
-      W.MA.filesPanel.reveal('target', '');
+      expect(W.MA.filesPanel.isOpen()).toBe(false);
+      expect(W.MA.filesPanel.reveal('target')).toBe(true);
+      expect(W.MA.filesPanel.isOpen()).toBe(true);
       expect(W.document.activeElement.id).toBe('top-save-target');
+      expect(W.document.activeElement.classList.contains('files-revealed')).toBe(true);
       expect(clicked).toBe(0);
     } finally { restore(); }
   });
 
-  test('一覧が読み直るたびに上部バーのパンくずを追わせる', function() {
+  test('保存先の図は名前の順に直下へ並び、部品のフォルダの見出しは出ない', function() {
     var W = boot();
     try {
-      var n = 0;
-      W.MA.refreshTopCrumbs = function() { n++; };
-      W.MA.filesPanel.renderParts();
-      expect(n).toBe(1);
+      expect(W.document.querySelectorAll('#files-parts .files-part-head').length).toBe(0);
+      var rows = W.document.querySelectorAll('#files-parts .files-part-file');
+      expect(Array.prototype.map.call(rows, function(r) { return r.getAttribute('data-file-name'); }))
+        .toEqual(['spi_init_sequence', 'spi_state']);
       expect(W.MA.filesPanel.folderEntries().map(function(e) { return e.name; }))
         .toEqual(['spi_state', 'spi_init_sequence']);
     } finally { restore(); }

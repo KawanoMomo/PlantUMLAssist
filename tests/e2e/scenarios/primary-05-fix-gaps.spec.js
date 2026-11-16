@@ -160,8 +160,6 @@ test('手順5.5 複製してクラスを消すと、消したクラスとその�
   // FILES の右クリック「複製」で 2 枚にし、写しを開く。
   await S.openFolder(page);
   await S.closeFolderList(page);
-  const head = page.locator('#files-parts .files-part-head[aria-expanded="false"]');
-  for (let i = await head.count(); i > 0; i--) await head.first().click();
   await page.locator('#files-parts .files-part-file[data-file-name="driver_common_class"]').click({ button: 'right' });
   await page.locator('#files-ctx-menu [data-action="copy"]').click();
   const copy = page.locator('#files-parts .files-part-file[data-file-name="driver_common_class_copy"]');

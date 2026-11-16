@@ -37,7 +37,6 @@ const sourceFiles = [
   'src/core/note-block.js',
   'src/core/note-edit.js',
   'src/core/note-intent.js',
-  'src/core/driver-usecase-starter.js',
   'src/core/activity-insert.js',
   'src/core/sequence-group-range.js',
   'src/core/app-bridge.js',
