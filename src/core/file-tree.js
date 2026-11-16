@@ -238,15 +238,13 @@ window.MA.fileTree = (function() {
   }
 
   // ツリーのファイル行の右に付ける札 (design 10a「ファイルの状態」)。中身は保存先の一覧の
-  // 行のバッジと同じ事実を読む: 未保存 ● / 指摘が未反映 / 一時控え / SVG が本文より古い。
-  // Git の M・A は行の data-git が別に出す。
+  // 行のバッジと同じ事実を読む: 未保存 ● / 指摘が未反映。
+  // Git の M・A は行の data-git が別に出す。下書きの印・SVG の鮮度の札は TICKET-owner-20261116-0241-prune で外した。
   function fileMarks(st) {
     var s = st || {};
     var out = [];
     if (s.dirty) out.push('●');
     if (s.unapplied) out.push('未反映');
-    if (s.draft) out.push('控え');
-    if (s.svgStale) out.push('SVG 古い');
     return out.join(' ');
   }
 
@@ -335,16 +333,15 @@ window.MA.fileTree = (function() {
     return String(sig == null ? '' : sig).split('\n').indexOf(n) >= 0;
   }
 
-  // 下端の 1 行の数。states は図 1 枚ごとの札の事実 ({ unapplied, draft })。
+  // 下端の 1 行の数。states は図 1 枚ごとの札の事実 ({ unapplied })。
   // 保存先の図を数える (design 10a の「12 図」はツリーに並ぶ保存先の図の数)。
   function summaryOf(states) {
     var list = states || [];
-    var un = 0, dr = 0;
+    var un = 0;
     list.forEach(function(st) {
       if (st && st.unapplied) un++;
-      if (st && st.draft) dr++;
     });
-    return { total: list.length, unapplied: un, draft: dr };
+    return { total: list.length, unapplied: un };
   }
 
   // design 10a: 部品フォルダの「＋ 未作成 2 図種（UC・ACT）」。
@@ -380,12 +377,11 @@ window.MA.fileTree = (function() {
     return '';
   }
 
-  // 下端に出していた「12 図 未反映 1 控え 1」をパネル内の 1 行に。
+  // 下端に出していた「12 図 未反映 1」をパネル内の 1 行に。
   function summaryLine(sum) {
     var s = sum || {};
     var out = (Number(s.total) || 0) + ' 図';
     if (Number(s.unapplied) > 0) out += ' · 未反映 ' + Number(s.unapplied);
-    if (Number(s.draft) > 0) out += ' · 控え ' + Number(s.draft);
     return out;
   }
 

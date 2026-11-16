@@ -232,15 +232,9 @@ test('手順5.5 塗り潰された図を、打ち直さずに直前の版へ 1 �
   await page.locator('[data-versions-name="driver_common_class"]').click();
   const restore = page.locator('[data-version-restore][data-version-of="driver_common_class"]').first();
   await restore.waitFor({ timeout: 10000 });
-  // 一覧は庫・札・保存の確かめが届くたびに描き直される (全体実行で遅い回は、押した後に届く)。
-  // 描き直しても開いた版の一覧は閉じない (閉じると、押したのに何も出ないように見える)。
-  // 保存したばかりの図なので「一覧を取り直す」が出ている。それで描き直させる。
-  // 版の一覧は「この図の履歴」(#vt-modal) に開くので、一覧はその裏にあって人の手では押せない。
-  // ここで要るのは利用者の操作ではなく「裏で届いた確かめによる描き直し」なので、
-  // 描き直しの入口をマウスを介さずに呼ぶ (押すのは [戻す] で、それは実マウスで押す)。
-  const again = page.locator('#folder-panel .folder-write-refresh').first();
-  await again.waitFor({ state: 'attached' });
-  await again.evaluate((b) => /** @type {HTMLButtonElement} */ (b).click());
+  // 一覧の「一覧を取り直す」(直近の更新の欄) は TICKET-owner-20261116-0241-prune で外した。
+  // 裏で一覧が描き直されても版の一覧が閉じないことは、ウィンドウにフォーカスが戻った知らせで確かめる。
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.waitForTimeout(800);
   await restore.waitFor({ timeout: 10000 });
 
@@ -265,64 +259,6 @@ async function openFolder(page) {
   await require('./_scenario').openFolder(page);
   await page.waitForSelector('#folder-panel.open');
 }
-
-// BLK-primary-20260914-1306-wish: 指摘.md は毎回「can_init_sequence-編集中 /
-// spi_init_sequence-編集中 が本体と byte 単位で同一のまま」の整理を求めるのに、
-// 📂一覧には開く・名前を変えるしか無く、片付けるには保存フォルダを直接触るしか
-// なかった (体験の規律で禁止)。重複を一覧の側で名指しし、1 押しで統合できることを
-// 到達条件にする。
-test('手順5.5 本体と中身が同じ「-編集中」を、一覧から 1 押しで統合できる', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.clearDir(page, DIR);
-
-  const CAN = S.docFor('can_init_sequence');
-  const SPI = S.docFor('spi_init_sequence');
-  await S.putDoc(page, DIR, 'can_init_sequence', CAN);
-  await S.putDoc(page, DIR, 'can_init_sequence-編集中', CAN);
-  await S.putDoc(page, DIR, 'spi_init_sequence', SPI);
-  await S.putDoc(page, DIR, 'spi_init_sequence-編集中', SPI);
-  await S.putDoc(page, DIR, 'driver_common_class', S.docFor('driver_common_class'));
-
-  await S.openFolder(page);
-  // 到達条件 1: 一覧が「中身が同じ図」を自分で数えて名指しする。
-  const sum = page.locator('#folder-dupe-summary');
-  await sum.waitFor({ timeout: 10000 });
-  expect(await sum.textContent()).toContain('2 組');
-  // 行の印で、どちらが本体でどちらが消せる写しかが分かる。
-  expect(await page.locator('[data-dupe-of="can_init_sequence-編集中"]').getAttribute('data-dupe-kind'))
-    .toBe('copy');
-  expect(await page.locator('[data-dupe-of="can_init_sequence"]').getAttribute('data-dupe-kind'))
-    .toBe('keep');
-  // 重複していない図には印を出さない (全行に印が付くと印でなくなる)。
-  expect(await page.locator('[data-dupe-of="driver_common_class"]').count()).toBe(0);
-
-  // 到達条件 2: 1 押しで写しだけが消え、本体は残る。
-  await page.locator('[data-dupe-keep="can_init_sequence"]').click();
-  await page.waitForTimeout(1500);
-  let names = await S.listDir(page, DIR);
-  expect(names).not.toContain('can_init_sequence-編集中');
-  expect(names).toContain('can_init_sequence');
-  expect(names).toContain('spi_init_sequence-編集中');
-
-  // 到達条件 3: 残りも同じ 1 押しで片付き、重複の行そのものが消える。
-  await page.locator('[data-dupe-keep="spi_init_sequence"]').click();
-  await page.waitForTimeout(1500);
-  names = await S.listDir(page, DIR);
-  expect(names).not.toContain('spi_init_sequence-編集中');
-  expect(names).toContain('spi_init_sequence');
-  expect(await page.locator('#folder-dupe-summary').count()).toBe(0);
-
-  // 到達条件 4: 重複していない図も、一覧から 1 枚だけ消せる (⚙設定の全削除しか
-  // 無かったので、1 枚を消すには保存フォルダを直接触るしかなかった)。
-  const del = page.locator('[data-delete-name="driver_common_class"]');
-  await del.click();           // 1 回目は身構えるだけ
-  await page.waitForTimeout(400);
-  await page.locator('[data-delete-name="driver_common_class"]').click();
-  await page.waitForTimeout(1500);
-  expect(await S.listDir(page, DIR)).not.toContain('driver_common_class');
-
-  await S.clearDir(page, DIR);
-});
 
 // BLK-primary-20260914-2106: 起動すると既定のタブ (diagram1) が図種の見本で作られる。
 // 画面のバッジは数を出すために saveActiveDoc() を通るので、利用者が 1 文字も

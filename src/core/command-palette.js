@@ -30,7 +30,7 @@ window.MA.commandPalette = (function() {
   // 「渡す」(引き継ぎ・納品) は TICKET-owner-20261115-1828-prune で道具ごと外した。
   var TOOL_GROUPS = ['make', 'edit', 'find', 'check', 'review'];
   // 'file' は Ctrl+P で開く「ファイル名から開く」の見出し。
-  // ファイル単位の操作 (一時控え・この図の変遷) もここに入る (入口は FILES ツリーの右クリック)。
+  // ファイル単位の操作 (この図の変遷) もここに入る (入口は FILES ツリーの右クリック)。
   var GROUPS = ['add', 'jump', 'selected'].concat(TOOL_GROUPS).concat(['file', 'command']);
   var GROUP_LABELS = {
     add: '図に足す / Add',

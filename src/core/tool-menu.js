@@ -41,13 +41,12 @@ window.MA.toolMenu = (function() {
   // Ctrl+K / Ctrl+P からは今まで通りの名前で引ける (ボタンの実体もそのまま)。
   var MOVED_TO_FILES = [
     { key: 'file', title: 'ファイル', items: [
-      { id: 'btn-tab-draft',    label: '一時控えにする', group: 'ファイルの右クリック' },
       { id: 'btn-tab-versions', label: 'この図の履歴を見る', group: 'ファイルの右クリック' },
       // フォルダの図を覗く窓は TICKET-owner-20261115-2141-prune で外した。
     ] },
   ];
   // 前の版と比べるのは「この図の履歴」の行の「比較」から (TICKET-owner-20261115-2141-prune)。
-  var FILES_NOTE = 'ファイル単位の操作（開く・この図の履歴（前の版との比較）・名前変更・一時控え・削除…）は FILES のファイルを右クリック。'
+  var FILES_NOTE = 'ファイル単位の操作（開く・この図の履歴（前の版との比較）・名前変更・削除…）は FILES のファイルを右クリック。'
     + '隣の保存フォルダは FILES の読むだけ（図を押すと右の枠に出ます）';
 
   function allGroups() {

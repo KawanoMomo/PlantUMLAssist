@@ -108,8 +108,9 @@ describe('絞り込みはファイル名と部品名のどちらでも引ける'
 });
 
 describe('下端に出していた枚数の 1 行をパネル内に移す', function() {
-  test('「12 図 · 未反映 1 · 控え 1」の 1 行にまとまる', function() {
-    expect(FT.summaryLine({ total: 12, unapplied: 1, draft: 1 })).toBe('12 図 · 未反映 1 · 控え 1');
+  // 「控え N」は TICKET-owner-20261116-0241-prune で外した (一時控えの仕分けごと)。
+  test('「12 図 · 未反映 1」の 1 行にまとまる', function() {
+    expect(FT.summaryLine({ total: 12, unapplied: 1, draft: 1 })).toBe('12 図 · 未反映 1');
   });
 
   test('0 件のものは言わない (下端と同じく、場所を取らせない)', function() {

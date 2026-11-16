@@ -177,13 +177,10 @@ window.MA.methodAudit = (function() {
     return ownerPrefix(event) !== '';
   }
 
-  // 「作業用の写し」を示す名前の印。📂 一覧の重複整理 (src/core/dupe-merge.js) と
-  // 同じ印を使う。読み込み順に依存しないよう、取れなければ同じ既定を自前で持つ。
+  // 「作業用の写し」を示す名前の印 (一覧の重複整理は TICKET-owner-20261116-0241-prune で外したので、印はここだけが持つ)。
   var COPY_MARKS = ['-編集中', '-編集用', '-copy', '-コピー', '-作業中', '-bak', '-old'];
   function _copyMarks() {
-    var dm = window.MA.dupeMerge;
-    var m = dm && dm.COPY_MARKS;
-    return (m && m.length) ? m : COPY_MARKS;
+    return COPY_MARKS;
   }
 
   // 宣言を本体ではなく `-編集中` の写しにだけ

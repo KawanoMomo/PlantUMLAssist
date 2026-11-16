@@ -527,7 +527,7 @@ window.MA.workspace = (function() {
   function listFolder(fileDir, opts) {
     var asked = _dir(fileDir);
     var wantPrev = !!(opts && opts.prev);
-    var miss = { entries: [], exists: null, dir: asked, roles: {}, verified: {}, now: null,
+    var miss = { entries: [], exists: null, dir: asked, roles: {},
                  gone: [], kinds: {} };
     try {
       // 一覧と同時に本文も受け取る。部品ごとの
@@ -552,13 +552,6 @@ window.MA.workspace = (function() {
             // 実データ / テンプレの宣言。
             // 一覧と同じ呼び出しで返る (別呼び出しにすると印の付く前が一瞬見える)。
             roles: (data.roles && typeof data.roles === 'object') ? data.roles : {},
-            // 「この svg を今の puml で描き直したら
-            // 一致したか」の控え。指紋つきなので、どちらかが動けば未確認に戻せる。
-            verified: (data.verified && typeof data.verified === 'object') ? data.verified : {},
-            // mtime を刻んだのと同じ時計の「今」。
-            // 「直近 N 分以内に更新された」は端末の時計では判定できない。
-            // 古い server は返さない (その場合は判定しない = null)。
-            now: (typeof data.now === 'string' && data.now) ? data.now : null,
             // 本体が消えて、上書き前の控えだけが
             // 残っている図。現存する図と混ぜずに別枠で受け取る。
             gone: Array.isArray(data.gone) ? data.gone : [],
