@@ -211,45 +211,6 @@ function openExistingFile(spec, opts) {
   return doc;
 }
 
-// 手本になるコンポーネント図が 1 枚も無い部品を、
-// 部品名 1 語から起こす。本体 1 つを末尾に追加してから依存チェックの起点を選び直す
-// 組み立てを、押した 1 回にまとめる。
-// 起こしたものはたたき台なので、別タブで開いて今の図はそのままにする。
-function makeComponentDraft(subject) {
-  var CS = window.MA.componentStarter;
-  var WS = window.MA.workspace;
-  if (!CS || !WS) return null;
-  saveActiveDoc();
-  var docs = WS.list ? WS.list() : [];
-  var plan = CS.plan(subject, docs);
-  if (!plan) {
-    if (window.MA.toast) window.MA.toast.show('部品名を入れてください (例: TIMER)');
-    return null;
-  }
-  // 同じ名前のタブがあっても中身は上書きしない (書きかけを消さない)。
-  // 下書きは常に新しいタブに出し、要らなければ閉じれば済むようにする。
-  var doc = WS.open({
-    name: CS.docName(subject),
-    dsl: CS.dsl(subject, docs),
-    diagramType: 'plantuml-component',
-  });
-  var name = doc.name;
-  applyActiveDoc();
-  if (window.MA.toast) {
-    window.MA.toast.show(plan.body + ' と依存 ' + plan.rows.length
-      + ' 本の下書きを別タブで開きました');
-  }
-  return name;
-}
-window.MA.makeComponentDraft = makeComponentDraft;
-
-// パレットからの入口。図種を問わず使えるので、部品名だけその場で聞く。
-function promptComponentDraft() {
-  var s = window.prompt('コンポーネント図を起こす部品名 (例: TIMER)', '');
-  if (s == null) return null;
-  return makeComponentDraft(s);
-}
-
 // 一覧から開いたファイルは、開いたときの本文を憶える。読むだけの回 (本文が開いたときのまま) は
 // 書き戻さない。本文を変えたら、ほかの図と同じく Ctrl+S と自動保存でそのファイルに書く。
 function markOpenedSource(doc) {
@@ -3686,7 +3647,6 @@ function initCommandPalette() {
       // タブ列から「ツール ▾」も消えるので、
       // 6 分類のメニュー自体を引く経路をここに置く (メニューは画面左上に開く)。
       { id: 'tab-tools', title: 'ツールを分類から選ぶ / Tools', hint: 'Tabs', keywords: ['tool', 'menu', 'つーる', 'どうぐ', 'ぶんるい', 'めにゅー'], run: function() { setTimeout(function() { clickById('btn-tab-tools'); }, 0); } },
-      { id: 'component-draft', title: '定石構成からコンポーネント図を起こす / Component draft', hint: 'Tabs', keywords: ['component', 'draft', 'こんぽーねんと', 'じょうせき', 'おこす', 'したがき'], run: function() { promptComponentDraft(); } },
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], button: 'btn-tab-new', run: function() { clickById('btn-tab-new'); } },
       // 保存先の行の右クリック「別のフォルダを保存先にする…」と同じ窓。
       // 右クリックの入口と同じ名前にする (前の名前「保存先を変える」は検索語に残す)。
