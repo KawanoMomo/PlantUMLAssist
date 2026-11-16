@@ -38,7 +38,7 @@ window.MA.refFolders = (function() {
     return (i >= 0 ? s.slice(i + 1) : s) || s;
   }
 
-  // 登録簿の読み書き。壊れていても画面を止めない (空として扱う)。
+  // 並べたフォルダの一覧の読み書き。壊れていても画面を止めない (空として扱う)。
   function parse(raw) {
     var v = null;
     try { v = JSON.parse(_s(raw)); } catch (e) { return []; }

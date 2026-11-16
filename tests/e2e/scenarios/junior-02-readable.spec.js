@@ -884,46 +884,6 @@ test('手順2 活動図の本文を欄に打って、位置を選んで足せる
   expect(await S.readDoc(page, SENIOR_DIR, 'driver_common_class')).toBe(SENIOR_COMMON_CLASS);
 });
 
-// BLK-junior-20260916-0046-wish: 17 周目の手順 2 は「指摘の表記揺れ 4 組を canonical に
-// 揃える」。揃える先は reviewer が決めて登録簿 (_names.json) に置いてあるのに、GUI には
-// 「どのファイルにその揺れが残っているか」が無いので、junior は 📂 一覧と登録簿を
-// 見比べ、該当しそうな図を 1 枚ずつ開いて本文を読み、直して保存する、を 10 回繰り返した。
-// 組を選べば在処が出て、チェックした分が保存まで 1 回で終わることを確かめる。
-const UNIFY_ROOT = DIR + '-unify';
-const UNIFY_DIR = UNIFY_ROOT + '/junior';
-
-const U_GPIO = [
-  '@startuml', 'title GPIOドライバ初期化シーケンス',
-  'participant Gpio_Driver', 'participant IrqCtrl',
-  'Gpio_Driver -> IrqCtrl : Gpio_Init()',
-  '@enduml',
-].join('\n');
-const U_SPI = [
-  '@startuml', 'title SPIドライバ初期化シーケンス',
-  'participant Spi_Driver', 'participant Irq_Ctrl', 'participant ClockCtrl',
-  'Spi_Driver -> Irq_Ctrl : Spi_Init()',
-  'Spi_Driver -> ClockCtrl : 分周設定',
-  '@enduml',
-].join('\n');
-// 既に揃っている図。対象に挙がってはいけない (直す必要が無い図を触らない)。
-const U_OK = [
-  '@startuml', 'title TIMERドライバ初期化シーケンス',
-  'participant Timer_Driver', 'participant IRQCtrl',
-  'Timer_Driver -> IRQCtrl : Timer_Init()',
-  '@enduml',
-].join('\n');
-
-async function putRegistry(page, dir, entries) {
-  return page.evaluate(async (a) => {
-    const r = await fetch('/name-registry', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dir: a.dir, entries: a.entries }),
-    });
-    return r.ok;
-  }, { dir, entries });
-}
-
-
 // BLK-builder-20260924-1252-4 (design 4a): 先輩の構成を真似てクラス図を起こすとき、属性の名前・可視性は
 // 右パネルの 1 行 1 レコードで直す。閉じた行は「記号・シグネチャ・編集」だけで、図の属性を押すと同じ行が
 // その場で開き、入力に合わせて「組み立てられる行」が変わる。並べ替えと削除は開いた行の中にある。

@@ -3247,8 +3247,6 @@ window.MA.modules.plantumlSequence = (function() {
               '<input id="seq-edit-stereotype" type="text" value="' + escHtml(msgParts.stereotype) + '" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
             '</div>' +
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-msg-label-rle"></div></div>' +
-            // 正式表記のチップ (登録簿に語があるときだけ。役割 method / event には出ない)。
-            P.vocabPickerHtml('seq-edit-msg-vocab', { roles: ['method', 'event'], callSuffix: true }) +
             actionBarHtml(mm.line, 'message');
           var mln = mm.line;
           var swapBtn = document.getElementById('seq-edit-swap');
@@ -3294,8 +3292,6 @@ window.MA.modules.plantumlSequence = (function() {
             ctx.setMmdText(updateMessage(ctx.getMmdText(), mln, 'label', combined));
             ctx.onUpdate();
           });
-          P.bindVocabPicker('seq-edit-msg-vocab',
-            document.querySelector('#seq-edit-msg-label-rle .rle-textarea'));
 
           var _stereoPushed = false;
           document.getElementById('seq-edit-stereotype').addEventListener('change', function() {
@@ -3353,9 +3349,6 @@ window.MA.modules.plantumlSequence = (function() {
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(pp.label) + '</strong><br><span style="color:var(--text-secondary);">' + escHtml(P.lineHead(pp.ptype, selLine)) + '</span></div>' +
             P.selectFieldHtml('Type', 'seq-edit-ptype', pOpts2) +
             P.fieldHtml('Alias', 'seq-edit-alias', pp.id) +
-            // 部品名を打つのはここ。登録簿の
-            // 正式表記を欄の下に出し、揺れた綴りならその場で揃える先を言う。
-            P.vocabPickerHtml('seq-edit-alias-vocab', { roles: ['type'] }) +
             // 図に出る文字の欄は部品を問わず「本文」。
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-label-rle"></div></div>' +
             '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);margin:8px 0;"><input id="seq-edit-rename-refs" type="checkbox" checked> Alias 変更時に他要素の参照も追従</label>' +
@@ -3390,7 +3383,6 @@ window.MA.modules.plantumlSequence = (function() {
             ctx.setMmdText(t);
             ctx.onUpdate();
           });
-          P.bindVocabPicker('seq-edit-alias-vocab', 'seq-edit-alias');
           // C20: 同上 (participant label edit)
           var _partLabelPushed = false;
           window.MA.richLabelEditor.mount(document.getElementById('seq-edit-label-rle'), pp.label, function(v) {

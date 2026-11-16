@@ -2323,48 +2323,6 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
 
 #rename-hits .hit { display: flex; justify-content: space-between; padding: 1px 0; }
 #rename-hits .hit.zero { opacity: 0.45; }
-/* 改名履歴タイムライン */
-#rename-history { margin-top: 6px; font-size: 10px; }
-#rename-history .rh-head {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 3px;
-}
-#rename-history .rh-head-label { flex: 1 1 auto; }
-#rename-history button.rh-copy {
-  flex: 0 0 auto;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 10px;
-  padding: 0 5px;
-  cursor: pointer;
-}
-#rename-history .rh-summary { padding: 3px 0; }
-#rename-history .rh-summary.rh-found { color: var(--accent); }
-#rename-history .rh-summary.rh-none { color: var(--text-secondary); }
-#rename-history .rh-rows { max-height: 150px; overflow-y: auto; font-family: var(--font-mono); }
-#rename-history .rh-entry { padding: 2px 0; border-bottom: 1px solid var(--bg-tertiary); }
-#rename-history .rh-line { color: var(--text-primary); }
-#rename-history .rh-docs { display: flex; flex-wrap: wrap; gap: 3px; padding-top: 2px; }
-#rename-history button.rh-doc {
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 10px;
-  padding: 0 4px;
-  cursor: pointer;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-#rename-history button.rh-doc:hover { border-color: var(--accent); color: var(--accent); }
 /* 開いていない図も含めた影響範囲一覧 (保存フォルダの全ファイルを先に数える) */
 #rename-folder { margin-top: 6px; font-size: 10px; }
 #rename-folder .folder-head {
@@ -2424,16 +2382,6 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
 
 
 
-/* シグネチャ変更 (戻り値型・引数) をまとめて当てる欄 */
-#rename-signature { margin-top: 6px; font-size: 10px; }
-#rename-signature .sig-head { color: var(--text-secondary); padding-bottom: 3px; }
-#rename-signature .sig-row { display: flex; align-items: center; gap: 4px; }
-#rename-signature .sig-row label { margin: 0; white-space: nowrap; }
-#rename-signature .sig-row input { width: auto; flex: 1 1 0; min-width: 0; }
-#rename-signature .sig-preview { max-height: 90px; overflow-y: auto; margin: 4px 0; }
-#rename-signature .sig-line { font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#rename-signature .sig-note { color: var(--text-secondary); }
-#rename-signature .sig-apply { width: 100%; }
 #rename-summary { margin-top: 6px; font-size: 10px; color: var(--text-secondary); }
 #rename-panel .rename-actions { display: flex; gap: 6px; margin-top: 8px; }
 #rename-panel .rename-actions button {
@@ -4434,10 +4382,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="rename-hits"></div>
         <!-- 開いていない図も含めた影響範囲 (ヒットした図 / しなかった図) -->
         <div id="rename-folder"></div>
-        <!-- 綴りが変わらない仕様変更 (戻り値型・引数) を全図へ 1 回で当てる -->
-        <div id="rename-signature"></div>
-        <!-- この部品名がいつ・どの図で改名されたか -->
-        <div id="rename-history"></div>
         <div id="rename-summary"></div>
         <div class="rename-actions">
           <button id="btn-rename-apply" disabled>置換</button>
@@ -4765,8 +4709,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
       <div id="cfg-backend-cards"></div>
       <div id="cfg-file-dir-row" style="display:none;margin-top:6px;font-size:12px;">
         <label style="display:block;margin-bottom:4px;color:var(--text-secondary);">保存先ディレクトリ</label>
-        <input type="text" id="cfg-file-dir" placeholder="./autosave (渡された xref.md ごと貼ってもよい)" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:monospace;">
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">server.py からの相対パス、 または絶対パス。 存在しなければ保存時に自動作成。 区切りは / が安全です (\ は往復で壊れることがあるため / に直して保存します)。 渡された xref.md をそのまま貼っても、保存先の値だけを拾って入れます。</div>
+        <input type="text" id="cfg-file-dir" placeholder="./autosave" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:monospace;">
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">server.py からの相対パス、 または絶対パス。 存在しなければ保存時に自動作成。 区切りは / が安全です (\ は往復で壊れることがあるため / に直して保存します)。</div>
         <div id="cfg-file-dir-msg" style="font-size:10px;color:var(--accent-red);margin-top:2px;white-space:pre-wrap;"></div>
       </div>
     </div>
@@ -4947,12 +4891,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/recent-files.js"></script>
 <script src="src/core/bulk-rename.js"></script>
 <script src="src/core/folder-impact.js"></script>
-<script src="src/core/signature-change.js"></script>
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/export-name.js"></script>
 <script src="src/core/svg-export.js"></script>
 <script src="src/core/component-pack.js"></script>
-<script src="src/core/rename-history.js"></script>
 <script src="src/core/rename-redo.js"></script>
 <script src="src/core/rename-seed.js"></script>
 <script src="src/core/rename-pairs.js"></script>
@@ -4967,9 +4909,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/diagram-settings.js"></script>
 <script src="src/core/name-audit.js"></script>
 <script src="src/core/add-kind-vocab.js"></script>
-<script src="src/core/name-registry.js"></script>
 <script src="src/core/review-before-after.js"></script>
-<script src="src/core/save-dir-handoff.js"></script>
+<script src="src/core/save-dir-check.js"></script>
 <script src="src/core/activity-insert.js"></script>
 <script src="src/core/activity-branch-pattern.js"></script>
 <script src="src/core/swimlane-move.js"></script>
