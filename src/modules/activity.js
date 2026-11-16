@@ -2771,7 +2771,7 @@ window.MA.modules.plantumlActivity = (function() {
           // 置く機会の少ない 1 行 (中断・切り離し・打ち切り) はここに畳む。
           { value: 'other', label: 'その他 (中断・切り離し・打ち切り)' },
           // 複数行を 1 行 1 アクションで入れる入口は、他の図種と同じ種別チップ「まとめて」1 つ。
-          // 以前は処理欄の下に「+ 各行をアクションとして一括追加」「⧉ 他の図から取り込む」を別に並べていた。
+          // 以前は処理欄の下に「+ 各行をアクションとして一括追加」と取り込みのボタンを別に並べていた。
           { value: 'bulk', label: 'まとめて (複数行)' }
         ]) +
         '<div id="ac-tail-place">' +
@@ -2871,10 +2871,10 @@ window.MA.modules.plantumlActivity = (function() {
         html2 = lbl('注釈の本文 (Enter で追加 / Shift+Enter で改行)') +
           '<textarea id="ac-tail-ntext" data-enter="submit" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>';
       } else if (kind === 'bulk') {
-        // 他の図種の「まとめて」と同じ形: 「⧉ 他の図から取り込む」+ 1 行 1 件の欄 +「+ まとめて追加」。
+        // 他の図種の「まとめて」と同じ形: 1 行 1 件の欄 +「+ まとめて追加」
+        // (他の図の行を持ち込むボタンは TICKET-owner-20261116-0321-prune で外した。欄は打って埋める)。
         html2 =
           lbl('アクションを 1 行 1 件で') +
-          window.MA.reuseModal.buttonHtml('ac-tail-reuse') +
           '<textarea id="ac-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
           P.vocabPickerHtml('ac-tail-bulk-vocab', { roles: ['method'], callSuffix: true });
       } else if (kind === 'other') {
@@ -2893,8 +2893,6 @@ window.MA.modules.plantumlActivity = (function() {
       }
       detailEl.innerHTML = html2;
       restoreDrafts();
-      // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
-      window.MA.reuseModal.bindButton('ac-tail-reuse', 'plantuml-activity', 'ac-tail-bulk');
       P.bindVocabPicker('ac-tail-text-vocab', 'ac-tail-text', null, { insert: 'caret' });
       // 一括欄では、チップは欄を置き換えずカーソル位置に差し込む。
       P.bindVocabPicker('ac-tail-bulk-vocab', 'ac-tail-bulk', null, { insert: 'caret' });

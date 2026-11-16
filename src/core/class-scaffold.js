@@ -181,26 +181,6 @@ window.MA.classScaffold = (function() {
     return fwd > back;
   }
 
-  // 同じ語尾 (最後の `_` の後、例 `Driver`) の兄弟クラスが 2 つ以上そろって継承している親。無ければ ''。
-  // 系統を 1 つ足すとき、新しい `Pwm_Driver` は兄弟の `Spi_Driver` … と同じ親 (`Driver_Common`) にぶら下がる。
-  function siblingParent(text, name) {
-    var n = _s(name);
-    var cut = n.lastIndexOf('_');
-    if (cut <= 0 || cut === n.length - 1) return '';
-    var suffix = n.slice(cut);
-    var count = {};
-    _s(text).split(/\r?\n/).forEach(function(raw) {
-      var l = raw.trim(), m, child = null, parent = null;
-      if ((m = l.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*--\|>\s*([A-Za-z_][A-Za-z0-9_]*)/))) { child = m[1]; parent = m[2]; }
-      else if ((m = l.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*<\|--\s*([A-Za-z_][A-Za-z0-9_]*)/))) { child = m[2]; parent = m[1]; }
-      if (!child || child === n || child.slice(-suffix.length) !== suffix || child.length <= suffix.length) return;
-      count[parent] = (count[parent] || 0) + 1;
-    });
-    var best = '', bestN = 1;
-    Object.keys(count).forEach(function(p) { if (count[p] > bestN) { bestN = count[p]; best = p; } });
-    return best;
-  }
-
   // 本文の中のクラスの宣言の行 ({ で本体を開くか) を探す。
   function _declAt(lines, id) {
     for (var i = 0; i < lines.length; i++) {
@@ -320,7 +300,6 @@ window.MA.classScaffold = (function() {
     ARROWS: ARROWS,
     validate: validate,
     childFirstInheritance: childFirstInheritance,
-    siblingParent: siblingParent,
     preview: preview,
     apply: apply,
   };

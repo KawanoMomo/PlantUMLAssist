@@ -82,6 +82,20 @@ describe('FILES の部品フォルダの束ねを外した (TICKET-owner-2026111
     expect(FT.filter([{ name: 'spi_state' }, { name: 'can_state' }], 'spi').length).toBe(1);
   });
 
+  test('「⧉ 他の図から取り込む」の窓とボタン・候補集め (reuse-picker / reuse-modal / seq-to-activity) が無い', function() {
+    ['src/core/reuse-picker.js', 'src/core/seq-to-activity.js', 'src/ui/reuse-modal.js'].forEach(function(f) {
+      expect(fs.existsSync(path.join(ROOT, f))).toBe(false);
+      expect(HTML).not.toContain(f);
+    });
+    expect(HTML).not.toContain('id="reuse-modal"');
+    ['sequence', 'usecase', 'component', 'class', 'activity', 'state'].forEach(function(m) {
+      var src = fs.readFileSync(path.join(ROOT, 'src', 'modules', m + '.js'), 'utf8');
+      expect(src).not.toContain('reuseModal');
+      expect(src).not.toContain('reusePicker');
+      expect(src).not.toContain('他の図から取り込む');
+    });
+  });
+
   test('パンくずは保存先の段だけ', function() {
     var TS = fs.readFileSync(path.join(ROOT, 'src', 'core', 'top-status.js'), 'utf8');
     expect(TS).not.toContain("kind: 'part'");
