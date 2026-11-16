@@ -80,10 +80,18 @@ async function getEditorLine(page, lineNum) {
 // 実マウスで当たりの真ん中を押す。関係の線は細い当たり (path.link-hit) が枠の rect より手前にあり
 // (BLK-migrator-20260925-1032)、locator.click は「別の要素が受ける」と押す前に断る。利用者が押すのと同じく、
 // その位置で一番手前の当たりが受ける (線の当たりも同じ関係を選ぶ)。
+// TICKET-releaser-20261116-1201-1: 直前の操作 (Undo など) の描き直しが遅れて届くと、枠の層は作り直され、
+// 掴んだ枠は外れる。boundingBox は「枠を掴む」と「箱を測る」が別の往復なので、その間に作り直しが入ると
+// 外れた枠を測って null になる (全体実行の負荷のときだけ赤になっていた)。利用者は座標を押すので影響は無い。
+// 掴み直して測り直す。何度掴み直しても箱が無いときだけ (枠そのものが無い・大きさが無い) 赤にする。
 async function clickOverlayByLine(page, line) {
   const r = page.locator('#overlay-layer rect[data-line="' + line + '"]').first();
-  await r.scrollIntoViewIfNeeded();
-  const b = await r.boundingBox();
+  let b = null;
+  for (let i = 0; i < 5 && !b; i++) {
+    if (i) await page.waitForTimeout(150);
+    await r.scrollIntoViewIfNeeded();
+    b = await r.boundingBox();
+  }
   if (!b) throw new Error('overlay rect for line ' + line + ' has no box');
   await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
 }
