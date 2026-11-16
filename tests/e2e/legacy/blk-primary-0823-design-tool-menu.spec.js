@@ -27,7 +27,7 @@ test('ツールボタンで分類のメニューが開き、Ctrl+K の注記が�
   // 「渡す」(引き継ぎ・納品) は TICKET-owner-20261115-1828-prune で外した。
   await expect(menu.locator('.tool-menu-cat .tool-cat-name')).toHaveText([
     // 確かめる は 1841-prune、探す は TICKET-owner-20261115-2140-prune、レビュー は 2141-prune で外した
-    '図をつくる', '書き換える',
+    '書き換える',
   ]);
   await expect(menu.locator('.tool-menu-note')).toHaveText('Ctrl+K でも引けます');
   await expect(page.locator('#btn-tab-tools')).toHaveAttribute('aria-expanded', 'true');
@@ -89,14 +89,12 @@ test('分類はホバーで切り替わり、どの分類もパネル内をス�
   const menu = page.locator('#tool-menu');
   await expect(menu).toBeVisible();
 
-  // 開いた時点では 1 つ目の分類だけが右列に出ている
-  await expect(page.locator('.tool-menu-group[data-group="make"]')).toBeVisible();
-  await expect(page.locator('.tool-menu-group[data-group="edit"]')).toBeHidden();
-
-  // ホバーで右列が切り替わる (レビューの分類は TICKET-owner-20261115-2141-prune で外した)
+  // 開いた時点で 1 つ目の分類 (今は 書き換える 1 つ) が右列に出ている。
+  // 「図をつくる」の分類は TICKET-owner-20261116-0321-prune で外した。
+  await expect(page.locator('.tool-menu-group[data-group="edit"]')).toBeVisible();
+  await expect(page.locator('.tool-menu-group[data-group="make"]')).toHaveCount(0);
   await page.locator('.tool-menu-cat[data-group="edit"]').hover();
   await expect(page.locator('.tool-menu-group[data-group="edit"]')).toBeVisible();
-  await expect(page.locator('.tool-menu-group[data-group="make"]')).toBeHidden();
 
   // 小見出しで区切って出る (BLK-owner-20260924-1836-prune: 「見比べる」の「他の保存フォルダを覗く」は
   // FILES「読むだけ」の右クリックへ移し、パネル下端の案内 1 行に落とした)
@@ -107,7 +105,7 @@ test('分類はホバーで切り替わり、どの分類もパネル内をス�
   // パネルの中は溢れない (1 画面に収まる)
   // 「探す」は TICKET-owner-20261115-2140-prune で外した
   await expect(page.locator('.tool-menu-cat[data-group="find"]')).toHaveCount(0);
-  for (const key of ['make', 'edit']) {
+  for (const key of ['edit']) {
     await page.locator('.tool-menu-cat[data-group="' + key + '"]').hover();
     const over = await menu.evaluate((el) => el.scrollHeight - el.clientHeight);
     expect(over).toBeLessThanOrEqual(1);
@@ -120,11 +118,11 @@ test('絞り込み欄は全分類を横断し、キーボードだけで実行�
   await expect(filter).toBeFocused();
   await expect(page.locator('.tool-menu-note')).toHaveText('Ctrl+K でも引けます');
 
-  // 「図をつくる」の項目も「書き換える」の項目も、分類を開かずに候補へ出る
-  // (「図」で当たるのは 図をつくる の 1 行。基準の図との指摘 は 2141-prune で外した)
-  await filter.fill('図');
+  // 「書き換える」の項目は、分類を開かずに候補へ出る (「一括」で当たるのは 一括置換・一括適用 の 2 行)。
+  // 「図をつくる」の分類は TICKET-owner-20261116-0321-prune で外した。
+  await filter.fill('一括');
   const hits = page.locator('.tool-menu-hits .tool-menu-item');
-  await expect(hits).toHaveCount(1);
+  await expect(hits).toHaveCount(2);
   await filter.fill('行を書き換える');
   await expect(page.locator('.tool-menu-hits [data-target="btn-tab-lines"]')).toBeVisible();
 

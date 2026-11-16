@@ -61,9 +61,10 @@ describe('右列の小見出しは各 1 回 (design 9b)', () => {
   });
 
   test('絞り込みの横断結果でも分類の見出しは各 1 回', () => {
-    // 「レビュー」分類は TICKET-owner-20261115-2141-prune で外した。2 分類に当たる語で確かめる。
+    // 「レビュー」分類は TICKET-owner-20261115-2141-prune、「図をつくる」は TICKET-owner-20261116-0321-prune で外した。
+    // 残る「書き換える」の 3 行 (同じ小見出し) に当たる語で、小見出しが 1 回だけ出ることを確かめる。
     var subs = subsIn(TM.buildHitsHtml('す', {}));
-    expect(subs.length).toBeGreaterThan(1);
+    expect(subs.length).toBeGreaterThan(0);
     var uniq = subs.filter(function(s, i) { return subs.indexOf(s) === i; });
     expect(subs).toEqual(uniq);
   });

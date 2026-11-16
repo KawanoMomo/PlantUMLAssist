@@ -44,7 +44,7 @@ test('機能は Ctrl+K から引ける (ツールの分類メニューも Ctrl+K
   await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
     // 確かめる は TICKET-owner-20261115-1841-prune、探す は TICKET-owner-20261115-2140-prune で外した。
     // レビュー は TICKET-owner-20261115-2141-prune で外した。
-    '図をつくる', '書き換える',
+    '書き換える',
   ]);
   await pickTool(page, 'btn-tab-lines');
   await expect(page.locator('#lines-panel')).toHaveClass(/open/);

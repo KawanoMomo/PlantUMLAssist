@@ -17,7 +17,9 @@ describe('ツールメニューの分類', function() {
   // 「渡す」1 か所に集めた (TICKET-owner-20261115-1828-prune で引き継ぎ・納品ごと外した)。
   test('design 7a の分類がこの順で並ぶ (渡す は Export ▾ へ移した)', function() {
     expect(tm.groups().map(function(g) { return g.title; }))
-      .toEqual(['図をつくる', '書き換える']);
+      .toEqual(['書き換える']);
+    // 「図をつくる」(既存の図や雛形から起こす) は TICKET-owner-20261116-0321-prune で中身ごと外した。
+    expect(tm.menuIds().indexOf('btn-tab-template')).toBe(-1);
     // 「探す」(図をまたぐ調べ物) は TICKET-owner-20261115-2140-prune で中身ごと外した。
     ['btn-tab-symptom', 'btn-tab-blame', 'btn-tab-xref', 'btn-tab-lineage'].forEach(function(id) {
       expect(tm.menuIds().indexOf(id)).toBe(-1);

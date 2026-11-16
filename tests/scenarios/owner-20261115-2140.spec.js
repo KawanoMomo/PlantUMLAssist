@@ -79,7 +79,8 @@ test('owner 2140 ツール ▾ に「探す」は無く、残った道具をど�
     return out;
   });
   const ids = Array.from(new Set(targets.concat(all))).filter(Boolean);
-  expect(ids.length).toBeGreaterThan(3);
+  // 「図をつくる」(⧉ 新しい図を起こす) は TICKET-owner-20261116-0321-prune で外した。残りは 書き換える の 3 つ。
+  expect(ids.length).toBeGreaterThan(2);
   await page.keyboard.press('Escape');
 
   for (const id of ids) {
