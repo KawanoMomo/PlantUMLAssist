@@ -64,8 +64,10 @@ describe('フォルダの右クリック (design 10b)', function() {
     expect(it[3].title).toContain('読むだけ');
   });
 
-  test('部品のフォルダは名前で束ねた見出しなので、保存先 / 読むだけ は出さない', function() {
-    expect(ids(FM.folderItems({ kind: 'part' }))).toEqual(['new-doc']);
+  // 部品のフォルダ (名前で束ねた見出し) は TICKET-owner-20261116-0321-prune で外した。
+  // 種類の無い呼び出しは保存先として扱う。
+  test('種類を渡さなければ保存先のメニュー', function() {
+    expect(ids(FM.folderItems({}))).toEqual(ids(FM.folderItems({ kind: 'target' })));
   });
 
   // BLK-builder-20260924-1749-3 (design 10a): 読むだけのフォルダは「並べて比較」が先頭で、
@@ -136,16 +138,6 @@ describe('名前の組み立て', function() {
     expect(FM.copyName('spi_state', ['spi_state_copy', 'spi_state_copy2'])).toBe('spi_state_copy3');
   });
 
-  test('別の部品のフォルダへ移す = 頭の語 (部品) を差し替える', function() {
-    expect(FM.renameForPart('spi_init_sequence', 'adc')).toBe('adc_init_sequence');
-    expect(FM.renameForPart('spi-state', 'CAN')).toBe('can-state');
-    expect(FM.renameForPart('spi', 'can')).toBe('can');
-    // 同じ部品へ落としても何もしない。
-    expect(FM.renameForPart('spi_state', 'SPI')).toBe(null);
-    expect(FM.renameForPart('', 'spi')).toBe(null);
-    expect(FM.renameForPart('spi_state', '')).toBe(null);
-  });
-
   test('外から落としたファイルは .puml / .plantuml / .uml / .txt だけ取り込む', function() {
     var got = FM.importables([{ name: 'a.puml' }, { name: 'b.PlantUML' }, { name: 'c.png' }, { name: '.puml' }, { name: 'd.txt' }]);
     expect(got.map(function(g) { return g.name; })).toEqual(['a', 'b', 'd']);
@@ -182,22 +174,11 @@ describe('元の入口 (ツール ▾) は右クリックへの案内に落と�
   });
 });
 
-// BLK-builder-20260924-1915-4 (design 10b): 外から部品のフォルダに落とした図は、その部品の下に入る名前で取り込む。
-describe('外から部品フォルダへ取り込む名前 (design 10b)', function() {
-  test('もうその部品の名前ならそのまま', function() {
-    expect(FM.importNameForPart('timer_state', 'timer')).toBe('timer_state');
-    expect(FM.importNameForPart('TIMER_state', 'timer')).toBe('TIMER_state');
-  });
-  test('図種の語を持つ名前は、ツリー内の移動と同じく頭の語を差し替える', function() {
-    expect(FM.importNameForPart('gpt_state', 'timer')).toBe('timer_state');
-    expect(FM.importNameForPart('sequence', 'spi')).toBe('spi_sequence');
-  });
-  test('図種の語が無い名前は、元の名前を残して頭に部品を足す', function() {
-    expect(FM.importNameForPart('memo', 'timer')).toBe('timer_memo');
-    expect(FM.importNameForPart('gpt_notes', 'TIMER')).toBe('timer_gpt_notes');
-  });
-  test('部品が無ければ元の名前', function() {
-    expect(FM.importNameForPart('gpt_state', '')).toBe('gpt_state');
-    expect(FM.importNameForPart('gpt_state', null)).toBe('gpt_state');
+// BLK-builder-20260924-1915-4 の「部品のフォルダに落とした図を部品名に付け替えて取り込む」は
+// TICKET-owner-20261116-0321-prune で外した。外から落とした図は保存先の直下へ元の名前で取り込む。
+describe('外から落とした図の名前 (design 10b)', function() {
+  test('元の名前のまま (部品名に付け替えない)', function() {
+    expect(FM.importNameForPart).toBe(undefined);
+    expect(FM.importables([{ name: 'gpt_state.puml' }]).map(function(g) { return g.name; })).toEqual(['gpt_state']);
   });
 });

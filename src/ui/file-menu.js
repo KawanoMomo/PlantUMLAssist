@@ -12,9 +12,8 @@ window.MA = window.MA || {};
 // exportSVG / タブのダブルクリック改名) を
 // そのまま呼ぶ。同じ操作を 2 通りに実装しない。
 window.MA.fileMenuUi = (function() {
-  var ROW_SEL = '.files-sec-head, .files-row, .files-part-head, .files-part-file, .files-ro-folder, .files-ro-file, #folder-panel .folder-item[data-file-name]';
+  var ROW_SEL = '.files-sec-head, .files-row, .files-part-file, .files-ro-folder, .files-ro-file, #folder-panel .folder-item[data-file-name]';
   var FILE_SEL = '.files-row, .files-part-file, #folder-panel .folder-item[data-file-name]';
-  var DRAG_TYPE = 'application/x-pua-file';
 
   var panel = null;
   var menu = null;
@@ -54,11 +53,9 @@ window.MA.fileMenuUi = (function() {
     return '';
   }
 
-  // フォルダの種類。部品のフォルダは名前で束ねた見出し、保存先・読むだけは実在のフォルダ。
+  // フォルダの種類。保存先・読むだけ (どちらも実在のフォルダ)。
   function folderOf(el) {
     if (!el || !el.closest) return null;
-    var part = el.closest('.files-part-head');
-    if (part) return { kind: 'part', part: part.getAttribute('data-part') || '', el: part };
     var target = el.closest('#btn-tab-folder, #top-save-target');
     if (target) return { kind: 'target', el: target };
     // design 10a: 読むだけの節の中のフォルダの行 (と、その中の図の行)。
@@ -275,30 +272,15 @@ window.MA.fileMenuUi = (function() {
     });
   }
 
-  // 行き先の候補: ツリーに並んでいる部品のフォルダと、読むだけの節に並ぶ隣の保存フォルダ。
+  // 行き先の候補: 読むだけの節に並ぶ隣の保存フォルダ。
   function moveCandidates() {
-    var parts = [];
     var dirs = [];
     if (panel) {
-      Array.prototype.forEach.call(panel.querySelectorAll('.files-part-head[data-part]'), function(h) {
-        var p = h.getAttribute('data-part') || '';
-        if (p) parts.push({ part: p, label: p.toUpperCase() });
-      });
       Array.prototype.forEach.call(panel.querySelectorAll('.files-ro-folder[data-ro-dir]'), function(h) {
         dirs.push({ path: h.getAttribute('data-ro-dir') || '', name: h.getAttribute('data-ro-name') || '' });
       });
     }
-    return { parts: parts, dirs: dirs };
-  }
-
-  function renameToPart(name, part) {
-    var to = FM().renameForPart(name, part);
-    if (!to) return Promise.resolve();
-    return fileOp({ op: 'rename', dir: _dir(), name: name, to: to }).then(function(r) {
-      if (!r.ok) { toast('移せませんでした: ' + (r.data.error || r.status)); return; }
-      toast('「' + name + '」を ' + String(part).toUpperCase() + ' へ移しました (' + to + ')');
-      refreshLists();
-    });
+    return dirs;
   }
 
   function deleteFile(name) {
@@ -348,7 +330,6 @@ window.MA.fileMenuUi = (function() {
 
   function runMove(it, name) {
     if (!it) return Promise.resolve();
-    if (it.id === 'move-part') return renameToPart(name, it.part);
     if (it.id === 'move-dir') return moveToDir(name, it.dir);
     if (it.id === 'move-path') return moveFile(name);
     return Promise.resolve();
@@ -394,8 +375,7 @@ window.MA.fileMenuUi = (function() {
     if (!menu) return;
     menuCtx = ctx;
     if (ctx.type === 'move') {
-      var cand = moveCandidates();
-      menuItems = FM().moveTargets(ctx.name, cand.parts, cand.dirs);
+      menuItems = FM().moveTargets(ctx.name, moveCandidates());
     } else {
       menuItems = ctx.type === 'file'
         ? FM().fileItems({ git: _isGit() })
@@ -407,8 +387,7 @@ window.MA.fileMenuUi = (function() {
     title.className = 'files-ctx-title';
     title.textContent = ctx.type === 'move' ? ctx.name + ' の移動先'
       : ctx.type === 'file' ? ctx.name
-      : (ctx.folder.kind === 'part' ? String(ctx.folder.part).toUpperCase()
-        : ctx.folder.kind === 'target' ? '保存先' : (ctx.folder.name || '読むだけ'));
+      : (ctx.folder.kind === 'target' ? '保存先' : (ctx.folder.name || '読むだけ'));
     menu.appendChild(title);
     menuItems.forEach(function(it, i) {
       if (it.sep) {
@@ -512,16 +491,16 @@ window.MA.fileMenuUi = (function() {
   // ── ツリーのキーボード ────────────────────────────────────────────────
   function rowKind(row) {
     if (isFileRow(row)) return 'file';
-    if (row.classList.contains('files-part-head') || row.classList.contains('files-ro-folder')) return 'folder';
+    if (row.classList.contains('files-ro-folder')) return 'folder';
     if (row.classList.contains('files-ro-file')) return 'rofile';
     return 'section';
   }
 
   function parentRow(row) {
-    var body = row.closest('.files-part-body, .files-ro-body');
+    var body = row.closest('.files-ro-body');
     if (body) {
       var head = body.previousElementSibling;
-      if (head && (head.classList.contains('files-part-head') || head.classList.contains('files-ro-folder'))) return head;
+      if (head && head.classList.contains('files-ro-folder')) return head;
     }
     var sec = row.closest('.files-sec');
     return sec ? sec.querySelector('.files-sec-head') : null;
@@ -583,32 +562,19 @@ window.MA.fileMenuUi = (function() {
     if (!dt || !dt.types) return false;
     return Array.prototype.indexOf.call(dt.types, 'Files') >= 0;
   }
-  function hasOurs(dt) {
-    if (!dt || !dt.types) return false;
-    return Array.prototype.indexOf.call(dt.types, DRAG_TYPE) >= 0;
-  }
-
-  function markDraggable() {
-    if (!panel) return;
-    Array.prototype.forEach.call(panel.querySelectorAll('.files-part-file'), function(el) {
-      if (el.getAttribute('draggable') !== 'true') el.setAttribute('draggable', 'true');
-    });
-  }
-
-  // part: 落とした先の部品フォルダ (無ければ保存先の直下へ元の名前で)。
-  function importFiles(list, part) {
+  // 外から落とした図は保存先の直下へ元の名前で置く (ファイル名を部品名に付け替えない)。
+  function importFiles(list) {
     var items = FM().importables(list);
     if (!items.length) { toast('取り込めるのは .puml / .plantuml / .uml / .txt です'); return Promise.resolve(); }
     var ws = WS();
     if (!ws || !ws.saveToFile) return Promise.resolve();
     var dir = _dir();
-    var where = part ? String(part).toUpperCase() : '保存先';
     return folderFileNames().then(function(names) {
       var have = {};
       names.forEach(function(n) { have[n] = true; });
       var done = [], skipped = [];
       return items.reduce(function(p, it) {
-        var name = part ? FM().importNameForPart(it.name, part) : it.name;
+        var name = it.name;
         return p.then(function() {
           if (have[name] || !ws.isValidName(name)) { skipped.push(name); return null; }
           return it.file.text().then(function(text) {
@@ -616,8 +582,7 @@ window.MA.fileMenuUi = (function() {
           }).then(function(ok) { if (ok) { done.push(name); have[name] = true; } else skipped.push(name); });
         });
       }, Promise.resolve()).then(function() {
-        var msg = done.length + ' 枚を' + where + 'へ取り込みました';
-        if (part && done.length) msg += ' (' + done.join(', ') + ')';
+        var msg = done.length + ' 枚を保存先へ取り込みました';
         if (skipped.length) msg += ' (同じ名前があるなどで取り込まなかった図: ' + skipped.join(', ') + ')';
         toast(msg);
         refreshLists();
@@ -625,73 +590,28 @@ window.MA.fileMenuUi = (function() {
     });
   }
 
-  // 落とした先の部品フォルダ。見出しでも、開いた中の行でも、その部品に落としたことにする。
-  function dropPartHead(target) {
-    if (!target || !target.closest || !panel) return null;
-    var head = target.closest('.files-part-head');
-    if (head) return head;
-    var body = target.closest('.files-part-body');
-    if (!body) return null;
-    var part = body.getAttribute('data-part-body');
-    if (!part) return null;
-    var prev = body.previousElementSibling;
-    return (prev && prev.classList.contains('files-part-head')) ? prev : null;
-  }
-
-  function clearDropMarks() {
-    Array.prototype.forEach.call(panel.querySelectorAll('.files-part-head.is-drop'), function(h) { h.classList.remove('is-drop'); });
-  }
-
+  // 外から .puml を落とすと保存先へ取り込む。ツリーの中の図を部品のフォルダへドラッグして
+  // 名前の頭を付け替える道は TICKET-owner-20261116-0321-prune で外した (移すのは右クリックの「別のフォルダへ移動…」)。
   function bindDrag() {
-    panel.addEventListener('dragstart', function(ev) {
-      var el = ev.target && ev.target.closest ? ev.target.closest('.files-part-file') : null;
-      if (!el || !ev.dataTransfer) return;
-      ev.dataTransfer.setData(DRAG_TYPE, el.getAttribute('data-file-name') || '');
-      ev.dataTransfer.setData('text/plain', el.getAttribute('data-file-name') || '');
-      ev.dataTransfer.effectAllowed = 'move';
-    });
     panel.addEventListener('dragover', function(ev) {
       var dt = ev.dataTransfer;
-      if (hasOurs(dt)) {
-        var head = ev.target.closest ? ev.target.closest('.files-part-head') : null;
-        if (!head) return;
-        ev.preventDefault();
-        dt.dropEffect = 'move';
-        head.classList.add('is-drop');
-        return;
-      }
       if (hasFiles(dt)) {
         ev.preventDefault();
         ev.stopPropagation();
         dt.dropEffect = 'copy';
         panel.classList.add('is-drop');
-        // 外からのドラッグでも、どの部品に入るかを見出しで示す。
-        var ph = dropPartHead(ev.target);
-        clearDropMarks();
-        if (ph) ph.classList.add('is-drop');
       }
     });
     panel.addEventListener('dragleave', function(ev) {
-      var head = ev.target && ev.target.closest ? ev.target.closest('.files-part-head') : null;
-      if (head) head.classList.remove('is-drop');
       if (ev.target === panel) panel.classList.remove('is-drop');
     });
     panel.addEventListener('drop', function(ev) {
       var dt = ev.dataTransfer;
       panel.classList.remove('is-drop');
-      clearDropMarks();
-      if (hasOurs(dt)) {
-        var head = ev.target.closest ? ev.target.closest('.files-part-head') : null;
-        if (!head) return;
-        ev.preventDefault();
-        renameToPart(dt.getData(DRAG_TYPE), head.getAttribute('data-part'));
-        return;
-      }
       if (dt && dt.files && dt.files.length) {
         ev.preventDefault();
         ev.stopPropagation();
-        var ph = dropPartHead(ev.target);
-        importFiles(dt.files, ph ? ph.getAttribute('data-part') : '');
+        importFiles(dt.files);
       }
     });
   }
@@ -726,10 +646,6 @@ window.MA.fileMenuUi = (function() {
     window.addEventListener('resize', function() { closeMenu(false); });
 
     bindDrag();
-    markDraggable();
-    if (window.MutationObserver) {
-      new window.MutationObserver(markDraggable).observe(panel, { childList: true, subtree: true });
-    }
 
     document.addEventListener('keydown', function(ev) {
       if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || ev.shiftKey) return;

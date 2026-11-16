@@ -303,7 +303,7 @@ window.MA.componentDeps = (function() {
   // 実績を先に置くのは、見比べずにチェックできる確かな候補だから。
   // opts.noUsage: 他の図の呼び出しから拾う実績を見ない (依存チェックの画面。
   // 図をまたぐ「実際の呼び出し」枠は TICKET-owner-20261115-1841-prune で外した。
-  // 部品を起こす component-starter は実績を使うので既定は従来どおり)。
+  // 実績を使っていた下書きの起こし方は TICKET-owner-20261116-0321-prune で外した。既定は従来どおり)。
   function check(dsl, docs, exceptId, subject, opts) {
     var names = namesIn(dsl);
     var rows = [];

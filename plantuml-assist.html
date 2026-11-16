@@ -136,16 +136,8 @@ html, body {
   overflow: hidden; white-space: nowrap;
 }
 #files-panel .files-ro-file:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-/* design 10a: 保存先の下の部品ごとのフォルダ。`SPI 4 / 6` は揃い具合で、ファイル数ではない。 */
-#files-panel .files-part-head {
-  display: flex; align-items: center; gap: 4px; width: 100%;
-  background: none; border: 0; padding: 2px 8px 2px 10px;
-  font: inherit; font-size: 11px; color: var(--text-secondary);
-  text-align: left; cursor: pointer;
-}
-#files-panel .files-part-head:hover { background: var(--bg-tertiary); }
+/* design 10a: 保存先の下の図の行 (実在のファイルを名前の順に並べる)。 */
 #files-panel .files-part-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#files-panel .files-part-body[hidden] { display: none; }
 #files-panel .files-part-file {
   display: block; width: 100%; background: none; border: 0;
   padding: 2px 8px 2px 24px; font: inherit; font-size: 11px;
@@ -157,24 +149,6 @@ html, body {
 #files-panel .files-rename-box { padding: 1px 8px 2px 24px; }
 #files-panel .files-rename-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 11px; padding: 1px 4px; color: var(--text-primary); background: var(--bg-primary); border: 1px solid var(--accent); border-radius: 2px; outline: none; }
 #files-panel .files-rename-note { font-size: 10px; line-height: 1.4; color: var(--accent-red); padding-top: 2px; white-space: normal; }
-/* 未作成は薄い文字 (design 10a「＋ 未作成 2 図種（UC・ACT）」)。略号を押すとその図種を、
-   行頭の ＋ で未作成をまとめて、その場で作る。 */
-#files-panel .files-part-missing {
-  display: block; width: 100%; box-sizing: border-box;
-  padding: 2px 8px 2px 36px; text-indent: -14px; font-size: 11px;
-  color: var(--text-muted, var(--text-secondary)); opacity: .7;
-  /* 切り詰めない: 未作成が 4 図種以上でも後ろの略号が隠れず押せる。
-     折り返した 2 行目は ＋ の右にそろえる。 */
-  text-align: left; white-space: normal; line-height: 1.5;
-}
-#files-panel .files-part-missing:hover { opacity: 1; }
-#files-panel .files-part-missing button {
-  background: none; border: 0; padding: 0 1px; font: inherit; color: inherit; cursor: pointer; border-radius: 2px;
-}
-#files-panel .files-part-missing button.files-part-missing-all { width: 14px; margin-right: 0; text-align: center; }
-#files-panel .files-part-missing button:hover,
-#files-panel .files-part-missing button:focus-visible { color: var(--accent); background: var(--bg-tertiary); outline: none; }
-#files-panel .files-part-missing button.files-part-missing-kind { text-decoration: underline dotted; text-underline-offset: 2px; }
 #files-panel button.files-row {
   display: flex; align-items: center; gap: 4px;
   width: 100%; text-align: left; border: none; background: none; cursor: pointer;
@@ -186,7 +160,6 @@ html, body {
 #files-panel button.files-row[data-preview="1"] .files-row-name { font-style: italic; opacity: 0.85; }
 #files-panel .files-row-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #files-panel .files-row-mark { flex: 0 0 auto; font-size: 9px; color: var(--accent); white-space: nowrap; }
-#files-panel .files-part-note { flex: 0 0 auto; margin-left: 6px; font-size: 9px; color: var(--accent-orange, #f59e0b); white-space: nowrap; }
 #files-panel .files-empty { padding: 3px 16px; color: var(--text-secondary); }
 #files-panel .files-summary {
   flex: 0 0 auto; padding: 4px 6px; border-top: 1px solid var(--border);
@@ -201,7 +174,7 @@ html, body {
   display: flex; width: 100%; box-sizing: border-box; text-align: left;
   border: none; background: none; padding: 3px 6px 3px 16px; cursor: pointer;
 }
-/* design 10a: 「▾ junior 保存先」の行。その下の部品のフォルダ・図は 1 段下げて中身にする。 */
+/* design 10a: 「▾ junior 保存先」の行。その下の図は 1 段下げて中身にする。 */
 #files-panel .files-target-row { display: flex; align-items: center; }
 #files-panel .files-target-row #top-save-target { flex: 1 1 auto; min-width: 0; padding-left: 2px; }
 #files-panel .files-target-caret {
@@ -211,10 +184,7 @@ html, body {
 #files-panel .files-target-caret:hover { color: var(--text-primary); }
 #files-panel .files-target-row[data-empty="1"] .files-target-caret { visibility: hidden; }
 #files-panel #files-parts[hidden] { display: none; }
-#files-panel #files-parts .files-part-head { padding-left: 24px; }
-#files-panel #files-parts .files-part-file { padding-left: 38px; }
 #files-panel #files-parts .files-part-file.files-loose-file { padding-left: 30px; }
-#files-panel #files-parts .files-part-missing { padding-left: 50px; }
 /* ツリーに入れた #folder-panel は浮かせず、節の中身としてそのまま流す。 */
 /* GIT 欄・この図の履歴・比較する相手を選ぶ */
 #files-panel [data-files-section="git"][hidden] { display: none; }
@@ -346,7 +316,6 @@ html, body {
 }
 #files-ctx-menu .files-ctx-sep { height: 1px; margin: 4px 0; background: var(--border); }
 #files-panel.is-drop { outline: 2px dashed var(--accent); outline-offset: -3px; }
-#files-panel .files-part-head.is-drop { background: var(--bg-tertiary); outline: 1px solid var(--accent); }
 /* 遷移フォームの候補 (打ち始めで絞り、上下キーと Enter で選ぶ) */
 .st-tx-sugg { margin: -4px 0 6px 0; border: 1px solid var(--border); border-radius: 3px; background: var(--bg-secondary); max-height: 160px; overflow-y: auto; }
 .st-tx-sugg[hidden] { display: none; }
@@ -4209,7 +4178,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     </div>
     <div class="files-filterbar">
       <input id="files-filter" type="search" autocomplete="off" spellcheck="false"
-             placeholder="ファイル名・部品名で絞り込む" aria-label="ファイル名・部品名で絞り込む">
+             placeholder="ファイル名で絞り込む" aria-label="ファイル名で絞り込む">
     </div>
     <div class="files-sections">
       <section class="files-sec" data-files-section="open">
@@ -4226,10 +4195,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
                 class="files-sec-count" id="files-count-target"></span></button>
         <div class="files-sec-body" id="files-body-target">
           <!-- 保存先の一番上はフォルダそのもの。押すと保存先を変えられる (旧・保存先チップ)。
-               design 10a: 頭の ▾ / ▸ で、その下の部品のフォルダをまとめて畳む -->
+               design 10a: 頭の ▾ / ▸ で、その下の図をまとめて畳む -->
           <div class="files-target-row">
             <button type="button" class="files-target-caret" id="files-target-caret" aria-expanded="true"
-                    aria-controls="files-parts" title="部品のフォルダをまとめて畳む / 開く"><span class="files-caret"
+                    aria-controls="files-parts" title="保存先の図をまとめて畳む / 開く"><span class="files-caret"
                     aria-hidden="true">▾</span></button>
             <button id="top-save-target" type="button" title="保存先">ダウンロード</button>
           </div>
@@ -5005,9 +4974,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/name-registry.js"></script>
 <script src="src/core/review-before-after.js"></script>
 <script src="src/core/save-dir-handoff.js"></script>
-<script src="src/core/part-reference.js"></script>
-<script src="src/core/part-starter.js"></script>
-<script src="src/core/driver-usecase-starter.js"></script>
 <script src="src/core/activity-insert.js"></script>
 <script src="src/core/activity-branch-pattern.js"></script>
 <script src="src/core/swimlane-move.js"></script>
@@ -5048,7 +5014,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/twin-restore.js"></script>
 <script src="src/core/consistency-check.js"></script>
 <script src="src/core/component-deps.js"></script>
-<script src="src/core/component-starter.js"></script>
 <script src="src/core/scaffold-notice.js"></script>
 <script src="src/core/state-branch.js"></script>
 <script src="src/core/state-transition.js"></script>

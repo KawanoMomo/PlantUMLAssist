@@ -98,21 +98,14 @@ function updateTopSaveTarget() {
 }
 
 // design 10a / 9a: 上部バー左のパンくずのフォルダの段。
-// 「{保存先} / {部品} / 」を #top-file-name の左に出す。部品はツリーが保存先の図を束ねた
-// 部品のフォルダ (FILES の一覧に無い図・図種の読めない図は保存先だけ)。
+// 「{保存先} / 」を #top-file-name の左に出す (ファイル名から部品を読んで段を足すことはしない)。
 // 段を押すと FILES ツリーでそのフォルダを見せる (保存先を変える入口はツリーの保存先の行)。
 function updateTopCrumbs(bc, doc) {
   var host = document.getElementById('top-crumbs');
   var TS = window.MA.topStatus;
   if (!host || !TS || !TS.crumbs) return;
   var folder = (bc && bc.mode === 'file') ? bc.folder : '';
-  var part = null;
-  var FT = window.MA.fileTree;
-  var FP = window.MA.filesPanel;
-  if (folder && doc && doc.name && FT && FT.partFor && FP && FP.folderEntries && !_docHeldElsewhere(doc)) {
-    part = FT.partFor(String(doc.name), FP.folderEntries());
-  }
-  var list = TS.crumbs(folder, part);
+  var list = TS.crumbs(folder);
   // 保存先を替える前に開いたタブは、そのファイルのフォルダを段に出し、今の保存先ではないことを添える。
   var held = !!(folder && doc && _docHeldElsewhere(doc));
   if (held && list[0]) {
@@ -130,11 +123,10 @@ function updateTopCrumbs(bc, doc) {
     b.className = 'top-crumb';
     b.setAttribute('data-crumb', c.kind);
     if (c.held) b.setAttribute('data-held', '1');
-    if (c.part) b.setAttribute('data-part', c.part);
     b.textContent = c.label;
     b.title = c.title;
     b.addEventListener('click', function() {
-      if (window.MA.filesPanel && window.MA.filesPanel.reveal) window.MA.filesPanel.reveal(c.kind, c.part || '');
+      if (window.MA.filesPanel && window.MA.filesPanel.reveal) window.MA.filesPanel.reveal(c.kind);
     });
     host.appendChild(b);
     var sep = document.createElement('span');
@@ -145,14 +137,6 @@ function updateTopCrumbs(bc, doc) {
   });
   host.hidden = !list.length;
 }
-// FILES の保存先の一覧は非同期に読み直るので、読み直るたびに部品の段を追う (files-panel が呼ぶ)。
-window.MA.refreshTopCrumbs = function() {
-  var ST = window.MA.saveTarget;
-  if (!ST) return;
-  var doc = null;
-  try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
-  updateTopCrumbs(ST.breadcrumb(_cfgForDoc(doc), doc, '(無題)'), doc);
-};
 
 // 保存だけがボタンを持たず、Ctrl+K で「ファイルを保存」と
 // 打つ経路しか無かった。文言は保存先によって変わる (フォルダ運用なら上書き保存)。
@@ -4432,45 +4416,6 @@ function _isUntouchedDoc(doc) {
   try { return BD.isUntouched(doc.dsl, tpl, doc.diagramType); } catch (e) { return false; }
 }
 
-// design 10a: FILES ツリーの部品フォルダの「＋ 未作成 2 図種（UC・ACT）」から、
-// その部品のまだ無い図種をその場で作る。名前とひな形は ➕ 部品を起こす と同じ (part-starter の plan)。
-// 部品名は打ち直させない。保存先に同じ名前があれば `_2` を付ける (上書きしない)。
-// part: ツリーの部品名 ('spi')、kinds: file-tree の図種 ('usecase' …)、existing: 保存先の図の名前。
-function createPartKinds(part, kinds, existing) {
-  var PS = window.MA.partStarter;
-  var FT = window.MA.fileTree;
-  var WS = window.MA.workspace;
-  if (!PS || !WS || !Array.isArray(kinds) || !kinds.length) return [];
-  saveActiveDoc();
-  var p = PS.plan(String(part || '').toUpperCase(), WS.list(), null);
-  if (!p) {
-    if (window.MA.toast) window.MA.toast.show('「' + part + '」からは図の名前を組めませんでした (部品を起こす で部品名を英数字で入れてください)');
-    return [];
-  }
-  var taken = (existing || []).slice();
-  WS.list().forEach(function(d) { if (d && d.name) taken.push(d.name); });
-  var opened = [];
-  PS.selected(p, kinds).forEach(function(s) {
-    var name = FT && FT.freeName ? FT.freeName(s.name, taken) : s.name;
-    if (!name) return;
-    taken.push(name);
-    WS.open({ name: name, dsl: s.dsl, diagramType: s.type });
-    applyActiveDoc();
-    saveActiveDoc();
-    opened.push(name);
-  });
-  if (window.MA.toast && opened.length) {
-    window.MA.toast.show(opened.join('・') + ' を作って開きました (保存先に置きました)');
-  }
-  // 保存 (POST) が届いてからツリーを数え直す。
-  window.setTimeout(function() {
-    try { refreshFolderPanelNow(); } catch (e) {}
-    try { if (window.MA.filesPanel && window.MA.filesPanel.refresh) window.MA.filesPanel.refresh(); } catch (e) {}
-  }, 400);
-  return opened;
-}
-window.createPartKinds = createPartKinds;
-
 // 一括置換・改名の後始末が、開いているタブを丸ごと
 // 保存フォルダへ書き戻していた。そこには (a) 今回の置換が 1 文字も当たっていない図、
 // (b) テンプレ宣言で書き込みを止めてある図が混ざる。どちらもタブが持っている本文で
@@ -6891,11 +6836,10 @@ function setupTabs() {
     if (vr) row.appendChild(vr);
     var kb = folderKindBadge(name);
     if (kb) row.appendChild(kb);
-    // 本文から読んだ図種を行に持たせる。FILES ツリーは名前に図種が無い図も
-    // これで部品の側に数える (1 枚ずつ「0 / 6・未作成 6 図種」と出さない)。
+    // 本文から読んだ図種を行に持たせる。FILES ツリーは名前に図種が無い図にも
+    // これで行頭の図種の線画を付ける。
     // 保存したときの図種の控え (_kinds.json) があればそれを先に使う
-    // (行のバッジと同じ順)。actor で始まるユースケース図は本文判定だとシーケンスに倒れ、
-    // ツリーの部品フォルダで UC が「未作成」と読めていた。
+    // (行のバッジと同じ順。actor で始まるユースケース図は本文判定だとシーケンスに倒れる)。
     var ckSaved = window.MA.savedKind ? window.MA.savedKind.pick(savedKindByName, name) : '';
     var ck = ckSaved || kindByName[name];
     if (ck) b.setAttribute('data-content-kind', ck);

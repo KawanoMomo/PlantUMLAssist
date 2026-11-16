@@ -206,9 +206,8 @@ test.describe('primary 手順 4 (c)④: 共通定義を !include の共通ファ
   });
 
   async function openSaved(page, part, name) {
-    const head = page.locator('#files-parts .files-part-head[data-part="' + part + '"]');
+    // 保存先の図は直下に並ぶ (部品のフォルダは TICKET-owner-20261116-0321-prune で外した)。
     const row = page.locator('#files-parts .files-part-file[data-file-name="' + name + '"]');
-    if (!(await row.isVisible())) await head.click();
     await row.click();
     await expect(page.locator('#editor')).toHaveValue(new RegExp('participant ' + (part === 'spi' ? 'SpiDrv' : 'CanDrv')));
   }

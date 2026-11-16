@@ -49,3 +49,42 @@ describe('既存の図や雛形から起こす窓を外した (TICKET-owner-2026
     expect(APP).toContain('function setupTemplateAutosaveGuard');
   });
 });
+
+// 途中 4: FILES の部品フォルダの束ね (ファイル名から部品を読む仮のフォルダ・`SPI 4 / 6`・「＋ 未作成 N 図種」・
+// 部品フォルダへのドラッグと「その部品の名前で取り込む」・パンくずの部品の段) と、それだけが使っていた
+// part-starter / component-starter / driver-usecase-starter / part-reference を外した。
+describe('FILES の部品フォルダの束ねを外した (TICKET-owner-20261116-0321-prune 途中 4)', function() {
+  var FP = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'files-panel.js'), 'utf8');
+  var FMUI = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'file-menu.js'), 'utf8');
+
+  test('外したモジュールはファイルも読み込みも無い', function() {
+    ['part-starter', 'component-starter', 'driver-usecase-starter', 'part-reference'].forEach(function(m) {
+      expect(fs.existsSync(path.join(ROOT, 'src', 'core', m + '.js'))).toBe(false);
+      expect(HTML).not.toContain('src/core/' + m + '.js');
+    });
+  });
+
+  test('部品フォルダの見出し・未作成の行・その場で作る結線が無い', function() {
+    ['files-part-head', 'files-part-missing', 'files-part-note', 'createPartKinds', 'refreshTopCrumbs'].forEach(function(w) {
+      expect(HTML).not.toContain(w);
+      expect(APP).not.toContain(w);
+      expect(FP).not.toContain(w);
+      expect(FMUI).not.toContain(w);
+    });
+    expect(FMUI).not.toContain('renameToPart');
+    expect(FMUI).not.toContain('importNameForPart');
+  });
+
+  test('保存先の図は名前の順にそのまま並ぶ (名前を付け替えない・束ねない)', function() {
+    var FT = W.MA.fileTree;
+    var rows = FT.targetRows([{ name: 'spi_state' }, { name: 'TIMERドライバ' }, { name: 'spi_seq' }]);
+    expect(rows.map(function(r) { return r.name; })).toEqual(['TIMERドライバ', 'spi_seq', 'spi_state']);
+    expect(FT.filter([{ name: 'spi_state' }, { name: 'can_state' }], 'spi').length).toBe(1);
+  });
+
+  test('パンくずは保存先の段だけ', function() {
+    var TS = fs.readFileSync(path.join(ROOT, 'src', 'core', 'top-status.js'), 'utf8');
+    expect(TS).not.toContain("kind: 'part'");
+    expect(APP).not.toContain('FT.partFor');
+  });
+});
