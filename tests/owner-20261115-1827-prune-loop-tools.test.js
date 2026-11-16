@@ -27,12 +27,10 @@ describe('omit タグを持つ既存の図', function() {
     expect(p.relations[0].line).toBe(5);
   });
 
-  test('メソッド突合はタグを読まずに動き、省略として外す仕組みは無い', function() {
+  // メソッド突合 (method-audit) そのものは TICKET-owner-20261116-0321-prune で外した。
+  test('省略として外す仕組みは無い', function() {
     var MA = require('./load-ma').loadMA().MA;
-    var cls = { name: 'driver_common_class.puml', dsl: '@startuml\nclass ClockCtrl {\n  +Reset()\n}\n@enduml' };
-    var r = MA.methodAudit.audit([cls, { name: 'spi_init_sequence.puml', dsl: OMIT_DSL }]);
-    expect(r.issues.map(function(i) { return i.method; })).toContain('EnableClock');
-    expect(r.omitted).toEqual([]);
+    expect(MA.methodAudit).toBe(undefined);
     expect(MA.omitMethod).toBe(undefined);
   });
 });

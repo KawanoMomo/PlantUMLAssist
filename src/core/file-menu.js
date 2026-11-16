@@ -41,7 +41,6 @@ window.MA.fileMenu = (function() {
   // TICKET-owner-20261115-2141-prune で外した。
   var FOLDER_ITEMS = [
     { id: 'new-doc', label: '新しい図', writable: true },
-    { id: 'new-part', label: '6 図種をまとめて作る', writable: true },
     { sep: true, realOnly: true },
     { id: 'set-target', label: '保存先にする', realOnly: true },
     { id: 'set-readonly', label: '読むだけにする', realOnly: true },

@@ -317,12 +317,12 @@ test('手順8 FILES ツリーのファイルを右クリックすると 10b の�
   // 到達条件その4: フォルダの右クリックは「そこに作る」。部品のフォルダは実在のフォルダではないので
   // 保存先 / 読むだけ は出さない。
   await page.locator('#files-parts .files-part-head[data-part="spi"]').click({ button: 'right' });
-  await expect(menu.locator('.files-ctx-item .files-ctx-label')).toHaveText(['新しい図', '6 図種をまとめて作る']);
+  await expect(menu.locator('.files-ctx-item .files-ctx-label')).toHaveText(['新しい図']);   // 6 図種をまとめて作る は TICKET-owner-20261116-0321-prune で外した
   await page.keyboard.press('Escape');
   await page.locator('#btn-tab-folder').click({ button: 'right' });
   await expect(menu.locator('.files-ctx-item .files-ctx-label'))
     // BLK-primary-20260925-0232-design: 別のフォルダを保存先に替える入口を足した。
-    .toHaveText(['新しい図', '6 図種をまとめて作る', '保存先にする', '読むだけにする', '別のフォルダを保存先にする…', '保存先の一覧を開く']);
+    .toHaveText(['新しい図', '保存先にする', '読むだけにする', '別のフォルダを保存先にする…', '保存先の一覧を開く']);
   await page.keyboard.press('Escape');
 });
 

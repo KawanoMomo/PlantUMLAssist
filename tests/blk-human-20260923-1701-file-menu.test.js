@@ -56,15 +56,16 @@ describe('フォルダの右クリック (design 10b)', function() {
   test('保存先: 新しい図 / 6 図種 / 保存先にする (今の保存先なので押せない) / 読むだけにする', function() {
     var it = FM.folderItems({ kind: 'target' });
     // BLK-primary-20260925-0232-design: 別のフォルダを保存先に替える入口が 2 つの灰色の後に並ぶ。
-    expect(ids(it)).toEqual(['new-doc', 'new-part', '-', 'set-target', 'set-readonly', 'change-target', '-', 'open-list']);
-    expect(it[3].disabled).toBe(true);
+    // 「6 図種をまとめて作る」は TICKET-owner-20261116-0321-prune で外した。
+    expect(ids(it)).toEqual(['new-doc', '-', 'set-target', 'set-readonly', 'change-target', '-', 'open-list']);
+    expect(it[2].disabled).toBe(true);
     // BLK-owner-20260924-1836-prune: 「読むだけにする」は覗く窓を開かない。保存先は書く場所なので押せない。
-    expect(it[4].disabled).toBe(true);
-    expect(it[4].title).toContain('読むだけ');
+    expect(it[3].disabled).toBe(true);
+    expect(it[3].title).toContain('読むだけ');
   });
 
   test('部品のフォルダは名前で束ねた見出しなので、保存先 / 読むだけ は出さない', function() {
-    expect(ids(FM.folderItems({ kind: 'part' }))).toEqual(['new-doc', 'new-part']);
+    expect(ids(FM.folderItems({ kind: 'part' }))).toEqual(['new-doc']);
   });
 
   // BLK-builder-20260924-1749-3 (design 10a): 読むだけのフォルダは「並べて比較」が先頭で、

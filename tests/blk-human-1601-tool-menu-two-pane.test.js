@@ -18,9 +18,10 @@ describe('左列の分類', function() {
   // TICKET-owner-20261115-1841-prune: 「確かめる」(図をまたぐ監査) を外し、左列は 4 分類になった。
   // TICKET-owner-20261115-2140-prune: 「探す」(図をまたぐ調べ物) を外し、左列は 3 分類になった。
   // TICKET-owner-20261115-2141-prune: 「レビュー」(基準の図との指摘・前回保存からの差分) を外し、左列は 2 分類になった。
-  test('2 分類がこの順で並ぶ', function() {
+  // TICKET-owner-20261116-0321-prune: 「図をつくる」(既存の図や雛形から起こす) を外し、左列は 1 分類になった。
+  test('1 分類 (書き換える) だけが並ぶ', function() {
     expect(tm.panelGroups().map(function(g) { return g.title; }))
-      .toEqual(['図をつくる', '書き換える']);
+      .toEqual(['書き換える']);
   });
 
   test('探す の分類は無い', function() {
@@ -83,12 +84,11 @@ describe('パネルの HTML', function() {
     expect(out).toContain('Ctrl+K でも引けます');
   });
 
-  test('左列は 2 つ、最初の分類だけが開いている', function() {
+  test('左列は 1 つで、その分類が開いている', function() {
     var out = tm.buildMenuHtml();
-    expect((out.match(/class="tool-menu-cat"/g) || []).length).toBe(2);
+    expect((out.match(/class="tool-menu-cat"/g) || []).length).toBe(1);
     expect((out.match(/aria-selected="true"/g) || []).length).toBe(1);
-    // 2 分類のうち 1 つは畳んだ状態で出す (1 画面に収める)
-    expect((out.match(/class="tool-menu-group" data-group="[a-z]+" hidden/g) || []).length).toBe(1);
+    expect((out.match(/class="tool-menu-group" data-group="[a-z]+" hidden/g) || []).length).toBe(0);
   });
 
   test('分類の合計は項目の件数と別の印にする (件数の数え方を壊さない)', function() {
@@ -103,15 +103,15 @@ describe('パネルの HTML', function() {
     // 「指摘」「変更の履歴」の小見出しは 2141-prune で外した (レビューの分類が無くなった)。
     expect((out.match(/class="tool-menu-sub">指摘</g) || []).length).toBe(0);
     expect((out.match(/class="tool-menu-sub">変更の履歴</g) || []).length).toBe(0);
-    expect((out.match(/class="tool-menu-sub">起こす</g) || []).length).toBe(1);
+    expect((out.match(/class="tool-menu-sub">起こす</g) || []).length).toBe(0);
   });
 });
 
 describe('絞り込み', function() {
   test('全分類を横断して当たる', function() {
-    // 「図」は 図をつくる、「一括」は 書き換える (レビューの分類は 2141-prune で外した)。
-    var hits = tm.filterItems('図').concat(tm.filterItems('一括置換'));
-    expect(hits.map(function(h) { return h.groupKey; })).toEqual(['make', 'edit']);
+    // 残る分類は 書き換える 1 つ (図をつくる は 0321-prune、レビューは 2141-prune で外した)。
+    var hits = tm.filterItems('一括置換').concat(tm.filterItems('行を'));
+    expect(hits.map(function(h) { return h.groupKey; })).toEqual(['edit', 'edit']);
   });
 
   test('小見出し・分類名でも引ける', function() {

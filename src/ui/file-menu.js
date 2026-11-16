@@ -357,21 +357,6 @@ window.MA.fileMenuUi = (function() {
   function runFolder(action, folder) {
     switch (action) {
       case 'new-doc': clickId('btn-tab-new'); break;
-      case 'new-part':
-        // 「既存の図や雛形から新しい図を起こす」窓を「部品名だけ」で開く。
-        if (typeof window.openNewFrom === 'function') window.openNewFrom('part');
-        else clickId('btn-tab-template');
-        // 部品のフォルダから起こすときは、部品名を打ち直させない。
-        if (folder && folder.part) {
-          window.setTimeout(function() {
-            var inp = document.querySelector('#part-subject');
-            if (inp && !inp.value) {
-              inp.value = String(folder.part).toUpperCase();
-              inp.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-          }, 50);
-        }
-        break;
       case 'set-target': clickId('top-save-target'); break;
       case 'change-target':
         if (typeof window.openChangeTarget === 'function') window.openChangeTarget();
