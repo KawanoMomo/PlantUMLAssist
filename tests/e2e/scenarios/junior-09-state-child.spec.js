@@ -377,13 +377,13 @@ test('手順9 状態遷移表に親 2 つ・子 3 つずつと各親の開始が
   await expect(page.locator('#state-table-body td[data-state-id="Busy.Recv"][data-trigger="sent"]'))
     .toHaveText('Busy / Done');
 
-  // BLK-owner-20260923-2332-1: 表を開いても、見出しの「CSV で書き出し」にズームの帯が重ならず押せる。
-  const csvBox = await page.locator('#btn-state-table-csv').boundingBox();
+  // BLK-owner-20260923-2332-1: 表を開いても、見出しにズームの帯が重ならない。
+  // 見出しの「CSV で書き出し」は TICKET-owner-20261116-0840-prune で外した。
+  await expect(page.locator('#btn-state-table-csv')).toHaveCount(0);
+  const headBox = await page.locator('#state-table-head').boundingBox();
   const hudBox = await page.locator('#zoom-hud').boundingBox();
-  expect(csvBox && hudBox).toBeTruthy();
-  const overlap = !(csvBox.x + csvBox.width <= hudBox.x || hudBox.x + hudBox.width <= csvBox.x
-    || csvBox.y + csvBox.height <= hudBox.y || hudBox.y + hudBox.height <= csvBox.y);
-  expect(overlap).toBe(false);
+  expect(headBox && hudBox).toBeTruthy();
+  expect(hudBox.y).toBeGreaterThanOrEqual(headBox.y + headBox.height - 0.5);
 
   // BLK-owner-20260923-2332-1: 先輩や他ツールの図にある、最上位に `親.子` と修飾して書いた子どうしの遷移も
   // 同じ子の遷移として読む (表のマス・遷移一覧・下端の件数)。書き換えはしない。

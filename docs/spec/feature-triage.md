@@ -173,13 +173,13 @@ v5.0「整理の版」の成果物 1(TICKET-roadmap-20261115-2114-1)。機能台
 
 | # | 機能 | 節 | 判定 | 統合先 | 根拠 | 束 | 状態 | 痕跡の語 |
 |---|---|---|---|---|---|---|---|---|
-| 95 | 保存フォルダの一覧 | 保存フォルダの一覧・棚卸し | 統合 | 骨格だけ残す 保存フォルダの一覧 | 台本: primary 手順 2「保存先の一覧から 6 枚を 1 枚ずつ開く」。残す骨格 = 並べる・絞る・印を付けてまとめて開く・図種の印・実データ / テンプレの分類。消す枝 = 資料セットへの登録と本番用 / 資料用の版(roadmap (b)) | TICKET-owner-20261116-0140-prune | 未 | `資料用` |
+| 95 | 保存フォルダの一覧 | 保存フォルダの一覧・棚卸し | 統合 | 骨格だけ残す 保存フォルダの一覧 | 台本: primary 手順 2「保存先の一覧から 6 枚を 1 枚ずつ開く」。残す骨格 = 並べる・絞る・印を付けてまとめて開く・図種の印・実データ / テンプレの分類・1 枚削除と前の版が残る図の行(#101 の守り)。消す枝 = 資料セットへの登録と本番用 / 資料用の版(roadmap (b))、名乗りと本文の図種の食い違いの監査(下端の 1 行と行の ⚠ 印。roadmap (a)) | TICKET-owner-20261116-0140-prune・TICKET-owner-20261116-0840-prune | 済 | `資料用` `findingVariant` `folder-variant` `kind-mismatch` `kindMismatch` `図種ずれ` |
 | 96 | 🕘 最近開いた図 | 保存フォルダの一覧・棚卸し | 残す | — | 台本: primary は同じ 6 枚を開き直す。価値: 開く経路 | — | — | — |
 | 97 | SVG の鮮度 | 保存フォルダの一覧・棚卸し | 消す | — | 台本: 書き出しはその場で行う(junior 場面 4・primary 手順 6)。設計書: 根なし。roadmap (a) 監査 | TICKET-owner-20261116-0241-prune | 済 | `svg-freshness` `SVG の中身を確かめる` |
 | 98 | 食い違いの中身を調べる | 保存フォルダの一覧・棚卸し | 消す | — | 台本: 場面なし。設計書: 根なし。roadmap (a) | TICKET-owner-20261116-0241-prune | 済 | `食い違いの中身` `svg-diff-summary` |
 | 99 | 前回控えとの比較 | 保存フォルダの一覧・棚卸し | 消す | — | 台本: reviewer は Git の差分と前回の控えを自分で比べる(reviewer 手順 6)。設計書: 根なし。roadmap (a) | TICKET-owner-20261116-0241-prune | 済 | `変化なし` `change-stamp` `前回の指摘をそのまま` |
 | 100 | 対象 set の登録 | 保存フォルダの一覧・棚卸し | 消す | — | 台本: 場面なし。設計書: 根なし。roadmap (a) | TICKET-owner-20261116-0241-prune | 済 | `対象set` `target-set` |
-| 101 | 中身が同じ図を名指しして 1 押しで統合、同名で上書きされて消えた図を履歴から開く | 保存フォルダの一覧・棚卸し | 消す | — | 台本: 場面なし。価値: 前の版へ戻すのは「この図の履歴」1 つ(roadmap (e)) | TICKET-owner-20261116-0241-prune | 未 | `dupe-merge` |
+| 101 | 中身が同じ図を名指しして 1 押しで統合、同名で上書きされて消えた図を履歴から開く | 保存フォルダの一覧・棚卸し | 統合 | 保存フォルダの一覧(#95)。残す枝 = 1 枚削除と前の版が残る図の行(守り)、消す枝 = 中身が同じ図の統合 | 価値: 消した図を戻す唯一の入口は principles「守ること(利用者の図を失わない)」。中身が同じ図の統合は台本: 場面なし(roadmap (e))。owner run 20261116-0921 の訂正 | TICKET-owner-20261116-0241-prune | 済 | `dupe-merge` |
 | 102 | 本体/編集中/SVG の反映状況と本体⇔編集中の差分、下書きの仕分け | 保存フォルダの一覧・棚卸し | 消す | — | 台本: 場面なし。-編集中 の控えは外した(roadmap (d))。roadmap (a) | TICKET-owner-20261116-0241-prune | 済 | `本体へ差し替え待ち` |
 | 103 | 直近 5 分以内に更新された図を名指しし、書き込み中かもしれない図を後回しにする | 保存フォルダの一覧・棚卸し | 消す | — | 台本: 場面なし。設計書: 根なし。roadmap (a) | TICKET-owner-20261116-0241-prune | 済 | `write-activity` |
 | 104 | 指摘.md の反映状況 | 保存フォルダの一覧・棚卸し | 消す | — | 台本: reviewer は製品を動かさず差分と書き出しを読む。設計書: 根なし。roadmap (b) 指摘 | TICKET-owner-20261115-1840-prune | 済 | `未反映だけ選ぶ` |
@@ -303,6 +303,7 @@ v5.0「整理の版」の成果物 1(TICKET-roadmap-20261115-2114-1)。機能台
 | 172 | ⚙ 設定 → 情報「更新を確認」(新版・変更点・インストーラ取得を開く。自動取得しない) | 配布・道具 | 残す | — | 価値: #170 の配布の更新。人間由来の行。図や本文は送らない | — | — | — |
 | 173 | 同梱の `lib/plantuml.jar` と推奨版 `lib/PLANTUML_VERSION`(⚙ 設定の「描画エンジン」) | 配布・道具 | 残す | — | 設計書: 配布の節「同梱 jar」。価値: local の jar で描く(roadmap の中核「描く」) | — | — | — |
 | 174 | ⚖ 整合チェック(右の枠の参照図と編集中の図の打ち間違い・並び・語尾の突き合わせ。台帳に行が無かった) | 確かめる(突合・整合チェック) | 消す | — | 台本: 雛形を書き写す場面は無い。設計書: 根なし。roadmap (a)(c)。右の枠の相手は自分の図の版だけになり、違いは ± 差分で見える | TICKET-owner-20261116-0821-prune | 済 | `整合チェック` `consistency-check` `check-bar` |
+| 175 | 状態遷移表の「CSV で書き出し」(固定名 `state-transition-table.csv`。台帳の「状態遷移表」の行にも #54 にも無かった) | 状態遷移図 | 消す | — | 台本: 場面なし。価値: 書き出すのは Export ▾ の 4 項目(SVG・PNG・透過 PNG・クリップボード)だけ(roadmap の線引き「書き出す」)。表そのもの(#54)は残す | TICKET-owner-20261116-0840-prune | 済 | `btn-state-table-csv` `toCsv` `state-transition-table.csv` `CSV で書き出し` |
 
 ## 締めへの申し送り(TICKET-roadmap-20261115-2114-2 が掃く)
 
@@ -312,5 +313,5 @@ v5.0「整理の版」の成果物 1(TICKET-roadmap-20261115-2114-1)。機能台
 - `引き継ぎチェック`(html の注釈 2)・`引き継ぎ zip`(html の CSS 注釈 1)・`納品パッケージ`(html の注釈 2)・`会議メモ`(html の CSS 注釈 1)
 - `表記統一`(html の CSS 注釈 2・`bulk-rename.js`・`senior-draft.js` のコメント)・`統一先`(`name-audit.js` のコメント 1)
 - `確かめられず`(`src/app.js`・`svg-freshness.js` のコメント)・`指摘から選ぶ`(`src/app.js` のコメント 1)・`review-carry`(`change-stamp.js` のコメント 1)
-- `tools/audit`(`src/app.js`・`domain-cohort.js`・`kind-mismatch.js`・`name-pairing.js`・`name-registry.js`・`note-intent.js`・`version-diff.js` のコメント)
+- `tools/audit`(`src/app.js`・`domain-cohort.js`・`name-pairing.js`・`name-registry.js`・`note-intent.js`・`version-diff.js` のコメント)
 - `意図的に省略`(html の ▤ 影響を見る の note 欄の placeholder。#117 と一緒に外れる)

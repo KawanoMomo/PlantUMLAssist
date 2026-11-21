@@ -2798,7 +2798,7 @@ function init() {
 
     // 帯はキャンバス (#preview-container) の右上に置く。状態遷移図では
     // キャンバスの上に状態遷移表・入れ子ツリーの見出しが出るので、固定の top: 40px のままだと
-    // 帯がその見出し (「CSV で書き出し」) に重なって押せない。見出しの下 = キャンバスの上端に下ろす。
+    // 帯がその見出し (▾ で畳むボタン) に重なって押せない。見出しの下 = キャンバスの上端に下ろす。
     function placeHud() {
       var pane = document.getElementById('preview-pane');
       var cont = document.getElementById('preview-container');
@@ -2843,7 +2843,6 @@ function init() {
     var panel = document.getElementById('state-table-panel');
     var body = document.getElementById('state-table-body');
     var toggle = document.getElementById('btn-state-table-toggle');
-    var csvBtn = document.getElementById('btn-state-table-csv');
     var ST = window.MA.stateTable;
     if (!panel || !body || !toggle || !ST) return;
 
@@ -2936,15 +2935,6 @@ function init() {
           ? '' : td.getAttribute('data-trigger'),
       });
     });
-
-    if (csvBtn) {
-      csvBtn.addEventListener('click', function() {
-        var csv = ST.toCsv(currentTable());
-        // Excel が UTF-8 と判断できるように BOM を付ける (日本語の状態名対策)。
-        var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-        downloadBlob('state-transition-table.csv', blob);
-      });
-    }
 
     syncStateTable();
   })();
@@ -3639,7 +3629,6 @@ function initCommandPalette() {
       { id: 'export-png', title: 'PNG として保存 / Export PNG', hint: 'Export', keywords: ['export', 'png'], run: function() { clickById('exp-png'); } },
       { id: 'export-png-t', title: 'PNG（透過背景）/ Export PNG transparent', hint: 'Export', keywords: ['export', 'png', 'transparent'], run: function() { clickById('exp-png-transparent'); } },
       { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
-      // 全図・名前を付けた図の組・選んだ図・要修正の zip、資料の見出しと並び、資料化の行は TICKET-owner-20261116-0140-prune で外した。
       { id: 'mode-local', title: 'レンダリング: local (Java)', hint: 'Render', keywords: ['render', 'mode', 'local'], run: function() { selectValue('render-mode', 'local'); } },
       { id: 'mode-online', title: 'レンダリング: online (plantuml.com)', hint: 'Render', keywords: ['render', 'mode', 'online'], run: function() { selectValue('render-mode', 'online'); } },
     ];
@@ -5988,14 +5977,6 @@ function setupTabs() {
   // 「別図種と紛らわしい書き方」をしていても開くときに図種が入れ替わらない。
   var savedKindByName = {};
   var savedKindsLoaded = false;
-  // 図名 → 本文 (名乗りと食い違って見えた図だけ)。
-  // 一覧の entry.kind は server の判定で、`actor` を持つユースケース図はシーケンスに
-  // 倒れる (saved-kind.js と同じ事情)。それをそのまま「食い違い」と出すと、正しい
-  // ユースケース図が毎回赤くなって印が効かなくなる。疑いの出た図だけ本文を取り寄せ、
-  // メッセージの有無まで見て確かめる (全 31 枚を読みに行く往復は作らない)。
-  var kindBodyByName = {};
-  var kindBodyBusy = false;
-  var kindBodySig = null;
   // 図名 → {role, status}。実データ / テンプレの宣言と、
   // テンプレの中身が宣言時から変わっていないか。22 枚を毎回同列に扱わなくて済むように。
   var fileRoles = {};        // 保存フォルダの _roles.json の中身
@@ -6177,14 +6158,6 @@ function setupTabs() {
   // 保存先を変えたときは畳んでいても読み直す (FILES の部品フォルダと
   // 上部バーの部品の段はこの一覧を読むので、閉じたままだと前のフォルダの図が残る)。
   reloadFolderListNow = function() { renderFolderPanel(); };
-  // 資料化の根拠から一覧へ渡るとき、名前を打ち直させない。
-  // 一覧は開くたびに絞り込みを白紙に戻すので、外から入れる口をここに置く。
-  filterFolderPanelNow = function(q) {
-    folderQuery = String(q == null ? '' : q);
-    var input = panel.querySelector('.folder-filter');
-    if (input) input.value = folderQuery;
-    applyFolderFilter();
-  };
 
   // 開いているタブと同じ名前を一覧から押したときに
   // 画面が何も動かないと、「保存できている」のか「一覧が効いていない」のかが
@@ -6423,23 +6396,12 @@ function setupTabs() {
       savedKindByName = (res && res.kinds && typeof res.kinds === 'object') ? res.kinds : {};
       savedKindsLoaded = true;
 
-      // 図が 1 枚でも書き換われば、疑いの確かめ直しが要る。
-      // 「読み直した」ではなく「中身が変わった」で取り直す (毎回だと描画が回り続ける)。
-      var noteSig = entries.map(function(e) {
-        return (e && e.name) + '@' + ((e && e.mtime) || '');
-      }).join('|');
-      if (noteSig !== kindBodySig) {
-        kindBodySig = noteSig;
-        kindBodyByName = {};
-      }
-
       setFolderNames(entries);
       appendRecentSection(panel, entries);
       panel.appendChild(folderFilterBar());
       panel.appendChild(folderPickBar());
       appendRoleSection(panel, dir);
       appendKindSummary(panel);
-      appendKindMismatchSummary(panel);
       entries.forEach(function(e) { panel.appendChild(folderRow(e.name || e)); });
       appendGoneVersionsSection(panel);
       raiseRowsInTree();
@@ -6797,19 +6759,7 @@ function setupTabs() {
     row.appendChild(box);
     if (window.MA.fileRole) row.appendChild(folderRoleButton(name));
     row.appendChild(b);
-    // 名乗り (ファイル名の図種) と本文の図種が
-    // 食い違う図だけに付く印。複製・貼り間違いを、全文を読む前にこの行で出す。
-    // 行の末尾ではなく名前のすぐ隣に置く — 末尾はボタンが並んで押し出される。
-    var km = folderKindMismatchBadge(name);
-    if (km) {
-      row.appendChild(km);
-      row.classList.add('folder-kind-bad');
-    }
     if ((roleStatus[name] || {}).status === 'dirty') row.appendChild(folderRoleAcceptButton(name));
-    // 同じ図種の枠に版が並ぶようになったので、
-    // 版は行の上で 1 文字で分かるようにする (名前の末尾を読み比べない)。
-    var vr = folderVariantBadge(name);
-    if (vr) row.appendChild(vr);
     var kb = folderKindBadge(name);
     if (kb) row.appendChild(kb);
     // 本文から読んだ図種を行に持たせる。FILES ツリーは名前に図種が無い図にも
@@ -6838,98 +6788,6 @@ function setupTabs() {
     line.textContent = DK.summaryLine(kindEntries);
     line.title = '図種は保存された本文から判定しています。0 の図種はこの保存先に 1 枚もありません';
     host.appendChild(line);
-  }
-
-  // ファイルが名乗っている図種 (plantuml-usecase) と、
-  // 本文が実際に描く図種の食い違い。中身が別の図で塗り潰される事故は、これまで
-  // 31 枚の DSL を 1 枚ずつ読むまで誰にも見えなかった。
-  // 1 枚分の材料。本文を取り寄せてある図は本文で判定する
-  // (server の判定より細かく見られる)。行の印と下の 1 行は必ず同じ材料で出す。
-  function kindEntryOf(name, kind) {
-    var n = name || '';
-    var body = kindBodyByName[n];
-    if (typeof body === 'string') {
-      return { name: n, dsl: body, savedKind: savedKindByName[n] || '' };
-    }
-    return { name: n, kind: kind || kindByName[n] || '', savedKind: savedKindByName[n] || '' };
-  }
-
-  function kindMismatchEntries() {
-    var list = kindEntries && kindEntries.length
-      ? kindEntries
-      : Object.keys(kindByName).map(function(n) { return { name: n, kind: kindByName[n] }; });
-    return list.map(function(e) { return kindEntryOf((e && e.name) || '', e && e.kind); });
-  }
-
-  function folderKindMismatchBadge(name) {
-    var KM = window.MA.kindMismatch;
-    if (!KM) return null;
-    var b = KM.badge(kindEntryOf(name));
-    if (!b) return null;
-    var el = document.createElement('span');
-    el.className = 'folder-kind-warn folder-kind-warn-' + b.severity;
-    el.setAttribute('data-kind-mismatch', name);
-    el.setAttribute('data-kind-severity', b.severity);
-    el.textContent = b.mark + ' ' + b.label;
-    el.title = b.title;
-    return el;
-  }
-
-  // 一覧の下に出す 1 行。0 件でも「何枚を照合しての 0 件か」を書く
-  // (照合できていないだけの 0 件と読み分けられないと、この行は読む意味が無い)。
-  function appendKindMismatchSummary(host) {
-    var KM = window.MA.kindMismatch;
-    if (!KM) return;
-    var entries = kindMismatchEntries();
-    var bad = KM.mismatches(entries);
-    var line = document.createElement('div');
-    // 一覧の他の要約行 (.folder-summary) とは別の class にする。あちらは
-    // 「前回から何枚変わったか」を 1 行で言う枠で、そこへ足すと既存の spec の
-    // locator が 2 つに割れる (見た目は下の CSS で揃える)。
-    line.className = 'folder-kind-mismatch' + (bad.length ? ' folder-kind-mismatch-bad' : '');
-    line.id = 'folder-kind-mismatch';
-    line.textContent = KM.summaryLine(entries);
-    line.title = '名乗りはファイル名の図種、本文は DSL から判定した図種です。'
-      + '食い違う図は中身が別の図で塗り潰されている疑いがあります';
-    host.appendChild(line);
-    kindBodyScan(_wsFileDir(), bad);
-  }
-
-  // 疑いの出た図だけ本文を取り寄せて確かめ、取れたら一覧を描き直す。
-  // 疑いが 0 件なら 1 往復も出さない (一覧を開くたびの待ちを作らない)。
-  function kindBodyScan(dir, bad) {
-    var WS = window.MA.workspace;
-    if (!WS || kindBodyBusy || !bad || !bad.length) return;
-    var want = bad.filter(function(r) {
-      return r.name && typeof kindBodyByName[r.name] !== 'string';
-    }).map(function(r) { return r.name; });
-    if (!want.length) return;
-    kindBodyBusy = true;
-    Promise.all(want.map(function(n) {
-      return WS.loadFile(n, dir).then(function(t) {
-        if (typeof t === 'string') kindBodyByName[n] = t;
-      }, function() {});
-    })).then(function() {
-      kindBodyBusy = false;
-      try { refreshFolderPanelNow(); } catch (e) {}
-    }, function() {
-      kindBodyBusy = false;
-    });
-  }
-
-  // 行に付く版のバッジ。本番用 (無印) には付けない — 全行に印が付くと印でなくなる。
-  function folderVariantBadge(name) {
-    var FV = window.MA.findingVariant;
-    if (!FV) return null;
-    var b = FV.badge(name);
-    if (!b) return null;
-    var el = document.createElement('span');
-    el.className = 'folder-variant' + (b.key ? ' folder-variant-' + b.key : '');
-    el.setAttribute('data-variant-of', name);
-    el.setAttribute('data-variant', b.key || '');
-    el.textContent = b.mark;
-    el.title = b.title;
-    return el;
   }
 
   // 行に付く図種のバッジ。名前が diagram1 でも何の図かがその場で分かる。
@@ -7275,7 +7133,7 @@ function setupTabs() {
       host.style.display = on ? '' : 'none';
       if (on) shown++;
       // 打った名前と丸ごと同じ図は「完全一致」の印を付けて先頭に出す
-      // (同じ接頭辞の「…(資料用)」より上。部分一致の行は消さずに下に残す)。
+      // (同じ接頭辞で後ろに語が続く名前より上。部分一致の行は消さずに下に残す)。
       if (host.getAttribute('data-ff-order') == null) host.setAttribute('data-ff-order', String(i));
       var ex = on && FF.exactMatch && FF.exactMatch(name, folderQuery);
       if (ex) { host.setAttribute('data-exact', '1'); el.title = el.title || '打った名前と完全一致'; }
@@ -7374,7 +7232,7 @@ function setupTabs() {
 // 一覧のパネルは自前の関数で図を開く。パネルの外からも同じ道で開けるように、
 // パネル側で実体を差し込む (パネルを作る前に押される画面は無い)。
 var openFromFolderByName = function() {};
-// 資料化のように、パネルの外で保存フォルダを書き換える操作から一覧を描き直すための口
+// パネルの外で保存フォルダを書き換える操作から一覧を描き直すための口
 // パネルを開いていなければ何もしない。
 var refreshFolderPanelNow = function() {};
 // 保存先を変えた直後に、開閉に関わらず一覧を新しいフォルダで読み直す口。
@@ -7384,7 +7242,6 @@ var syncFolderListNow = function() { return Promise.resolve(false); };
 // 保存先の版 (server の _versions) を読む・開く・並べる・戻す道具。「この図の履歴」が使う
 // 保存先の一覧の結線 (setupTabs) で入る。
 var _versionsApi = null;
-var filterFolderPanelNow = function() {};
 // 直前に開いた図の名前 (新しい順)。Ctrl+K からも
 // 一覧を開かずに同じ図へ戻れるように、パネルの外へ読み口だけ出す。
 var recentOpenedNames = function() { return []; };
@@ -10093,7 +9950,7 @@ function _dsRenameActive(next) {
 }
 
 // ── 図名とタイトルの末尾を連動させる ───────────────────────────────────────
-// 手順4「タイトルの末尾に (資料用) を付け足して保存」は、
+// 手順4「タイトルの末尾に語を付け足して保存」は、
 // 「タイトル / Title」と「図名 / File name」を別々に書き換える作業になっていた。
 // 片方だけ直すとファイル名と図の見出しがずれる。末尾を足した / 外しただけの編集は
 // もう片方にも同じことをして、何をしたかを欄の下に書く (黙って書き換えない)。
