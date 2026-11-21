@@ -1,0 +1,16 @@
+@startuml
+' 構成 (手書き版)
+!include common.puml
+skinparam classAttributeIconSize 0
+
+class Drv {
+  ' 属性
+  - rate : uint16
+  + open() : void
+}
+' 監視側
+class Mon {
+  - period : uint32
+}
+Drv --> Mon
+@enduml
