@@ -1,3 +1,5 @@
+## v5.0.0 (2026-11-22) 整理のメジャー。v4.0 以降の機能一覧は loop/releases/v5.0.0.md
+
 - TICKET-releaser-20261122-0641-3: primary 台本 場面 4 手順 3 の scenario `tests/scenarios/primary-3-s4.spec.js` を足した。3 図種の書き出しの中身を見て、SVG の text が本文の要素と数・文字とも一致し、PNG・透過 PNG は 8bit RGBA で寸法が viewBox どおり、線や文字が画像の縁に掛からず(切れていない)、PNG の隅は白・透過 PNG の隅は透明、既定の保存名は .puml と同じ名前で、書き出しても本文と保存先が変わらないことを確かめる。製品の振る舞いは変えない
 - TICKET-releaser-20261122-0641-2: primary 台本 場面 4 手順 2 の scenario `tests/scenarios/primary-2-s4.spec.js` を足した。保存先の一覧からシーケンス・状態遷移・クラスの 3 図を開き、Export ▾ の SVG・PNG・PNG(透過背景)で書き出すと、SVG は図の文字を持ち、PNG の寸法は SVG の viewBox どおりで、書き出しても本文は 1 行も動かず保存先の .puml は 1 バイトも変わらないこと、手数 30 を確かめる。製品の振る舞いは変えない
 - TICKET-releaser-20261122-0641-1: primary 台本 場面 4 手順 1 の scenario `tests/scenarios/primary-1-s4.spec.js` を足した。書き出しに使うシーケンス・クラス・状態遷移の 3 図 (と `!include` する common.puml) の写しを保存先に作り、保存先の一覧に 3 枚が並び、起こして一覧を見ても .puml が 1 バイトも変わらず画像も他のファイルも増えないこと、手数 3 以内を確かめる。製品の振る舞いは変えない
