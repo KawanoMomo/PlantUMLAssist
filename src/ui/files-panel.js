@@ -633,23 +633,6 @@ window.MA.filesPanel = (function() {
       });
     }
 
-    var newDoc = $('files-new-doc');
-    if (newDoc) {
-      newDoc.addEventListener('click', function() {
-        var b = $('btn-tab-new');
-        if (b) b.click();
-      });
-    }
-    // 「新しいフォルダ」は保存先を選び直す入口と同じ道を通る
-    // (保存先を作る / 変えるの 2 本を画面に並べない)。
-    var newFolder = $('files-new-folder');
-    if (newFolder) {
-      newFolder.addEventListener('click', function() {
-        var b = $('top-save-target');
-        if (b) b.click();
-      });
-    }
-
     var filter = $('files-filter');
     if (filter) {
       filter.addEventListener('input', function() {
