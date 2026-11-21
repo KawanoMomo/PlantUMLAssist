@@ -240,10 +240,6 @@ function currentIndentId() {
 // design 5a: 描画に失敗したとき、直前の図を残してエラーを重ねるか。
 var currentErrorOverlay = true;
 var syncStateTable = function() {};
-// 入れ子ツリー。どの階層を大きく見ているかを
-// ここで持ち、焦点がある間は /render にその階層だけの DSL を送る。
-var syncStateTree = function() {};
-var stateTreeFocusId = '';
 var renderTimer = null;
 var RENDER_DEBOUNCE_MS = 150;
 // design 5a: 設定「レンダリング」に出す材料。
@@ -2056,8 +2052,6 @@ function init() {
     var ST = window.MA.settingsTabs;
     var RM = window.MA.renderModes;
     var _cfgMode = null;   // 設定モーダルの中で選ばれているモード (保存まで確定しない)
-    // design 5d: 網羅一覧の描き直し。結線は下の if (ST) で入れる。
-    var drawCoverage = null;
     var TAB_KEY = 'plantuml-settings-tab';
     var EDITOR_PREFS_KEY = 'plantuml-editor-prefs';
     var RENDER_DEBOUNCE_KEY = 'plantuml-render-debounce';
@@ -2431,19 +2425,6 @@ function init() {
       drawShortcuts();
       if (scSearch) scSearch.addEventListener('input', function() { scCapturing = null; drawShortcuts(); });
 
-      // design 5d: UML 要素の網羅一覧。図種ごとの「常時表示 / その他パレット」の
-      // 配分を 1 枚の表にして、配分そのものを指摘できるようにする。いま編集して
-      // いる図種の行に「編集中」を付けるので、開いている図の配分から読み始められる。
-      var cvSearch = document.getElementById('cfg-cv-search');
-      drawCoverage = function() {
-        var list = document.getElementById('cfg-cv-list');
-        if (list) list.innerHTML = ST.buildCoverageHtml(currentDiagramType, cvSearch ? cvSearch.value : '');
-        var note = document.getElementById('cfg-cv-note');
-        if (note && !note.textContent) note.textContent = ST.COVERAGE_NOTE;
-      };
-      drawCoverage();
-      if (cvSearch) cvSearch.addEventListener('input', drawCoverage);
-
       var scList = document.getElementById('cfg-shortcuts-list');
       if (scList) {
         var startCapture = function(row) {
@@ -2548,8 +2529,6 @@ function init() {
         try { savedTab = localStorage.getItem(TAB_KEY) || 'autosave'; } catch (e) {}
         renderTabBar(ST.normalizeTab(savedTab));
         showTab(savedTab);
-        // 開くたびに引き直す (図種を替えた後も「編集中」が正しい行に付く)
-        if (drawCoverage) drawCoverage();
       }
       loadVersion();
       modal.style.display = 'flex';
@@ -2797,7 +2776,7 @@ function init() {
     if (!host || !hud) return;
 
     // 帯はキャンバス (#preview-container) の右上に置く。状態遷移図では
-    // キャンバスの上に状態遷移表・入れ子ツリーの見出しが出るので、固定の top: 40px のままだと
+    // キャンバスの上に状態遷移表の見出しが出るので、固定の top: 40px のままだと
     // 帯がその見出し (▾ で畳むボタン) に重なって押せない。見出しの下 = キャンバスの上端に下ろす。
     function placeHud() {
       var pane = document.getElementById('preview-pane');
@@ -2818,7 +2797,7 @@ function init() {
         var ro = new window.ResizeObserver(function() { placeHud(); });
         var contEl = document.getElementById('preview-container');
         if (contEl) ro.observe(contEl);
-        ['state-table-panel', 'state-tree-panel', 'overlay-warning'].forEach(function(id) {
+        ['state-table-panel', 'overlay-warning'].forEach(function(id) {
           var el = document.getElementById(id);
           if (el) ro.observe(el);
         });
@@ -2937,130 +2916,6 @@ function init() {
     });
 
     syncStateTable();
-  })();
-
-  // 入れ子ツリー
-  // 子状態を足した後、入れ子の中身を確かめるのに 1 枚の図を拡大するしか
-  // なかった。ここは木で階層を出し、行を押すとその階層だけを図に描く。
-  // 木の組み立てと焦点の DSL は state-tree.js の純関数。
-  (function setupStateTree() {
-    var panel = document.getElementById('state-tree-panel');
-    var body = document.getElementById('state-tree-body');
-    var toggle = document.getElementById('btn-state-tree-toggle');
-    var bar = document.getElementById('state-tree-focus-bar');
-    var barLabel = document.getElementById('state-tree-focus-label');
-    var clearBtn = document.getElementById('btn-state-tree-focus-clear');
-    var STree = window.MA.stateTree;
-    if (!panel || !body || !toggle || !STree) return;
-
-    var open = false;
-
-    function esc(v) { return window.MA.htmlUtils.escHtml(v); }
-
-    function rowsHtml() {
-      var rows = STree.rows(currentParsed);
-      if (!rows.length) {
-        return '<div id="state-tree-summary">状態がまだありません。</div>';
-      }
-      var selIds = {};
-      (window.MA.selection.getSelected() || []).forEach(function(x) { selIds[x.id] = true; });
-      var html = '';
-      rows.forEach(function(r) {
-        var cls = 'stree-row' + (selIds[r.id] ? ' stree-selected' : '') +
-          (stateTreeFocusId === r.id ? ' stree-focused' : '');
-        html += '<div class="' + cls + '" data-tree-id="' + esc(r.id) + '"' +
-          ' data-tree-depth="' + r.depth + '" data-line="' + r.line + '"' +
-          ' style="margin-left:' + (r.depth * 16) + 'px">' +
-          '<span class="stree-twisty">' + (r.hasChildren ? '▾' : '·') + '</span>' +
-          '<span class="stree-label">' + esc(r.label) + '</span>' +
-          '<span class="stree-count">' +
-            (r.hasChildren ? '子 ' + r.childCount + ' ・ 子孫 ' + r.descendantCount : '') +
-          '</span>' +
-          '<button type="button" class="tb-btn stree-btn" data-tree-focus="' + esc(r.id) + '">' +
-            (stateTreeFocusId === r.id ? '表示中' : 'この階層だけ表示') +
-          '</button>' +
-          '<button type="button" class="tb-btn stree-btn" data-tree-add-child="' + esc(r.id) + '">' +
-            '＋ 子状態</button>' +
-          '</div>';
-      });
-      html += '<div id="state-tree-summary">' + esc(STree.summaryText(currentParsed)) +
-        ' — 行を押すとその状態を選びます。' +
-        '「この階層だけ表示」で中身を大きく見ながら編集できます。</div>';
-      return html;
-    }
-
-    syncStateTree = function() {
-      var isState = currentDiagramType === 'plantuml-state';
-      panel.hidden = !isState;
-      if (!isState) {
-        body.hidden = true;
-        if (bar) bar.hidden = true;
-        // 図種を変えたら焦点は消す (他の図にその階層は無い)。
-        stateTreeFocusId = '';
-        return;
-      }
-      // 焦点にしていた状態が DSL から消えたら全体に戻す。
-      if (stateTreeFocusId && !STree.byId(currentParsed, stateTreeFocusId)) stateTreeFocusId = '';
-      if (bar) {
-        bar.hidden = !stateTreeFocusId;
-        if (stateTreeFocusId && barLabel) {
-          barLabel.textContent = STree.focusLabel(currentParsed, stateTreeFocusId);
-        }
-      }
-      body.hidden = !open;
-      if (open) body.innerHTML = rowsHtml();
-    };
-
-    function setFocus(id) {
-      stateTreeFocusId = (stateTreeFocusId === id) ? '' : id;
-      syncStateTree();
-      renderSvg();
-    }
-
-    toggle.addEventListener('click', function() {
-      open = !open;
-      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-      toggle.textContent = '入れ子ツリー / Hierarchy ' + (open ? '⌃' : '⌄');
-      syncStateTree();
-    });
-
-    if (clearBtn) {
-      clearBtn.addEventListener('click', function() {
-        stateTreeFocusId = '';
-        syncStateTree();
-        renderSvg();
-      });
-    }
-
-    body.addEventListener('click', function(e) {
-      var t = e.target;
-      var focusBtn = t && t.closest ? t.closest('[data-tree-focus]') : null;
-      if (focusBtn) { setFocus(focusBtn.getAttribute('data-tree-focus')); return; }
-
-      var addBtn = t && t.closest ? t.closest('[data-tree-add-child]') : null;
-      if (addBtn) {
-        // 木のその場から子を足す。右ペインへ戻らずに深い階層を伸ばせる。
-        var pid = addBtn.getAttribute('data-tree-add-child');
-        var SC = window.MA.stateChild;
-        if (!SC || !SC.canHaveChild(STree.byId(currentParsed, pid))) return;
-        var childId = SC.uniqueChildId(currentParsed, 'Sub');
-        var next = SC.addChild(mmdText, currentParsed, pid, childId, '');
-        if (next === mmdText) return;
-        mmdText = next;
-        suppressSync = true; editorEl.value = next; suppressSync = false;
-        scheduleRefresh();
-        return;
-      }
-
-      var row = t && t.closest ? t.closest('.stree-row') : null;
-      if (!row) return;
-      window.MA.selection.setSelected([{
-        type: 'state', id: row.getAttribute('data-tree-id'),
-        line: Number(row.getAttribute('data-line')),
-      }]);
-    });
-
-    syncStateTree();
   })();
 
   // 右パネルの「Properties / 図の設定」タブ。
@@ -3427,7 +3282,6 @@ function init() {
     renderProps();
     // 表の選択枠を図・右パネルと同じ選択に合わせる。
     syncStateTable();
-    syncStateTree();
   });
 
   setupTabs();
@@ -3441,7 +3295,6 @@ function init() {
   setupSeniorPane();
   setupSeniorGit();
   setupLineEdit();
-  setupOutline();
   setupCompareView();
 
   setZoom(1.0);
@@ -8348,168 +8201,6 @@ function setupLineEdit() {
   if (closeBtn) closeBtn.addEventListener('click', closePanel);
 }
 
-// ── 構造 / Outline ─────────────────────────────────────────────────────────
-// design/「PlantUMLAssist - リデザイン案」1a のエディタペインは DSL と
-// 構造 (Outline) の 2 タブ。DSL 全文を目で追わずに図の骨格を掴み、
-// 目的の要素の行へ 1 クリックで飛ぶための索引。
-// 行の書き換えは行編集パネルの職掌なので、ここは「見る・飛ぶ」だけにする。
-
-var _outlineTab = 'dsl';     // 'dsl' | 'outline'
-var _outlineLine = null;     // 選択中の行 (0 始まり)
-
-function setEditorTab(tab) {
-  var wrap = document.getElementById('editor-wrap');
-  var pane = document.getElementById('outline-pane');
-  if (!wrap || !pane) return;
-  _outlineTab = (tab === 'outline') ? 'outline' : 'dsl';
-  var isOutline = _outlineTab === 'outline';
-  wrap.style.display = isOutline ? 'none' : 'flex';
-  if (isOutline) pane.classList.add('open'); else pane.classList.remove('open');
-  Array.prototype.forEach.call(document.querySelectorAll('.editor-tab'), function(b) {
-    var on = b.getAttribute('data-editor-tab') === _outlineTab;
-    if (on) b.classList.add('active'); else b.classList.remove('active');
-    b.setAttribute('aria-selected', on ? 'true' : 'false');
-  });
-  if (isOutline) {
-    renderOutline();
-    var f = document.getElementById('outline-filter');
-    if (f) f.focus();
-  } else if (editorEl) {
-    editorEl.focus();
-  }
-}
-
-function renderOutline() {
-  var ol = window.MA.outline;
-  var list = document.getElementById('outline-list');
-  var summary = document.getElementById('outline-summary');
-  if (!ol || !list || !summary) return;
-  var result = ol.build(mmdText);
-  var q = (document.getElementById('outline-filter') || {}).value || '';
-  var rows = ol.filter(result.nodes, q);
-
-  list.textContent = '';
-  if (rows.length === 0) {
-    var empty = document.createElement('div');
-    empty.className = 'outline-empty';
-    empty.textContent = q
-      ? '「' + q + '」に一致する要素はありません'
-      : 'この図にはまだ要素がありません';
-    list.appendChild(empty);
-  }
-  rows.forEach(function(n) {
-    var row = document.createElement('div');
-    row.className = 'outline-row' + (n.line === _outlineLine ? ' selected' : '');
-    row.setAttribute('data-outline-line', String(n.line));
-    row.setAttribute('data-outline-kind', n.kind);
-    row.setAttribute('role', 'treeitem');
-    row.setAttribute('aria-level', String(n.depth + 1));
-    var no = document.createElement('span');
-    no.className = 'outline-no';
-    no.textContent = String(n.line + 1);
-    var kind = document.createElement('span');
-    kind.className = 'outline-kind';
-    kind.textContent = n.kind;
-    var label = document.createElement('span');
-    label.className = 'outline-label';
-    // 入れ子は字下げで見せる (ブロックの内と外を取り違えないため)。
-    label.style.paddingLeft = (n.depth * 12) + 'px';
-    label.textContent = n.label;
-    var detail = document.createElement('span');
-    detail.className = 'outline-detail';
-    detail.textContent = n.detail ? ': ' + n.detail : '';
-    row.appendChild(no);
-    row.appendChild(kind);
-    row.appendChild(label);
-    row.appendChild(detail);
-    row.title = 'クリックで ' + (n.line + 1) + ' 行目へ移動し、その要素を選ぶ';
-    row.addEventListener('click', function() { gotoOutlineLine(n.line); });
-    list.appendChild(row);
-  });
-
-  // 何を数えたのかは図種で変わる (design 4a/4b/4c)。
-  summary.textContent = ol.summary(result, currentDiagramType);
-  if (result.ok) summary.classList.remove('ng'); else summary.classList.add('ng');
-  if (!result.ok && result.errors.length) {
-    summary.title = result.errors.map(function(e) { return e.message; }).join('\n');
-  } else {
-    summary.title = '';
-  }
-  renderOutlineCompare(result);
-}
-
-// 前の版と「同じ形か」を、開いた瞬間に数で出す。
-// 相手は compare-view と同じ選び方 (この図の履歴の版だけ。別のタブの図は相手にしない:
-// TICKET-owner-20261115-2141-prune)。選んだ相手は覚えておくので、図を直すたびに選び直さずに済む。
-var _outlineCmpRefId = null;
-
-function renderOutlineCompare(result) {
-  var sel = document.getElementById('outline-cmp-select');
-  var out = document.getElementById('outline-cmp-result');
-  var cv = window.MA.compareView, cc = window.MA.countCompare;
-  if (!sel || !out || !cv || !cc) return;
-
-  var docs = _compareDocs();
-  var activeId = window.MA.workspace ? window.MA.workspace.getActiveId() : null;
-  var opts = cv.options(docs, activeId);
-  var ref = cv.pick(docs, activeId, _outlineCmpRefId);
-
-  sel.textContent = '';
-  if (opts.length === 0) {
-    _outlineCmpRefId = null;
-    sel.disabled = true;
-    var none = document.createElement('option');
-    none.textContent = '(前の版を開いていません)';
-    sel.appendChild(none);
-    out.className = '';
-    out.textContent = '「この図の履歴」の行の「比較」で前の版を開くと、要素数・関係数を突き合わせます。';
-    return;
-  }
-  sel.disabled = false;
-  opts.forEach(function(o) {
-    var op = document.createElement('option');
-    op.value = String(o.id);
-    op.textContent = o.name + ' (' + String(o.diagramType || '').replace('plantuml-', '') + ')';
-    if (ref && o.id === ref.id) op.selected = true;
-    sel.appendChild(op);
-  });
-
-  _outlineCmpRefId = ref ? ref.id : null;
-  var full = cv.doc ? (cv.doc(docs, _outlineCmpRefId) || {}) : {};
-  var cmp = cc.compare(result.counts,
-    window.MA.outline.build(full.dsl || '').counts,
-    currentDiagramType, full.diagramType);
-  out.className = cmp.comparable ? (cmp.same ? 'same' : 'diff') : '';
-  out.textContent = cc.label(cmp);
-}
-
-// 構造の行を選ぶと DSL タブに戻り、その行をキャレット選択して見える位置に出す。
-function gotoOutlineLine(line) {
-  _outlineLine = line;
-  var lines = String(mmdText || '').split('\n');
-  if (line == null || line < 0 || line >= lines.length) return;
-  setEditorTab('dsl');
-  var start = 0;
-  for (var i = 0; i < line; i++) start += lines[i].length + 1;
-  var end = start + lines[line].length;
-  if (!editorEl) return;
-  editorEl.focus();
-  editorEl.setSelectionRange(start, end);
-  // 選んだ行が画面の中ほどに来るようにする (先頭に貼り付くと前後が見えない)。
-  var lineHeight = editorEl.scrollHeight / Math.max(1, lines.length);
-  editorEl.scrollTop = Math.max(0, (line * lineHeight) - (editorEl.clientHeight / 2));
-  if (lineNumbersEl) lineNumbersEl.scrollTop = editorEl.scrollTop;
-  // 行へ飛ぶだけではなく、その行の要素を選んだ
-  // 状態にする。右パネルにその要素の編集フォームが出るので、
-  // プレビュー上で座標を探し直さなくて済む。
-  if (!selectElementAtLine(line + 1) && window.MA.selection) {
-    // 選べない行 (@startuml など) では前の選択を残さない。
-    // 右パネルに別の要素のフォームが出たままになると、
-    // それを目的の要素だと思って編集してしまう。
-    window.MA.selection.clearSelection();
-  }
-}
-
 // ── 参照ペイン (2 枚の図を並べて見比べる) ────────────────────────────────
 // 先輩の図を真似て書くとき、タブを行き来して記憶する往復が要らないように、
 // 別のタブの図を右に出したまま編集を続けられるようにする。
@@ -8801,25 +8492,6 @@ function setupCompareView() {
       _compareRefId = sel.value;
       _compareShownDsl = null;
       renderCompareView();
-    });
-  }
-}
-
-function setupOutline() {
-  var dslBtn = document.getElementById('btn-editor-tab-dsl');
-  var outBtn = document.getElementById('btn-editor-tab-outline');
-  var filter = document.getElementById('outline-filter');
-  if (dslBtn) dslBtn.addEventListener('click', function() { setEditorTab('dsl'); });
-  if (outBtn) outBtn.addEventListener('click', function() { setEditorTab('outline'); });
-  var cmpSel = document.getElementById('outline-cmp-select');
-  if (cmpSel) cmpSel.addEventListener('change', function() {
-    _outlineCmpRefId = cmpSel.value;
-    renderOutline();
-  });
-  if (filter) {
-    filter.addEventListener('input', renderOutline);
-    filter.addEventListener('keydown', function(ev) {
-      if (ev.key === 'Escape') { ev.preventDefault(); setEditorTab('dsl'); }
     });
   }
 }
@@ -9721,9 +9393,6 @@ function _adoptDetectedType(t) {
 function refresh() {
   updateLineNumbers();
   updateUndoRedoButtons();
-  // 構造タブを開いたまま DSL が変わったら (エディタ・行編集・一括追加・タブ切替)
-  // 一覧も追随させる。開いていないときは組み立てない。
-  if (_outlineTab === 'outline') renderOutline();
   // 参照ペインを開いたままタブを切り替えたら、選択肢と中身を追随させる
   // (今編集しているタブは参照の候補から外れる)。
   if (_compareOpen) renderCompareView();
@@ -9769,7 +9438,6 @@ function refresh() {
 
   renderProps(currentParsed);
   syncStateTable();
-  syncStateTree();
   renderSvg();
 }
 
@@ -10291,7 +9959,6 @@ function jumpEditorToSelection(sel) {
   var EJ = window.MA.editorJump;
   if (!EJ || !editorEl) return;
   if (currentEditorPrefs && currentEditorPrefs.clickToLine === false) { clearJumpBand(); return; }
-  if (_outlineTab && _outlineTab !== 'dsl') { clearJumpBand(); return; }
   var line = EJ.targetLine(sel);
   if (line === null) { clearJumpBand(); return; }
   var range = EJ.lineRange(editorEl.value, line);
@@ -10486,16 +10153,6 @@ function clearRenderError() {
   if (banner) { banner.hidden = true; banner.textContent = ''; }
 }
 
-// 焦点中の階層だけの DSL。焦点が無ければ空で、
-// 呼ぶ側はこれまで通り図全体を描く。
-function stateTreeFocusText() {
-  if (!stateTreeFocusId) return '';
-  var STree = window.MA.stateTree;
-  if (!STree || currentDiagramType !== 'plantuml-state') return '';
-  try { return STree.focusDsl(mmdText, currentParsed, stateTreeFocusId) || ''; }
-  catch (e) { return ''; }
-}
-
 // `!include` した手続き (`WorkDocs(...)` など) で部品を宣言した図は、
 // DSL には `actor` と `-->` しか見えないのでシーケンス図と読まれ、選択枠が 1 つも出なかった。
 // 手続きの中身は展開して読まず、PlantUML が SVG に残した図種 (data-diagram-type) に合わせる。
@@ -10594,18 +10251,14 @@ function renderSvg() {
     return now - startedAt;
   };
   var myGen = ++renderGen;
-  // 入れ子ツリーで階層を選んでいる間は、
-  // その階層だけの DSL を描く (図の中で小さく潰れずに済む)。
-  // 図と DSL の行番号がずれるので、焦点中は overlay を作らない。
-  var focusDsl = stateTreeFocusText();
-  var renderText = focusDsl || mmdText;
+  var renderText = mmdText;
   var renderDocKey = _activeDocKey();  // この回の図がどのタブのものか
   // マクロのある本文は、描画と並べて PlantUML のプリプロセッサに展開を頼み、
   // 選択枠はその展開を読んでから当てる (展開できない・遅いときは今までの読み方で当てる)。
   var _PEx = window.MA.preprocExpand;
   // 相対の !include は、このタブの .puml のあるフォルダから探す。
   var renderDir = _renderDirOfActive();
-  var expandP = (!focusDsl && _PEx) ? _PEx.ensure(mmdText, null, renderDir).catch(function() { return false; }) : Promise.resolve(false);
+  var expandP = _PEx ? _PEx.ensure(mmdText, null, renderDir).catch(function() { return false; }) : Promise.resolve(false);
   var renderBody = { text: renderText, mode: mode };
   if (renderDir) renderBody.dir = renderDir;
   fetch('/render', {
@@ -10686,9 +10339,9 @@ function renderSvg() {
     }
     _overlayBuiltFrom = null;
     if (warnEl) { warnEl.style.display = 'none'; warnEl.textContent = ''; warnEl.title = ''; }
-    if (svgEl && !focusDsl) _adoptExpansion();
-    if (svgEl && !focusDsl) _reconcileKindWithSvg(svgEl);
-    if (svgEl && !focusDsl && currentModule && currentModule.buildOverlay) {
+    if (svgEl) _adoptExpansion();
+    if (svgEl) _reconcileKindWithSvg(svgEl);
+    if (svgEl && currentModule && currentModule.buildOverlay) {
       syncOverlayOrigin();
       var report = currentModule.buildOverlay(svgEl, currentParsed, overlayEl, mmdText);
       // 図はこの回の本文 (renderText) の絵。描いている間に本文が変わっていれば、枠は絵と本文が食い違う

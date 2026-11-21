@@ -67,7 +67,7 @@ window.MA.modules.plantumlState = (function() {
   );
   var END_NOTE_RE = /^end\s+note\s*$/i;
 
-  // design 5d「UML 要素の網羅一覧」State 行の「その他パレット」:
+  // 状態遷移図の「その他」パレット (design 5d):
   // fork / join、入口・出口ポイント、並行領域。いずれも PlantUML では
   // ステレオタイプ付きの state (と複合状態の中の `--`) として書く。
   var PSEUDO_KIND_BY_STEREOTYPE = {

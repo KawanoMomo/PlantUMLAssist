@@ -79,11 +79,9 @@ test.describe('junior 手順 1: 前周までの最新版を開く', () => {
 
 });
 
-// BLK-junior-20260909-0303: 開こうとした図が実データにも先輩側にも無いときは、
-// 新規タブのサンプル (WebApp / IAuth) から書き起こすことになる。その付け替えを
-// 要素ごとに「選択 → Alias/Label → 変更を反映 → 関連に追従」で繰り返すと
-// クリックが要素数に比例して増えていた (実測 14、基準 10 超)。
-// 無選択の右ペインの表で全要素を一度に付け替えられることを確かめる。
+// BLK-junior-20260909-0303: 新規タブのサンプル (WebApp / IAuth) から書き起こすときの付け替え。
+// 無選択の右ペインの「要素名をまとめて付け替え」表は TICKET-owner-20261116-0921-prune で外し、
+// 名前を揃える入口は ⇄ 一括置換 (Ctrl+H) の 1 本にした。無選択の右ペインは「末尾に追加」だけになる。
 test.describe('junior 手順 1: 実体が無くサンプルから起こす', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
@@ -98,35 +96,16 @@ test.describe('junior 手順 1: 実体が無くサンプルから起こす', () 
     await page.waitForTimeout(600);
   });
 
-  test('サンプルの 2 要素が表に並び、まとめて反映 1 回で関連ごと付け替わる', async ({ page }) => {
-    const rows = page.locator('#co-rename-list .co-rename-row');
-    await expect(rows).toHaveCount(2);
-    await expect(rows.nth(0).locator('.co-rename-id')).toHaveValue('WebApp');
-    await expect(rows.nth(1).locator('.co-rename-id')).toHaveValue('IAuth');
-
-    // クリックは「まとめて反映」の 1 回だけ。欄の移動は Tab で済む。
-    await rows.nth(0).locator('.co-rename-id').fill('GpioDrv');
-    await rows.nth(0).locator('.co-rename-label').fill('GPIO ドライバ');
-    await rows.nth(1).locator('.co-rename-id').fill('IGpio');
-    await rows.nth(1).locator('.co-rename-label').fill('GPIO API');
-    await page.locator('#co-rename-apply').click();
-    await page.waitForTimeout(500);
-
-    const dsl = await getEditorText(page);
-    expect(dsl).toContain('component "GPIO ドライバ" as GpioDrv');
-    expect(dsl).toContain('interface "GPIO API" as IGpio');
-    // Alias 変更が関連 Relation にも追従している (別ボタンを押さなくてよい)。
-    expect(dsl).toContain('GpioDrv -() IGpio');
-    expect(dsl).not.toContain('WebApp');
-  });
-
-  test('付け替えたあとの表は新しい名前で並び直す', async ({ page }) => {
-    const rows = page.locator('#co-rename-list .co-rename-row');
-    await rows.nth(0).locator('.co-rename-id').fill('GpioDrv');
-    await page.locator('#co-rename-apply').click();
-    await page.waitForTimeout(500);
-    await expect(page.locator('#co-rename-list .co-rename-row').nth(0).locator('.co-rename-id'))
-      .toHaveValue('GpioDrv');
+  test('無選択の右ペインは「末尾に追加」だけで、まとめて付け替えの表も依存チェックも無い', async ({ page }) => {
+    await expect(page.locator('#co-tail-kind')).toBeVisible();
+    for (const sel of ['#co-rename-list', '#co-rename-apply', '#co-deps-summary', '#co-deps-body']) {
+      await expect(page.locator(sel), sel).toHaveCount(0);
+    }
+    const props = await page.locator('#props-content').innerText();
+    expect(props).not.toContain('まとめて付け替え');
+    expect(props).not.toContain('依存チェック');
+    // 本文は触っていない。
+    expect(await getEditorText(page)).toBe('@startuml\ncomponent WebApp\ninterface IAuth\nWebApp -() IAuth\n@enduml');
   });
 });
 
