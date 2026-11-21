@@ -83,17 +83,24 @@ async function getEditorLine(page, lineNum) {
 // TICKET-releaser-20261116-1201-1: 直前の操作 (Undo など) の描き直しが遅れて届くと、枠の層は作り直され、
 // 掴んだ枠は外れる。boundingBox は「枠を掴む」と「箱を測る」が別の往復なので、その間に作り直しが入ると
 // 外れた枠を測って null になる (全体実行の負荷のときだけ赤になっていた)。利用者は座標を押すので影響は無い。
-// 掴み直して測り直す。何度掴み直しても箱が無いときだけ (枠そのものが無い・大きさが無い) 赤にする。
+// TICKET-releaser-20261122-0015-1: 箱が null のときだけ掴み直しても、掴んだ枠が scrollIntoViewIfNeeded の
+// 「安定を待つ」往復の間に外れる経路 (Element is not attached) が残っていた。掴む・見える所へ寄せる・測るを
+// ページの中の 1 回の評価にまとめ (その間に枠の層は作り直されない)、枠が無い・大きさが無い間は評価ごとやり直す。
+// 押すのは測った座標 (作り直された枠も同じ本文なら同じ位置にある)。15 秒たっても箱が無いときだけ赤にする。
 async function clickOverlayByLine(page, line) {
-  const r = page.locator('#overlay-layer rect[data-line="' + line + '"]').first();
-  let b = null;
-  for (let i = 0; i < 5 && !b; i++) {
-    if (i) await page.waitForTimeout(150);
-    await r.scrollIntoViewIfNeeded();
-    b = await r.boundingBox();
-  }
-  if (!b) throw new Error('overlay rect for line ' + line + ' has no box');
-  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  const handle = await page.waitForFunction((ln) => {
+    const r = document.querySelector('#overlay-layer rect[data-line="' + ln + '"]');
+    if (!r || !r.isConnected) return null;
+    // 見えていれば動かさず、見えていなければ真ん中へ寄せる (Playwright の scrollIntoViewIfNeeded と同じ寄せ方)。
+    if (typeof r.scrollIntoViewIfNeeded === 'function') r.scrollIntoViewIfNeeded(true);
+    else r.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+    const b = r.getBoundingClientRect();
+    if (!(b.width > 0 && b.height > 0)) return null;
+    return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+  }, line, { timeout: 15000 }).catch(() => null);
+  const p = handle ? await handle.jsonValue() : null;
+  if (!p) throw new Error('overlay rect for line ' + line + ' has no box');
+  await page.mouse.click(p.x, p.y);
 }
 
 
