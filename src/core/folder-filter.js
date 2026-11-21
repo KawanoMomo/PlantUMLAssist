@@ -44,7 +44,7 @@ window.MA.folderFilter = (function() {
   }
 
   // 部分一致なので、フルネームを打っても同じ接頭辞の
-  // 「…(資料用)」が一緒に残り、並び順次第で資料用を開いてしまう。打った名前と
+  // 「…(レビュー反映)」が一緒に残り、並び順次第でそちらを開いてしまう。打った名前と
   // 拡張子を除いて丸ごと同じ図は「完全一致」として先頭に出す。
   function _base(s) {
     return String(s == null ? '' : s).trim().replace(/\.(puml|pu|plantuml|txt)$/i, '').toLowerCase();

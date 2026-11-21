@@ -1167,41 +1167,6 @@ html, body {
   color: var(--text-secondary);
 }
 #folder-panel .folder-kinds { color: var(--text-secondary); }
-/* 名乗り (ファイル名の図種) と本文の図種の食い違い。
-   中身が別の図で塗り潰される事故は、これまで全文を読むまで誰にも見えなかった。
-   赤はファイル名と食い違った図だけに付け、保存時の控えとの差は橙に留める
-   (控えとの差は「紛らわしい書き方」で普通に出るので、赤にすると印が効かなくなる)。 */
-#folder-panel .folder-kind-warn {
-  flex: 0 0 auto;
-  font-size: 9px;
-  border: 1px solid var(--accent-red);
-  border-radius: 3px;
-  padding: 0 4px;
-  margin-left: 3px;
-  color: var(--accent-red);
-}
-#folder-panel .folder-kind-warn-note {
-  border-color: var(--accent-orange);
-  color: var(--accent-orange);
-}
-#folder-panel .folder-row.folder-kind-bad { border-left: 2px solid var(--accent-red); }
-#folder-panel .folder-kind-mismatch {
-  color: var(--text-secondary);
-  font-size: 10px;
-  padding: 2px 6px;
-}
-#folder-panel .folder-kind-mismatch-bad { color: var(--accent-red); }
-/* 版のバッジと、選んでいる指摘が指す版の光り。
-   資料用・編集中・旧版が同じ図種の枠に並んでも、名前の末尾を読み比べずに済む。 */
-#folder-panel .folder-variant {
-  flex: 0 0 auto;
-  font-size: 9px;
-  border: 1px solid var(--accent-yellow, var(--border));
-  border-radius: 3px;
-  padding: 0 4px;
-  margin-left: 3px;
-  color: var(--text-secondary);
-}
 #folder-panel .folder-gone-versions-head { color: var(--accent-red); }
 #folder-panel button.folder-gone-name {
   flex: 1 1 auto;
@@ -2949,10 +2914,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   align-items: center;
   gap: 8px;
   padding: 5px 10px;
-  /* 右上に浮くズーム帯 (#zoom-hud) と重なる高さにあるので、その幅ぶんを空ける。
-     空けないと「CSV で書き出し」が帯の下に隠れて押せない。
-     FILES ツリーでキャンバスが狭くなると 275px は幅の大半になるので上限を割合で切る。 */
-  padding-right: min(275px, 40%);
   /* 狭い幅で見出しが何行にも折り返すと、この帯だけで 400px を超えて
      キャンバスが潰れる。1 行に保ち、あふれる文字は省略する。 */
   flex-wrap: nowrap;
@@ -4225,8 +4186,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
          出さない。選ぶ入口は設定の「レンダリング」タブ・Ctrl+K・状態表示のクリック。
          保存や描画の経路はこの select を唯一の窓口にしたままなので、値と change は
          これまでどおり効く。 -->
-    <!-- 資料化と zip の書き出しの実体のボタン (図を選んで zip・部品の図をまとめて資料化・1 枚を資料化・
-         開いている図すべて・部品の資料一式) は TICKET-owner-20261116-0140-prune で外した -->
     <select id="render-mode" title="レンダリングモード">
       <option value="local">local (Java)</option>
       <option value="online">online (plantuml.com)</option>
@@ -4398,7 +4357,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <button type="button" class="tb-btn" id="btn-state-table-toggle"
                   title="状態遷移表を開く / 閉じる" aria-expanded="false">状態遷移表 / State transition table ⌄</button>
           <span class="stt-sub">図と同じ内容を表で確認</span>
-          <button type="button" class="tb-btn" id="btn-state-table-csv" title="表を CSV で書き出す">CSV で書き出し</button>
         </div>
         <div id="state-table-body" hidden></div>
       </div>
@@ -4784,13 +4742,11 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/senior-pane.js"></script>
 <script src="src/core/blank-doc.js"></script>
 <script src="src/core/text-sync.js"></script>
-<script src="src/core/finding-variant.js"></script>
 <script src="src/core/version-history.js"></script>
 <script src="src/core/version-diff.js"></script>
 <script src="src/core/version-fulldiff.js"></script>
 <script src="src/core/diagram-kind.js"></script>
 <script src="src/core/saved-kind.js"></script>
-<script src="src/core/kind-mismatch.js"></script>
 <script src="src/core/folder-reopen.js"></script>
 <script src="src/core/recent-files.js"></script>
 <script src="src/core/bulk-rename.js"></script>
@@ -4798,12 +4754,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/export-name.js"></script>
 <script src="src/core/svg-export.js"></script>
-<script src="src/core/component-pack.js"></script>
 <script src="src/core/rename-redo.js"></script>
 <script src="src/core/rename-seed.js"></script>
 <script src="src/core/rename-pairs.js"></script>
 <script src="src/core/rename-badge.js"></script>
-<script src="src/core/export-target.js"></script>
 <script src="src/core/app-bridge.js"></script>
 <script src="src/core/file-open.js"></script>
 <script src="src/core/save-prefs.js"></script>
@@ -4919,9 +4873,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/svg-text-diff.js"></script>
 <script src="src/ui/git-ui.js"></script>
 <script src="src/ui/file-menu.js"></script>
-
-<!-- 名前を付けた図の組・提出用 zip の図選び・部品の図をまとめて資料化・1 枚を資料化・部品の資料一式の窓は
-     TICKET-owner-20261116-0140-prune で外した -->
 
 <!-- 1 図の中身が保存のたびにどう変わったかを通しで見る -->
 <div id="vt-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">

@@ -227,26 +227,6 @@ window.MA.stateTable = (function() {
       filled + ' 遷移 · 空欄 ' + (total - filled);
   }
 
-  // CSV。Excel で開いて仕様書に貼れる形。`,` `"` 改行を含む値は引用する。
-  function csvCell(v) {
-    var s = v == null ? '' : String(v);
-    if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-    return s;
-  }
-
-  function toCsv(table) {
-    var t = table || { triggers: [], rows: [] };
-    var lines = [];
-    lines.push([csvCell('現在の状態 \\ きっかけ')].concat(
-      t.triggers.map(csvCell)).join(','));
-    t.rows.forEach(function(r) {
-      lines.push([csvCell(r.label)].concat(r.cells.map(function(c) {
-        return csvCell(c ? c.text : EMPTY_CELL);
-      })).join(','));
-    });
-    return lines.join('\r\n');
-  }
-
   return {
     START_LABEL: START_LABEL,
     END_LABEL: END_LABEL,
@@ -261,6 +241,5 @@ window.MA.stateTable = (function() {
     ancestorsOf: ancestorsOf,
     build: build,
     summaryText: summaryText,
-    toCsv: toCsv,
   };
 })();
