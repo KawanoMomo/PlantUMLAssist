@@ -14,8 +14,8 @@ if (!global.window) {
 }
 
 // method-audit (遷移ラベルとメソッドの突合) は TICKET-owner-20261116-0321-prune で外した。
-['../src/core/dsl-utils.js',
- '../src/core/name-audit.js', '../src/core/outline.js'].forEach(function(m) {
+// name-audit (名前突合) は TICKET-roadmap-20261115-2114-2 で外した。
+['../src/core/dsl-utils.js', '../src/core/outline.js'].forEach(function(m) {
   try { delete require.cache[require.resolve(m)]; } catch (e) {}
   require(m);
 });

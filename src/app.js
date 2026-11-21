@@ -3456,10 +3456,6 @@ function initCommandPalette() {
       { id: 'change-target', title: '別のフォルダを保存先にする… / Change save folder', hint: 'Files', keywords: ['保存先を変える', 'べつのフォルダ', '別のフォルダ', '保存先', 'ほぞんさき', 'かえる', '変える', '自動保存', 'じどうほぞん', 'save', 'folder', 'autosave', 'target'], run: function() { setTimeout(openChangeTarget, 0); } },
       { id: 'tab-folder', title: 'FILES: 保存先を開く / Files: save folder', hint: 'Files', keywords: ['folder', 'files', 'tree', 'list', 'いちらん', 'ふぉるだ', 'ほぞんさき'], button: 'btn-tab-folder', run: function() { _ensureFolderListOpen(); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], button: 'btn-tab-rename', run: function() { clickById('btn-tab-rename'); } },
-      { id: 'tab-submit', title: '提出前チェックを開く / Submit check', hint: 'Tabs', keywords: ['submit', 'check', 'ていしゅつ', 'かくにん', '略語'], button: 'btn-tab-submit', run: function() { clickById('btn-tab-submit'); } },
-      // 旧 🔍 名前突合の行はここに置かない。▦ 突合ボードの 1 行
-      // (id 'tab-cross') の語に「名前突合」「表記揺れ」「name audit」を入れ、その語で引いたときは
-      // ボードを「名前/表記揺れ」で絞って開く。
       { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], button: 'btn-tab-lines', run: function() { clickById('btn-tab-lines'); } },
       // design 7b: タブ列を畳むと Ctrl+K だけが手掛かりになるので、ツールメニューに
       // 載っている道具はすべてパレットからも引けなければならない。ここは
@@ -7174,12 +7170,6 @@ function loadFolderImpact(force) {
     var names = ((info && info.entries) || []).map(function(e) {
       return e && typeof e === 'object' ? e.name : e;
     }).filter(function(n) { return n; });
-    // 変更サマリボードが「基準より後に更新された
-    // ファイル」を選ぶのに mtime が要る。一覧と同じ応答に載っているので拾っておく。
-    var mtimes = {};
-    ((info && info.entries) || []).forEach(function(e) {
-      if (e && typeof e === 'object' && e.name) mtimes[e.name] = e.mtime || '';
-    });
     var roles = (info && info.roles) || {};
     return Promise.all(names.map(function(n) {
       return WS.loadFile(n, dir).then(function(text) {
@@ -7188,7 +7178,6 @@ function loadFolderImpact(force) {
     })).then(function(docs) {
       if (seq !== _fiSeq) return false;
       _fiFileDocs = docs.filter(function(d) { return d; });
-      _fiFileDocs.forEach(function(d) { d.mtime = mtimes[d.name] || ''; });
       _fiRoles = roles;
       _fiDir = dir;
       _fiLoading = false;
@@ -8473,10 +8462,7 @@ function renderCompareView() {
   });
 }
 
-// 参照ペインの別フォルダとの突き合わせ (名前の組・雛形・系統・増分の取り込み) は
-// TICKET-owner-20261115-2141-prune で、参照図との打ち間違い・並びの突き合わせと
-// 保存フォルダへ書いた回の控えは TICKET-owner-20261116-0821-prune で外した
-// (2 枚を比べるのは「この図の履歴」の版との比較)。
+// 2 枚を比べるのは「この図の履歴」の版との比較だけ (参照ペインの別フォルダとの突き合わせは持たない)。
 function setupCompareView() {
   var btn = document.getElementById('btn-tab-compare');
   var sel = document.getElementById('compare-select');

@@ -116,7 +116,6 @@ html, body {
 #files-panel .files-sec-headrow button.files-sec-act {
   flex: 0 0 auto; font-size: 11px; line-height: 1; padding: 2px 5px; margin-right: 3px;
 }
-#files-panel .files-sec-headrow button.files-sec-act .files-act-glyph { display: block; }
 #files-panel .files-sec-body[hidden] { display: none; }
 /* design 10a: 読むだけのフォルダの行 (senior / release_v1.2)。
    押すと開閉してそのフォルダの図が並ぶ。図を押すとその 1 枚が右の枠に出る。 */
@@ -463,15 +462,6 @@ html, body {
   height: 38px;
 }
 
-#toolbar .logo {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 14px;
-  color: var(--accent);
-  margin-right: 8px;
-  white-space: nowrap;
-  letter-spacing: -0.5px;
-}
 
 /* design 1a: 上部に残す 2 つの状態表示 */
 #top-file-name {
@@ -602,13 +592,6 @@ html, body {
 /* 上部バーから外した操作の実体。表示しないが click は届く */
 #toolbar-actions[hidden] { display: none; }
 
-.tb-sep {
-  width: 1px;
-  height: 20px;
-  background: var(--border);
-  margin: 0 4px;
-  flex-shrink: 0;
-}
 
 .tb-btn {
   background: transparent;
@@ -935,42 +918,7 @@ html, body {
   white-space: nowrap;
   flex-shrink: 0;
 }
-/* design 9a: フォルダ操作 (一覧) は枠なしの文字にして、
-   枠付きで残すのは右端の「ツール ▾」だけにする。 */
-#tab-bar .tab-tool.tab-tool-plain {
-  border-color: transparent;
-  background: transparent;
-}
-#tab-bar .tab-tool.tab-tool-plain:hover { color: var(--accent); }
 #tab-bar .tab { flex-shrink: 0; }
-/* 図を開いた人にその図の申し送りを出す帯 */
-#hn-banner {
-  display: none;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  font-size: 11px;
-  background: rgba(180, 140, 255, 0.14);
-  border-bottom: 1px solid var(--border);
-  color: var(--text-primary);
-}
-#hn-banner #hn-banner-text { flex: 1; white-space: pre-wrap; word-break: break-all; }
-#hn-banner button {
-  background: transparent; border: 1px solid var(--border); border-radius: 3px;
-  color: var(--text-secondary); font-size: 10px; padding: 1px 6px; cursor: pointer;
-}
-#hn-banner button:hover { color: var(--text-primary); border-color: var(--accent); }
-/* 変更サマリボードの行に添える一言 */
-.diff-board .cb-note-row {
-  display: flex; align-items: center; gap: 6px;
-  padding: 4px 10px; border-top: 1px solid var(--border);
-  font-size: 11px;
-}
-.diff-board .cb-note-row input {
-  flex: 1; background: var(--bg-primary); color: var(--text-primary);
-  border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; font-size: 11px;
-}
-.diff-board .cb-note-row .cb-note-state { color: var(--accent); font-size: 10px; min-width: 84px; }
 #folder-panel {
   display: none;
   position: absolute;
@@ -1473,50 +1421,8 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 
 
 
-.dm-family { border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; margin-bottom: 10px; }
-.dm-family.red { border-color: var(--accent-red); }
-.dm-member { display: inline-block; border: 1px solid var(--border); border-radius: 3px; padding: 2px 8px; margin: 2px 4px 2px 0; cursor: pointer; font-size: 12px; }
-.dm-member.missing { border-color: var(--accent-red); color: var(--accent-red); cursor: default; }
-.dm-mismatch { font-size: 12px; margin-top: 6px; }
-.dm-mismatch .dm-row { cursor: pointer; padding: 2px 0; color: var(--accent-red); }
 
 
-/* ── 突合ダッシュボード ────────────
-   別々のモーダルに分かれていた突合の出口を 1 枚の表にまとめる。 */
-.ab-empty { color: var(--text-secondary); font-size: 12px; padding: 12px 0; }
-/* 出典ごとに畳んだ表。出典の組み合わせが
-   1 つの塊で、その中に指摘が並ぶ。出口の名前は本文と見分けが付く印にする。 */
-.fo-group { margin-bottom: 14px; }
-.fo-group-head { font-size: 11px; font-weight: bold; color: var(--accent); padding: 4px 0; border-bottom: 1px solid var(--border); }
-.fo-count { color: var(--text-secondary); font-weight: normal; }
-.fo-id { font-family: var(--font-mono); white-space: nowrap; }
-.fo-state { white-space: nowrap; }
-.fo-origins { color: var(--text-secondary); }
-.fo-origin { display: inline-block; font-size: 10px; padding: 0 4px; margin-right: 4px; border: 1px solid var(--border); border-radius: 3px; color: var(--text-primary); }
-.fo-note { color: var(--accent-red); }
-.ab-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.ab-table th {
-  text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border);
-  color: var(--text-secondary); font-weight: normal; position: sticky; top: 0;
-  background: var(--bg-secondary);
-}
-.ab-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
-.ab-row { cursor: pointer; }
-.ab-row:hover { background: var(--bg-primary); }
-.ab-row[data-ab-keep="1"] { opacity: 0.6; }
-.ab-cat { white-space: nowrap; color: var(--accent-orange); }
-.ab-doc { white-space: nowrap; font-family: var(--font-mono); }
-.ab-title { font-family: var(--font-mono); }
-.ab-detail { color: var(--text-secondary); }
-/* 表記揺れの行から揃える先を選んで 🔤 表記統一へ渡す */
-.ab-note { font-size: 11px; color: var(--text-secondary); margin: 0 0 6px 0; }
-.ab-unify { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; }
-.ab-unify-lead { font-size: 11px; color: var(--text-secondary); }
-.ab-unify-to {
-  background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary);
-  border-radius: 3px; cursor: pointer; padding: 1px 8px; font-size: 11px; font-family: var(--font-mono);
-}
-.ab-unify-to:hover { border-color: var(--accent); }
 
 
 
@@ -1633,147 +1539,6 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 
 
 
-/* 引き継ぎチェックリスト */
-#hb-modal-content {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  width: 72vw;
-  max-width: 900px;
-  max-height: 84vh;
-  display: flex;
-  flex-direction: column;
-}
-#hb-head {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px; border-bottom: 1px solid var(--border);
-  font-size: 12px; color: var(--text-primary);
-}
-#hb-sum { color: var(--text-secondary); }
-#hb-peer-wrap { color: var(--text-secondary); font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
-#hb-peer { font-size: 12px; max-width: 220px; }
-#hb-table button.hb-peer-go { border: none; background: none; color: inherit; cursor: pointer; font: inherit; padding: 0; text-align: left; text-decoration: underline dotted; }
-/* 食い違う要素を全部チップで出し、同じ食い違い方の図の枚数を添える */
-#hb-table td.hb-peer { white-space: normal; min-width: 180px; }
-#hb-table .hb-chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
-#hb-table button.hb-chip, #hb-table button.hb-chip-more {
-  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
-  border-radius: 9px; padding: 0 7px; font-size: 11px; line-height: 16px; cursor: pointer; white-space: nowrap;
-}
-#hb-table button.hb-chip[data-kind="peer-lacks"] { border-left: 3px solid var(--danger, #d05050); }
-#hb-table button.hb-chip[data-kind="mine-lacks"] { border-left: 3px solid #d08a30; }
-#hb-table button.hb-chip[data-kind="renamed"] { border-left: 3px solid var(--accent); }
-#hb-table button.hb-chip[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
-#hb-table button.hb-chip-more { border-style: dashed; color: var(--text-secondary); }
-#hb-sum[data-tone="ng"] { color: var(--danger, #d05050); font-weight: 600; }
-#hb-sum[data-tone="ok"] { color: var(--accent); font-weight: 600; }
-#hb-tools { margin-left: auto; display: flex; gap: 6px; }
-#hb-tools button {
-  border: 1px solid var(--border); background: var(--bg-tertiary);
-  color: var(--text-primary); border-radius: 4px; padding: 3px 10px;
-  font-size: 12px; cursor: pointer;
-}
-#hb-body { overflow: auto; padding: 8px 14px 14px; }
-#hb-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-#hb-table th, #hb-table td {
-  border-bottom: 1px solid var(--border); padding: 5px 8px; text-align: left;
-  white-space: nowrap;
-}
-#hb-table th { color: var(--text-secondary); font-weight: 600; position: sticky; top: 0;
-  background: var(--bg-secondary); }
-#hb-table td.hb-name { white-space: normal; }
-#hb-table tr[data-ready="0"] td { background: rgba(208, 80, 80, 0.10); }
-#hb-table tr[data-ready="0"] td.hb-name { color: var(--danger, #d05050); font-weight: 600; }
-#hb-table td[data-tone="ng"], #hb-table td[data-tone="unknown"] { color: var(--danger, #d05050); }
-#hb-table td[data-tone="ok"] { color: var(--text-secondary); }
-#hb-table button.hb-open {
-  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
-  border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer;
-}
-#hb-empty { color: var(--text-secondary); font-size: 12px; padding: 10px 2px; }
-/* 引き継ぎ zip の対象と書き出しをチェックリストの窓に畳む */
-#hb-et { padding: 8px 14px 0; font-size: 12px; color: var(--text-primary); }
-#hb-et #et-line.is-warn { color: var(--warning, #d98b00); }
-#hb-et #et-hint { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
-#hb-et #et-modes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 6px; font-size: 11px; }
-#hb-et .et-cap { color: var(--accent); font-weight: 600; font-size: 10px; }
-#hb-et #et-scratch-row { color: var(--warning, #d98b00); }
-#hb-table td.hb-in { width: 1%; text-align: center; }
-#hb-table tr.hb-tab-only td.hb-tab-note { color: var(--text-secondary); font-size: 11px; white-space: normal; }
-#hb-table button.hb-in-toggle {
-  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-secondary);
-  border-radius: 4px; width: 26px; padding: 1px 0; font-size: 12px; cursor: pointer;
-}
-#hb-table button.hb-in-toggle[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
-#hb-foot {
-  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
-  padding: 8px 14px; border-top: 1px solid var(--border); font-size: 12px;
-}
-#hb-foot #et-status { margin-right: auto; color: var(--text-secondary); font-size: 11px; }
-#hb-foot #et-notready { color: var(--warning, #d98b00); font-weight: 600; }
-#hb-foot #et-build {
-  border: none; background: var(--accent); color: #fff; border-radius: 4px;
-  padding: 5px 14px; font-size: 12px; cursor: pointer;
-}
-#hb-foot #et-build:disabled { opacity: .5; cursor: not-allowed; }
-
-tr.req-row[data-status="none"] td.req-kind { color: #d19a66; }
-tr.req-row[data-status="orphan"] td.req-element { color: #e06c75; }
-
-/* 会議セット。選んだ図だけを選んだ順に並べ、
-   1 枚ずつ 変更前 / 変更後 / 差分 をタブで切り替えて見せる。 */
-#cb-meeting[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
-#cb-meeting-state { color: var(--accent); }
-.cb-entry button.cb-pick {
-  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
-  border-radius: 3px; font-size: 10px; padding: 1px 8px; cursor: pointer; white-space: nowrap;
-}
-.cb-entry button.cb-pick[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
-.cb-sides { display: flex; gap: 6px; padding: 4px 0 6px 0; }
-.cb-sides button.cb-side {
-  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-secondary);
-  border-radius: 3px 3px 0 0; font-size: 11px; padding: 2px 12px; cursor: pointer;
-}
-.cb-sides button.cb-side[aria-pressed="true"] {
-  border-color: var(--accent); color: var(--accent); background: var(--bg-secondary);
-}
-pre.cb-side-dsl {
-  margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.5;
-  background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 0 3px 3px 3px;
-  max-height: 46vh; overflow: auto; white-space: pre-wrap; word-break: break-all;
-  color: var(--text-primary);
-}
-/* 変わった行と文字は ± 差分 (変更サマリボードの行差分) と同じ色 */
-pre.cb-side-dsl .cb-line-add { background: rgba(80, 180, 110, 0.16); }
-pre.cb-side-dsl .cb-line-del { background: rgba(220, 80, 80, 0.16); }
-pre.cb-side-dsl mark.cb-ch-add { background: rgba(80, 180, 110, 0.45); color: inherit; border-radius: 2px; }
-pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inherit; border-radius: 2px; }
-.cb-side-empty { color: var(--text-secondary); font-size: 11px; padding: 6px 8px; }
-.diff-board .cb-entry-head .cb-nobase { color: var(--accent-red); font-size: 11px; font-weight: normal; }
-/* 変更サマリボード */
-.board-modal {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  width: 92vw;
-  max-width: 1280px;
-  height: 88vh;
-  display: flex;
-  flex-direction: column;
-}
-.board-head {
-  display: flex;
-  align-items: center;
-  /* 道具が増えると 1 行に収まらず、見出しの文字が 1 文字ずつ縦に潰れていた。
-     入り切らない分は次の行に送る。 */
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  color: var(--text-primary);
-}
-.board-head > * { flex: none; }   
 
 
 
@@ -1791,14 +1556,6 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
 
 
 
-/* 保存先の一覧の「変更チケット」の帯 */
-.folder-vault-bar { display: flex; align-items: center; gap: 8px; padding: 4px 10px; font-size: 11px; }
-.folder-vault-bar .folder-vault-open {
-  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
-  border-radius: 3px; font-size: 11px; padding: 2px 8px; cursor: pointer; white-space: nowrap;
-}
-.folder-vault-bar .folder-vault-open:hover { border-color: var(--accent); }
-.folder-vault-bar .folder-vault-state { color: var(--text-secondary); }
 
 
 
@@ -1873,165 +1630,8 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
 
 
 
-.board-tools { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-.board-tools > * { flex: none; }   /* 文字が 1 文字ずつ縦に潰れないようにする */
-/* 道具の列そのものは見出しの残り幅に収め、入り切らない道具を次の行に送る。列ごと縮めずに
-   置くと 1280px 幅で「閉じる」が画面の外に出ていた。 */
-.board-head > .board-tools { flex: 1 1 0; min-width: 240px; justify-content: flex-end; }
-#cb-base { max-width: 16em; }
-.board-tools label { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); cursor: pointer; }
-.board-tools button {
-  border: 1px solid var(--border);
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 3px 10px;
-}
-/* 会議メモの書き出し */
-.board-tools button, .board-tools label { white-space: nowrap; }
-.board-tools #cb-minutes { border-color: var(--accent); color: var(--accent); }
-#cb-minutes-state { color: var(--text-secondary); font-size: 11px; max-width: 320px; }
-/* 申し送りチェックリストの行 */
-#cb-handover-bar { gap: 6px; flex-wrap: wrap; font-size: 11px; }
-#cb-handover-bar input[type="text"] { flex: 1; min-width: 180px; }
-#cb-checklist-state, #cb-note-add-state { color: var(--text-secondary); font-size: 11px; }
-.tab-tool.has-handover-followup { border-color: var(--accent); }
-/* 要修正のみの絞り込み */
-#cb-filter-state { color: var(--accent); font-size: 11px; white-space: nowrap; }
-.diff-board { flex: 1; overflow-y: auto; padding: 6px 14px 14px 14px; }
-.diff-board .cb-empty { color: var(--text-secondary); font-size: 12px; padding: 20px 4px; }
-.diff-board .cb-entry { margin: 12px 0 0 0; border: 1px solid var(--border); border-radius: 4px; }
-.diff-board .cb-entry-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  background: var(--bg-tertiary);
-  font-size: 12px;
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border);
-}
-.diff-board .cb-entry-head .cb-count { color: var(--accent); font-family: var(--font-mono); font-size: 11px; }
-/* 開いていない保存フォルダの図 (いつもの 14 枚の外) の目印 */
-.diff-board .cb-entry-head .cb-origin {
-  color: var(--accent-orange);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  white-space: nowrap;
-}
-.diff-board .cb-entry-head .cb-goto {
-  margin-left: auto;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 2px 8px;
-}
-.diff-board .cb-cols { display: flex; font-size: 11px; color: var(--text-secondary); }
-.diff-board .cb-cols > span { flex: 1; padding: 3px 10px; }
-.diff-board .cb-cols > span + span { border-left: 1px solid var(--border); }
-.diff-board table.cb-diff { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 11px; }
-.diff-board table.cb-diff td { padding: 1px 6px; vertical-align: top; white-space: pre-wrap; word-break: break-all; }
-.diff-board table.cb-diff td.cb-no { width: 34px; text-align: right; color: var(--text-secondary); user-select: none; }
-.diff-board table.cb-diff td.cb-before, .diff-board table.cb-diff td:last-child { width: 50%; }
-.diff-board table.cb-diff td.cb-after { border-left: 1px solid var(--border); }
-.diff-board table.cb-diff tr.cb-del td { background: rgba(220, 80, 80, 0.16); }
-.diff-board table.cb-diff tr.cb-add td { background: rgba(80, 180, 110, 0.16); }
-.diff-board table.cb-diff tr.cb-gap td { color: var(--text-secondary); text-align: center; padding: 2px 6px; }
-/* 差分行のレビュー結果 */
-.diff-board table.cb-diff td.cb-verdict { width: 88px; white-space: nowrap; text-align: right; padding: 0 6px; }
-.diff-board table.cb-diff td.cb-verdict button {
-  border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary);
-  border-radius: 3px; cursor: pointer; font-size: 10px; padding: 0 5px; margin-left: 3px;
-}
-.diff-board table.cb-diff td.cb-verdict button:hover { color: var(--text-primary); border-color: var(--accent); }
-.diff-board table.cb-diff td.cb-verdict button[aria-pressed="true"] {
-  color: var(--text-primary); border-color: var(--accent); background: var(--bg-tertiary); font-weight: bold;
-}
-/* 顧客に見せる画面。
-   DSL を出さず、描いた図だけを変更前後で並べる / 片側だけ大きく出す。 */
-.diff-board .cb-show { display: flex; gap: 10px; padding: 8px 10px 12px 10px; align-items: flex-start; }
-.diff-board .cb-show .cb-pane { flex: 1; min-width: 0; }
-.diff-board .cb-show .cb-pane[hidden] { display: none; }
-/* 切替の「重ねる」(旧 🔍 提出前レビューの重ね表示)。
-   変更前を薄い赤で下に敷き、変更後を同じ位置に重ねる。SVG は触らず包む側で染める。 */
-.diff-board .cb-show[data-side="overlay"] { display: block; position: relative; }
-.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="before"] {
-  position: absolute; left: 10px; right: 10px; top: 8px; pointer-events: none; z-index: 0;
-}
-.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="before"] .cb-pane-label { visibility: hidden; }
-.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="before"] .cb-pane-body svg {
-  filter: grayscale(1) sepia(1) saturate(6) hue-rotate(310deg) opacity(0.45);
-  background: transparent !important;
-}
-.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="before"]:has(.cb-pane-empty) { display: none; }
-.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="after"] { position: relative; z-index: 1; }
-.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="after"] .cb-pane-body { background: transparent; }
-.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="after"] .cb-pane-body svg { background: transparent !important; }
-.diff-board .cb-show[data-side="overlay"] .cb-pane[data-side="after"] .cb-pane-label::after {
-  content: " に変更前 (薄い赤) を重ねています";
-}
-.diff-board .cb-show .cb-pane-label {
-  font-size: 11px; color: var(--text-secondary); padding: 0 0 4px 2px;
-}
-.diff-board .cb-show .cb-pane-body {
-  background: #fff; border: 1px solid var(--border); border-radius: 3px;
-  padding: 6px; overflow: auto; max-height: 46vh; min-height: 60px;
-}
-.diff-board .cb-show .cb-pane-body svg { max-width: 100%; height: auto; }
-.diff-board .cb-show .cb-pane-body.cb-pane-empty,
-.diff-board .cb-show .cb-pane-body.cb-pane-wait {
-  background: var(--bg-tertiary); color: var(--text-secondary); font-size: 11px;
-  display: flex; align-items: center; justify-content: center; min-height: 80px;
-}
-.diff-board .cb-entry-head .cb-flip {
-  border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);
-  border-radius: 3px; cursor: pointer; font-size: 11px; padding: 1px 8px;
-}
-.diff-board .cb-entry-head .cb-flip:hover { border-color: var(--accent); }
-.diff-board table.cb-diff tr[data-verdict="要修正"] td { background: rgba(220, 80, 80, 0.28); }
-.diff-board table.cb-diff tr[data-verdict="済"] td { opacity: 0.55; }
-/* 指摘と変更の対応表 */
-.diff-board .cb-map { margin: 4px 0 0 0; border: 1px solid var(--accent); border-radius: 4px; }
-.diff-board .cb-map-head {
-  display: flex; align-items: center; gap: 10px; padding: 4px 10px; font-size: 12px;
-  background: var(--bg-tertiary); border-bottom: 1px solid var(--border); border-radius: 4px 4px 0 0;
-}
-.diff-board .cb-map-head .cb-map-count { color: var(--accent); font-family: var(--font-mono); font-size: 11px; }
-.diff-board table.cb-map-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-.diff-board table.cb-map-table th {
-  text-align: left; padding: 2px 8px; color: var(--text-secondary); font-weight: normal;
-  border-bottom: 1px solid var(--border);
-}
-.diff-board table.cb-map-table td { padding: 2px 8px; vertical-align: top; }
-.diff-board table.cb-map-table td.cb-map-where { font-family: var(--font-mono); white-space: nowrap; }
-.diff-board table.cb-map-table td.cb-map-text { word-break: break-all; }
-.diff-board table.cb-map-table td.cb-map-state { white-space: nowrap; }
-.diff-board table.cb-map-table tr[data-map-status="none"] td.cb-map-state { color: var(--accent-red); }
-.diff-board table.cb-map-table tr[data-map-status="linked"] td.cb-map-state { color: var(--accent); }
-.diff-board table.cb-map-table tr[data-map-status="linked"] td { opacity: 0.7; }
-.diff-board table.cb-map-table button.cb-map-goto {
-  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-secondary);
-  border-radius: 3px; font-size: 10px; padding: 0 5px; cursor: pointer; margin-right: 3px;
-}
-.diff-board table.cb-map-table button.cb-map-goto:hover { color: var(--text-primary); border-color: var(--accent); }
-.diff-board .cb-map-empty { color: var(--text-secondary); font-size: 11px; padding: 8px; }
-.diff-board .cb-links { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 3px 10px; font-size: 11px; }
-.diff-board .cb-links > span { color: var(--text-secondary); }
-.diff-board .cb-links button.cb-link-btn {
-  border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-secondary);
-  border-radius: 3px; font-size: 10px; padding: 1px 6px; cursor: pointer; max-width: 320px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.diff-board .cb-links button.cb-link-btn:hover { color: var(--text-primary); border-color: var(--accent); }
-.diff-board .cb-links button.cb-link-btn[aria-pressed="true"] {
-  border-color: var(--accent); color: var(--accent); background: var(--bg-secondary);
-}
-#hn-banner.hn-fix { border-color: var(--accent-red); }
+
+
 /* 行編集パネル (この図の 1 行だけを書換・挿入・削除する) */
 #lines-panel {
   display: none;
@@ -2193,8 +1793,6 @@ pre.cb-side-dsl mark.cb-ch-del { background: rgba(220, 80, 80, 0.45); color: inh
   word-break: break-all;
   line-height: 1.5;
 }
-/* 表記統一パネル。見た目は一括置換と同じ枠に
-   揃える — 同じ「図をまたいで名前を直す」道具が 2 通りに見えないようにする。 */
 /* 一括置換パネル (複数の図をまたいで部品名を置換する) */
 #rename-panel {
   display: none;
@@ -2815,11 +2413,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   overflow: hidden;
 }
 
-#state-table-head .stt-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
 
 #state-table-head .stt-sub {
   font-size: 10px;
@@ -3002,15 +2595,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   height: 40px;
 }
 
-/* 中身の入れ替わりは「読めるが間違っている」
-   状態なので、突合の警告より強い色 (エラー寄り) で出す。 */
 
-/* 保存フォルダへまだ書けていない回 (錠の返事待ち) は、
-   を灰色の「たった今」のままにせず、押せる警告として出す。 */
-#status-autosave.autosave-pending {
-  color: #ffd79a; background: rgba(60, 40, 14, 0.96);
-  border: 1px solid #8a6a23; border-radius: 3px; padding: 0 6px;
-}
 
 #save-swap-overlay {
   position: sticky;
@@ -3521,10 +3106,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 
 
 
-/* ボードの 🖼 表示で図の下に出す見た目の差 (旧 🔍 提出前レビュー) */
-.cb-svg-diff { font-size: 11px; color: var(--text-primary); margin: 4px 0 0 0; }
-.cb-svg-diff:empty { display: none; }
-.cb-svg-diff-line { color: var(--text-secondary); }
 
 #statusbar {
   display: flex;
@@ -3605,14 +3186,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
 
-/* ── Overlay hover effects ──────────────────────────────────────────────────── */
-#overlay-layer .overlay-bar {
-  transition: fill 0.1s, opacity 0.1s;
-}
-#overlay-layer .overlay-bar:hover {
-  fill: rgba(124, 140, 248, 0.15) !important;
-  cursor: move;
-}
 
 /* ── 帯を押して決まった挿入先の跡 ────────────────── */
 /* 帯・帯下のライフラインを押すと選択は外れるので、押した場所と「内側 / 外側」の
@@ -3948,12 +3521,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- 「± 差分」は TICKET-owner-20261115-2141-prune で外した (前回保存版と比べるのは「この図の履歴」の比較) -->
         <!-- 単発 diff では見えない「行って戻った」を履歴の上で見る -->
         <button class="tab-tool" id="btn-tab-versions" title="この図が保存のたびにどう変わったかを通しで並べる。前の版に戻った「往復」には印が付く">⟲ 変遷 −</button>
-        <!-- 変わった図の変更前後をまとめて 1 画面に並べる -->
-        <!-- レビューの指摘を図の該当行に貼り、未読/既読で追う -->
-        <!-- 引き継ぎに要る確認結果と図を 1 つの zip に固める -->
-        <!-- 図の束を 1 プロジェクトとして、部品名で辿れるように渡す -->
-        <!-- 📦 引き継ぎ / 📦 納品パッケージ はタブ列から外し、
-             Export ▾ の「渡す」に集めた。実体のボタンは #toolbar-actions にある -->
       </div>
       <!-- ツールを 6 分類で縦に並べるパネル -->
       <div id="tool-menu" role="menu" aria-label="ツール" hidden></div>
@@ -4107,9 +3674,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div class="pane-resizer" id="resizer-compare" hidden
          role="separator" aria-orientation="vertical" aria-label="参照ペインの幅"></div>
     <div id="compare-pane" hidden>
-      <!-- 「変更前後を見せる」1 つの業務のために
-           「⇔ 並べて見る」と「± 差分」の 2 画面を選び分けていた。同じペインの中の
-           タブにして、会議中どちらを聞かれても閉じずに切り替えられるようにする。 -->
+      <!-- 前の版と「⇔ 見比べ」「± 差分」を同じペインのタブで切り替える。 -->
       <div id="compare-modes" role="tablist" aria-label="見比べ方">
         <button type="button" id="compare-mode-ref" class="compare-mode active" role="tab"
                 aria-selected="true" title="この図の前の版 (この図の履歴の版・控えた変更前) と並べて見る">⇔ 見比べ</button>
@@ -4448,9 +4013,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/source-lock.js"></script>
 <script src="src/core/export-shortcuts.js"></script>
 <script src="src/core/diagram-settings.js"></script>
-<script src="src/core/name-audit.js"></script>
 <script src="src/core/add-kind-vocab.js"></script>
-<script src="src/core/review-before-after.js"></script>
 <script src="src/core/save-dir-check.js"></script>
 <script src="src/core/activity-insert.js"></script>
 <script src="src/core/activity-branch-pattern.js"></script>
@@ -4484,7 +4047,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/tail-kind-chips.js"></script>
 <script src="src/core/before-snapshot.js"></script>
 <script src="src/core/compare-view.js"></script>
-<script src="src/core/show-before-after.js"></script>
 <script src="src/core/save-swap.js"></script>
 <script src="src/core/live-diff.js"></script>
 <script src="src/core/twin-restore.js"></script>
@@ -4534,7 +4096,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/relation-kind-cards.js"></script>
 <script src="src/core/note-block.js"></script>
 <script src="src/core/note-edit.js"></script>
-<script src="src/core/note-intent.js"></script>
 <script src="src/ui/properties.js"></script>
 <script src="src/ui/sequence-overlay.js"></script>
 <script src="src/ui/modal-keys.js"></script>
