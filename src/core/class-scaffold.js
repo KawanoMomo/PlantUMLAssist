@@ -159,7 +159,7 @@ window.MA.classScaffold = (function() {
       var needsParent = s.classes.some(function(c) { return c.relation !== 'none'; });
       if (needsParent) errors.push('親クラスを入れるか、関連を「なし」にしてください');
     }
-    // BLK-human-20260923-1330: 未定義の相手は PlantUML 側がその行からクラスを起こすので
+    // 未定義の相手は PlantUML 側がその行からクラスを起こすので
     // 生成はできる。止めずに「確かめたいこと」として警告に落とす。
     var warnings = [];
     s.relations.forEach(function(r) {
@@ -169,7 +169,7 @@ window.MA.classScaffold = (function() {
     return { ok: errors.length === 0, errors: errors, warnings: warnings };
   }
 
-  // BLK-primary-20260929-2056-friction: 継承を図の書き方に合わせる。図の継承が `子 --|> 親` の向きで多く書かれていれば
+  // 継承を図の書き方に合わせる。図の継承が `子 --|> 親` の向きで多く書かれていれば
   // 新しい継承もその向きで書く (`親 <|-- 子` と混ぜると、揃える手が別に要った)。
   function childFirstInheritance(text) {
     var fwd = 0, back = 0;
@@ -179,26 +179,6 @@ window.MA.classScaffold = (function() {
       else if (/^[A-Za-z_][A-Za-z0-9_]*\s*(?:"[^"]*"\s*)?<\|--/.test(l)) back++;
     });
     return fwd > back;
-  }
-
-  // 同じ語尾 (最後の `_` の後、例 `Driver`) の兄弟クラスが 2 つ以上そろって継承している親。無ければ ''。
-  // 系統を 1 つ足すとき、新しい `Pwm_Driver` は兄弟の `Spi_Driver` … と同じ親 (`Driver_Common`) にぶら下がる。
-  function siblingParent(text, name) {
-    var n = _s(name);
-    var cut = n.lastIndexOf('_');
-    if (cut <= 0 || cut === n.length - 1) return '';
-    var suffix = n.slice(cut);
-    var count = {};
-    _s(text).split(/\r?\n/).forEach(function(raw) {
-      var l = raw.trim(), m, child = null, parent = null;
-      if ((m = l.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*--\|>\s*([A-Za-z_][A-Za-z0-9_]*)/))) { child = m[1]; parent = m[2]; }
-      else if ((m = l.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*<\|--\s*([A-Za-z_][A-Za-z0-9_]*)/))) { child = m[2]; parent = m[1]; }
-      if (!child || child === n || child.slice(-suffix.length) !== suffix || child.length <= suffix.length) return;
-      count[parent] = (count[parent] || 0) + 1;
-    });
-    var best = '', bestN = 1;
-    Object.keys(count).forEach(function(p) { if (count[p] > bestN) { bestN = count[p]; best = p; } });
-    return best;
   }
 
   // 本文の中のクラスの宣言の行 ({ で本体を開くか) を探す。
@@ -320,7 +300,6 @@ window.MA.classScaffold = (function() {
     ARROWS: ARROWS,
     validate: validate,
     childFirstInheritance: childFirstInheritance,
-    siblingParent: siblingParent,
     preview: preview,
     apply: apply,
   };

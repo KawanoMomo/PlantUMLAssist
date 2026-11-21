@@ -14,9 +14,11 @@ function ids(items) {
 describe('ファイルの右クリック (design 10b)', function() {
   test('10b のモックどおりの並びと区切り', function() {
     expect(ids(FM.fileItems({}))).toEqual([
-      'open', 'open-side', '-',
-      'cmp-readonly', 'cmp-saved', 'cmp-commit', 'history', '-',
-      'rename', 'copy', 'move', 'draft', '-',
+      // 右に並べて開く・比較の 3 行は TICKET-owner-20261115-2141-prune で外した。
+      'open', '-',
+      'history', '-',
+      // 一時控えにする は TICKET-owner-20261116-0241-prune で外した。
+      'rename', 'copy', 'move', '-',
       'export-svg', 'reveal', '-',
       'delete',
     ]);
@@ -30,19 +32,18 @@ describe('ファイルの右クリック (design 10b)', function() {
     expect(by['delete'].key).toBe('Delete');
   });
 
-  test('過去のコミットと比較 は Git のときだけ押せる (印は Git)', function() {
-    var off = FM.fileItems({ git: false }).filter(function(it) { return it.id === 'cmp-commit'; })[0];
-    var on = FM.fileItems({ git: true }).filter(function(it) { return it.id === 'cmp-commit'; })[0];
-    expect(off.disabled).toBe(true);
-    expect(off.tag).toBe('Git');
-    expect(!!on.disabled).toBe(false);
+  test('比較の行 (読むだけ / 前回保存版 / 過去のコミット) と 右に並べて開く は無い', function() {
+    var got = FM.fileItems({ git: true }).map(function(it) { return it.id; });
+    ['open-side', 'cmp-readonly', 'cmp-saved', 'cmp-commit'].forEach(function(id) {
+      expect(got.indexOf(id)).toBe(-1);
+    });
   });
 
-  test('一時控えは今の状態で言い換える', function() {
-    var a = FM.fileItems({ draft: false }).filter(function(it) { return it.id === 'draft'; })[0];
-    var b = FM.fileItems({ draft: true }).filter(function(it) { return it.id === 'draft'; })[0];
-    expect(a.label).toBe('一時控えにする');
-    expect(b.label).toBe('一時控えを外す');
+  test('一時控えの行は出さない (TICKET-owner-20261116-0241-prune)', function() {
+    [{ draft: false }, { draft: true }].forEach(function(ctx) {
+      var hit = FM.fileItems(ctx).filter(function(it) { return it.id === 'draft' || /一時控え/.test(it.label || ''); });
+      expect(hit.length).toBe(0);
+    });
   });
 
   test('呼び出し側が書き換えても次の呼び出しに漏れない', function() {
@@ -55,25 +56,27 @@ describe('フォルダの右クリック (design 10b)', function() {
   test('保存先: 新しい図 / 6 図種 / 保存先にする (今の保存先なので押せない) / 読むだけにする', function() {
     var it = FM.folderItems({ kind: 'target' });
     // BLK-primary-20260925-0232-design: 別のフォルダを保存先に替える入口が 2 つの灰色の後に並ぶ。
-    expect(ids(it)).toEqual(['new-doc', 'new-part', '-', 'set-target', 'set-readonly', 'change-target', '-', 'open-list']);
-    expect(it[3].disabled).toBe(true);
+    // 「6 図種をまとめて作る」は TICKET-owner-20261116-0321-prune で外した。
+    expect(ids(it)).toEqual(['new-doc', '-', 'set-target', 'set-readonly', 'change-target', '-', 'open-list']);
+    expect(it[2].disabled).toBe(true);
     // BLK-owner-20260924-1836-prune: 「読むだけにする」は覗く窓を開かない。保存先は書く場所なので押せない。
-    expect(it[4].disabled).toBe(true);
-    expect(it[4].title).toContain('読むだけ');
+    expect(it[3].disabled).toBe(true);
+    expect(it[3].title).toContain('読むだけ');
   });
 
-  test('部品のフォルダは名前で束ねた見出しなので、保存先 / 読むだけ は出さない', function() {
-    expect(ids(FM.folderItems({ kind: 'part' }))).toEqual(['new-doc', 'new-part']);
+  // 部品のフォルダ (名前で束ねた見出し) は TICKET-owner-20261116-0321-prune で外した。
+  // 種類の無い呼び出しは保存先として扱う。
+  test('種類を渡さなければ保存先のメニュー', function() {
+    expect(ids(FM.folderItems({}))).toEqual(ids(FM.folderItems({ kind: 'target' })));
   });
 
   // BLK-builder-20260924-1749-3 (design 10a): 読むだけのフォルダは「並べて比較」が先頭で、
   // 編集できないので「新しい図 / 6 図種をまとめて作る」は出さない (前は it[4] が「読むだけにする」だった)。
-  test('読むだけのフォルダ: 並べて比較 / 保存先にする / 読むだけにする (押せない)', function() {
+  test('読むだけのフォルダ: 保存先にする / 読むだけにする (押せない)。区切りから始めない', function() {
     var it = FM.folderItems({ kind: 'readonly' });
-    // BLK-owner-20260924-1836-prune: 覗く窓 (そのフォルダの道具) の入口「このフォルダの図を調べる…」が 2 行目。
-    expect(ids(it)).toEqual(['compare', 'peek', '-', 'set-target', 'set-readonly']);
-    expect(it[1].label).toBe('このフォルダの図を調べる…');
-    expect(it[4].disabled).toBe(true);
+    // 比較の行と覗く窓「このフォルダの図を調べる…」は TICKET-owner-20261115-2141-prune で外した。
+    expect(ids(it)).toEqual(['set-target', 'set-readonly']);
+    expect(it[1].disabled).toBe(true);
   });
 });
 
@@ -82,9 +85,12 @@ describe('キーボード', function() {
     var items = FM.fileItems({ git: false });
     var first = FM.nextIndex(items, -1, 1);
     expect(items[first].id).toBe('open');
-    // cmp-saved の次は押せない cmp-commit を飛ばして history。
-    var saved = items.map(function(i) { return i.id; }).indexOf('cmp-saved');
-    expect(items[FM.nextIndex(items, saved, 1)].id).toBe('history');
+    // open の次は区切りを飛ばして history。
+    expect(items[FM.nextIndex(items, first, 1)].id).toBe('history');
+    // 押せない行は飛ばす (読むだけのフォルダの「読むだけにする」は押せない)。
+    var ro = FM.folderItems({ kind: 'readonly' });
+    var tgt = ro.map(function(i) { return i.id; }).indexOf('set-target');
+    expect(ro[FM.nextIndex(ro, tgt, 1)].id).toBe('set-target');
     // 先頭から ↑ で末尾 (削除) へ回る。
     expect(items[FM.nextIndex(items, first, -1)].id).toBe('delete');
     expect(FM.nextIndex([], 0, 1)).toBe(-1);
@@ -132,16 +138,6 @@ describe('名前の組み立て', function() {
     expect(FM.copyName('spi_state', ['spi_state_copy', 'spi_state_copy2'])).toBe('spi_state_copy3');
   });
 
-  test('別の部品のフォルダへ移す = 頭の語 (部品) を差し替える', function() {
-    expect(FM.renameForPart('spi_init_sequence', 'adc')).toBe('adc_init_sequence');
-    expect(FM.renameForPart('spi-state', 'CAN')).toBe('can-state');
-    expect(FM.renameForPart('spi', 'can')).toBe('can');
-    // 同じ部品へ落としても何もしない。
-    expect(FM.renameForPart('spi_state', 'SPI')).toBe(null);
-    expect(FM.renameForPart('', 'spi')).toBe(null);
-    expect(FM.renameForPart('spi_state', '')).toBe(null);
-  });
-
   test('外から落としたファイルは .puml / .plantuml / .uml / .txt だけ取り込む', function() {
     var got = FM.importables([{ name: 'a.puml' }, { name: 'b.PlantUML' }, { name: 'c.png' }, { name: '.puml' }, { name: 'd.txt' }]);
     expect(got.map(function(g) { return g.name; })).toEqual(['a', 'b', 'd']);
@@ -163,36 +159,26 @@ describe('元の入口 (ツール ▾) は右クリックへの案内に落と�
   });
 
   test('ボタンの実体は畳んだまま残り、Ctrl+K / Ctrl+P からは「ファイル」の見出しで引ける', function() {
-    expect(TM.isFoldable('btn-tab-draft')).toBe(true);
+    // 一時控え (btn-tab-draft) は TICKET-owner-20261116-0241-prune で外した。
+    expect(TM.isFoldable('btn-tab-versions')).toBe(true);
     expect(TM.labelOf('btn-tab-versions')).toBe('この図の履歴を見る'); // BLK-owner-20260924-1212-prune: 行名は画面の名前にそろえた
     var items = CP.buildItems([
-      { id: 'tab-draft', title: '一時控えにする / Draft', button: 'btn-tab-draft', run: function() {} },
+      { id: 'tab-versions', title: 'この図の履歴を見る / History', button: 'btn-tab-versions', run: function() {} },
       { id: 'spi_state', group: 'file', badge: 'ファイル', title: 'spi_state', run: function() {} },
     ], '');
-    var draft = items.filter(function(i) { return i.id === 'file:tab-draft'; })[0];
-    expect(draft.group).toBe('file');
+    var hist = items.filter(function(i) { return i.id === 'file:tab-versions'; })[0];
+    expect(hist.group).toBe('file');
     expect(CP.groupsOf(items)).toContain('file');
     expect(CP.filterByGroup(items, 'file').length).toBe(2);
     expect(CP.groupLabel('file')).toBe('ファイル / Files');
   });
 });
 
-// BLK-builder-20260924-1915-4 (design 10b): 外から部品のフォルダに落とした図は、その部品の下に入る名前で取り込む。
-describe('外から部品フォルダへ取り込む名前 (design 10b)', function() {
-  test('もうその部品の名前ならそのまま', function() {
-    expect(FM.importNameForPart('timer_state', 'timer')).toBe('timer_state');
-    expect(FM.importNameForPart('TIMER_state', 'timer')).toBe('TIMER_state');
-  });
-  test('図種の語を持つ名前は、ツリー内の移動と同じく頭の語を差し替える', function() {
-    expect(FM.importNameForPart('gpt_state', 'timer')).toBe('timer_state');
-    expect(FM.importNameForPart('sequence', 'spi')).toBe('spi_sequence');
-  });
-  test('図種の語が無い名前は、元の名前を残して頭に部品を足す', function() {
-    expect(FM.importNameForPart('memo', 'timer')).toBe('timer_memo');
-    expect(FM.importNameForPart('gpt_notes', 'TIMER')).toBe('timer_gpt_notes');
-  });
-  test('部品が無ければ元の名前', function() {
-    expect(FM.importNameForPart('gpt_state', '')).toBe('gpt_state');
-    expect(FM.importNameForPart('gpt_state', null)).toBe('gpt_state');
+// BLK-builder-20260924-1915-4 の「部品のフォルダに落とした図を部品名に付け替えて取り込む」は
+// TICKET-owner-20261116-0321-prune で外した。外から落とした図は保存先の直下へ元の名前で取り込む。
+describe('外から落とした図の名前 (design 10b)', function() {
+  test('元の名前のまま (部品名に付け替えない)', function() {
+    expect(FM.importNameForPart).toBe(undefined);
+    expect(FM.importables([{ name: 'gpt_state.puml' }]).map(function(g) { return g.name; })).toEqual(['gpt_state']);
   });
 });

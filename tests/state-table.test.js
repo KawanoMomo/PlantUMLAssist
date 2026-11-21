@@ -126,27 +126,9 @@ describe('summaryText', function() {
   });
 });
 
-describe('toCsv', function() {
-  var csv = ST.toCsv(ST.build(SAMPLE));
-  var lines = csv.split('\r\n');
-
-  test('1 行目は見出し', function() {
-    expect(lines[0]).toBe('現在の状態 \\ きっかけ,（きっかけなし）,start,stop,done');
-  });
-
-  test('空欄は — で埋める', function() {
-    expect(lines[2]).toBe('Idle,—,Running,—,—');
-  });
-
-  test('カンマ・引用符を含む値は引用する', function() {
-    var p = {
-      states: [{ id: 'A', label: 'a,b' }],
-      transitions: [{ id: 't', from: 'A', to: 'A', trigger: 'x"y' }],
-    };
-    var out = ST.toCsv(ST.build(p)).split('\r\n');
-    expect(out[0]).toBe('現在の状態 \\ きっかけ,"x""y"');
-    expect(out[1]).toBe('"a,b","a,b"');
-  });
+// 表の CSV 書き出し (toCsv) は TICKET-owner-20261116-0840-prune で外した。書き出しは Export ▾ の 4 項目だけ。
+test('状態遷移表は CSV の書き出しを持たない', function() {
+  expect(ST.toCsv).toBe(undefined);
 });
 
 // BLK-human-20260923-2001: 入れ子の子状態と、親の中の開始 [*]。

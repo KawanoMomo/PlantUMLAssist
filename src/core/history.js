@@ -1,7 +1,7 @@
 'use strict';
 window.MA = window.MA || {};
 // 元に戻す / やり直しの履歴。
-// BLK-owner-20260924-2232-1 / BLK-human-20260924-2355: 履歴は図 (タブ) ごとに持つ。
+// 履歴は図 (タブ) ごとに持つ。
 // 全タブで 1 本だったため、あるタブで Ctrl+Z を押すと別のタブの本文が入り、
 // 図種の判定が替わって自動保存が別名の .puml を書いていた。
 // 今どの図の履歴かは init の getKey (編集中の図の id) で決める。タブを替えれば効く履歴も替わる。
@@ -14,6 +14,8 @@ window.MA.history = (function() {
     onUpdate: function() {},
     getKey: function() { return ''; },
     onRestore: function() {},
+    // 操作を 1 つ積んだとき (Ctrl+Z の行き先の判定が「直前の操作がどこから来たか」を知るため)。
+    onPush: function() {},
   };
 
   function init(opts) {
@@ -22,6 +24,7 @@ window.MA.history = (function() {
     state.onUpdate = opts.onUpdate || function() {};
     state.getKey = typeof opts.getKey === 'function' ? opts.getKey : function() { return ''; };
     state.onRestore = typeof opts.onRestore === 'function' ? opts.onRestore : function() {};
+    state.onPush = typeof opts.onPush === 'function' ? opts.onPush : function() {};
   }
 
   function _key() {
@@ -45,6 +48,7 @@ window.MA.history = (function() {
       if (s.undo.length > MAX_HISTORY) s.undo.shift();
     }
     s.future = [];
+    try { state.onPush(); } catch (e) { /* 判定の控えが取れなくても積むことは止めない */ }
     state.onUpdate();
   }
 

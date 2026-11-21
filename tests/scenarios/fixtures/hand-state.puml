@@ -1,0 +1,14 @@
+@startuml
+' 状態機械 (手書き版)
+!include common.puml
+skinparam state {
+  BackgroundColor White
+}
+
+[*] --> Idle
+' 起動と停止
+Idle --> Busy : Start
+Busy  --> Slow : Throttle
+  ' 停止は Idle へ戻る
+  Busy --> Idle : Stop
+@enduml

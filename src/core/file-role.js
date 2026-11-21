@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // file-role — 保存フォルダのファイルが「実データ」か「テンプレ」かを宣言し、
 // テンプレの中身が変わったら赤くする。
 //
-// BLK-reviewer-20260908-0203-wish: plantuml-sequence.puml / diagram1.puml /
+// plantuml-sequence.puml / diagram1.puml /
 // plantuml-usecase.puml はテンプレ扱いだったが、その宣言がどこにも無かったため
 // 中身が別の図の内容に書き換わっていても一覧では他の 19 枚と同列に並び、
 // 前回 run の tmp コピーとの手動全数 diff で初めて気付いた。
@@ -158,7 +158,7 @@ window.MA.fileRole = (function() {
     return setRole(map, entry, 'template', now);
   }
 
-  // BLK-junior-20260908-1803: テンプレ宣言したファイルには自動保存を書き込ませない。
+  // テンプレ宣言したファイルには自動保存を書き込ませない。
   // 見比べのためにテンプレを Open で開くと、図名を変えるまでの一瞬でも自動保存が
   // そのファイル名へ書き、テンプレ (前周の完了物) が編集途中の内容で壊れる。
   // 汚染を後から赤く出すより、そもそも書かせない方が手戻りが無い。

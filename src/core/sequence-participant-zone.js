@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // sequence-participant-zone — シーケンス図の DSL を「参加者の欄」と
 // 「シーケンスの欄」の 2 領域として読む。
 //
-// BLK-human-20260915-1205: 途中から actor / participant / database を足すと、
+// 途中から actor / participant / database を足すと、
 // 宣言行が `@enduml` の直前 (= 全メッセージの後ろ) に入っていた。PlantUML は
 // それでも描くが、宣言が上に揃っていないと DSL が読めず、左右の並びも
 // 意図どおりにならない。挿入・並べ替え・一括追加のどこから足しても同じ場所に
@@ -70,7 +70,7 @@ window.MA.seqParticipantZone = (function() {
   //   firstBody    最初のシーケンス行 (メッセージ・帯・alt など。無ければ -1)
   //   count        宣言の数
   // 宣言はすべて先頭側の連なりだけを欄と見なす。メッセージの後ろに取り残された
-  // 宣言 (この BLK が直す前の出力) は欄の外で、新しい宣言はそこへは足さない。
+  // 宣言 (この直しの前の出力) は欄の外で、新しい宣言はそこへは足さない。
   function find(text) {
     var lines = _s(text).split('\n');
     var i = 0;

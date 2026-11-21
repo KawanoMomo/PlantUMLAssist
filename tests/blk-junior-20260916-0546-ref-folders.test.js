@@ -29,33 +29,7 @@ function fakeStorage() {
   };
 }
 
-describe('ref-folders: 参照専用フォルダを保存先と別に持つ', function() {
-
-  test('タブは保存先が先頭で、参照には (参照) が付く', function() {
-    var tabs = RF.tabs(MINE, [SENIOR], '');
-    expect(tabs.length).toBe(2);
-    expect(tabs[0].label).toBe('junior(保存先)');
-    expect(tabs[0].kind).toBe('save');
-    expect(tabs[0].active).toBe(true);
-    expect(tabs[1].label).toBe('primary(参照)');
-    expect(tabs[1].kind).toBe('ref');
-    expect(tabs[1].active).toBe(false);
-  });
-
-  test('参照タブを見ている間も、保存先タブは先頭に残る', function() {
-    var tabs = RF.tabs(MINE, [SENIOR, OTHER], SENIOR);
-    expect(tabs[0].kind).toBe('save');
-    expect(tabs[0].active).toBe(false);
-    expect(tabs[1].active).toBe(true);
-    expect(tabs[2].active).toBe(false);
-    expect(RF.activeTab(MINE, [SENIOR, OTHER], SENIOR).name).toBe('primary');
-  });
-
-  test('登録の消えたフォルダを見ていたら、保存先タブに戻す', function() {
-    var tabs = RF.tabs(MINE, [SENIOR], OTHER);
-    expect(tabs.length).toBe(2);
-    expect(tabs[0].active).toBe(true);
-  });
+describe('ref-folders: 参照に足したフォルダを保存先と別に控える', function() {
 
   test('保存先そのものは参照に足さない (書き込む先が 2 枚に割れない)', function() {
     expect(RF.add([], MINE, MINE).length).toBe(0);
@@ -73,19 +47,13 @@ describe('ref-folders: 参照専用フォルダを保存先と別に持つ', fun
     expect(RF.baseName(left[0])).toBe('reviewer');
   });
 
-  test('参照タブは「保存先は変わらない」と自分で言う', function() {
-    expect(RF.isRef(MINE, SENIOR)).toBe(true);
-    expect(RF.isRef(MINE, '')).toBe(false);
-    expect(RF.notice(MINE, SENIOR)).toBe('読むだけです。保存先は junior のまま変わりません');
-    expect(RF.notice(MINE, '')).toBe('');
-  });
-
-  test('足せる行き先から、保存先と登録済みを外す', function() {
-    var choices = [{ path: MINE, name: 'junior' }, { path: SENIOR, name: 'primary' },
-                   { path: OTHER, name: 'reviewer' }];
-    var left = RF.candidates(choices, MINE, [SENIOR]);
-    expect(left.length).toBe(1);
-    expect(left[0].name).toBe('reviewer');
+  // BLK-owner-20260925-0416-prune: 参照タブ列を外し、控えのフォルダは FILES「読むだけ」節の並び (/peek-dirs) に
+  // keep で渡して残す。保存先そのものと空の行は渡さない。
+  test('控えのフォルダは keep で読むだけ節に渡し、保存先は渡さない', function() {
+    var q = RF.keepQuery([SENIOR, MINE, '', OTHER], MINE);
+    expect(q).toBe('&keep=' + encodeURIComponent(SENIOR) + '&keep=' + encodeURIComponent(OTHER));
+    expect(RF.keepQuery([], MINE)).toBe('');
+    expect(RF.keepQuery(null, MINE)).toBe('');
   });
 
   test('登録は保存され、壊れていても画面を止めない', function() {

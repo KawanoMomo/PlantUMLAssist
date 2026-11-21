@@ -80,12 +80,27 @@ async function getEditorLine(page, lineNum) {
 // 実マウスで当たりの真ん中を押す。関係の線は細い当たり (path.link-hit) が枠の rect より手前にあり
 // (BLK-migrator-20260925-1032)、locator.click は「別の要素が受ける」と押す前に断る。利用者が押すのと同じく、
 // その位置で一番手前の当たりが受ける (線の当たりも同じ関係を選ぶ)。
+// TICKET-releaser-20261116-1201-1: 直前の操作 (Undo など) の描き直しが遅れて届くと、枠の層は作り直され、
+// 掴んだ枠は外れる。boundingBox は「枠を掴む」と「箱を測る」が別の往復なので、その間に作り直しが入ると
+// 外れた枠を測って null になる (全体実行の負荷のときだけ赤になっていた)。利用者は座標を押すので影響は無い。
+// TICKET-releaser-20261122-0015-1: 箱が null のときだけ掴み直しても、掴んだ枠が scrollIntoViewIfNeeded の
+// 「安定を待つ」往復の間に外れる経路 (Element is not attached) が残っていた。掴む・見える所へ寄せる・測るを
+// ページの中の 1 回の評価にまとめ (その間に枠の層は作り直されない)、枠が無い・大きさが無い間は評価ごとやり直す。
+// 押すのは測った座標 (作り直された枠も同じ本文なら同じ位置にある)。15 秒たっても箱が無いときだけ赤にする。
 async function clickOverlayByLine(page, line) {
-  const r = page.locator('#overlay-layer rect[data-line="' + line + '"]').first();
-  await r.scrollIntoViewIfNeeded();
-  const b = await r.boundingBox();
-  if (!b) throw new Error('overlay rect for line ' + line + ' has no box');
-  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  const handle = await page.waitForFunction((ln) => {
+    const r = document.querySelector('#overlay-layer rect[data-line="' + ln + '"]');
+    if (!r || !r.isConnected) return null;
+    // 見えていれば動かさず、見えていなければ真ん中へ寄せる (Playwright の scrollIntoViewIfNeeded と同じ寄せ方)。
+    if (typeof r.scrollIntoViewIfNeeded === 'function') r.scrollIntoViewIfNeeded(true);
+    else r.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+    const b = r.getBoundingClientRect();
+    if (!(b.width > 0 && b.height > 0)) return null;
+    return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+  }, line, { timeout: 15000 }).catch(() => null);
+  const p = handle ? await handle.jsonValue() : null;
+  if (!p) throw new Error('overlay rect for line ' + line + ' has no box');
+  await page.mouse.click(p.x, p.y);
 }
 
 
@@ -101,32 +116,16 @@ async function setDiagramTitle(page, title) {
 }
 
 
-// design 9b (BLK-human-20260923-1601): ツール ▾ は左 6 分類・右小見出しの 2 段パネル。
-// 目当ての項目はその分類を選ばないと右列に出ないので、分類を選んでから押す。
+// TICKET-roadmap-20261115-2114-2: ツール ▾ は残った道具だけの 1 段の一覧 (分類を選ぶ手は無い)。
 async function pickTool(page, targetId) {
-  const key = await page.evaluate((id) => window.MA.toolMenu.groupOf(id), targetId);
-  await page.locator('.tool-menu-cat[data-group="' + key + '"]').click();
-  await page.locator('.tool-menu-item[data-target="' + targetId + '"]').click();
+  await page.locator('#tool-menu .tool-menu-list .tool-menu-item[data-target="' + targetId + '"]').click();
 }
 
-// BLK-owner-20260924-2135-prune: 参照ペインの相手のフォルダは、FILES「読むだけ」で比較中にしたフォルダ 1 つ。
-// パスを打つ欄 (#xf-dir + 🔍 探す) は外した。ツリーの「並べて比較」と同じ関数で比較中にし、
-// 並べて比較の枠の相手「別タブの図」から参照ペインを開く (開くと相手のフォルダを読む)。
-async function openCrossRef(page, dir) {
-  await page.evaluate((d) => window.compareReadonlyFolder(d), dir);
-  await page.locator('#senior-target-tabs').click();
-  await page.waitForSelector('#compare-pane:not([hidden])');
-}
-
-// BLK-owner-20260923-1509-prune: 旧 ⇔ 並べて見る (#btn-tab-compare) はタブ列から外れ、
-// 並べて比較の枠の相手「別タブの図」になった (scenarios の junior-02 / primary-04 と同じ経路)。
-// 並べて比較 (FILES「読むだけ」の ⇔) を開き、相手を「別タブの図」にして参照ペインを出す。
+// TICKET-owner-20261115-2141-prune: 参照ペインの入口は「この図の履歴」の行の「比較」1 つになり、
+// 相手を「別タブの図」に選び直す口は外した。ペインの中身を見る spec はその開き口 (toggleCompareView) で開く。
 async function openCompareTabs(page) {
-  await page.waitForSelector('#btn-tab-senior');
-  if (await page.locator('#senior-pane').isHidden()) {
-    await page.locator('#btn-tab-senior').click();
-  }
-  await page.locator('#senior-target-tabs').click();
+  await page.waitForFunction(() => typeof window.toggleCompareView === 'function');
+  await page.evaluate(() => { window.toggleCompareView(true, 'ref'); });
   await page.waitForSelector('#compare-pane:not([hidden])');
 }
 
@@ -151,7 +150,7 @@ async function switchTypeWithSample(page, type) {
 }
 
 module.exports = {
-  openCrossRef, openCompareTabs,
+  openCompareTabs,
   gotoApp, loadFixture, getEditorText, getEditorLine, clickOverlayByLine, setDiagramTitle,
   saveDirFor, shotOut, E2E_SAVE_ROOT, pickTool, switchTypeWithSample,
 };

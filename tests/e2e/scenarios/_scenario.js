@@ -137,47 +137,16 @@ async function openFolderItem(page, name, opts) {
   await page.waitForTimeout(900);
 }
 
-// BLK-owner-20260924-1836-prune: 隣の保存フォルダを覗く窓は、FILES「読むだけ」のそのフォルダの行の
-// 右クリック「このフォルダの図を調べる…」で、そのフォルダを開いた状態で出る (窓の中でフォルダを選ばない)。
-async function peekFolder(page, dirName) {
-  const head = page.locator('#files-sec-readonly');
-  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
-  const row = page.locator('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"]');
-  await row.waitFor();
-  await row.click({ button: 'right' });
-  await page.locator('#files-ctx-menu [data-action="peek"]').click();
-  await page.waitForSelector('#peek-modal');
-  await page.waitForFunction((n) => {
-    const b = document.getElementById('peek-dir-name');
-    return b && b.textContent === n;
-  }, dirName);
-}
-
-// FILES「読むだけ」のフォルダを右クリック →「並べて比較」で比較中にする (相手のフォルダを選ぶ道はこの 1 本。
-// BLK-owner-20260924-2135-prune)。参照ペインの増分の取り込みも、このフォルダを相手にする。
-async function compareFolder(page, dirName) {
-  const head = page.locator('#files-sec-readonly');
-  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
-  const row = page.locator('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"]');
-  await row.waitFor();
-  await row.click({ button: 'right' });
-  await page.locator('#files-ctx-menu [data-action="compare"]').click();
-  await page.waitForSelector('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"][data-comparing="1"]');
-}
-
-// 一覧から開いた図は錠がかかっている。直す目的で開いたときは「このファイルを書き換える」を選ぶ。
-// 錠は最初の書き戻しの直前に一度だけ聞くので、1 文字足して問いを出してから答える。
+// 一覧から開いた図は、開いたときの本文のままの間は書き戻さない (読むだけの回)。直す目的で開いたときは
+// 1 行足して戻し、以後の書き戻しが本文に関わらずそのファイルへ入る状態にする (確認の窓は出ない)。
+// 開くのに使った中央の保存先の一覧は閉じて図に戻る (窓があった頃は、窓のボタンを押すと一覧が閉じていた)。
 async function overwriteOpenedFile(page) {
   const current = await page.locator('#editor').inputValue();
   await typeDsl(page, current + "\n' review");
   await page.waitForTimeout(900);
-  const modal = page.locator('#source-lock-modal');
-  if (await modal.isVisible().catch(() => false)) {
-    await page.locator('#source-lock-overwrite').click();
-    await page.waitForTimeout(1200);
-  }
   await typeDsl(page, current);
   await page.waitForTimeout(600);
+  await closeFolderList(page);
 }
 
 // エディタに DSL を流し込む (ペルソナが GUI で書き上げた状態の代わり)。
@@ -188,6 +157,19 @@ async function typeDsl(page, text) {
     ed.dispatchEvent(new Event('input'));
   }, text);
   await page.waitForTimeout(400);
+}
+
+// 本文を流し込み、その本文の図が描き直されるまで待つ (1 枚の画面で図を次々に替える試験用)。
+// 負荷が高いと 400ms では描き直しが届かず、前の図の文字・枠 (同じ行番号の枠) を新しい図のものと取り違えて
+// 前の図の note を押していた。前の SVG に印を付け、印の無い SVG が出るのを待つ (枠は同じ処理の中で作り直される)。
+// 描けない本文 (前の図が残る) と、前と同じ本文 (描き直さない) には使わない。
+async function typeDslDrawn(page, text, timeout = 20000) {
+  await page.evaluate(() => {
+    const s = document.querySelector('#preview-svg > svg');
+    if (s) s.setAttribute('data-test-prev', '1');
+  });
+  await typeDsl(page, text);
+  await page.waitForSelector('#preview-svg > svg:not([data-test-prev])', { state: 'attached', timeout });
 }
 
 async function renameActive(page, name) {
@@ -381,7 +363,7 @@ module.exports = {
   PRIMARY_DOCS, docFor,
   dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode, reopenApp,
   putDoc, readDoc, listDir, clearDir, clearTickets,
-  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, peekFolder, compareFolder, typeDsl, renameActive, runCommand, exportVia,
+  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, typeDsl, typeDslDrawn, renameActive, runCommand, exportVia,
   GPIO_STATE, GPIO_SEQ, IRQ_SEQ_FOLDED_DASH,
   messageClickPoints, selectedMessageLine, expectMessageHitUniform,
 };

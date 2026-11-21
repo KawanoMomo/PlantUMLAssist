@@ -59,9 +59,9 @@ describe('今は無い「📂 一覧」を画面の文字で名指ししない',
     expect(hits).toEqual([]);
   });
 
-  test('保存の衝突の帯と書き出し結果のボタンは「保存先の一覧」で言う', () => {
+  // 1 枚を資料化の窓 (mexp) は TICKET-owner-20261116-0140-prune で外した。
+  test('資料化の書き出し結果の窓は無い', () => {
     var html = read('plantuml-assist.html');
-    expect(/id="btn-scl-folder"[^>]*>ぶつかった図を保存先の一覧で見る</.test(html)).toBe(true);
-    expect(/id="mexp-result-open"[^>]*>この図を保存先の一覧で開く</.test(html)).toBe(true);
+    expect(html.indexOf('id="mexp-result-open"')).toBe(-1);
   });
 });

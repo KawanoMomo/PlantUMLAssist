@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // svg-export — 画面の SVG を PNG に変換する前の下ごしらえと、失敗の名指し。
 //
-// BLK-junior-20260923-1409: Export ▾ →「PNG（透過背景）」が特定の 1 枚だけで
+// Export ▾ →「PNG（透過背景）」が特定の 1 枚だけで
 // 「SVG 読み込みエラー」になり、download が始まらなかった。
 //
 // 根っこは PlantUML が SVG の末尾に埋める処理命令

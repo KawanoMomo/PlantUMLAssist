@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // git-ui — FILES ツリー下端の GIT 欄と「比較する相手を選ぶ」を結線する (design 10c)。
 //
-// BLK-human-20260923-1702: 保存先が Git リポジトリのときだけ GIT 欄を出し、
+// 保存先が Git リポジトリのときだけ GIT 欄を出し、
 // ブランチ・変更 (M / A / D)・コミットをそこで済ませる。「この図の履歴」の行の「比較」で
 // そのコミット時点の図が右の枠 (#senior-pane。読むだけのフォルダと同じ枠) に並ぶ。
 // 通信 (取得・送信) とブランチ切替は、ここのボタンを人が押したときだけ呼ぶ。
@@ -74,7 +74,7 @@ window.MA.gitUi = (function() {
     soonTimer = window.setTimeout(function() { soonTimer = null; refresh(); }, 400);
   }
 
-  // BLK-owner-20260924-2157-prune: 保存先が Git のとき「この図の履歴」は GIT 節の 1 つ。
+  // 保存先が Git のとき「この図の履歴」は GIT 節の 1 つ。
   // server が上書きの手前に取った控え (以前は窓 #vt-modal だけが出していた) も読んで同じ一覧に混ぜる。
   function loadSaved(name) {
     var a = APP();
@@ -173,7 +173,7 @@ window.MA.gitUi = (function() {
       return;
     }
     list.forEach(function(c) {
-      // BLK-builder-20260924-2344-3 (design 10c): 押すとその図を開く (M は最後のコミットと並べる)。
+      // 押すとその図を開く (M は最後のコミットと並べる)。
       // 開けない行 (D・保存先の外) は押せる見た目にしない。
       var op = gp.changeOpen ? gp.changeOpen(c) : null;
       var row = _el(op ? 'button' : 'div', 'git-change');
@@ -185,7 +185,7 @@ window.MA.gitUi = (function() {
       row.setAttribute('data-git-code', c.code);
       row.setAttribute('data-file', c.file);
       row.title = op ? op.title : c.file;
-      // design 10c (BLK-builder-20260924-1808-1): ツリーの行と同じ形。名前は拡張子なし、状態字は右。
+      // design 10c: ツリーの行と同じ形。名前は拡張子なし、状態字は右。
       row.appendChild(_el('span', 'git-change-name', gp.changeName(c)));
       row.appendChild(_el('span', 'git-code git-code-' + c.code, c.code));
       host.appendChild(row);
@@ -206,7 +206,7 @@ window.MA.gitUi = (function() {
     if (!host || !gp) return;
     host.textContent = '';
     var lab = $('git-history-head');
-    // design 10c (BLK-builder-20260924-1808-1): 見出しはどの図の履歴かを言う。件数は title に回す。
+    // design 10c: 見出しはどの図の履歴かを言う。件数は title に回す。
     var name = _stem(_name());
     var sv = savedName === name ? saved : [];
     var rows = timelineRows();
@@ -242,7 +242,7 @@ window.MA.gitUi = (function() {
       row.setAttribute('data-hash', c.hash);
       if (c.version) row.setAttribute('data-version-stamp', c.version);
       if (cur && cur.hash === c.hash) row.classList.add('is-compared');
-      // design 10c (BLK-builder-20260924-1835-1): 1 行 1 コミット。メッセージ・タグの札・右端に日付。
+      // design 10c: 1 行 1 コミット。メッセージ・タグの札・右端に日付。
       // 「比較」は行に手を置いた・キーで来たときに日付の位置へ出る (全部の行に枠を並べない)。
       // 控えの行は「控え」の札を持ち、手を置くと「比較」と「戻す」が出る。
       var hr = gp.historyRow(c);
@@ -286,10 +286,10 @@ window.MA.gitUi = (function() {
   function _waitActive(name, ms) {
     return new Promise(function(done) {
       var until = Date.now() + (ms || 5000);
-      (function tick() {
+      (function poll() {
         if (_stem(_name()) === name) { done(true); return; }
         if (Date.now() > until) { done(false); return; }
-        window.setTimeout(tick, 80);
+        window.setTimeout(poll, 80);
       })();
     });
   }
@@ -392,7 +392,7 @@ window.MA.gitUi = (function() {
     m.hidden = false;
     var gp = GP();
     if (anchor && anchor.getBoundingClientRect && gp && gp.pickerPlace) {
-      // design 10c (BLK-builder-20260924-1818-1): 窓は必ず画面の中。下に入りきらなければボタンの上へ開き、
+      // design 10c: 窓は必ず画面の中。下に入りきらなければボタンの上へ開き、
       // 入る高さまで縮めて一覧をスクロールさせる (FILES 下端の「相手を選ぶ…」から下へ開くと切れていた)。
       var p = gp.pickerPlace(anchor.getBoundingClientRect(), window.innerWidth, window.innerHeight);
       m.style.top = p.top != null ? p.top + 'px' : 'auto';
@@ -419,7 +419,7 @@ window.MA.gitUi = (function() {
     if (m) m.hidden = true;
   }
 
-  // tags: メッセージの横に置く札 (design 10c「初版 [v1.2]」。BLK-builder-20260924-2246-1)。
+  // tags: メッセージの横に置く札 (design 10c「初版 [v1.2]」。)。
   function _pickRow(title, meta, stat, onPick, hash, tags) {
     var b = _el('button', 'git-pick-row');
     b.type = 'button';
@@ -455,11 +455,6 @@ window.MA.gitUi = (function() {
     }
     var q = ($('git-pick-filter') || {}).value || '';
     list.textContent = '';
-    if (pickTab === 'folder') {
-      list.appendChild(_pickRow('読むだけのフォルダの同じ図', '別の保存フォルダの図を右に並べます', '',
-        function() { var a = APP(); if (a) a.openFolderCompare(); }));
-      return;
-    }
     if (pickTab === 'refs') {
       gp.refRows(refs, q).forEach(function(r) {
         list.appendChild(_pickRow((r.kind === 'tag' ? 'タグ ' : 'ブランチ ') + r.name, r.short + (r.current ? ' · 今のブランチ' : ''), '',

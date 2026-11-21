@@ -146,7 +146,7 @@ describe('BLK-owner-20260929-0431-1: 見出し・削除は選んで光らせた�
   test('create し直した 2 回目の頭: 見出しは 2 回目の create の行 (L7)', function() {
     start(RECREATED);
     var p = selectPart('Worker', 7);
-    expect(/participant · L7/.test(p.textContent)).toBe(true);
+    expect(/participant · 7 行目/.test(p.textContent)).toBe(true);
     expect(btn(p, 'seq-delete-line').getAttribute('data-line')).toBe('7');
     expect(btn(p, 'seq-move-up').getAttribute('data-line')).toBe('7');
   });
@@ -165,7 +165,7 @@ describe('BLK-owner-20260929-0431-1: 見出し・削除は選んで光らせた�
   test('宣言のある参加者は今までどおり宣言の行だけを消す', function() {
     start(DECLARED);
     var p = selectPart('Alice', 2);
-    expect(/participant · L2/.test(p.textContent)).toBe(true);
+    expect(/participant · 2 行目/.test(p.textContent)).toBe(true);
     btn(p, 'seq-delete-line').click();
     expect(text).toBe(['@startuml', 'participant Bob', 'Alice -> Bob : hi', '@enduml'].join('\n'));
   });
@@ -182,6 +182,6 @@ describe('BLK-owner-20260929-0431-1: 見出し・削除は選んで光らせた�
     start(DECLARED);
     var propsEl = W.document.getElementById('props');
     SEQ.renderProps([{ type: 'participant', id: 'Bob' }], SEQ.parseSequence(text), propsEl, ctx);
-    expect(/participant · L3/.test(propsEl.textContent)).toBe(true);
+    expect(/participant · 3 行目/.test(propsEl.textContent)).toBe(true);
   });
 });

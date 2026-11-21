@@ -1,0 +1,11 @@
+@startuml
+title SPI 周りの部品
+' 手で整えた図。字下げとコメントは道具に崩させない
+component App
+component SpiDrv
+component SpiDrvMon
+interface ISpi
+  SpiDrv -() ISpi
+  App ..> ISpi
+SpiDrvMon ..> SpiDrv
+@enduml

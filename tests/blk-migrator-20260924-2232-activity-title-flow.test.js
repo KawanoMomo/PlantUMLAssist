@@ -25,6 +25,8 @@ var MODS = [
   '../src/core/parser-utils.js',
   '../src/core/props-renderer.js',
   '../src/core/overlay-builder.js',
+  // BLK-owner-20260926-0550-5: パネルの見出し「{種類} · N 行目」は properties.lineHead が組む。
+  '../src/ui/properties.js',
   '../src/modules/activity.js',
 ];
 MODS.forEach(function(m) { try { delete require.cache[require.resolve(m)]; } catch (e) {} });

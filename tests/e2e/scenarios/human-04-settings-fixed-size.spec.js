@@ -21,7 +21,8 @@ for (const vp of [{ width: 1400, height: 900 }, { width: 900, height: 500 }]) {
     await page.locator('#rail-config').click();
     await expect(page.locator('#cfg-modal')).toBeVisible();
     const ids = await page.$$eval('#cfg-tabs .cfg-tab', (els) => els.map((e) => e.id));
-    expect(ids.length).toBeGreaterThanOrEqual(7);
+    // 整理で「UML 要素の網羅一覧」タブを外して 6 枚 (TICKET-owner-20261116-0921-prune / TICKET-releaser-20261122-0120-1)。
+    expect(ids.length).toBeGreaterThanOrEqual(6);
     const first = await rects(page);
     let scrolled = false;
     for (const id of ids.concat(ids.slice().reverse())) {

@@ -11,13 +11,12 @@ const TOOLS = [
   'btn-tab-new',
   'btn-tab-folder',
   'btn-tab-rename',
-  // BLK-owner-20260924-1332-prune: 🔍 名前突合は ▦ 突合ボードに畳んだ
-  'btn-tab-cross',
-  'btn-tab-family',
+  // ▦ 突合ボード・⇉ 系統チェックは TICKET-owner-20261115-1841-prune で外した
   'btn-tab-lines',
   // BLK-owner-20260923-1509-prune: ⇔ 並べて見る は「並べて比較」1 つに畳み、タブバーのボタンは無くなった
-  'btn-tab-template',
-  'btn-tab-diff',
+  // ⧉ 既存の図や雛形から新しい図を起こす (btn-tab-template) は TICKET-owner-20261116-0321-prune で外した
+  // ± 差分 (btn-tab-diff) は TICKET-owner-20261115-2141-prune で外した
+  'btn-tab-versions',
 ];
 
 test.describe('BLK-primary-0923 タブバーが潰れない', () => {
@@ -47,12 +46,11 @@ test.describe('BLK-primary-0923 タブバーが潰れない', () => {
     await gotoApp(page);
     await page.keyboard.press('Control+k');
     await expect(page.locator('#cp-input')).toBeVisible();
-    await page.locator('#cp-input').fill('テンプレート');
-    // BLK-owner-20260924-2337-prune: テンプレート・部品を起こす・骨格・セット複製は 1 行「既存の図や雛形から新しい図を起こす…」に
-    // まとめた。旧名はその行を引く語として残る (行の題には出ない)。
-    await expect(page.locator('#cp-list .cp-item').first()).toContainText('新しい図を起こす');
+    await page.locator('#cp-input').fill('一括置換');
+    // ⧉ 新しい図を起こす窓は TICKET-owner-20261116-0321-prune で外した。残る道具 ⇄ 一括置換で確かめる。
+    await expect(page.locator('#cp-list .cp-item').first()).toContainText('一括置換');
     await page.keyboard.press('Enter');
-    await expect(page.locator('#tpl-modal')).toBeVisible();
+    await expect(page.locator('#rename-panel')).toBeVisible();
   });
 
   test('パレットの「一覧」で保存フォルダのパネルが開く', async ({ page }) => {

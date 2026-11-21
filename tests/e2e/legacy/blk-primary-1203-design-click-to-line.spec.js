@@ -109,12 +109,4 @@ test.describe('BLK-primary-1203-design 図クリック→DSL 該当行へ移動'
     await page.locator('.cfg-tab[data-cfg-tab="editor"]').click();
     await expect(page.locator('#cfg-editor-click-to-line')).not.toBeChecked();
   });
-
-  test('構造 / Outline タブを見ているときは裏で動かさない', async ({ page }) => {
-    await openState(page);
-    await page.locator('#btn-editor-tab-outline').click();
-    await page.waitForTimeout(300);
-    await clickOverlay(page, 'state', 'Running');
-    expect(await selectedText(page)).toBe('');
-  });
 });

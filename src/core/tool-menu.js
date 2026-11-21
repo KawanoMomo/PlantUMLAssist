@@ -5,7 +5,7 @@ window.MA = window.MA || {};
 //
 // タブ列には 2 種類のものが混ざっている。図のタブ (今どれを見ているか) と、機能ボタン
 // (何をするか)。後者が 20 個以上あるため、目的のボタンを目で探す時間が業務のたびに要る。
-// ここでは機能ボタンを 6 分類のメニューに畳み、分類ごとに開いて選べるようにする。
+// ここでは機能ボタンを 1 段の一覧のメニューに畳む (整理で分類の中身が外れ、残りは数行)。
 // メニュー項目は既存のボタンの id を指すだけで、実際の処理は元のボタンの click に委ねる
 // (同じ操作が Ctrl+K のコマンドパレットからも引ける、という関係を崩さないため)。
 // ここは DOM に触らない純関数だけを置き、描画と結線は app.js。
@@ -13,119 +13,59 @@ window.MA.toolMenu = (function() {
   // 分類と並びは design 7a のパネルに合わせる。label はメニュー上の文言で、
   // タブ列のボタン文字 (絵文字 + 短い語) ではなく「何をするか」で読める形にする。
   var GROUPS = [
-    { key: 'make', title: '図をつくる', items: [
-      // BLK-owner-20260924-2337-prune: 部品を起こす・テンプレート・骨格・系統ごと複製の 4 行は、同じ手順 (元を選ぶ →
-      // 部品名の対応表 → 作る) の「何から」違いだった。1 行にし、何から起こすかは窓の上端で選ぶ。旧名は絞り込みの語に残す。
-      { id: 'btn-tab-template', label: '既存の図や雛形から新しい図を起こす…', group: '起こす',
-        keywords: ['部品を起こす', '6 図種まとめて', 'テンプレートから作る', 'テンプレート', '骨格から作る', '骨格',
-          '系統ごと複製する', 'セット複製', '複製'] },
-    ] },
     { key: 'edit', title: '書き換える', items: [
       { id: 'btn-tab-lines',  label: '行を書き換える', group: 'まとめて直す' },
       { id: 'btn-tab-rename', label: '部品名を一括置換する', group: 'まとめて直す' },
       { id: 'btn-tab-apply',  label: '複数クラスに一括適用する', group: 'まとめて直す' },
-      { id: 'btn-tab-unify',  label: '表記を登録簿に揃える', group: '表記を揃える' },
     ] },
-    { key: 'find', title: '探す', items: [
-      { id: 'btn-tab-symptom', label: '症状から関連図を探す', group: '図をたどる' },
-      { id: 'btn-tab-blame',   label: '部品名の混入点を探す', group: '図をたどる' },
-      // BLK-owner-20260924-0852-prune: 🕸 参照関係の画面は畳み、旧名のまま ▤ 影響を見る を開く案内にした。
-      { id: 'btn-tab-xref',    label: '部品名で図をまたいで辿る → ▤ 影響を見る', group: '図をたどる' },
-    ] },
-    { key: 'check', title: '確かめる', items: [
-      // BLK-owner-20260924-1332-prune: 🔍 名前突合 (名前の表記揺れ) の画面は畳んだ。同じ指摘は
-      // ▦ 突合ボードの「名前/表記揺れ」に出る。「表記揺れ」「名前突合」と絞り込むとボードの行に当たり、
-      // 押すとそのカテゴリで絞って開く (app.js が絞り込み欄の語を渡す)。
-      { id: 'btn-tab-family',         label: '系統内の動作名のずれ', group: '名前と系統' },
-      { id: 'btn-tab-drivermap',      label: '系統マップの崩れ', group: '名前と系統' },
-      { id: 'btn-tab-trace',          label: '状態遷移のトレース漏れ', group: '名前と系統' },
-      // BLK-builder-20260924-1341-4 (design 9b): 並びは小見出しごとにまとめ、9b の右列と同じ順にする。
-      { id: 'btn-tab-cross',          label: '突合ボード (表記揺れ・宣言なし・メソッドも 1 画面で)', group: 'まとめて点検',
-        keywords: ['名前突合', '名前の表記揺れ', '表記ゆれ', 'name audit', 'メソッド突合'] },
-      { id: 'btn-tab-pattern',        label: '1 つの観点で全図を棚卸し', group: 'まとめて点検' },
-      { id: 'btn-tab-design',         label: '仕様 (design) と現在値の突合', group: 'まとめて点検' },
-      { id: 'btn-tab-submit',         label: '提出前チェック', group: '渡す前に' },
-      // BLK-owner-20260918-0429-prune: 「渡してよいか」を数える突合。ここに載るまでは
-      // Ctrl+K でしか辿り着けず、同じ目的の 6 つで 1 つだけ入口が違っていた。
-      { id: 'btn-tab-handover',       label: '引き継ぎチェックリスト', group: '渡す前に' },
-      { id: 'btn-tab-audit-timeline', label: '監査履歴', group: '渡す前に' },
-    ] },
-    // BLK-owner-20260923-1307-prune: 「2 つの版・2 枚の図を並べて違いを見る」入口を 2 つに絞る。
-    // 前の回 (BLK-owner-20260918-0529-prune) は 5 つの入口をここに並べて名前だけ揃えたが、
-    // 目的が同じ画面が 5 つ並ぶこと自体が「どれを開けばよいか」を選ばせていた。
-    // 残すのは ⇔ 並べて見る (版どうし・図どうしを並べる正面) と 🔍 変更前後を見比べる
-    // (資料・会議で見せる) の 2 つだけ。前回保存版 / 他フォルダの版 / 基準の図 は
-    // ⇔ 並べて見る の相手 (compare-select の候補) になったので、ここには並べない。
-    // 文脈内のショートカット (下端の「前回保存版 ＋a −b」・👀 他フォルダ・👁 レビュー) は
-    // そのまま残し、押すと ⇔ 並べて見る をその相手で開く。
-    // opener は、その入口がモーダルの中にしか無いもの (先に開く画面) の id。
-    { key: 'review', title: 'レビュー', items: [
-      // BLK-owner-20260923-1509-prune: 並べる面はタブ列の「並べて比較」1 つに統合した。
-      // ⇔ 並べて見る (別タブの図) と 🔍 変更前後を見比べる (前回保存版) は
-      // その枠の「相手」になったので、ここに別の入口としては並べない
-      // (🔍 は ▤ 変更サマリボードの中には残る。提出前に全件を見る文脈)。
-      // 並べる画面ではない道具。覗く・指摘を出すのが目的で、並べるのは ⇔ 並べて見る に任せる。
-      { id: 'btn-tab-review',   label: '基準の図との指摘', group: '指摘' },
-      { id: 'btn-tab-pins',     label: 'この図の指摘', group: '指摘' },
-      { id: 'btn-tab-inbox',    label: '図をまたぐ指摘箱 (手で書いた指摘も出典で絞れる)', group: '指摘' },
-      { id: 'btn-tab-diff',     label: '前回保存からの差分', group: '変更の履歴' },
-      { id: 'btn-tab-lineage',  label: 'この図の継承元', group: '変更の履歴' },
-      { id: 'btn-tab-board',    label: '変更サマリ', group: '変更の履歴' },
-    ] },
-    // BLK-owner-20260918-0329-prune: 「渡す」(引き継ぎ zip / 納品パッケージ zip) はこのメニューに
-    // 出さない。zip にして渡す入口は Export ▾ の「渡す」1 か所に集めた。分類と言い換えは
-    // MOVED_TO_EXPORT に残すので、Ctrl+K では今まで通り「渡す」の分類・同じ名前で引ける。
+    // 「探す」(図をまたぐ調べ物) の分類は TICKET-owner-20261115-2140-prune で中身ごと外した。
+    // 図をまたぐ操作は「書き換える」の ⇄ 一括置換 1 本。
+    // 「確かめる」(図をまたぐ監査) の分類は TICKET-owner-20261115-1841-prune で中身ごと外した。
+    // 「レビュー」の分類 (基準の図に照らした指摘の窓・前回保存からの差分) は TICKET-owner-20261115-2141-prune で
+    // 中身ごと外した。2 枚を比べるのは「この図の履歴」の行の「比較」1 つ (FILES のファイルの右クリック)。
+    // zip にして渡す入口は TICKET-owner-20261116-0140-prune で外した (書き出しは Export ▾ の 1 枚ずつ)。
   ];
 
-  // メニューからは外したが、分類と言い換えは生きているもの (入口は Export ▾)。
-  var MOVED_TO_EXPORT = [
-    { key: 'give', title: '渡す', items: [
-      { id: 'btn-tab-handoff',  label: '引き継ぎ zip', group: 'zip にして渡す' },
-      { id: 'btn-tab-delivery', label: '納品パッケージ zip', group: 'zip にして渡す' },
-    ] },
-  ];
+  // メニューからは外したが、分類と言い換えは生きているもの (入口は Export ▾)。今は無い。
+  var MOVED_TO_EXPORT = [];
 
-  // BLK-human-20260923-1701 (design 10b): ファイル 1 枚に対する操作は FILES ツリーの
+  // ファイル 1 枚に対する操作は FILES ツリーの
   // 右クリックに集めた。メニューには並べず案内 1 行に落とす。分類と言い換えは残すので、
   // Ctrl+K / Ctrl+P からは今まで通りの名前で引ける (ボタンの実体もそのまま)。
   var MOVED_TO_FILES = [
     { key: 'file', title: 'ファイル', items: [
-      { id: 'btn-tab-draft',    label: '一時控えにする', group: 'ファイルの右クリック' },
       { id: 'btn-tab-versions', label: 'この図の履歴を見る', group: 'ファイルの右クリック' },
-      // BLK-owner-20260924-1836-prune: 隣の保存フォルダを覗く窓の入口は FILES「読むだけ」の
-      // フォルダの右クリック (と見出しの目の印) 1 か所。旧名は Ctrl+K の検索の語に残す。
-      { id: 'btn-tab-peek',     label: 'このフォルダの図を調べる…', group: 'FILES の読むだけ',
-        keywords: ['他の保存フォルダを覗く', '他フォルダを覗く', '読むだけのフォルダを足す', 'peek'] },
+      // フォルダの図を覗く窓は TICKET-owner-20261115-2141-prune で外した。
     ] },
   ];
-  var FILES_NOTE = 'ファイル単位の操作（開く・並べて比較・前回保存版と比較・履歴・名前変更・一時控え・削除…）は FILES のファイルを右クリック。'
-    + '隣の保存フォルダは FILES の読むだけ（右クリックで並べて比較・このフォルダの図を調べる…）';
+  // 前の版と比べるのは「この図の履歴」の行の「比較」から (TICKET-owner-20261115-2141-prune)。
+  var FILES_NOTE = 'ファイル単位の操作（開く・この図の履歴（前の版との比較）・名前変更・削除…）は FILES のファイルを右クリック。'
+    + '隣の保存フォルダは FILES の読むだけ（図を押すと右の枠に出ます）';
 
   function allGroups() {
     return GROUPS.concat(MOVED_TO_EXPORT).concat(MOVED_TO_FILES);
   }
 
-  // メニューの 6 分類 (右クリックへ移したものは入れない)。
+  // メニューに並べる分類 (右クリックへ移したものは入れない)。
   function menuGroups() {
     return GROUPS.concat(MOVED_TO_EXPORT);
   }
 
   // タブ列に残すもの。図そのものの出し入れ (＋ / 📂 一覧) はツールではないので畳まない。
-  // ⇔ 先輩の図 (BLK-junior-20260914-1406-wish) も畳まない。開いて終わる道具ではなく
-  // 画面の枠の出し入れで、畳むと「据え置き」の値打ち (深い経路を通らない) が消える。
-  // 📄 ファイルを開く (BLK-human-20260917-0901) も図の出し入れなので畳まない。
-  var KEEP_IN_TAB_BAR = ['btn-tab-new', 'btn-tab-folder', 'btn-open-file', 'btn-tab-senior'];
+  // 📄 ファイルを開く も図の出し入れなので畳まない。
+  var KEEP_IN_TAB_BAR = ['btn-tab-new', 'btn-tab-folder', 'btn-open-file'];
 
   // メニューには載るが、タブ列のボタンではないもの (下端ステータスの札・モーダルの中の
   // ボタン)。畳む対象に数えると「他 N 件」の N が実際に消えた数とずれるので外す。
-  var NOT_IN_TAB_BAR = ['status-livediff', 'dp-review'];
+  // 下端の「前回保存版」の札 (status-livediff) はメニューから外し (TICKET-owner-20261115-2141-prune)、
+  // 消える向きの警告のときだけ出る守りになった。
+  var NOT_IN_TAB_BAR = ['status-livediff'];
 
-  // design 9b: 絞り込み欄の右端に出す注記。パネルが 2 段になって幅が要るので短くする。
+  // 絞り込み欄の右端に出す注記。
   var NOTE = 'Ctrl+K でも引けます';
   var FILTER_LABEL = 'ツールを絞り込む';
 
-  // design 9b: パネルの左列に出す 6 分類。Export ▾ に入口を移した「渡す」も、
-  // 「どこを見ればよいか」の地図としてはここに居る (押すと Export 側のボタンを鳴らす)。
+  // 一覧に並べる項目を分類ごとに返す (絞り込みと Ctrl+K の見出しが使う)。
   function panelGroups() {
     return menuGroups().map(function(g) {
       return {
@@ -141,7 +81,7 @@ window.MA.toolMenu = (function() {
     });
   }
 
-  // BLK-builder-20260924-1341-4 (design 9b): 右列は並び順に小見出しを差し込むので、
+  // 右列は並び順に小見出しを差し込むので、
   // 同じ小見出しの項目が離れていると小見出しが 2 度出る (「まとめて点検」「渡す前に」が
   // 2 回ずつ出ていた)。小見出しの初出順に項目を寄せる。小見出しの中では元の並びを保つ。
   function bySubHead(items) {
@@ -157,23 +97,7 @@ window.MA.toolMenu = (function() {
     return out;
   }
 
-  // 分類ごとの合計件数。開く前に「どこに何件あるか」を左列で見せる (design 9b)。
-  // 0 の分類は数字を出さない (常に場所を取る 0 を画面から消す)。
-  function groupCounts(badges) {
-    var b = badges || {};
-    var out = {};
-    panelGroups().forEach(function(g) {
-      var n = 0;
-      g.items.forEach(function(it) {
-        var v = parseInt(b[it.id], 10);
-        if (v > 0) n += v;
-      });
-      if (n > 0) out[g.key] = n;
-    });
-    return out;
-  }
-
-  // 絞り込み。分類名・小見出し・項目名のどれかに当たれば残す (全分類を横断する)。
+  // 絞り込み。分類名・小見出し・項目名のどれかに当たれば残す。
   function filterItems(query) {
     var q = String(query == null ? '' : query).trim().toLowerCase();
     var out = [];
@@ -193,20 +117,17 @@ window.MA.toolMenu = (function() {
     return out;
   }
 
-  // パネル 1 面あたりの行数 (小見出しを 1 行と数える)。design 9b は 14 行以内。
-  function rowCount(key) {
-    var gs = panelGroups();
-    for (var i = 0; i < gs.length; i++) {
-      if (gs[i].key !== key) continue;
-      var heads = {};
-      var n = 0;
-      gs[i].items.forEach(function(it) {
+  // 一覧の行数 (小見出しを 1 行と数える)。パネルの中をスクロールさせない 14 行以内に収める。
+  function rowCount() {
+    var heads = {};
+    var n = 0;
+    panelGroups().forEach(function(g) {
+      g.items.forEach(function(it) {
         if (!heads[it.group]) { heads[it.group] = 1; n++; }
         n++;
       });
-      return n;
-    }
-    return 0;
+    });
+    return n;
   }
 
   // 単独キーを持つツール。ボタン id → ショートカット表 (settings-tabs) の行 id。
@@ -332,11 +253,11 @@ window.MA.toolMenu = (function() {
   // 札の title。畳んで見えなくなっているボタンの数と、Ctrl+K でも引けることを出す。
   function miniTitle(count) {
     var n = (typeof count === 'number' && count > 0) ? count : 0;
-    return '畳んでいるツール ' + n + ' 件を分類から選ぶ (Ctrl+K でも同じ操作が引ける)';
+    return '畳んでいるツール ' + n + ' 件から選ぶ (Ctrl+K でも同じ操作が引ける)';
   }
 
-  // BLK-builder-20260924-1815-3 (design 9b / 9a): パネルの下端に出す切り替え。
-  // 9b のパネルは絞り込み欄と 2 段だけで、既定 (畳む・ツール ▾ は右端) の人に切り替えは要らない。
+  // パネルの下端に出す切り替え。
+  // パネルは絞り込み欄と一覧だけで、既定 (畳む・ツール ▾ は右端) の人に切り替えは要らない。
   // 以前に自分で切り替えて既定から外れている人にだけ、既定へ戻す 1 行を出す (選んだ状態は消さない)。
   //   畳んでいない (機能ボタンがタブ列に並ぶ) → 「タブ列から畳む」
   //   畳んでいるが ツール ▾ が ＋ の隣       → 「ツール ▾ を右端へ戻す」
@@ -351,7 +272,7 @@ window.MA.toolMenu = (function() {
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // メニューの中身。badges は { 'btn-tab-diff': '2' } のように件数を持つものだけ渡す
+  // メニューの中身。badges は { 'btn-tab-lines': '2' } のように件数を持つものだけ渡す
   // (タブ列のボタン文字から拾った数字。0 件・未計算のものは付けない)。
   function itemHtml(it, badges) {
     var badge = (badges || {})[it.id];
@@ -364,61 +285,42 @@ window.MA.toolMenu = (function() {
       + '</button>';
   }
 
-  // design 9b: 左に 6 分類、右にその中身を小見出しで区切って出す 2 段のパネル。
-  // 縦 1 列に 40 件近く並べていたときは「確かめる」「レビュー」が画面の下にはみ出し、
-  // 何があるかを見るのにパネル内スクロールが要った。1 面 14 行以内に収める。
+  // 項目を小見出しで区切って並べる (同じ小見出しは 1 度だけ出す)。
+  function listHtml(items, badges) {
+    var head = '';
+    return items.map(function(it) {
+      var sub = '';
+      if (it.group && it.group !== head) {
+        head = it.group;
+        sub = '<div class="tool-menu-sub">' + esc(head) + '</div>';
+      }
+      return sub + itemHtml(it, badges);
+    }).join('');
+  }
+
+  // 残った道具だけの 1 段の一覧 (整理表 #4)。左の分類の列は持たない
+  // (分類の中身が外れて残りは数行になり、分類を選ぶ 1 手が要らなくなった)。
   function buildMenuHtml(badges) {
     var b = badges || {};
-    var counts = groupCounts(b);
-    var gs = panelGroups();
-    var cats = gs.map(function(g, i) {
-      return '<button type="button" class="tool-menu-cat" role="tab" data-group="' + esc(g.key) + '"'
-        + (i === 0 ? ' aria-selected="true"' : ' aria-selected="false"') + '>'
-        + '<span class="tool-cat-name">' + esc(g.title) + '</span>'
-        + (counts[g.key] ? '<span class="tool-cat-count">' + esc(counts[g.key]) + '</span>' : '')
-        + '</button>';
-    }).join('');
-    var panes = gs.map(function(g, i) {
-      var head = '';
-      var items = g.items.map(function(it) {
-        var sub = '';
-        if (it.group && it.group !== head) {
-          head = it.group;
-          sub = '<div class="tool-menu-sub">' + esc(head) + '</div>';
-        }
-        return sub + itemHtml(it, b);
-      }).join('');
-      return '<div class="tool-menu-group" data-group="' + esc(g.key) + '"'
-        + (i === 0 ? '' : ' hidden') + '>'
-        + '<div class="tool-menu-title">' + esc(g.title) + '</div>'
-        + items + '</div>';
-    }).join('');
+    var items = [];
+    panelGroups().forEach(function(g) { items = items.concat(g.items); });
     return '<div class="tool-menu-head">'
       + '<input type="search" id="tool-menu-filter" class="tool-menu-filter" autocomplete="off"'
       + ' placeholder="' + esc(FILTER_LABEL) + '" aria-label="' + esc(FILTER_LABEL) + '">'
       + '<span class="tool-menu-note">' + esc(NOTE) + '</span></div>'
-      + '<div class="tool-menu-panes">'
-      + '<div class="tool-menu-cats" role="tablist">' + cats + '</div>'
-      + '<div class="tool-menu-items">' + panes
-      + '<div class="tool-menu-hits" hidden></div></div></div>'
+      + '<div class="tool-menu-items">'
+      + '<div class="tool-menu-list">' + listHtml(items, b) + '</div>'
+      + '<div class="tool-menu-hits" hidden></div></div>'
       + '<div class="tool-menu-files-note" id="tool-menu-files-note">' + esc(FILES_NOTE) + '</div>';
   }
 
-  // 絞り込み中に右列へ出す一覧。どの分類のものかが分かるように分類名を添える。
+  // 絞り込み中に一覧の代わりに出す候補。
   function buildHitsHtml(query, badges) {
     var hits = filterItems(query);
     if (!hits.length) {
       return '<div class="tool-menu-sub">該当なし</div>';
     }
-    var head = '';
-    return hits.map(function(it) {
-      var sub = '';
-      if (it.groupTitle !== head) {
-        head = it.groupTitle;
-        sub = '<div class="tool-menu-sub">' + esc(head) + '</div>';
-      }
-      return sub + itemHtml(it, badges);
-    }).join('');
+    return listHtml(hits, badges);
   }
 
   return {
@@ -440,7 +342,6 @@ window.MA.toolMenu = (function() {
     buildMenuHtml: buildMenuHtml,
     buildHitsHtml: buildHitsHtml,
     panelGroups: panelGroups,
-    groupCounts: groupCounts,
     filterItems: filterItems,
     rowCount: rowCount,
     NOTE: NOTE,

@@ -28,7 +28,7 @@ window.MA.modules.plantumlActivity = (function() {
     if (head) { if (!color) color = head[1]; body = body.substring(head[0].length - 1); }
     return { color: color, body: body };
   }
-  // BLK-migrator-20260929-0951: 後ろに SDL の形 (`:内容を確認; <<input>>`) を書いた動作も 1 行で閉じた動作。
+  // 後ろに SDL の形 (`:内容を確認; <<input>>`) を書いた動作も 1 行で閉じた動作。
   // 読めないと閉じていない複数行の動作と見なし、後ろの if や分岐までを 1 つの動作に呑んでいた。
   var ACTION_TAIL_STEREO_RE = /;\s*(<<[A-Za-z_][A-Za-z0-9_]*>>)\s*$/;
   function _splitActionStereo(trimmedLine) {
@@ -44,7 +44,7 @@ window.MA.modules.plantumlActivity = (function() {
   var ENDIF_RE = /^endif\s*$/i;
 
   var WHILE_OPEN_RE = /^while\s*\(([^)]*)\)\s*(?:is\s*\(([^)]*)\))?\s*$/i;
-  // BLK-migrator-20260929-0951: 出口に文字を書いた `endwhile (なし)`、入口に処理を書いた `repeat :検証;`、
+  // 出口に文字を書いた `endwhile (なし)`、入口に処理を書いた `repeat :検証;`、
   // 抜ける側に文字を書いた `repeat while (c) is (再試行) not (成功)` も同じ入れ物の開き・閉じとして読む
   // (読めないと入れ物が閉じず、後ろの行が中に入り、入口の箱に枠が出なかった)。
   var ENDWHILE_RE = /^endwhile\s*(?:\(([^)]*)\))?\s*$/i;
@@ -52,7 +52,7 @@ window.MA.modules.plantumlActivity = (function() {
   var REPEAT_OPEN_RE = /^repeat\s*(?::(.*);)?\s*$/i;
   var REPEAT_WHILE_RE = /^repeat\s+while\s*\(([^)]*)\)\s*(?:is\s*\(([^)]*)\))?\s*(?:not\s*\(([^)]*)\))?\s*$/i;
 
-  // BLK-migrator-20260929-0951: split / split again / end split は fork と同じ「枝を持つ入れ物」(棒から枝が分かれ、
+  // split / split again / end split は fork と同じ「枝を持つ入れ物」(棒から枝が分かれ、
   // 下の棒で合流する)。fork の閉じは `end merge` でも書ける。どちらも同じ正規表現で読み、開きの語を節点に残す。
   var FORK_OPEN_RE = /^(fork|split)\s*$/i;
   var FORK_AGAIN_RE = /^(fork|split)\s+again\s*$/i;
@@ -763,7 +763,7 @@ window.MA.modules.plantumlActivity = (function() {
     if (CLOSING_TOKEN_RE.test(trimmed) && targetIdx > 0) {
       src = lines[targetIdx - 1] || src;
       // 中身の無い枝・繰り返し (開き行の直後が閉じ行) では、開き行より 1 段内側に置く
-      // (BLK-owner-20260927-0745-1: 枠は `:;` を書かずに入るので、枝のはじめへ足す行がここを通る)。
+      // (枠は `:;` を書かずに入るので、枝のはじめへ足す行がここを通る)。
       if (OPENING_TOKEN_RE.test(src.trim())) {
         return (src.match(/^(\s*)/) || ['', ''])[1] + '  ';
       }
@@ -786,7 +786,7 @@ window.MA.modules.plantumlActivity = (function() {
 
   // Insert a control structure (if/while/repeat/fork) before/after lineNum,
   // with indent inherited from target line. 枝の中身は空のまま入れる
-  // (BLK-owner-20260927-0745-1: 利用者が入れていない空のアクション `:;` を書かない。
+  // (利用者が入れていない空のアクション `:;` を書かない。
   // PlantUML は空の枝・空の繰り返し・空の並行を描け、枝のはじめは「追加する位置」に開き行として残る)。
   // fields: { cond, thenLabel, elseLabel } for if; { cond, label } for while/repeat; { branchCount } for fork
   function addControlAtLine(text, lineNum, position, kind, fields) {
@@ -826,7 +826,7 @@ window.MA.modules.plantumlActivity = (function() {
   }
 
   // よく使う分岐パターンを、条件・枝ラベル・枝の中身ごと 1 手で入れる
-  // (BLK-junior-20260907-1803-wish)。addControlAtLine の if は枠だけを入れて
+  // addControlAtLine の if は枠だけを入れて
   // 中身が空のままなので、型として繰り返し使うにはここが別に要る。
   function addBranchPatternAtLine(text, lineNum, position, pattern) {
     var BP = window.MA.activityBranchPattern;
@@ -1087,7 +1087,7 @@ window.MA.modules.plantumlActivity = (function() {
         '</button>';
     });
     // 分岐は「毎回同じ形」を打ち直していることが多いので、if の枠だけを入れる
-    // 導線の隣に、型ごと入れる導線を出す (BLK-junior-20260907-1803-wish)。
+    // 導線の隣に、型ごと入れる導線を出す。
     var canBranch = !isOther && list.some(function(k) { return k.kind === 'if'; });
     if (canBranch) {
       html += '<button id="act-pick-pattern" class="act-pick-btn2" ' +
@@ -1263,9 +1263,7 @@ window.MA.modules.plantumlActivity = (function() {
       var html = '';
       if (k === 'action') {
         html = '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">アクション本文 (改行可)</label>' +
-               '<textarea id="act-mod-text" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>' +
-               // BLK-junior-20260915-0606: 途中に挿し込むときも同じ名前帳から引ける。
-               P.vocabPickerHtml('act-mod-text-vocab', { roles: ['method'], callSuffix: true });
+               '<textarea id="act-mod-text" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>';
       } else if (k === 'if') {
         html = P.fieldHtml('Condition', 'act-mod-cond', '', '例: 認証成功?') +
                P.fieldHtml('Then label', 'act-mod-thenlbl', 'yes') +
@@ -1289,7 +1287,6 @@ window.MA.modules.plantumlActivity = (function() {
         '<textarea id="act-mod-text" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:3px;"></textarea>';
       }
       fEl.innerHTML = html;
-      P.bindVocabPicker('act-mod-text-vocab', 'act-mod-text', null, { insert: 'caret' });
     }
     renderFields();
     P.bindEvent('act-mod-kind', 'change', renderFields);
@@ -1410,7 +1407,7 @@ window.MA.modules.plantumlActivity = (function() {
     return pts;
   }
 
-  // BLK-migrator-20260929-0951: 分岐・合流の棒は、fork なら塗った細い <rect> (高さ 6 前後) で、split / end split なら
+  // 分岐・合流の棒は、fork なら塗った細い <rect> (高さ 6 前後) で、split / end split なら
   // 横の <line> (stroke-width 1.5) で描かれる。どちらも「上下から矢印がつながる横の区間」なので、描いた側から拾う。
   // 横線のうち太さ 1.3 以上で、端点がその線に触れる縦の線 (矢印) が 1 本以上あるものを棒とする
   // (矢印の横の区間は太さ 1 なので入らない)。返り値は棒と見なした <line> の配列。
@@ -1574,7 +1571,7 @@ window.MA.modules.plantumlActivity = (function() {
 
   // 分岐の枝ラベル (「異常」「正常」など) を、DSL の並び順で集める。
   // PlantUML は枝ラベルを分岐の矢印の脇に <text> で描く。ラベルを選べるようにすると、
-  // 「この側に足す」が図の上のクリックで決まる (BLK-junior-20260908-0103)。
+  // 「この側に足す」が図の上のクリックで決まる。
   function _branchLabelTargets(nodes, out) {
     out = out || [];
     (nodes || []).forEach(function(n) {
@@ -1612,7 +1609,7 @@ window.MA.modules.plantumlActivity = (function() {
           break;
         }
         used[i] = true;
-        // BLK-human-20260912-2130: 分岐ラベル (yes / no) は文字の外周ちょうどだと
+        // 分岐ラベル (yes / no) は文字の外周ちょうどだと
         // 当たり判定が数 px しかなく、狙って押すのが難しい。他図種の関係と同じく
         // 少し広げ、hover の枠でその範囲が見えるようにする。
         var pad = 4;
@@ -1647,7 +1644,7 @@ window.MA.modules.plantumlActivity = (function() {
       boxes.push({ el: r, x: parseFloat(r.getAttribute('x')) || 0, y: parseFloat(r.getAttribute('y')) || 0, w: w, h: h, label: null });
     });
     var texts = _textsIn(svgEl);
-    // BLK-migrator-20260929-0951: 文字はそれを囲む最も小さい箱のもの。色付きレーン (`|#色|B|`) の背景は
+    // 文字はそれを囲む最も小さい箱のもの。色付きレーン (`|#色|B|`) の背景は
     // レーンの高さいっぱいの <rect> で、中の動作の文字も囲むので、背景が動作の箱と取り違えられていた。
     function inBox(t, b) { return t.x >= b.x && t.x <= b.x + b.w && t.y >= b.y && t.y <= b.y + b.h; }
     texts.forEach(function(t) {
@@ -1686,7 +1683,7 @@ window.MA.modules.plantumlActivity = (function() {
     return out;
   }
 
-  // BLK-migrator-20260924-0752: レーンの見出し (`|Swimlane1|`) は、描かれた見出しの文字で当てる。
+  // レーンの見出し (`|Swimlane1|`) は、描かれた見出しの文字で当てる。
   // 押すとそのレーンを最初に書いた行が選ばれ、右欄でレーン名を直せる。
   function _addSwimlaneHeaderRects(svgEl, parsedData, overlayEl) {
     var sws = parsedData.swimlanes || [];
@@ -1717,7 +1714,7 @@ window.MA.modules.plantumlActivity = (function() {
     });
   }
 
-  // BLK-migrator-20260929-0952: partition (と同じ描き方の group / rectangle / card) の入れ物を本文から読む。
+  // partition (と同じ描き方の group / rectangle / card) の入れ物を本文から読む。
   // 名前・開きの行・閉じの `}` の行・入れ子の深さ。skinparam の `{ … }` と <style> の中の `}` は入れ物として数えない。
   var PARTITION_OPEN_RE = /^(partition|group|rectangle|card)\s+(.+?)\s*\{\s*$/i;
   function readPartitions(lines) {
@@ -1849,17 +1846,17 @@ window.MA.modules.plantumlActivity = (function() {
     });
   }
 
-  // BLK-migrator-20260924-2232: 図の題・凡例・見出し・脚注・図の下の説明は、PlantUML が
+  // 図の題・凡例・見出し・脚注・図の下の説明は、PlantUML が
   // <g class="title" data-source-line> に行を残す。本文の並びを数えず、その行で当てる
   // (題が付いても動作・分岐の対応はずれない)。data-source-line は @startuml を 0 とする。
-  // BLK-migrator-20260925-0932: 当て方は全図種共通の overlayBuilder.addDocumentChrome の 1 か所に置く。
+  // 当て方は全図種共通の overlayBuilder.addDocumentChrome の 1 か所に置く。
   function _addDecorRects(svgEl, parsedData, overlayEl) {
     var base = (parsedData && parsedData.meta && parsedData.meta.startUmlLine) || 1;
     OB.addDocumentChrome(svgEl, overlayEl, null, { startUmlLine: base });
   }
 
   // 題・凡例などの <g> の中の図形は、動作や分岐の箱として数えない。
-  // BLK-migrator-20260925-1732: mainframe の枠・札・札の文字 (どの <g> にも入らない) も同じ。buildOverlay が描画ごとに入れ直す。
+  // mainframe の枠・札・札の文字 (どの <g> にも入らない) も同じ。buildOverlay が描画ごとに入れ直す。
   var _chromeEls = [];
   function _inDecor(el) {
     if (_chromeEls.indexOf(el) >= 0) return true;
@@ -1968,15 +1965,15 @@ window.MA.modules.plantumlActivity = (function() {
     return 0;
   }
 
-  // BLK-migrator-20260924-2232: 新記法の矢印は PlantUML が <g> にも行にも入れず、線と矢じりだけを描く。
+  // 新記法の矢印は PlantUML が <g> にも行にも入れず、線と矢じりだけを描く。
   // 矢じりの先が触れている要素 (無ければ線の元の要素) を描いた位置から探し、
   // 「その要素の前 (= 本文でその 1 つ前の行の後)」を指す枠を置く。押せばその位置に足せる。
   function _addFlowRects(svgEl, overlayEl, lines) {
     var frames = Array.prototype.filter.call(overlayEl.querySelectorAll('rect.selectable'), function(r) {
-      // BLK-builder-20260925-1712-2: 閉じの図形 (合流の菱形・下の棒) も矢印の端として見る
+      // 閉じの図形 (合流の菱形・下の棒) も矢印の端として見る
       if (/^(action|decision|start|stop|end|fork|note)$/.test(r.getAttribute('data-type') || '') ||
         /^(close|loop)$/.test(r.getAttribute('data-src-kind') || '')) return true;
-      // BLK-migrator-20260926-2118: switch の菱形 (文字で当てた枠) も矢印の端。入る矢印は switch の前を指す
+      // switch の菱形 (文字で当てた枠) も矢印の端。入る矢印は switch の前を指す
       return r.getAttribute('data-src-kind') === 'text' &&
         /^\s*switch\s*\(/i.test(String(lines[(parseInt(r.getAttribute('data-line'), 10) || 0) - 1] || ''));
     }).map(function(r) {
@@ -2047,7 +2044,7 @@ window.MA.modules.plantumlActivity = (function() {
     // 別の矢印の最後の区間は、その矢印のもの (たどって別の矢印へ乗り移らない)
     var lastSegs = [];
     heads.forEach(function(h) { h.own.forEach(function(s) { lastSegs.push(s); }); });
-    // BLK-migrator-20260926-2118: 1 本の矢印 = 矢じりから元の要素まで、端点でつながった区間の全部。
+    // 1 本の矢印 = 矢じりから元の要素まで、端点でつながった区間の全部。
     // 折れた矢印 (分岐の菱形から枝へ「横へ → 下へ」、枝から合流へ「下へ → 横へ」、while / repeat の戻り) は、
     // 最後の区間の遠い端から、元の要素 (行を持つ枠) に着くまで区間をたどる。分かれ道 (続きが 2 本以上) と
     // 別の矢印の最後の区間では止める。行を決める道と枠を出す区間はこの 1 つの道。
@@ -2126,7 +2123,7 @@ window.MA.modules.plantumlActivity = (function() {
     return n;
   }
 
-  // BLK-migrator-20260924-2232: ここまでで枠の無い文字 (switch の条件・case、while の出口の no、
+  // ここまでで枠の無い文字 (switch の条件・case、while の出口の no、
   // repeat while の yes、ノートの本文など) は、同じ文字を書いた本文の行で当てる。
   // 同じ文字が何度も出るときは、図の上の順と本文の順を 1 つずつ対にする。
   // 押すとその行が選ばれる (フォームで直せる要素ならそのフォーム、無ければ行の表示)。
@@ -2153,7 +2150,7 @@ window.MA.modules.plantumlActivity = (function() {
     var shapes = Array.prototype.filter.call(svgEl.querySelectorAll('polygon, rect'), function(el) {
       return !_inDecor(el);
     }).map(function(el) { return { el: el, bb: _shapeBBox(el) }; }).filter(function(s) { return s.bb && s.bb.width > 0; });
-    // BLK-migrator-20260929-0952: PlantUML 1.2026 のノートの紙は <path>。本文と数が合わず紙で当てられなかったノート
+    // PlantUML 1.2026 のノートの紙は <path>。本文と数が合わず紙で当てられなかったノート
     // (floating note など) の文字は、紙ごと囲む (入れ物の partition の枠を紙と見なさない)。
     if (OB.notePapers) {
       OB.notePapers(svgEl).forEach(function(p) {
@@ -2205,7 +2202,7 @@ window.MA.modules.plantumlActivity = (function() {
     return n;
   }
 
-  // BLK-builder-20260925-1712-2: 閉じの行 (endif / endswitch / end fork) が描く合流の菱形・下の棒と、repeat の入口の菱形には
+  // 閉じの行 (endif / endswitch / end fork) が描く合流の菱形・下の棒と、repeat の入口の菱形には
   // 本文の節点が無く (節点は開きの行 1 つに 1 つ)、並び順の当て方から漏れて枠が出なかった。本文の開きと閉じを対にし、
   // 開きの図形の枠から閉じの図形を探す (内側の対から): 合流の菱形 = 開きの菱形と同じ列で下の最も近い菱形、
   // repeat の入口 = repeat while の菱形と同じ列で上の最も近い菱形、end fork の棒 = fork の棒と横が重なり下の最も近い棒。
@@ -2333,7 +2330,7 @@ window.MA.modules.plantumlActivity = (function() {
     OB.syncDimensions(svgEl, overlayEl);
     while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
 
-    // BLK-migrator-20260924-0752: 旧記法 (`(*) -->` / `if "..." then` / `===LABEL===`) の図は、
+    // 旧記法 (`(*) -->` / `if "..." then` / `===LABEL===`) の図は、
     // PlantUML が関係 (<g class="link">) に書かれた行を残す。そのときは本文を読み直さず、
     // 描いた側の情報 (関係の行・要素の名前・線のつながり) だけで当てる。
     // 新記法 (`:Action;`) の図は SVG に行も <g> も無いので、今までどおり本文の並びで当てる。
@@ -2351,7 +2348,7 @@ window.MA.modules.plantumlActivity = (function() {
     var flat = _flattenNodes(parsedData.nodes || [], []);
     if (flat.length === 0) return;
 
-    // BLK-migrator-20260929-0952: partition の枠・札・見出しの文字は、動作・菱形・矢印の文字・ノートの紙として数えない
+    // partition の枠・札・見出しの文字は、動作・菱形・矢印の文字・ノートの紙として数えない
     // (並び順・文字で当てる他の当て方から外す)。枠は本文の partition の行で _addPartitionRects が置く。
     var partPairs = _matchPartitions(svgEl, parsedData.sourceLines || []);
     partPairs.forEach(function(pr) {
@@ -2360,7 +2357,7 @@ window.MA.modules.plantumlActivity = (function() {
       if (pr.drawn.sep) _chromeEls.push(pr.drawn.sep);
       pr.drawn.texts.forEach(function(t) { _chromeEls.push(t); });
     });
-    // BLK-migrator-20260929-0951: レーンの背景・見出しの帯と図全体の背景の <rect> は、動作の箱・文字を囲む図形として数えない。
+    // レーンの背景・見出しの帯と図全体の背景の <rect> は、動作の箱・文字を囲む図形として数えない。
     _laneChromeRects(svgEl).forEach(function(r) { _chromeEls.push(r); });
 
     // Walk SVG, classify each primitive, then post-process to group ellipse pairs as 'stop-or-end'.
@@ -2390,7 +2387,7 @@ window.MA.modules.plantumlActivity = (function() {
       return null;
     };
 
-    // BLK-migrator-20260924-0752: 動作は箱の中に描かれた文字 (= 本文の動作の名前) で先に当てる。
+    // 動作は箱の中に描かれた文字 (= 本文の動作の名前) で先に当てる。
     // 並び順だけで当てると、レーン (`|Swimlane|`) をまたぐ図では SVG の並びがレーンごとになって
     // 枠が隣の動作にずれ、テーマ (`!include` した skin) で角の丸みが変わると箱が動作と見なされず全滅していた。
     var byText = _matchActionsByText(svgEl, flat);
@@ -2420,7 +2417,7 @@ window.MA.modules.plantumlActivity = (function() {
     var textEls = byText.map(function(m) { return m.el; }).concat(decByText.map(function(m) { return m.el; })).concat(loopEls);
     var decExtra = decByText.filter(function(m) { return m.extra; }).length;
     matched = matched.filter(function(sh) { return textEls.indexOf(sh.el) < 0 && !_inDecor(sh.el); });
-    // BLK-builder-20260925-1712-2: 並び順で当てる菱形から、switch の菱形 (switch には本文の節点が無い) と、
+    // 並び順で当てる菱形から、switch の菱形 (switch には本文の節点が無い) と、
     // 文字の無い合流の菱形 (endswitch は 7 点で描かれる) を外す。並びに残すと、後ろの repeat / while / if の節点がそこへ当たり、
     // 以後の菱形が 1 つずつずれる。switch の菱形の枠は文字で当てる _addTextFallback、合流は _addClosingShapes が置く。
     var switchConds = (parsedData.sourceLines || []).map(function(l) {
@@ -2485,7 +2482,7 @@ window.MA.modules.plantumlActivity = (function() {
         }
       });
       var noteBoxOf = _polygonBBox;
-      // BLK-migrator-20260926-1116: PlantUML 1.2026 は note を 5 点の polygon でなく、紙の外形の path と
+      // PlantUML 1.2026 は note を 5 点の polygon でなく、紙の外形の path と
       // 折り返しの path で描く。紙の外形 (OB.notePapers) を全図種共通の 1 か所で取り、中の Creole の表・
       // 箇条書きの文字ごとに枠を作らない。
       if (notePolys.length !== notes.length && OB.notePapers) {
@@ -2523,7 +2520,7 @@ window.MA.modules.plantumlActivity = (function() {
     _addClosingShapes(svgEl, overlayEl, parsedData.sourceLines || []);
     _addFlowRects(svgEl, overlayEl, parsedData.sourceLines || []);
 
-    // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
+    // 小さい当たり判定を手前に。共通実装 (src/core)
     OB.raiseSmallestLast(overlayEl);
   }
 
@@ -2553,25 +2550,25 @@ window.MA.modules.plantumlActivity = (function() {
     var esc = window.MA.htmlUtils.escHtml;
     var where = AI ? AI.pointLabel(ctx.getMmdText(), sel.line, 'after') : ('L' + sel.line);
     propsEl.innerHTML =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">分岐の枝 (L' + sel.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + esc(window.MA.properties.lineHead('分岐の枝', sel.line)) + '</div>' +
       '<div style="font-size:11px;margin-bottom:8px;">' + esc(where) + '</div>' +
       '<div style="font-size:10px;color:var(--text-secondary);">この側に足すものを下で選びます。' +
       '枝の名前を変えるときは分岐の菱形を選んでください。</div>';
   }
 
-  // BLK-migrator-20260924-2232: 図の上で矢印 (流れ) を選んだとき。どの行の後の流れかを言い、
+  // 図の上で矢印 (流れ) を選んだとき。どの行の後の流れかを言い、
   // 下の「＋ ここに挿入」がその矢印の上 (= その行の後) を既定にする。
   function _renderFlowPick(sel, parsedData, propsEl, ctx) {
     var AI = window.MA.activityInsert;
     var esc = window.MA.htmlUtils.escHtml;
     var where = AI ? AI.pointLabel(ctx.getMmdText(), sel.line, 'after') : ('L' + sel.line);
     propsEl.innerHTML =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">流れの矢印 (L' + sel.line + ' の後)</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + esc(window.MA.properties.lineHead('流れの矢印', sel.line)) + 'の後</div>' +
       '<div style="font-size:11px;margin-bottom:8px;">' + esc(where) + '</div>' +
       '<div style="font-size:10px;color:var(--text-secondary);">この矢印の上に足すものを下で選びます。</div>';
   }
 
-  // 選んだ要素のフォームの下に「＋ ここに挿入」を足す (BLK-junior-20260908-0103)。
+  // 選んだ要素のフォームの下に「＋ ここに挿入」を足す。
   // 図で要素をクリックしたのに、挿入位置は右ペインの「追加」タブへ戻って
   // 行番号と生コードのプルダウンから選び直す必要があった。選んだ要素の位置を
   // 既定にして、その場で足せるようにする。位置は分岐のどちら側かで言い直す。
@@ -2596,7 +2593,7 @@ window.MA.modules.plantumlActivity = (function() {
     var node = _findNodeById(parsedData.nodes, sel.id);
     if (!node) { propsEl.innerHTML = ''; return; }
     var html =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + node.kind + ' (L' + node.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + window.MA.htmlUtils.escHtml(P.lineHead(node.kind, node.line)) + '</div>' +
       '<div style="font-size:11px;margin-bottom:8px;color:var(--text-secondary);">この ' + node.kind + ' ノードは編集項目がありません。</div>' +
       P.primaryButtonHtml('ac-term-delete', '✕ 削除');
     propsEl.innerHTML = html;
@@ -2608,7 +2605,7 @@ window.MA.modules.plantumlActivity = (function() {
     });
   }
 
-  // BLK-owner-20260924-2259-prune: 追加ペインのフォームは 1 つ。「末尾に追加」と
+  // 追加ペインのフォームは 1 つ。「末尾に追加」と
   // 「＋ この位置に挿入」が縦に 2 つ並び、同じ要素 (repeat / fork) を別の名前・別の言語で
   // 書いていたので、位置は他の図種と同じ「追加する位置」で選ぶ形に畳んだ。
   // 既定は「図の末尾」(= stop の前。従来の末尾に追加と同じ)。途中の位置は design 4b の
@@ -2636,9 +2633,29 @@ window.MA.modules.plantumlActivity = (function() {
     return out;
   }
 
+  // 1 件足した後の「追加する位置」。図の末尾で足したら図の末尾のまま、
+  // 途中の位置で足したら足した行 (if〜endif のような組は最後の行) の後。見つからなければ図の末尾。
+  function placeAfterAdd(before, after, place) {
+    if (!place || place.value === 'tail') return 'tail';
+    var a = String(before == null ? '' : before).split('\n');
+    var b = String(after == null ? '' : after).split('\n');
+    var head = 0;
+    while (head < a.length && head < b.length && a[head] === b[head]) head++;
+    var tail = 0;
+    while (tail < a.length - head && tail < b.length - head
+           && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
+    var last = b.length - tail;   // 足した最後の行 (1 始まり)
+    if (last <= head) return 'tail';
+    var opts = tailPlaceOptions(after);
+    for (var i = 0; i < opts.length; i++) {
+      if (opts[i].line === last && opts[i].position === 'after') return opts[i].value;
+    }
+    return 'tail';
+  }
+
   // その位置にその種類を置けるか。「図の末尾」は従来どおり何でも置ける。
   // 終了 (end) は停止 (stop) と同じ場所に置けるものとして扱う。
-  // BLK-owner-20260925-0312-4: 開始・停止・終了はどこに置いても PlantUML が描くので止めない
+  // 開始・停止・終了はどこに置いても PlantUML が描くので止めない
   // (流れの外や 2 つ目になるときは tailKindWarning が橙で知らせる)。
   // 位置は行だけでなく「前 / 後」も見る (start の前はフローの外、start の直後はフローの先頭)。
   function tailKindAllowed(dsl, place, kind, sub) {
@@ -2646,7 +2663,8 @@ window.MA.modules.plantumlActivity = (function() {
     if (kind === 'start' || kind === 'stop' || kind === 'end') return true;
     var AI = window.MA.activityInsert;
     if (!AI) return false;
-    var k = kind === 'other' ? (sub || 'break') : kind;
+    // 「まとめて」は 1 行 1 アクションなので、置けるかはアクションと同じ。
+    var k = kind === 'other' ? (sub || 'break') : (kind === 'bulk' ? 'action' : kind);
     return AI.isAllowed(dsl, place.line, k, place.position);
   }
 
@@ -2674,6 +2692,7 @@ window.MA.modules.plantumlActivity = (function() {
     if (kind === 'action') {
       return atTail ? addAction(text, v.text) : addActionAtLine(text, line, pos, v.text || '');
     }
+    if (kind === 'bulk') return addActionsFromTailForm(text, place, v.text || '');
     if (kind === 'start' || kind === 'stop' || kind === 'end') {
       return atTail ? insertBeforeEnd(text, kind) : _insertBareAtLine(text, line, pos, kind);
     }
@@ -2730,10 +2749,11 @@ window.MA.modules.plantumlActivity = (function() {
     var esc = window.MA.htmlUtils.escHtml;
     var places = tailPlaceOptions(ctx.getMmdText());
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        // 置く場所を選べるので、見出しは「末尾」を名乗らない (状態遷移図と同じ)。
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">追加</label>' +
+        // 見出しは 6 図種で同じ「末尾に追加」(台帳の名前)。
+        // 途中に入れるときは、この見出しの下の「追加する位置」で選ぶ。
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'ac-tail-kind', [
           { value: 'action', label: 'アクション (:…;)', selected: true },
           { value: 'start', label: '開始 (start)' },
@@ -2746,7 +2766,10 @@ window.MA.modules.plantumlActivity = (function() {
           { value: 'swimlane', label: 'レーン (swimlane)' },
           { value: 'note', label: '注釈 (note)' },
           // 置く機会の少ない 1 行 (中断・切り離し・打ち切り) はここに畳む。
-          { value: 'other', label: 'その他 (中断・切り離し・打ち切り)' }
+          { value: 'other', label: 'その他 (中断・切り離し・打ち切り)' },
+          // 複数行を 1 行 1 アクションで入れる入口は、他の図種と同じ種別チップ「まとめて」1 つ。
+          // 以前は処理欄の下に「+ 各行をアクションとして一括追加」と取り込みのボタンを別に並べていた。
+          { value: 'bulk', label: 'まとめて (複数行)' }
         ]) +
         '<div id="ac-tail-place">' +
           P.selectFieldHtml('追加する位置', 'ac-tail-where', places.map(function(p, i) {
@@ -2756,6 +2779,8 @@ window.MA.modules.plantumlActivity = (function() {
         '<div id="ac-tail-detail" style="margin-top:6px;"></div>' +
       '</div>';
     propsEl.innerHTML = html;
+    // 確定後も「追加する位置」を保つ (足した行の後)。図種・タブを替えたときだけ既定に戻る。
+    if (window.MA.tailMemory) window.MA.tailMemory.bindSelect('ac-tail-where');
 
     function currentPlace() {
       var w = document.getElementById('ac-tail-where');
@@ -2788,13 +2813,11 @@ window.MA.modules.plantumlActivity = (function() {
         warn.textContent = w ? '注意: ' + w : '';
         warn.style.display = w ? 'block' : 'none';
       }
-      ['ac-tail-add', 'ac-tail-add-lines'].forEach(function(id) {
-        var b = document.getElementById(id);
-        if (b) b.disabled = !ok;
-      });
+      var b = document.getElementById('ac-tail-add');
+      if (b) b.disabled = !ok;
     }
 
-    // BLK-owner-20260925-0312-4: 種別を替えても、打ちかけの欄は黙って消さない (同じ欄に戻れば戻る)。
+    // 種別を替えても、打ちかけの欄は黙って消さない (同じ欄に戻れば戻る)。
     var drafts = {};
     function keepDrafts() {
       var box = document.getElementById('ac-tail-detail');
@@ -2817,16 +2840,11 @@ window.MA.modules.plantumlActivity = (function() {
       keepDrafts();
       var html2 = '';
       if (kind === 'action') {
-        // BLK-owner-20260925-0312-4: 処理欄も他の図種と同じく Enter で確定、改行は Shift+Enter
-        // (data-enter="submit" を modal-keys が見る)。複数行は Shift+Enter か「各行を一括追加」。
+        // 処理欄も他の図種と同じく Enter で確定、改行は Shift+Enter
+        // (data-enter="submit" を modal-keys が見る)。複数のアクションを 1 度に入れるのは種別チップ「まとめて」。
         html2 =
           lbl('処理 (Enter で追加 / Shift+Enter で改行)') +
-          window.MA.reuseModal.buttonHtml('ac-tail-reuse') +
-          '<textarea id="ac-tail-text" data-enter="submit" rows="2" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>' +
-          // BLK-junior-20260915-0606: アクション本文に打つのは先輩のクラス図にある
-          // 実在メソッド名。名前帳を欄の下に出さないと、クラス図タブを別に開いて
-          // 絞り込み、名前を控えてから戻るという往復が図種ごとに要る。
-          P.vocabPickerHtml('ac-tail-text-vocab', { roles: ['method'], callSuffix: true });
+          '<textarea id="ac-tail-text" data-enter="submit" rows="2" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>';
       } else if (kind === 'if') {
         html2 =
           P.fieldHtml('条件', 'ac-tail-cond', '', '例: 認証成功?') +
@@ -2847,6 +2865,12 @@ window.MA.modules.plantumlActivity = (function() {
       } else if (kind === 'note') {
         html2 = lbl('注釈の本文 (Enter で追加 / Shift+Enter で改行)') +
           '<textarea id="ac-tail-ntext" data-enter="submit" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>';
+      } else if (kind === 'bulk') {
+        // 他の図種の「まとめて」と同じ形: 1 行 1 件の欄 +「+ まとめて追加」
+        // (他の図の行を持ち込むボタンは TICKET-owner-20261116-0321-prune で外した。欄は打って埋める)。
+        html2 =
+          lbl('アクションを 1 行 1 件で') +
+          '<textarea id="ac-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>';
       } else if (kind === 'other') {
         html2 = P.selectFieldHtml('足すもの', 'ac-tail-other', OTHER_BARE.map(function(o, i) {
           return { value: o.value, label: o.label, selected: i === 0 };
@@ -2855,19 +2879,14 @@ window.MA.modules.plantumlActivity = (function() {
       html2 +=
         '<div id="ac-tail-where-note" style="display:none;font-size:10px;color:var(--text-secondary);margin:4px 0 6px 0;line-height:1.5;"></div>' +
         '<div id="ac-tail-where-warn" role="status" style="display:none;font-size:10px;color:var(--accent-orange, #ffa657);margin:4px 0 6px 0;line-height:1.5;"></div>' +
-        P.primaryButtonHtml('ac-tail-add', '+ 追加');
-      if (kind === 'action') {
+        P.primaryButtonHtml('ac-tail-add', kind === 'bulk' ? '+ まとめて追加' : '+ 追加');
+      if (kind === 'bulk') {
         html2 +=
-          P.primaryButtonHtml('ac-tail-add-lines', '+ 各行をアクションとして一括追加') +
           '<div id="ac-tail-lines-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;">' +
             '1 行 = 1 アクション。空行は無視されます</div>';
       }
       detailEl.innerHTML = html2;
       restoreDrafts();
-      // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
-      window.MA.reuseModal.bindButton('ac-tail-reuse', 'plantuml-activity', 'ac-tail-text');
-      // 一括追加の欄でもあるので、チップは欄を置き換えずカーソル位置に差し込む。
-      P.bindVocabPicker('ac-tail-text-vocab', 'ac-tail-text', null, { insert: 'caret' });
       P.bindEvent('ac-tail-other', 'change', paintAllowed);
 
       function commit(out, t) {
@@ -2878,18 +2897,13 @@ window.MA.modules.plantumlActivity = (function() {
           ctx.onUpdate();
         }
       }
-      P.bindEvent('ac-tail-add-lines', 'click', function() {
-        var t0 = ctx.getMmdText();
-        if (!tailKindAllowed(t0, currentPlace(), 'action')) return;
-        commit(addActionsFromTailForm(t0, currentPlace(), val('ac-tail-text')), t0);
-      });
       P.bindEvent('ac-tail-add', 'click', function() {
         var t = ctx.getMmdText();
         var k = val('ac-tail-kind');
         var place = currentPlace();
         if (!tailKindAllowed(t, place, k, val('ac-tail-other'))) return;
-        commit(addFromTailForm(t, place, k, {
-          text: k === 'note' ? val('ac-tail-ntext') : val('ac-tail-text'),
+        commitKeepPlace(t, place, addFromTailForm(t, place, k, {
+          text: k === 'note' ? val('ac-tail-ntext') : (k === 'bulk' ? val('ac-tail-bulk') : val('ac-tail-text')),
           cond: val('ac-tail-cond'),
           thenLabel: val('ac-tail-thenlbl'),
           elseLabel: val('ac-tail-elselbl'),
@@ -2897,8 +2911,15 @@ window.MA.modules.plantumlActivity = (function() {
           name: val('ac-tail-lbl'),
           branchCount: val('ac-tail-bcount'),
           sub: val('ac-tail-other'),
-        }), t);
+        }));
       });
+      // 足した行の後を次の「追加する位置」にしてから確定する (同じ枝に 2 つ目を続けて足せる)。
+      function commitKeepPlace(t, place, out) {
+        if (out !== t && window.MA.tailMemory) {
+          window.MA.tailMemory.setField('ac-tail-where', placeAfterAdd(t, out, place));
+        }
+        commit(out, t);
+      }
       paintAllowed();
     };
     P.bindEvent('ac-tail-kind', 'change', renderTailDetail);
@@ -3014,7 +3035,7 @@ window.MA.modules.plantumlActivity = (function() {
       return;
     }
     // 既定は、図で要素を選んでいればその位置。選んでいなければ本体の最後。
-    // BLK-junior-20260908-0103: 図形をクリックしてから「＋この位置に挿入」を開いたとき、
+    // 図形をクリックしてから「＋この位置に挿入」を開いたとき、
     // 位置をプルダウンから探し直さずに済ませる。
     var selLine = (typeof forcedLine === 'number' && forcedLine >= 1) ? forcedLine : _selectedLine();
     var defIdx = AI.defaultPointIndex(ctx.getMmdText(), selLine);
@@ -3219,7 +3240,7 @@ window.MA.modules.plantumlActivity = (function() {
     var AI = window.MA.activityInsert;
     var place = (AI && AI.describeStructure) ? AI.describeStructure(ctx.getMmdText(), node.line) : '';
     // design 4b: 右パネルは上から 見出し (Action · N 行目 / 名前) → ラベル → スイムレーン → 位置 →
-    // この位置に挿入 → ノートを添える → ↑ ↓ → 削除 の順 (BLK-builder-20260924-1252-3)。
+    // この位置に挿入 → ノートを添える → ↑ ↓ → 削除 の順。
     var esc = window.MA.htmlUtils.escHtml;
     var head = actionPanelHeading(node);
     var html =
@@ -3233,9 +3254,6 @@ window.MA.modules.plantumlActivity = (function() {
         '<label for="ac-action-text" style="display:block;font-size:10px;color:var(--text-secondary);">ラベル / Label</label>' +
         '<textarea id="ac-action-text" style="width:100%;min-height:60px;">' + esc(node.text || '') + '</textarea>' +
       '</div>' +
-      // BLK-junior-20260915-0606: 打ち直すときも同じ名前帳から引ける (綴りを揃える先が
-      // 欄の下にあるので、クラス図タブへ確かめに戻らない)。
-      P.vocabPickerHtml('ac-action-text-vocab', { roles: ['method'], callSuffix: true }) +
       P.primaryButtonHtml('ac-action-update', '更新') +
       _actionColorHtml(node.color || '') +
       // design 4b: スイムレーンは読むだけでなく、チップで選び直せる。
@@ -3274,7 +3292,6 @@ window.MA.modules.plantumlActivity = (function() {
             P.primaryButtonHtml('ac-action-delete', '削除 / Delete') +
           '</div>';
     propsEl.innerHTML = html;
-    P.bindVocabPicker('ac-action-text-vocab', 'ac-action-text', null, { insert: 'caret' });
 
     // design 4b:「↑ ↓」— 同じ親の中の兄弟と入れ替える。行が動くので、
     // 選択は id ではなく移動先の行番号から引き直す (id は文書順の連番で振り直される)。
@@ -3396,7 +3413,7 @@ window.MA.modules.plantumlActivity = (function() {
     var P = window.MA.properties;
     var node = _findNodeById(parsedData.nodes, sel.id);
     if (!node) { propsEl.innerHTML = ''; return; }
-    var html = '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + (node.keyword || node.kind) + ' (L' + node.line + ')</div>';
+    var html = '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + window.MA.htmlUtils.escHtml(P.lineHead(node.keyword || node.kind, node.line)) + '</div>';
 
     if (node.kind === 'if') {
       html += P.fieldHtml('Condition', 'ac-if-cond', node.condition || '');
@@ -3558,7 +3575,7 @@ window.MA.modules.plantumlActivity = (function() {
     }
     if (!sw) { propsEl.innerHTML = ''; return; }
     var html =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Swimlane "' + window.MA.htmlUtils.escHtml(sw.label) + '" (L' + sw.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead('Swimlane', sw.line) + ' 「' + sw.label + '」') + '</div>' +
       P.fieldHtml('Name', 'ac-sw-name', sw.label) +
       P.primaryButtonHtml('ac-sw-update', '更新') +
       P.primaryButtonHtml('ac-sw-delete', '✕ swimlane 解除');
@@ -3587,7 +3604,7 @@ window.MA.modules.plantumlActivity = (function() {
     }
     if (!note) { propsEl.innerHTML = ''; return; }
     var html =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (L' + note.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead('Note', note.line)) + '</div>' +
       P.selectFieldHtml('Position', 'ac-note-pos', [
         { value: 'right', label: 'Right', selected: note.position === 'right' },
         { value: 'left', label: 'Left', selected: note.position === 'left' }
@@ -3660,8 +3677,9 @@ window.MA.modules.plantumlActivity = (function() {
     insertBareAtLine: _insertBareAtLine,
     addSwimlaneAtLine: addSwimlaneAtLine,
     addNoteAtLine: addNoteAtLine,
-    // BLK-owner-20260924-2259-prune: 追加ペインの 1 つのフォーム (追加する位置 + 種類)
+    // 追加ペインの 1 つのフォーム (追加する位置 + 種類)
     tailPlaceOptions: tailPlaceOptions,
+    placeAfterAdd: placeAfterAdd,
     tailKindAllowed: tailKindAllowed,
     tailKindWarning: tailKindWarning,
     tailPlaceReason: tailPlaceReason,

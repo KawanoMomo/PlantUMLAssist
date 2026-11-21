@@ -5,7 +5,7 @@ window.MA = window.MA || {};
 //
 // 1 ドキュメント = { id, name, diagramType, dsl }。
 // name はサーバの保存先ファイル名 ({name}.puml) にそのまま使う。
-// BLK-junior-20260907-1203: 以前は [A-Za-z0-9_-]+ しか許さず、「GPIOドライバ
+// 以前は [A-Za-z0-9_-]+ しか許さず、「GPIOドライバ
 // ユースケース」のような日本語名の図が保存フォルダ経由で読み込めず、保存も
 // 黙って download に落ちていた。ファイル名として危ないもの (パス区切り・
 // Windows の禁止文字・制御文字・予約名) だけを弾き、日本語はそのまま通す。
@@ -25,7 +25,7 @@ window.MA.workspace = (function() {
 
   var _state = null;   // { activeId, docs: [] }
   var _seq = 0;
-  // BLK-owner-20260929-1111-1: 保存先ごとに「そこに在る .puml の名前」を覚える (一覧を読んだ時点のもの)。
+  // 保存先ごとに「そこに在る .puml の名前」を覚える (一覧を読んだ時点のもの)。
   // 「＋ 新しい図」の名前 diagramN を、開いているタブだけでなく保存先の図とも重ならないものにする。
   var _known = {};     // dir → { 小文字の名前: true }
 
@@ -50,7 +50,7 @@ window.MA.workspace = (function() {
 
   // 名前の規則を、判定と同じ場所から日本語 1 行で出す。
   //
-  // BLK-junior-20260908-0003: 名前変更ダイアログの説明文が「英数字・_ ・- のみ」
+  // 名前変更ダイアログの説明文が「英数字・_ ・- のみ」
   // のまま残っていて、実際には通る日本語・空白・括弧を「使ってよいのか」毎回
   // 試すまで確信が持てなかった。文言を画面側に書き写すと、判定を変えたときに
   // また置いていかれる。判定の隣に置いて、画面はここから取る。
@@ -143,7 +143,7 @@ window.MA.workspace = (function() {
           dsl: typeof d.dsl === 'string' ? d.dsl : '',
           preview: d.preview === true,
         });
-        // BLK-human-20260925-1150: 保存先を替える前に開いていたタブは、開いたフォルダを持ち続ける。
+        // 保存先を替える前に開いていたタブは、開いたフォルダを持ち続ける。
         if (typeof d.dir === 'string' && d.dir) docs[docs.length - 1].dir = d.dir;
         if (d.fresh === true) docs[docs.length - 1].fresh = true;
       }
@@ -269,7 +269,7 @@ window.MA.workspace = (function() {
       diagramType: spec.diagramType || 'plantuml-sequence',
       dsl: typeof spec.dsl === 'string' ? spec.dsl : '',
     };
-    // BLK-owner-20260929-1111-1: ＋ で開いた新しい図は、1 度書けるまで「新しい図」の印を持つ。
+    // ＋ で開いた新しい図は、1 度書けるまで「新しい図」の印を持つ。
     // 印のある図の保存は、保存先に既にある別のファイルを書き換えない (server が 409 で断る)。
     if (spec.fresh === true) doc.fresh = true;
     _state.docs.push(doc);
@@ -295,7 +295,7 @@ window.MA.workspace = (function() {
     var name = sanitizeName(spec.name || '');
     for (var i = 0; i < _state.docs.length; i++) {
       if (_state.docs[i].name === name) {
-        // BLK-human-20260925-1150: 別のフォルダに留めてあるタブと同じ名前のファイルを今の保存先から
+        // 別のフォルダに留めてあるタブと同じ名前のファイルを今の保存先から
         // 開いた。中身を読み込むなら、そのタブは今の保存先のファイルになる (留めを外す)。
         // 中身を渡さない (名前で移るだけ) ときは留めたまま (前のフォルダの中身を今の保存先へ流さない)。
         if (typeof spec.dsl === 'string' && _state.docs[i].dir) delete _state.docs[i].dir;
@@ -309,7 +309,7 @@ window.MA.workspace = (function() {
     return open(spec);
   }
 
-  // BLK-primary-20260924-0805-design (design 10a): 保存先ツリーの行を 1 回押したときの「仮のタブ」。
+  // 保存先ツリーの行を 1 回押したときの「仮のタブ」。
   // 仮のタブは常に 1 枚だけで、別の図を仮に開くと同じ位置のタブの中身が入れ替わる
   // (VS Code のプレビュータブと同じ)。既にタブがある図 (固定・仮) はそのタブへ移るだけ。
   function openPreview(spec) {
@@ -366,7 +366,7 @@ window.MA.workspace = (function() {
     return _copy(d);
   }
 
-  // ── タブの書き先のフォルダ (BLK-human-20260925-1150) ─────────────────────
+  // ── タブの書き先のフォルダ ─────────────────────
   // 保存先を別のフォルダに替えても、開いているタブは開いたときのファイルを指し続ける
   // (VS Code・IntelliJ と同じ。書き先はタブごと)。dir を持たないタブは今の保存先に従う。
   // holdDir(dir, skip): dir を持たないタブを dir に留める。skip(doc) が真のタブは留めない
@@ -417,7 +417,7 @@ window.MA.workspace = (function() {
     return fileDir || './autosave';
   }
 
-  // BLK-owner-20260926-0550-3: 保存フォルダに図を書いた・消したことを知らせる (FILES ツリーの保存先が
+  // 保存フォルダに図を書いた・消したことを知らせる (FILES ツリーの保存先が
   // 読み込み直すまで古いままだった)。聞き手は app.js の保存先の一覧 1 か所。
   function _announce(what, name, fileDir) {
     try {
@@ -435,17 +435,17 @@ window.MA.workspace = (function() {
       return window.fetch('/autosave', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // BLK-junior-20260912-2103-wish: 保存した図種を一緒に送り、server に控えさせる。
+        // 保存した図種を一緒に送り、server に控えさせる。
         // 次にフォルダから開くときは本文判定ではなくこの控えを使う。
         // doc が図種を持たない経路 (一括の書き戻し) では送らない = 前の控えが残る。
         body: JSON.stringify({
           type: doc.name, dsl: doc.dsl, dir: _dir(fileDir),
-          // BLK-owner-20260929-1111-1: まだ 1 度も書いていない新しい図は、既にある別のファイルへは書かない。
+          // まだ 1 度も書いていない新しい図は、既にある別のファイルへは書かない。
           freshId: (doc.fresh && doc.id) ? String(doc.id) : undefined,
-          // BLK-owner-20260930-0311-1: 書いたタブの印。自分で書いた続きは、図種の読みが替わっても別名へ回さない。
+          // 書いたタブの印。自分で書いた続きは、図種の読みが替わっても別名へ回さない。
           docId: doc.id ? String(doc.id) : undefined,
           kind: (window.MA.savedKind ? window.MA.savedKind.slugOf(doc.diagramType) : '') || undefined,
-          // BLK-migrator-20260918-0349: 手元から開いた図は、開いたときの改行で
+          // 手元から開いた図は、開いたときの改行で
           // 書き戻す。付けないと server は platform の既定 (Windows は CRLF) で
           // 書き、元が LF のファイルが保存するだけで全行書き換わる。
           eol: (doc.eol === 'lf' || doc.eol === 'crlf') ? doc.eol : undefined,
@@ -463,7 +463,7 @@ window.MA.workspace = (function() {
         }
         if (!(r && r.ok)) return false;
         if (doc.fresh && doc.id) markWritten(doc.id);
-        // BLK-junior-20260908-2003: 図種が変わる保存は server が別ファイルへ回す。
+        // 図種が変わる保存は server が別ファイルへ回す。
         // 回された先は autoSave の知らせに寄せる (聞き手は 1 か所でよい)。
         if (!r.json) { _announce('written', doc.name, fileDir); return true; }
         return r.json().then(function(data) {
@@ -494,7 +494,7 @@ window.MA.workspace = (function() {
     }
   }
 
-  // BLK-reviewer-20260907-1403: 名前だけでなく最終保存時刻と本文の指紋も取る。
+  // 名前だけでなく最終保存時刻と本文の指紋も取る。
   // 古い server は entries を返さないので、その場合は名前だけの entry に落とす。
   function listFileEntries(fileDir) {
     try {
@@ -517,20 +517,20 @@ window.MA.workspace = (function() {
 
   // listFolder — 一覧に加えて「その保存先が実在するか」も返す。
   //
-  // BLK-primary-20260908-0103: listFileEntries は 0 件しか返さないので、
+  // listFileEntries は 0 件しか返さないので、
   // 「保存先の綴りを間違えた」と「まだ 1 枚も無い」が呼び出し側で区別できず、
   // 保存先の書式を誤ると 📂一覧が黙って空になっていた。
   // 返り値: { entries, exists, dir }。exists が null なら server に尋ねられなかった。
   // opts.prev — 1 図ごとの「直前の退避版」の刻印と本文も一緒に受け取る
-  // (BLK-junior-20260914-1306-wish)。前回保存からの差分を行に出す画面だけが頼む。
+  // 前回保存からの差分を行に出す画面だけが頼む。
   // 既定で頼まないのは、控えの本文は一覧を開くたびに全図ぶん運ぶには重いため。
   function listFolder(fileDir, opts) {
     var asked = _dir(fileDir);
     var wantPrev = !!(opts && opts.prev);
-    var miss = { entries: [], exists: null, dir: asked, roles: {}, verified: {}, now: null,
+    var miss = { entries: [], exists: null, dir: asked, roles: {},
                  gone: [], kinds: {} };
     try {
-      // BLK-reviewer-20260914-1106-wish: 一覧と同時に本文も受け取る。部品ごとの
+      // 一覧と同時に本文も受け取る。部品ごとの
       // 突合 (遷移ラベル / メッセージ名がクラスに在るか) は本文が無いと判定できず、
       // 図を 1 枚ずつ取りに行くと 📂一覧が開いてから印が付くまで遅れて出る。
       return window.fetch('/autosave?dir=' + encodeURIComponent(asked) + '&texts=1'
@@ -549,29 +549,16 @@ window.MA.workspace = (function() {
             // 古い server は exists を返さない。その場合は判定しない (null)。
             exists: (typeof data.exists === 'boolean') ? data.exists : null,
             dir: (typeof data.dir === 'string' && data.dir) ? data.dir : asked,
-            // BLK-reviewer-20260908-0203-wish: 実データ / テンプレの宣言。
+            // 実データ / テンプレの宣言。
             // 一覧と同じ呼び出しで返る (別呼び出しにすると印の付く前が一瞬見える)。
             roles: (data.roles && typeof data.roles === 'object') ? data.roles : {},
-            // BLK-reviewer-20260908-1103-wish: 「この svg を今の puml で描き直したら
-            // 一致したか」の控え。指紋つきなので、どちらかが動けば未確認に戻せる。
-            verified: (data.verified && typeof data.verified === 'object') ? data.verified : {},
-            // BLK-reviewer-20260908-0923-wish: mtime を刻んだのと同じ時計の「今」。
-            // 「直近 N 分以内に更新された」は端末の時計では判定できない。
-            // 古い server は返さない (その場合は判定しない = null)。
-            now: (typeof data.now === 'string' && data.now) ? data.now : null,
-            // BLK-junior-20260908-2003: 本体が消えて、上書き前の控えだけが
+            // 本体が消えて、上書き前の控えだけが
             // 残っている図。現存する図と混ぜずに別枠で受け取る。
             gone: Array.isArray(data.gone) ? data.gone : [],
-            // BLK-primary-20260909-0003-wish: 「いつ・どの版で何を客先に出したか」の
-            // 控え。図と同じフォルダに置く (localStorage だと開き直すたびに消え、
-            // 何度出しても毎回「初回提出」になっていた)。古い server は返さない。
-            exportLog: (data.exportLog && typeof data.exportLog === 'object') ? data.exportLog : null,
-            // BLK-junior-20260912-2103-wish: 図ごとの「保存したときの図種」。
+            // 図ごとの「保存したときの図種」。
             // 一覧の行に印として出し、開くときの図種にも使う。
             // 古い server は返さない (その場合は今までどおり本文から当てる)。
             kinds: (data.kinds && typeof data.kinds === 'object') ? data.kinds : {},
-            // BLK-primary-20260916-2314-friction: 控えより前に作った納品 zip (出した図の名前つき)。
-            deliveryZips: Array.isArray(data.deliveryZips) ? data.deliveryZips : [],
           };
         })
         .catch(function() { return miss; });
@@ -581,7 +568,7 @@ window.MA.workspace = (function() {
   }
 
   // deleteFile — 保存フォルダから図を 1 枚だけ消す
-  // (BLK-primary-20260914-1306-wish)。過去版は server 側で残るので、
+  // 過去版は server 側で残るので、
   // 取り違えて消しても「今は無いが前の版が残っている図」から戻せる。
   // 返り値: { ok, error }。消せたかどうかを呼び出し側に必ず返す
   // (黙って失敗すると、一覧に残ったままの図を「消したつもり」で見送る)。
@@ -602,20 +589,6 @@ window.MA.workspace = (function() {
     }
   }
 
-  // saveExportLog — 書き出しの控えを保存フォルダに書く。
-  // 書けたかどうかだけを返す (書けなくても書き出し自体は成り立つ)。
-  function saveExportLog(log, fileDir) {
-    try {
-      return window.fetch('/export-log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dir: _dir(fileDir), log: log }),
-      }).then(function(r) { return !!(r && r.ok); }).catch(function() { return false; });
-    } catch (e) {
-      return Promise.resolve(false);
-    }
-  }
-
   function loadFile(name, fileDir) {
     if (!isValidName(name)) return Promise.resolve(null);
     try {
@@ -630,7 +603,7 @@ window.MA.workspace = (function() {
   // DSL 本文から図の種類を推測する。フォルダから開いた図に対して
   // 正しいモジュールを選ぶために使う。
   //
-  // BLK-junior-20260912-2103: 判定は parserUtils.detectDiagramType 1 つに寄せる。
+  // 判定は parserUtils.detectDiagramType 1 つに寄せる。
   // ここに独自の規則を持っていたため、同じ本文がエディタでは Sequence・フォルダから
   // 開くと UseCase になっていた (`Dev -> Timer : Timer_Init()` の丸括弧が
   // `actor` と組んで usecase 判定に当たる。parserUtils は行頭の `(...)` だけを
@@ -690,7 +663,6 @@ window.MA.workspace = (function() {
     listFileEntries: listFileEntries,
     listFolder: listFolder,
     deleteFile: deleteFile,
-    saveExportLog: saveExportLog,
     loadFile: loadFile,
     detectType: detectType,
   };

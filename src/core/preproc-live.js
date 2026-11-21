@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // preproc-live — プリプロセッサの条件 (!ifdef / !ifndef / !if / !elseif / !else / !endif) を
 // 本文の上で解き、PlantUML が描かない枝の行を言う純関数。
 //
-// BLK-migrator-20260929-1300: `!ifdef U … !else … !endif` の両枝に `A -> B` があると、描かれるのは
+// `!ifdef U … !else … !endif` の両枝に `A -> B` があると、描かれるのは
 // 片方だけなのに、当て方と下端の件数は両方を数えていた。描かれない枝の行は枠が無いのが正しいので、
 // 当て損ねとして帯を出さず、件数にも入れない。
 //

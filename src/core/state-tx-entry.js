@@ -1,12 +1,12 @@
 'use strict';
 window.MA = window.MA || {};
 
-// state-tx-entry — 状態遷移を「続けて」入れるための判断 (BLK-human-20260923-2000)。
+// state-tx-entry — 状態遷移を「続けて」入れるための判断。
 //
 // 状態機械の設計では遷移を 1 図に 10〜30 本入れる。1 本ごとにフォームが初期状態へ戻り、
 // トリガは毎回手打ち、遷移先は図から選べず、続けて入れられなかった。
 // ここは DOM を触らずに、
-//   - 候補 (この図の遷移で使ったトリガ・ガード・アクションと、同じ部品のシーケンス図のメッセージ名)
+//   - 候補 (この図の遷移で使ったトリガ・ガード・アクション)
 //   - 候補の絞り込み (打ち始めで絞る)
 //   - 次の 1 本の from (直前の to / 直前と同じ)
 //   - 書き込む位置 (同じ from の遷移の並びの末尾。無ければ同じ階層の遷移の末尾)
@@ -91,7 +91,7 @@ window.MA.stateTxEntry = (function() {
   }
 
   // parsed: この図 (入れ子の子状態の遷移も parse に入っている)。
-  // extraTriggers: 同じ部品のシーケンス図のメッセージ名・名前帳など (後ろに足す)。
+  // extraTriggers: 呼び出し側が足したい名前 (後ろに足す)。画面は今の図の中の名前だけを使い、渡さない。
   function candidates(parsed, extraTriggers) {
     var tm = {}, to = [], gm = {}, go = [], am = {}, ao = [];
     ((parsed && parsed.transitions) || []).forEach(function(tr) {

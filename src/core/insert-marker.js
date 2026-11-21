@@ -63,7 +63,7 @@ window.MA.insertMarker = (function() {
   function gutterHtml(count, t, escHtml) {
     var esc = escHtml || function(s) { return String(s); };
     var out = [];
-    // BLK-primary-20260908-1603: 行番号にマウスを乗せて対応する図形を光らせたいので、
+    // 行番号にマウスを乗せて対応する図形を光らせたいので、
     // どの番号も data-line を持つ span で包む (挿入先だけ従来どおり目印の class が付く)。
     for (var i = 1; i <= count; i++) {
       var cls = 'ln' + (i === t ? ' ln-insert-target' : '');
@@ -100,7 +100,7 @@ window.MA.insertMarker = (function() {
   }
 
   // show(line, position, explicitTarget) — 挿入メニューを開くときに呼ぶ。
-  // BLK-human-20260912-0901: activate/deactivate の帯を避けて挿入行がずれることが
+  // activate/deactivate の帯を避けて挿入行がずれることが
   // あるので、呼び出し側が決めた行を渡せる (渡さなければ従来の before/after 計算)。
   function show(line, position, explicitTarget) {
     var t = (typeof explicitTarget === 'number' && !isNaN(explicitTarget))

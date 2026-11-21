@@ -5,13 +5,13 @@ window.MA.regexParts = (function() {
   var IDENTIFIER = '[A-Za-z_][A-Za-z0-9_]*';
   var QUOTED_NAME = '"[^"]+"';
   var IDENTIFIER_OR_QUOTED = '(?:' + IDENTIFIER + '|' + QUOTED_NAME + ')';
-  // BLK-migrator-20260918-0249: PlantUML は矢印の中に置き方の指示を書ける
+  // PlantUML は矢印の中に置き方の指示を書ける
   // (`-up->` `-right->` と 1 文字の `-u->` `-r->`)。線の意味は変わらず、
   // 図の中でどちらへ伸ばすかだけが変わる。矢印トークンを読むところは
   // 図種によらずここを使い、方向語を落とさない。長い綴りを先に並べる。
   var ARROW_DIRECTION = '(?:up|down|left|right|u|d|l|r)';
 
-  // BLK-migrator-20260929-2003: 矢印の線の中の書式 `[…]`。PlantUML は線の中のどこにでも 1 つ置け、中身は
+  // 矢印の線の中の書式 `[…]`。PlantUML は線の中のどこにでも 1 つ置け、中身は
   // #色・bold・dashed・dotted・hidden・plain・thickness=N をカンマで並べたもの (`-[bold]>` `--[#green]>`
   // `-[#red,bold]->` `<-[dashed]-`)。図種ごとに「# の色だけ」「最初の - の直後だけ」と別々に読むと、
   // それ以外の書き方の行が要素として読めず枠が出ない。矢印を読む所 (sequence のメッセージ・state の遷移・

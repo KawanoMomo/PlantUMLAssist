@@ -13,7 +13,7 @@ async function open7b(page) {
 async function openToolMenu(page) {
   await page.keyboard.press('Control+k');
   await expect(page.locator('#cp-input')).toBeVisible();
-  await page.locator('#cp-input').fill('ツールを分類から選ぶ');
+  await page.locator('#cp-input').fill('ツールの一覧を開く');
   await page.keyboard.press('Enter');
   await expect(page.locator('#tool-menu')).toBeVisible();
 }
@@ -24,38 +24,27 @@ test('既定のタブ列にはボタンが 1 つも無い (図のタブと ＋ /
   await expect(page.locator('#btn-tab-folder')).toBeVisible();
   await expect(page.locator('#btn-tab-tools')).toBeHidden();
   // 25 個の機能ボタンはどれも出ない。
-  for (const id of ['btn-tab-rename', 'btn-tab-board', 'btn-tab-xref',
-                    'btn-tab-handoff', 'btn-tab-delivery', 'btn-tab-diff']) {
+  for (const id of ['btn-tab-rename', 'btn-tab-apply', 'btn-tab-lines', 'btn-tab-diff']) {
     await expect(page.locator('#' + id), id).toBeHidden();
   }
 });
 
-// 下端の札は件数が 1 以上のときだけ出る (0 件の札は消えて静か。BLK-releaser-20260929-0851-2 で今の画面に合わせた)。
-// 件数を持たせると札が出て、押すとそのパネルが開く。
-test('件数を持つものは下端の状態表示に出て、押せばそのパネルが開く', async ({ page }) => {
+// 整合・イベント整合の札 (図をまたぐ監査) は TICKET-owner-20261115-1841-prune、
+// ± 差分の札は TICKET-owner-20261115-2141-prune で外した。
+test('下端に件数の札 (± 差分・整合・イベント整合) は無い', async ({ page }) => {
   await open7b(page);
-  for (const id of ['status-diff', 'status-pins', 'status-inbox',
-                    'status-consistency', 'status-eventsync']) {
-    await expect(page.locator('#' + id), id).toHaveCount(1);
-  }
-  // 遷移のイベントに対応するクラスが無い state 図 → イベント整合の札に件数が出る
-  await page.locator('#diagram-type').selectOption('plantuml-state');
-  await page.locator('#editor').fill('@startuml\n[*] --> Idle\nIdle --> Busy : Adc_StartConv\n@enduml');
-  const badge = page.locator('#status-eventsync');
-  await expect(badge).toBeVisible();
-  await badge.click();
-  await expect(page.locator('#ev-modal')).toBeVisible();
+  await expect(page.locator('#status-diff')).toHaveCount(0);
+  await expect(page.locator('#status-consistency, #status-eventsync')).toHaveCount(0);
 });
 
-test('機能は Ctrl+K から引ける (ツールの分類メニューも Ctrl+K から開く)', async ({ page }) => {
+test('機能は Ctrl+K から引ける (ツールの一覧も Ctrl+K から開く)', async ({ page }) => {
   await open7b(page);
   await openToolMenu(page);
-  // BLK-human-20260923-1601 (design 9b): 分類は左列に 6 つ並ぶ。
-  await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
-    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー', '渡す',
-  ]);
-  await pickTool(page, 'btn-tab-board');
-  await expect(page.locator('#cb-modal')).toBeVisible();
+  // TICKET-roadmap-20261115-2114-2: 分類の列は無く、残った道具だけの 1 段の一覧。
+  await expect(page.locator('#tool-menu .tool-menu-cat')).toHaveCount(0);
+  await expect(page.locator('#tool-menu .tool-menu-list .tool-menu-item')).toHaveCount(3);
+  await pickTool(page, 'btn-tab-lines');
+  await expect(page.locator('#lines-panel')).toHaveClass(/open/);
 });
 
 // BLK-builder-20260924-1815-3 (design 9b / 9a): 既定のパネルに「ツール ▾ をタブ列に出す」は出さない
@@ -70,7 +59,7 @@ test('以前に「ツール ▾ をタブ列に出す」を選んだ人は、パ
   await page.reload();
   await page.waitForSelector('#preview-svg');
   await expect(page.locator('#btn-tab-tools')).toBeVisible();
-  await expect(page.locator('#btn-tab-board')).toBeHidden();
+  await expect(page.locator('#btn-tab-lines')).toBeHidden();
 
   await page.locator('#btn-tab-tools').click();
   await expect(page.locator('#tool-menu-quiet')).toHaveText('ツール ▾ を右端へ戻す');
