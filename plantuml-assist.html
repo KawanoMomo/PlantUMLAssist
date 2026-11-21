@@ -1178,7 +1178,7 @@ html, body {
 #folder-panel .folder-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
 
 /* 機能ボタンを「ツール」1 か所に畳む。
-   畳んだ状態では機能ボタンがタブ列から消え、6 分類のメニューから選ぶ。 */
+   畳んだ状態では機能ボタンがタブ列から消え、ツール ▾ の一覧から選ぶ。 */
 #tab-bar.tools-folded .tab-tool.tool-folded { display: none; }
 /* 手元の .puml を開く入口・ドロップ・未対応記法の一覧 */
 .folder-open-file { display: block; width: 100%; margin: 0 0 6px; padding: 6px 8px; text-align: left; font-size: 12px; cursor: pointer;
@@ -1235,8 +1235,8 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   top: 26px;
   left: 4px;
   z-index: 40;
-  /* design 9b: 左 6 分類・右小見出しの 2 段。1 面 14 行以内なので中はスクロールさせない */
-  width: 520px;
+  /* 残った道具だけの 1 段の一覧。14 行以内なので中はスクロールさせない */
+  width: 360px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1246,7 +1246,7 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
 }
 #tool-menu[hidden] { display: none; }
-/* design 9b: 上の絞り込み欄 */
+/* 上の絞り込み欄 */
 .tool-menu-head {
   display: flex;
   align-items: center;
@@ -1274,64 +1274,17 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   font-size: 10px;
   white-space: nowrap;
 }
-.tool-menu-panes { display: flex; min-height: 0; }
-.tool-menu-cats {
-  width: 150px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--border);
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.tool-menu-cat {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 11.5px;
-  text-align: left;
-  padding: 6px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.tool-menu-cat .tool-cat-name { flex: 1; }
-.tool-menu-cat .tool-cat-count {
-  color: var(--accent-orange);
-  font-size: 10px;
-  font-family: var(--font-mono, monospace);
-}
-.tool-menu-cat:hover { color: var(--text-primary); background: var(--bg-primary); }
-.tool-menu-cat[aria-selected="true"] {
-  color: var(--text-primary);
-  background: var(--bg-primary);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.tool-menu-items { flex: 1; min-width: 0; padding: 6px; }
-/* 小見出し (design 9b)。分類の中をさらに目的で区切る */
+.tool-menu-items { min-width: 0; padding: 6px; }
+/* 小見出し。一覧を目的で区切る */
 .tool-menu-sub {
   color: var(--text-secondary);
   font-size: 10px;
   font-family: var(--font-mono, monospace);
   padding: 6px 8px 2px;
 }
-.tool-menu-group > .tool-menu-sub:first-child { padding-top: 2px; }
-/* 分類名は左列が見せるので、右列の見出しは読み上げ用に隠す */
-.tool-menu-title {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-.tool-menu-group[hidden] { display: none; }
+.tool-menu-list > .tool-menu-sub:first-child { padding-top: 2px; }
+.tool-menu-list[hidden] { display: none; }
 .tool-menu-hits[hidden] { display: none; }
-/* 絞り込み中は分類の選択が効いていないことを見せる */
-.tool-menu-cats-dim .tool-menu-cat[aria-selected="true"] { box-shadow: none; background: transparent; }
 .tool-menu-foot {
   border-top: 1px solid var(--border);
   padding: 4px 6px;
@@ -3505,13 +3458,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- / design 9a: 手元の .puml を開く入口は上部バーの
              Import ▾ へ移した。DOM には残す (ドラッグ&ドロップ・空の画面・Ctrl+K が叩く) -->
         <button class="tab-tool" id="btn-open-file" hidden title="手元の .puml / .plantuml / .uml / .txt を開きます (複数可)。エディタやプレビューへドラッグ&ドロップでも開けます" aria-label="ファイルを開く(.puml)">開く</button>
-        <!-- 機能ボタンを 6 分類のメニューに畳む -->
+        <!-- 機能ボタンを 1 段の一覧のメニューに畳む -->
         <button class="tab-tool" id="btn-tab-tools" aria-expanded="false" aria-controls="tool-menu"
-                title="ツールを分類から選ぶ (Ctrl+K でも同じ操作が引ける)">ツール ▾</button>
+                title="ツールの一覧から選ぶ (Ctrl+K でも同じ操作が引ける)">ツール ▾</button>
         <!-- 静かなタブ列でも、畳んだ機能の入口を 1 クリック分残す。
              文字は「ツール ▾」、置き場所はタブ列の右端 -->
         <button class="tab-tool tab-tool-mini" id="btn-tab-tools-mini" aria-expanded="false" aria-controls="tool-menu"
-                title="畳んでいるツールを分類から選ぶ (Ctrl+K でも同じ操作が引ける)">ツール ▾</button>
+                title="畳んでいるツールの一覧から選ぶ (Ctrl+K でも同じ操作が引ける)">ツール ▾</button>
         <!-- 隣のフォルダの図は FILES ツリーの「読むだけ」節から開く -->
         <!-- やり直し途中の控えに印を付け、📂 一覧で畳む -->
         <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
@@ -3522,7 +3475,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- 単発 diff では見えない「行って戻った」を履歴の上で見る -->
         <button class="tab-tool" id="btn-tab-versions" title="この図が保存のたびにどう変わったかを通しで並べる。前の版に戻った「往復」には印が付く">⟲ 変遷 −</button>
       </div>
-      <!-- ツールを 6 分類で縦に並べるパネル -->
+      <!-- ツールを 1 段の一覧で縦に並べるパネル -->
       <div id="tool-menu" role="menu" aria-label="ツール" hidden></div>
       <!-- 開いている図をまたいで部品名を一括置換する -->
       <div id="rename-panel">

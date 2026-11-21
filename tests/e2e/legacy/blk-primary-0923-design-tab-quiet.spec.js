@@ -13,7 +13,7 @@ async function open7b(page) {
 async function openToolMenu(page) {
   await page.keyboard.press('Control+k');
   await expect(page.locator('#cp-input')).toBeVisible();
-  await page.locator('#cp-input').fill('ツールを分類から選ぶ');
+  await page.locator('#cp-input').fill('ツールの一覧を開く');
   await page.keyboard.press('Enter');
   await expect(page.locator('#tool-menu')).toBeVisible();
 }
@@ -37,15 +37,12 @@ test('下端に件数の札 (± 差分・整合・イベント整合) は無い'
   await expect(page.locator('#status-consistency, #status-eventsync')).toHaveCount(0);
 });
 
-test('機能は Ctrl+K から引ける (ツールの分類メニューも Ctrl+K から開く)', async ({ page }) => {
+test('機能は Ctrl+K から引ける (ツールの一覧も Ctrl+K から開く)', async ({ page }) => {
   await open7b(page);
   await openToolMenu(page);
-  // BLK-human-20260923-1601 (design 9b): 分類は左列に並ぶ (渡すは TICKET-owner-20261115-1828-prune で外した)。
-  await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
-    // 確かめる は TICKET-owner-20261115-1841-prune、探す は TICKET-owner-20261115-2140-prune で外した。
-    // レビュー は TICKET-owner-20261115-2141-prune で外した。
-    '書き換える',
-  ]);
+  // TICKET-roadmap-20261115-2114-2: 分類の列は無く、残った道具だけの 1 段の一覧。
+  await expect(page.locator('#tool-menu .tool-menu-cat')).toHaveCount(0);
+  await expect(page.locator('#tool-menu .tool-menu-list .tool-menu-item')).toHaveCount(3);
   await pickTool(page, 'btn-tab-lines');
   await expect(page.locator('#lines-panel')).toHaveClass(/open/);
 });

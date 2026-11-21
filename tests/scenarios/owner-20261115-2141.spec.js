@@ -89,7 +89,9 @@ test('owner 2141 読むだけの図は右の枠に 1 枚で出てどこにも書
   await expect(page.locator('#compare-pane')).toBeHidden();
   await page.locator('#btn-tab-tools-mini:visible, #btn-tab-tools:visible').first().click();
   await expect(page.locator('#tool-menu')).toBeVisible();
-  await expect(page.locator('#tool-menu .tool-menu-cat[data-group="review"]')).toHaveCount(0);
+  // TICKET-roadmap-20261115-2114-2: パネルは 1 段の一覧。レビューの項目 (指摘・変更の履歴) が無いことを見る。
+  await expect(page.locator('#tool-menu .tool-menu-list .tool-menu-item').first()).toBeVisible();
+  await expect(page.locator('#tool-menu')).not.toContainText('変更の履歴');
   await page.keyboard.press('Escape');
   await page.keyboard.press('Control+k');
   await page.waitForSelector('#cp-modal');

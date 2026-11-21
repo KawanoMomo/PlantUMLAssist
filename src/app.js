@@ -1602,7 +1602,7 @@ function init() {
     if (filesGlyph && filesSvg) filesGlyph.outerHTML = filesSvg;
   })();
 
-  // ── ツールメニュー (design 7a): 機能ボタンを 6 分類に畳む ────────────────
+  // ── ツールメニュー (design 7a): 機能ボタンを 1 段の一覧に畳む ────────────────
   // タブ列に横並びだった機能ボタンを 1 つの「ツール」に畳む。メニュー項目は
   // 既存ボタンの click を鳴らすだけで、処理そのものは元のボタン側に残す
   // (Ctrl+K のコマンドパレットと同じ経路を通す)。
@@ -1695,34 +1695,18 @@ function init() {
         + (foot ? '<div class="tool-menu-foot">' + foot + '</div>' : '');
       menu.hidden = false;
       setExpanded(true);
-      // design 9b: 開いたらそのまま打てる。分類は 1 つ目を選んだ状態で出す。
-      selectCat(menu.querySelector('.tool-menu-cat'));
+      // 開いたらそのまま打てる。
+      markCurrent(null);
       var f = menu.querySelector('#tool-menu-filter');
       if (f) f.focus();
     }
 
-    // ── design 9b: 2 段パネルの分類切り替え・絞り込み・キーボード ────────────
-    function catButtons() {
-      return Array.prototype.slice.call(menu.querySelectorAll('.tool-menu-cat'));
-    }
-
+    // ── 1 段の一覧の絞り込み・キーボード ────────────
     // いま見えている項目 (絞り込み中はその結果)。↑↓ と Enter はこれを辿る。
     function visibleItems() {
       return Array.prototype.filter.call(
         menu.querySelectorAll('.tool-menu-items .tool-menu-item'),
         function(b) { return b.offsetParent !== null || !b.closest('[hidden]'); });
-    }
-
-    function selectCat(btn) {
-      if (!btn) return;
-      var key = btn.getAttribute('data-group');
-      catButtons().forEach(function(b) {
-        b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
-      });
-      Array.prototype.forEach.call(menu.querySelectorAll('.tool-menu-group'), function(g) {
-        g.hidden = g.getAttribute('data-group') !== key;
-      });
-      markCurrent(null);
     }
 
     function markCurrent(item) {
@@ -1743,44 +1727,22 @@ function init() {
       markCurrent(list[i]);
     }
 
-    function moveCat(step) {
-      var cats = catButtons();
-      if (!cats.length) return;
-      var cur = menu.querySelector('.tool-menu-cat[aria-selected="true"]');
-      var i = cats.indexOf(cur);
-      i = (i < 0) ? 0 : (i + step + cats.length) % cats.length;
-      selectCat(cats[i]);
-    }
-
-    // 絞り込み: 全分類を横断して候補を出す。空に戻すと分類表示に帰る。
+    // 絞り込み: 一覧の代わりに候補を出す。空に戻すと一覧に帰る。
     function applyFilter(q) {
       var hits = menu.querySelector('.tool-menu-hits');
-      var cats = menu.querySelector('.tool-menu-cats');
+      var list = menu.querySelector('.tool-menu-list');
       if (!hits) return;
       var on = String(q || '').trim() !== '';
-      Array.prototype.forEach.call(menu.querySelectorAll('.tool-menu-group'), function(g) {
-        if (on) g.hidden = true;
-      });
+      if (list) list.hidden = on;
       hits.hidden = !on;
-      if (cats) cats.classList.toggle('tool-menu-cats-dim', on);
       if (on) {
         hits.innerHTML = tm.buildHitsHtml(q, badges());
         markCurrent(hits.querySelector('.tool-menu-item'));
       } else {
         hits.innerHTML = '';
-        selectCat(menu.querySelector('.tool-menu-cat[aria-selected="true"]')
-          || menu.querySelector('.tool-menu-cat'));
+        markCurrent(null);
       }
     }
-
-    // ホバーで右列が切り替わる (design 9b)。絞り込み中は候補を出したままにする。
-    menu.addEventListener('mouseover', function(e) {
-      var cat = e.target && e.target.closest ? e.target.closest('.tool-menu-cat') : null;
-      if (!cat) return;
-      var f = menu.querySelector('#tool-menu-filter');
-      if (f && f.value.trim()) return;
-      selectCat(cat);
-    });
 
     menu.addEventListener('input', function(e) {
       if (!e.target || e.target.id !== 'tool-menu-filter') return;
@@ -1791,8 +1753,6 @@ function init() {
       if (menu.hidden) return;
       if (e.key === 'ArrowDown') { e.preventDefault(); moveItem(1); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); moveItem(-1); return; }
-      if (e.key === 'ArrowRight') { e.preventDefault(); moveCat(1); return; }
-      if (e.key === 'ArrowLeft') { e.preventDefault(); moveCat(-1); return; }
       if (e.key === 'Enter') {
         var cur = currentItem();
         if (cur) { e.preventDefault(); cur.click(); }
@@ -1808,8 +1768,6 @@ function init() {
     if (mini) mini.addEventListener('click', toggle);
 
     menu.addEventListener('click', function(e) {
-      var cat = e.target && e.target.closest ? e.target.closest('.tool-menu-cat') : null;
-      if (cat) { selectCat(cat); return; }
       var item = e.target && e.target.closest ? e.target.closest('.tool-menu-item') : null;
       if (!item) return;
       // 下端の 1 行は既定へ戻すだけ (既定から外す道はパネルに置かない)。
@@ -3448,8 +3406,8 @@ function initCommandPalette() {
       // タブバーの道具はどれもパレットに無く、design 1a で
       // ペインが狭くなった後は潰れたラベルを目で数えて押すしか経路が無かった。
       // タブ列から「ツール ▾」も消えるので、
-      // 6 分類のメニュー自体を引く経路をここに置く (メニューは画面左上に開く)。
-      { id: 'tab-tools', title: 'ツールを分類から選ぶ / Tools', hint: 'Tabs', keywords: ['tool', 'menu', 'つーる', 'どうぐ', 'ぶんるい', 'めにゅー'], run: function() { setTimeout(function() { clickById('btn-tab-tools'); }, 0); } },
+      // ツールの一覧そのものを引く経路をここに置く (メニューは画面左上に開く)。
+      { id: 'tab-tools', title: 'ツールの一覧を開く / Tools', hint: 'Tabs', keywords: ['tool', 'menu', 'つーる', 'どうぐ', 'ぶんるい', 'めにゅー'], run: function() { setTimeout(function() { clickById('btn-tab-tools'); }, 0); } },
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], button: 'btn-tab-new', run: function() { clickById('btn-tab-new'); } },
       // 保存先の行の右クリック「別のフォルダを保存先にする…」と同じ窓。
       // 右クリックの入口と同じ名前にする (前の名前「保存先を変える」は検索語に残す)。
