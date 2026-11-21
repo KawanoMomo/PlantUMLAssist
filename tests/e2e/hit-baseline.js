@@ -179,7 +179,12 @@ function probeInPage() {
   const svg = document.querySelector('#preview-svg svg');
   if (!svg) return null;
   const pc = document.getElementById('preview-container');
-  const inv = svg.getScreenCTM().inverse();
+  // TICKET-releaser-20261122-0120-2: 点の名前 (SVG 座標) は、その時のスクロールでの画面座標から引き戻す。
+  // 最初の 1 回だけ取った逆行列を使い回すと、窓の外の点を指すためにスクロールした後の点がスクロールの分だけ
+  // ずれた名前になり、プレビューの高さが変わる (図の上の帯を外す等) だけで「点が消えた」と赤になっていた。
+  // 引き戻しの浮動小数の誤差で .5 ちょうどの座標の丸めが割れないよう、丸める前にわずかに寄せる。
+  const inv = () => svg.getScreenCTM().inverse();
+  const rnd = (v) => Math.round(v + 1e-4);
   const out = {};
   const els = svg.querySelectorAll('text, rect, ellipse, circle, polygon, path, line');
   for (const el of Array.from(els)) {
@@ -198,10 +203,10 @@ function probeInPage() {
       if (r.width < 2 && r.height < 2) continue;
       sx = r.left + r.width / 2; sy = r.top + r.height / 2;
     }
-    const u = new DOMPoint(sx, sy).matrixTransform(inv);
+    const u = new DOMPoint(sx, sy).matrixTransform(inv());
     // 文字は数字を 0 に寄せる (%date の日時など、描くたびに変わる数字で点の名前が揺れないように)。
     const txt = tag === 'text' ? (el.textContent || '').trim().slice(0, 24).replace(/\d/g, '0') : '';
-    const key = tag + '@' + Math.round(u.x) + ',' + Math.round(u.y) + (txt ? ' ' + txt : '');
+    const key = tag + '@' + rnd(u.x) + ',' + rnd(u.y) + (txt ? ' ' + txt : '');
     if (key in out) continue;
     let cr = pc.getBoundingClientRect();
     const outside = () => sx < cr.left || sy < cr.top || sx >= cr.right - 1 || sy >= cr.bottom - 1;
