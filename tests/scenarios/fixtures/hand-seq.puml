@@ -1,0 +1,16 @@
+@startuml
+' 通信手順 (手書き版)
+!include common.puml
+skinparam sequenceMessageAlign center
+
+participant Drv
+participant Mon
+participant Bus
+
+' --- 起動 ---
+Drv -> Bus : Open()
+    ' 字下げは手で揃えたもの
+    Bus --> Drv : ready
+' --- 監視 ---
+Mon -> Bus : Poll()
+@enduml

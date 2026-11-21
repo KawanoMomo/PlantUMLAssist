@@ -1,0 +1,3 @@
+' 共通の見た目 (自作・!include 用)
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 12
