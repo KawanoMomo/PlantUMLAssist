@@ -11,7 +11,7 @@ const { gotoApp } = require('../helpers');
 async function openToolMenu(page) {
   await page.keyboard.press('Control+k');
   await expect(page.locator('#cp-input')).toBeVisible();
-  await page.locator('#cp-input').fill('ツールを分類から選ぶ');
+  await page.locator('#cp-input').fill('ツールの一覧を開く');
   await page.keyboard.press('Enter');
   await expect(page.locator('#tool-menu')).toBeVisible();
 }

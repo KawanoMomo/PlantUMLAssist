@@ -21,11 +21,11 @@ function subsIn(html) {
   return out;
 }
 
-function subsOf(key) {
+// TICKET-roadmap-20261115-2114-2: パネルは 1 段の一覧 (分類ごとの面は無い)。一覧の小見出しを拾う。
+function subsOfList() {
   var html = TM.buildMenuHtml({});
-  var start = html.indexOf('<div class="tool-menu-group" data-group="' + key + '"');
-  var end = html.indexOf('<div class="tool-menu-group"', start + 1);
-  if (end < 0) end = html.indexOf('<div class="tool-menu-hits"', start);
+  var start = html.indexOf('<div class="tool-menu-list">');
+  var end = html.indexOf('<div class="tool-menu-hits"', start);
   return subsIn(html.slice(start, end));
 }
 
@@ -35,12 +35,10 @@ function labelsOf(key) {
 }
 
 describe('右列の小見出しは各 1 回 (design 9b)', () => {
-  test('どの分類でも小見出しが 2 度出ない', () => {
-    TM.panelGroups().forEach(function(g) {
-      var subs = subsOf(g.key);
-      var uniq = subs.filter(function(s, i) { return subs.indexOf(s) === i; });
-      expect(subs).toEqual(uniq);
-    });
+  test('一覧で小見出しが 2 度出ない', () => {
+    var subs = subsOfList();
+    var uniq = subs.filter(function(s, i) { return subs.indexOf(s) === i; });
+    expect(subs).toEqual(uniq);
   });
 
   // 「渡す前に」(提出前チェック・引き継ぎチェックリスト) は TICKET-owner-20261115-1828-prune で外した。
@@ -51,13 +49,11 @@ describe('右列の小見出しは各 1 回 (design 9b)', () => {
   });
 
   test('書き換える は まとめて直す だけ (1 回)', () => {
-    expect(subsOf('edit')).toEqual(['まとめて直す']);
+    expect(subsOfList()).toEqual(['まとめて直す']);
   });
 
   test('小見出しを 1 行と数えた行数は 14 行以内のまま', () => {
-    TM.panelGroups().forEach(function(g) {
-      expect(TM.rowCount(g.key)).toBeLessThanOrEqual(14);
-    });
+    expect(TM.rowCount()).toBeLessThanOrEqual(14);
   });
 
   test('絞り込みの横断結果でも分類の見出しは各 1 回', () => {

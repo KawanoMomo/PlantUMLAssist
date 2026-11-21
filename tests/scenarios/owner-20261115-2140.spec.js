@@ -62,9 +62,9 @@ test('owner 2140 ツール ▾ に「探す」は無く、残った道具をど�
   await H.waitDrawn(page, ['SpiDrv', 'Reg']);
 
   await page.locator('#btn-tab-tools').click();
-  await expect(page.locator('.tool-menu-cat').first()).toBeVisible();
-  await expect(page.locator('.tool-menu-cat[data-group="find"]')).toHaveCount(0);
-  const menuText = await page.locator('.tool-menu-cat').allTextContents();
+  // TICKET-roadmap-20261115-2114-2: パネルは 1 段の一覧 (分類の列は無い)。一覧の文字で「探す」が無いことを見る。
+  await expect(page.locator('#tool-menu .tool-menu-list .tool-menu-item').first()).toBeVisible();
+  const menuText = await page.locator('#tool-menu').allTextContents();
   expect(menuText.join(' ')).not.toContain('探す');
   await page.screenshot({ path: testInfo.outputPath('tool-menu.png') });
   const targets = await page.evaluate(() => Array.prototype.slice

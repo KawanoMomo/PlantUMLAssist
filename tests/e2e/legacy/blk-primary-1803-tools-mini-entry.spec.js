@@ -30,11 +30,9 @@ test('札を 1 クリックで畳んだ一覧が開く', async ({ page }) => {
   await openDefault(page);
   await page.locator('#btn-tab-tools-mini').click();
   await expect(page.locator('#tool-menu')).toBeVisible();
-  // 「渡す」(引き継ぎ・納品) は TICKET-owner-20261115-1828-prune で外した。
-  await expect(page.locator('#tool-menu .tool-menu-cat .tool-cat-name')).toHaveText([
-    // 確かめる は 1841-prune、探す は TICKET-owner-20261115-2140-prune、レビュー は 2141-prune で外した
-    '書き換える',
-  ]);
+  // TICKET-roadmap-20261115-2114-2: 分類の列は無く、残った道具だけの 1 段の一覧。
+  await expect(page.locator('#tool-menu .tool-menu-cat')).toHaveCount(0);
+  await expect(page.locator('#tool-menu .tool-menu-list .tool-menu-item[data-target="btn-tab-lines"]')).toBeVisible();
 });
 
 test('もう一度押せば閉じ、Esc でも閉じる', async ({ page }) => {

@@ -116,12 +116,9 @@ async function setDiagramTitle(page, title) {
 }
 
 
-// design 9b (BLK-human-20260923-1601): ツール ▾ は左 6 分類・右小見出しの 2 段パネル。
-// 目当ての項目はその分類を選ばないと右列に出ないので、分類を選んでから押す。
+// TICKET-roadmap-20261115-2114-2: ツール ▾ は残った道具だけの 1 段の一覧 (分類を選ぶ手は無い)。
 async function pickTool(page, targetId) {
-  const key = await page.evaluate((id) => window.MA.toolMenu.groupOf(id), targetId);
-  await page.locator('.tool-menu-cat[data-group="' + key + '"]').click();
-  await page.locator('.tool-menu-item[data-target="' + targetId + '"]').click();
+  await page.locator('#tool-menu .tool-menu-list .tool-menu-item[data-target="' + targetId + '"]').click();
 }
 
 // TICKET-owner-20261115-2141-prune: 参照ペインの入口は「この図の履歴」の行の「比較」1 つになり、

@@ -5,7 +5,7 @@ window.MA = window.MA || {};
 //
 // タブ列には 2 種類のものが混ざっている。図のタブ (今どれを見ているか) と、機能ボタン
 // (何をするか)。後者が 20 個以上あるため、目的のボタンを目で探す時間が業務のたびに要る。
-// ここでは機能ボタンを 6 分類のメニューに畳み、分類ごとに開いて選べるようにする。
+// ここでは機能ボタンを 1 段の一覧のメニューに畳む (整理で分類の中身が外れ、残りは数行)。
 // メニュー項目は既存のボタンの id を指すだけで、実際の処理は元のボタンの click に委ねる
 // (同じ操作が Ctrl+K のコマンドパレットからも引ける、という関係を崩さないため)。
 // ここは DOM に触らない純関数だけを置き、描画と結線は app.js。
@@ -46,7 +46,7 @@ window.MA.toolMenu = (function() {
     return GROUPS.concat(MOVED_TO_EXPORT).concat(MOVED_TO_FILES);
   }
 
-  // メニューの 6 分類 (右クリックへ移したものは入れない)。
+  // メニューに並べる分類 (右クリックへ移したものは入れない)。
   function menuGroups() {
     return GROUPS.concat(MOVED_TO_EXPORT);
   }
@@ -61,12 +61,11 @@ window.MA.toolMenu = (function() {
   // 消える向きの警告のときだけ出る守りになった。
   var NOT_IN_TAB_BAR = ['status-livediff'];
 
-  // design 9b: 絞り込み欄の右端に出す注記。パネルが 2 段になって幅が要るので短くする。
+  // 絞り込み欄の右端に出す注記。
   var NOTE = 'Ctrl+K でも引けます';
   var FILTER_LABEL = 'ツールを絞り込む';
 
-  // design 9b: パネルの左列に出す 6 分類。Export ▾ に入口を移した「渡す」も、
-  // 「どこを見ればよいか」の地図としてはここに居る (押すと Export 側のボタンを鳴らす)。
+  // 一覧に並べる項目を分類ごとに返す (絞り込みと Ctrl+K の見出しが使う)。
   function panelGroups() {
     return menuGroups().map(function(g) {
       return {
@@ -98,23 +97,7 @@ window.MA.toolMenu = (function() {
     return out;
   }
 
-  // 分類ごとの合計件数。開く前に「どこに何件あるか」を左列で見せる (design 9b)。
-  // 0 の分類は数字を出さない (常に場所を取る 0 を画面から消す)。
-  function groupCounts(badges) {
-    var b = badges || {};
-    var out = {};
-    panelGroups().forEach(function(g) {
-      var n = 0;
-      g.items.forEach(function(it) {
-        var v = parseInt(b[it.id], 10);
-        if (v > 0) n += v;
-      });
-      if (n > 0) out[g.key] = n;
-    });
-    return out;
-  }
-
-  // 絞り込み。分類名・小見出し・項目名のどれかに当たれば残す (全分類を横断する)。
+  // 絞り込み。分類名・小見出し・項目名のどれかに当たれば残す。
   function filterItems(query) {
     var q = String(query == null ? '' : query).trim().toLowerCase();
     var out = [];
@@ -134,20 +117,17 @@ window.MA.toolMenu = (function() {
     return out;
   }
 
-  // パネル 1 面あたりの行数 (小見出しを 1 行と数える)。design 9b は 14 行以内。
-  function rowCount(key) {
-    var gs = panelGroups();
-    for (var i = 0; i < gs.length; i++) {
-      if (gs[i].key !== key) continue;
-      var heads = {};
-      var n = 0;
-      gs[i].items.forEach(function(it) {
+  // 一覧の行数 (小見出しを 1 行と数える)。パネルの中をスクロールさせない 14 行以内に収める。
+  function rowCount() {
+    var heads = {};
+    var n = 0;
+    panelGroups().forEach(function(g) {
+      g.items.forEach(function(it) {
         if (!heads[it.group]) { heads[it.group] = 1; n++; }
         n++;
       });
-      return n;
-    }
-    return 0;
+    });
+    return n;
   }
 
   // 単独キーを持つツール。ボタン id → ショートカット表 (settings-tabs) の行 id。
@@ -273,11 +253,11 @@ window.MA.toolMenu = (function() {
   // 札の title。畳んで見えなくなっているボタンの数と、Ctrl+K でも引けることを出す。
   function miniTitle(count) {
     var n = (typeof count === 'number' && count > 0) ? count : 0;
-    return '畳んでいるツール ' + n + ' 件を分類から選ぶ (Ctrl+K でも同じ操作が引ける)';
+    return '畳んでいるツール ' + n + ' 件から選ぶ (Ctrl+K でも同じ操作が引ける)';
   }
 
   // パネルの下端に出す切り替え。
-  // 9b のパネルは絞り込み欄と 2 段だけで、既定 (畳む・ツール ▾ は右端) の人に切り替えは要らない。
+  // パネルは絞り込み欄と一覧だけで、既定 (畳む・ツール ▾ は右端) の人に切り替えは要らない。
   // 以前に自分で切り替えて既定から外れている人にだけ、既定へ戻す 1 行を出す (選んだ状態は消さない)。
   //   畳んでいない (機能ボタンがタブ列に並ぶ) → 「タブ列から畳む」
   //   畳んでいるが ツール ▾ が ＋ の隣       → 「ツール ▾ を右端へ戻す」
@@ -305,61 +285,42 @@ window.MA.toolMenu = (function() {
       + '</button>';
   }
 
-  // design 9b: 左に 6 分類、右にその中身を小見出しで区切って出す 2 段のパネル。
-  // 縦 1 列に 40 件近く並べていたときは「確かめる」「レビュー」が画面の下にはみ出し、
-  // 何があるかを見るのにパネル内スクロールが要った。1 面 14 行以内に収める。
+  // 項目を小見出しで区切って並べる (同じ小見出しは 1 度だけ出す)。
+  function listHtml(items, badges) {
+    var head = '';
+    return items.map(function(it) {
+      var sub = '';
+      if (it.group && it.group !== head) {
+        head = it.group;
+        sub = '<div class="tool-menu-sub">' + esc(head) + '</div>';
+      }
+      return sub + itemHtml(it, badges);
+    }).join('');
+  }
+
+  // 残った道具だけの 1 段の一覧 (整理表 #4)。左の分類の列は持たない
+  // (分類の中身が外れて残りは数行になり、分類を選ぶ 1 手が要らなくなった)。
   function buildMenuHtml(badges) {
     var b = badges || {};
-    var counts = groupCounts(b);
-    var gs = panelGroups();
-    var cats = gs.map(function(g, i) {
-      return '<button type="button" class="tool-menu-cat" role="tab" data-group="' + esc(g.key) + '"'
-        + (i === 0 ? ' aria-selected="true"' : ' aria-selected="false"') + '>'
-        + '<span class="tool-cat-name">' + esc(g.title) + '</span>'
-        + (counts[g.key] ? '<span class="tool-cat-count">' + esc(counts[g.key]) + '</span>' : '')
-        + '</button>';
-    }).join('');
-    var panes = gs.map(function(g, i) {
-      var head = '';
-      var items = g.items.map(function(it) {
-        var sub = '';
-        if (it.group && it.group !== head) {
-          head = it.group;
-          sub = '<div class="tool-menu-sub">' + esc(head) + '</div>';
-        }
-        return sub + itemHtml(it, b);
-      }).join('');
-      return '<div class="tool-menu-group" data-group="' + esc(g.key) + '"'
-        + (i === 0 ? '' : ' hidden') + '>'
-        + '<div class="tool-menu-title">' + esc(g.title) + '</div>'
-        + items + '</div>';
-    }).join('');
+    var items = [];
+    panelGroups().forEach(function(g) { items = items.concat(g.items); });
     return '<div class="tool-menu-head">'
       + '<input type="search" id="tool-menu-filter" class="tool-menu-filter" autocomplete="off"'
       + ' placeholder="' + esc(FILTER_LABEL) + '" aria-label="' + esc(FILTER_LABEL) + '">'
       + '<span class="tool-menu-note">' + esc(NOTE) + '</span></div>'
-      + '<div class="tool-menu-panes">'
-      + '<div class="tool-menu-cats" role="tablist">' + cats + '</div>'
-      + '<div class="tool-menu-items">' + panes
-      + '<div class="tool-menu-hits" hidden></div></div></div>'
+      + '<div class="tool-menu-items">'
+      + '<div class="tool-menu-list">' + listHtml(items, b) + '</div>'
+      + '<div class="tool-menu-hits" hidden></div></div>'
       + '<div class="tool-menu-files-note" id="tool-menu-files-note">' + esc(FILES_NOTE) + '</div>';
   }
 
-  // 絞り込み中に右列へ出す一覧。どの分類のものかが分かるように分類名を添える。
+  // 絞り込み中に一覧の代わりに出す候補。
   function buildHitsHtml(query, badges) {
     var hits = filterItems(query);
     if (!hits.length) {
       return '<div class="tool-menu-sub">該当なし</div>';
     }
-    var head = '';
-    return hits.map(function(it) {
-      var sub = '';
-      if (it.groupTitle !== head) {
-        head = it.groupTitle;
-        sub = '<div class="tool-menu-sub">' + esc(head) + '</div>';
-      }
-      return sub + itemHtml(it, badges);
-    }).join('');
+    return listHtml(hits, badges);
   }
 
   return {
@@ -381,7 +342,6 @@ window.MA.toolMenu = (function() {
     buildMenuHtml: buildMenuHtml,
     buildHitsHtml: buildHitsHtml,
     panelGroups: panelGroups,
-    groupCounts: groupCounts,
     filterItems: filterItems,
     rowCount: rowCount,
     NOTE: NOTE,

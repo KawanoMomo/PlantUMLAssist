@@ -153,6 +153,30 @@ describe('整理の締め (TICKET-roadmap-20261115-2114-2)', function() {
   test('外した機能の名前が注釈にも残らない', function() {
     expect(hits(HANDOFF_WORDS)).toEqual([]);
   });
+
+  // roadmap v5.0 クライテリア 2: 整理表の「消す」「統合」の行に「未」が残らない (痕跡 0 件は 2114-1 の unit が「済」の行で見る)。
+  test('整理表の「消す」「統合」の行はどれも「済」', function() {
+    var text = fs.readFileSync(path.join(ROOT, 'docs', 'spec', 'feature-triage.md'), 'utf8');
+    expect(undoneRows(text)).toEqual([]);
+  });
+});
+
+// 整理表の行のうち、判定が 消す / 統合 で状態が 済 でないものの番号。
+function undoneRows(text) {
+  var out = [];
+  text.split(/\r?\n/).forEach(function(line) {
+    if (!/^\|\s*\d+\s*\|/.test(line)) return;
+    var c = line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(function(s) { return s.trim(); });
+    if ((c[3] === '消す' || c[3] === '統合') && c[7] !== '済') out.push('#' + c[0] + ' ' + c[1]);
+  });
+  return out;
+}
+
+describe('整理表の「未」の数え方が変異で落ちる', function() {
+  test('消す・統合の「未」を名指しし、残すと済は数えない', function() {
+    var t = '| 1 | A | X | 消す | — | 台本 | T | 未 | `a` |\n| 2 | B | X | 統合 | C | 価値 | T | 済 | `b` |\n| 3 | D | X | 残す | — | 価値 | — | — | — |';
+    expect(undoneRows(t)).toEqual(['#1 A']);
+  });
 });
 
 describe('締めの検査が変異で落ちる', function() {
