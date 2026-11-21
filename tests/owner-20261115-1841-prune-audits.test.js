@@ -8,7 +8,6 @@ const fs = require('fs');
 const path = require('path');
 
 var W = (typeof window !== 'undefined' && window) || global.window;
-var CD = W.MA.componentDeps;
 var TM = W.MA.toolMenu;
 
 const ROOT = path.resolve(__dirname, '..');
@@ -47,28 +46,14 @@ describe('外した監査の入口が残っていない', function() {
   });
 });
 
-describe('依存チェックは「実際の呼び出し」枠を出さない', function() {
-  var MINE = uml(['component GpioDrv', 'component Port_Drv', 'GpioDrv ..> Port_Drv : 依存']);
-  var SEQ = uml(['participant GpioDrv', 'participant Logger', 'GpioDrv -> Logger : 初期化完了を記録']);
-  var DOCS = [
-    { id: 1, name: 'gpio_component', diagramType: 'plantuml-component', dsl: MINE },
-    { id: 2, name: 'gpio_init_sequence', diagramType: 'plantuml-sequence', dsl: SEQ },
-  ];
-
-  test('noUsage では他の図の呼び出し相手を候補にしない', function() {
-    var res = CD.check(MINE, DOCS, 1, 'GpioDrv', { noUsage: true });
-    expect(res.rows.filter(function(r) { return r.source === 'usage'; })).toEqual([]);
-    expect(res.usageMissing).toBe(0);
-    expect(res.rows.some(function(r) { return r.name === 'Logger'; })).toBe(false);
-  });
-
-  test('既定 (部品を起こす側) は今までどおり実績を拾う', function() {
-    var res = CD.check(MINE, DOCS, 1, 'GpioDrv');
-    expect(res.rows.some(function(r) { return r.source === 'usage' && r.name === 'Logger'; })).toBe(true);
-  });
-
-  test('依存チェックの画面は noUsage で引き、出所の札に「実際の呼び出し」を持たない', function() {
-    expect(comp).toContain('CD.check(dsl, docs, activeId, subject, { noUsage: true })');
+// 依存チェックの本体 (component-deps) も TICKET-owner-20261116-0921-prune で外した。
+describe('依存チェックは残っていない', function() {
+  test('component.js に依存チェックの枠も呼び出しも無く、html は component-deps を読み込まない', function() {
+    expect(W.MA.componentDeps).toBe(undefined);
+    ['co-deps-summary', 'co-deps-body', 'componentDeps', '依存チェック'].forEach(function(w) {
+      expect(comp.indexOf(w)).toBe(-1);
+    });
+    expect(html.indexOf('component-deps.js')).toBe(-1);
     expect(comp.indexOf("usage: '実際の呼び出し'")).toBe(-1);
   });
 });
