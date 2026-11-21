@@ -1,0 +1,197 @@
+// @ts-check
+// primary 台本 場面 4「書き出し」手順 3:
+//   保存先の一覧から開いた 3 枚 (シーケンス・状態遷移・クラス) を Export ▾ の SVG・PNG・PNG（透過背景）で書き出し、
+//   書き出した中身を見る (SVG の背景 rect の有無・text 数が本文の要素数と一致するか、PNG の寸法と線が切れていないか、
+//   既定の保存名)。
+//   台本では persona-data の export-s4 の rev-seq・rev-class・hand-state を使うが、scenario は persona-data を
+//   読まず fixture の hand-seq・hand-state・hand-class (と `!include` する common.puml) を使う。
+// 期待 (principles.md「押した対象だけが変わる」「描ける」):
+//   - SVG の text は本文の要素 (参加者は頭と足の 2 つ・メッセージ・状態・遷移のラベル・クラス名・属性と操作) と
+//     数も文字も一致する (描き落とし・余計な文字が無い)。背景の rect の有無は annotation に残す
+//   - PNG・透過 PNG は 8bit RGBA・非インターレースで、寸法は SVG の viewBox と 2px 以内で一致し、
+//     線や文字の画素が画像の縁 (外周 1px) に掛からない (図が切れていない)
+//   - PNG の隅は白の不透明、透過 PNG の隅は透明 (透過を選んだときだけ背景が抜ける)
+//   - 既定の保存名は .puml と同じ名前に拡張子 (hand-seq.svg / hand-seq.png)
+//   - 書き出しても本文は 1 行も動かず、保存先の .puml は 1 バイトも変わらない
+//   - 手数は 1 枚 10 (一覧を開く 2 + 図を選ぶ 1 + 一覧を閉じる 1 + 書き出し 2 x 3)、3 枚で 30 以内
+const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
+const zlib = require('zlib');
+const H = require('./_helpers');
+const S = require('../e2e/scenarios/_scenario');
+
+// texts: 本文から読める、SVG に描かれるべき文字 (並びは問わない)。
+const DOCS = [
+  { name: 'hand-seq', words: ['Drv', 'Open()', 'ready', 'Poll()'],
+    // 参加者 3 (頭と足で 2 回ずつ) + メッセージ 3
+    texts: ['Drv', 'Mon', 'Bus', 'Drv', 'Mon', 'Bus', 'Open()', 'ready', 'Poll()'] },
+  { name: 'hand-state', words: ['Idle', 'Busy', 'Slow', 'Throttle'],
+    // 状態 3 + ラベル付きの遷移 3
+    texts: ['Idle', 'Busy', 'Slow', 'Start', 'Throttle', 'Stop'] },
+  { name: 'hand-class', words: ['Drv', 'Mon', 'rate : uint16'],
+    // クラス 2 + 属性・操作 3 (classAttributeIconSize 0 なので可視性は記号の文字で出る)
+    texts: ['Drv', '-rate : uint16', '+open() : void', 'Mon', '-period : uint32'] },
+];
+const FILES = ['common'].concat(DOCS.map((d) => d.name));
+const OPS_MAX = 30;
+
+// 本文から要素の数を数える (図種ごと。コメント行は数えない)。SVG の text 数と突き合わせる。
+function elementCount(name, text) {
+  const lines = text.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith("'"));
+  if (name === 'hand-seq') {
+    const parts = lines.filter((l) => /^participant /.test(l)).length;
+    const msgs = lines.filter((l) => /-+>.*:/.test(l)).length;
+    return parts * 2 + msgs;
+  }
+  if (name === 'hand-state') {
+    const states = new Set();
+    let labels = 0;
+    for (const l of lines) {
+      const m = l.match(/^(\S+)\s+-+>\s+(\S+)(\s*:.*)?$/);
+      if (!m) continue;
+      for (const s of [m[1], m[2]]) if (s !== '[*]') states.add(s);
+      if (m[3]) labels++;
+    }
+    return states.size + labels;
+  }
+  // class: クラス名 + 波括弧の中の属性・操作
+  let n = 0, inBody = false;
+  for (const l of lines) {
+    if (/^class /.test(l)) { n++; inBody = /\{$/.test(l); continue; }
+    if (inBody) { if (l === '}') inBody = false; else n++; }
+  }
+  return n;
+}
+
+// PNG (8bit RGBA・非インターレース) を画素に戻す。
+function decodePng(buf) {
+  const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20);
+  const info = { w, h, depth: buf[24], ctype: buf[25], interlace: buf[28] };
+  const idat = [];
+  for (let p = 8; p < buf.length;) {
+    const len = buf.readUInt32BE(p);
+    if (buf.toString('ascii', p + 4, p + 8) === 'IDAT') idat.push(buf.subarray(p + 8, p + 8 + len));
+    p += 12 + len;
+  }
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const bpp = 4, stride = w * bpp, px = Buffer.alloc(h * stride);
+  for (let y = 0; y < h; y++) {
+    const f = raw[y * (stride + 1)];
+    for (let x = 0; x < stride; x++) {
+      const r = raw[y * (stride + 1) + 1 + x];
+      const a = x >= bpp ? px[y * stride + x - bpp] : 0;
+      const b = y > 0 ? px[(y - 1) * stride + x] : 0;
+      const c = (x >= bpp && y > 0) ? px[(y - 1) * stride + x - bpp] : 0;
+      let v = r;
+      if (f === 1) v = r + a;
+      else if (f === 2) v = r + b;
+      else if (f === 3) v = r + ((a + b) >> 1);
+      else if (f === 4) {
+        const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c);
+        v = r + (pa <= pb && pa <= pc ? a : (pb <= pc ? b : c));
+      }
+      px[y * stride + x] = v & 255;
+    }
+  }
+  return Object.assign(info, { px });
+}
+
+// 隅の色と違う画素 (線・文字・塗り) の数と、そのうち外周 1px に掛かる数。
+function inkStats(img) {
+  const at = (x, y) => img.px.subarray((y * img.w + x) * 4, (y * img.w + x) * 4 + 4);
+  const bg = Array.from(at(0, 0));
+  let ink = 0, edge = 0;
+  for (let y = 0; y < img.h; y++) {
+    for (let x = 0; x < img.w; x++) {
+      const v = at(x, y);
+      if (v[0] === bg[0] && v[1] === bg[1] && v[2] === bg[2] && v[3] === bg[3]) continue;
+      ink++;
+      if (x === 0 || y === 0 || x === img.w - 1 || y === img.h - 1) edge++;
+    }
+  }
+  return { corner: bg, ink, edge };
+}
+
+test('primary 手順3 (場面4) 書き出した SVG・PNG の中身が本文の要素どおりで、PNG は切れず、既定の保存名は .puml と同じ', async ({ page }, testInfo) => {
+  test.setTimeout(150 * 1000);
+  const dir = S.absDirFor(__filename);
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  const orig = {};
+  for (const n of FILES) {
+    orig[n] = fs.readFileSync(path.join(H.FIXTURES, n + '.puml'));
+    fs.writeFileSync(path.join(dir, n + '.puml'), orig[n]);
+  }
+
+  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  let ops = 0;
+
+  for (const d of DOCS) {
+    const text = orig[d.name].toString('utf8').replace(/\r\n/g, '\n');
+    await S.openFolder(page);
+    ops += 2;
+    await page.locator('#folder-panel .folder-item[data-file-name="' + d.name + '"]').first().dblclick();
+    ops += 1;
+    await expect(page.locator('#editor')).toHaveValue(text, { timeout: 20000 });
+    await H.waitDrawn(page, d.words);
+    await S.closeFolderList(page);
+    ops += 1;
+    await H.expectRendered(page);
+    const opened = await H.getEditorText(page);
+
+    // SVG: 既定の保存名・text が本文の要素と一致・背景 rect の有無。
+    const dlSvg = await S.exportVia(page, 'exp-svg');
+    ops += 2;
+    expect(dlSvg, d.name + ' の SVG を受け取れる').not.toBeNull();
+    if (!dlSvg) continue;
+    expect(dlSvg.suggestedFilename(), d.name + ' の SVG の既定の保存名').toBe(d.name + '.svg');
+    const svgFile = testInfo.outputPath(d.name + '.svg');
+    await dlSvg.saveAs(svgFile);
+    const svg = fs.readFileSync(svgFile, 'utf8');
+    const texts = (svg.match(/<text[^>]*>[^<]*<\/text>/g) || []).map((s) => s.replace(/<[^>]+>/g, ''));
+    expect(texts.length, d.name + '.svg の text 数は本文の要素数').toBe(elementCount(d.name, text));
+    expect(texts.slice().sort(), d.name + '.svg の text は本文の要素の文字').toEqual(d.texts.slice().sort());
+    const vb = (svg.match(/viewBox="([^"]+)"/) || [])[1];
+    expect(vb, d.name + '.svg の viewBox').toBeTruthy();
+    const [vw, vh] = String(vb).trim().split(/[ ,]+/).slice(2).map(Number);
+    const bgRect = /<rect[^>]*fill="#(FFF|FFFFFF)"[^>]*x="0"|<rect[^>]*x="0"[^>]*y="0"[^>]*fill="#(FFF|FFFFFF)"/i.test(svg);
+    H.annotate(testInfo, 'svgBgRect', d.name + ' ' + bgRect);
+
+    // PNG と透過 PNG: 既定の保存名・寸法・線が縁に掛からない・隅の色。
+    for (const [id, transparent] of [['exp-png', false], ['exp-png-transparent', true]]) {
+      const dl = await S.exportVia(page, id);
+      ops += 2;
+      expect(dl, d.name + ' の ' + id + ' を受け取れる').not.toBeNull();
+      if (!dl) continue;
+      expect(dl.suggestedFilename(), d.name + ' の ' + id + ' の既定の保存名').toBe(d.name + '.png');
+      const out = testInfo.outputPath(d.name + (transparent ? '.transparent' : '') + '.png');
+      await dl.saveAs(out);
+      const img = decodePng(fs.readFileSync(out));
+      const st = inkStats(img);
+      H.annotate(testInfo, 'png', d.name + ' ' + id + ' ' + img.w + 'x' + img.h + ' ink=' + st.ink + ' edge=' + st.edge);
+      expect([img.depth, img.ctype, img.interlace], d.name + ' ' + id + ' は 8bit RGBA・非インターレース').toEqual([8, 6, 0]);
+      expect(Math.abs(img.w - vw), d.name + ' ' + id + ' の幅は viewBox どおり').toBeLessThanOrEqual(2);
+      expect(Math.abs(img.h - vh), d.name + ' ' + id + ' の高さは viewBox どおり').toBeLessThanOrEqual(2);
+      expect(st.ink, d.name + ' ' + id + ' に線・文字が描かれている').toBeGreaterThan(500);
+      expect(st.edge, d.name + ' ' + id + ' の線が画像の縁で切れていない').toBe(0);
+      if (transparent) expect(st.corner[3], d.name + ' 透過 PNG の隅は透明').toBe(0);
+      else expect(st.corner, d.name + ' PNG の隅は白の不透明').toEqual([255, 255, 255, 255]);
+    }
+
+    // 書き出しても本文は 1 行も動かない。
+    const after = await H.getEditorText(page);
+    const dl = H.diffLines(opened, after);
+    H.annotate(testInfo, 'diffLines', dl);
+    expect(dl, d.name + ' を書き出した後の本文の差分').toBe(0);
+  }
+
+  // 書き出しても保存先の 4 枚は 1 バイトも変わらず、ほかのファイルも増えない。
+  await page.waitForTimeout(1500);
+  for (const n of FILES) {
+    expect(Buffer.compare(fs.readFileSync(path.join(dir, n + '.puml')), orig[n]), n + '.puml は 1 バイトも変わらない').toBe(0);
+  }
+  expect(fs.readdirSync(dir).sort(), '保存先にほかのファイルが増えない').toEqual(FILES.map((n) => n + '.puml').sort());
+  H.annotate(testInfo, 'ops', ops);
+  expect(ops).toBeLessThanOrEqual(OPS_MAX);
+});
