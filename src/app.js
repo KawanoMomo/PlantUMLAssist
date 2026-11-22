@@ -2489,9 +2489,32 @@ function init() {
         showTab(savedTab);
       }
       loadVersion();
+      // 閉じたら開く前の場所 (左レールの CFG など) へ手を戻す。
+      _returnFocusEl = document.activeElement;
       modal.style.display = 'flex';
     }
+    var _returnFocusEl = null;
     function close() { modal.style.display = 'none'; }
+    function isOpen() { return modal.style.display === 'flex'; }
+
+    // TICKET-owner-20261116-0621-1: Esc は「キャンセル」と同じ。変更を保存せずに閉じ、開く前の場所へ手を戻す
+    // (他の窓・メニューと同じ)。ショートカットのキー待ち中の Esc はその取り消しだけ (そちらが preventDefault する)。
+    document.addEventListener('keydown', function(e) {
+      if (e.key !== 'Escape') return;
+      // キー待ちの行があればその取り消しが先 (窓は閉じない)。
+      var capturing = !!modal.querySelector('.cfg-sc-capturing');
+      var ST0 = window.MA.settingsTabs;
+      var closes = ST0 && ST0.escClosesSettings
+        ? ST0.escClosesSettings(e, isOpen(), capturing)
+        : (!e.isComposing && !e.defaultPrevented && isOpen() && !capturing);
+      if (!closes) return;
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+      var back = _returnFocusEl;
+      _returnFocusEl = null;
+      if (back && back.focus && back !== document.body && document.body.contains(back)) back.focus();
+    });
 
     btn.addEventListener('click', open);
 
