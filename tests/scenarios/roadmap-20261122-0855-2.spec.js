@@ -92,8 +92,11 @@ test('roadmap 0855-2 保存先の 2 階層下の図を FILES からクリック 
   expect(openMs).toBeLessThanOrEqual(1000);
   await expect(page.locator('#diagram-type')).toHaveValue('plantuml-sequence');
   expect(await H.getEditorText(page)).toBe(SUB_LF);
-  // パンくずは保存先からの道。
+  // パンくずは保存先からの道。開いただけのタブは未保存の印 (○ / ●) を持たない。
   await expect(page.locator('#top-crumbs .top-crumb')).toHaveText(['t1', 'design', 'api']);
+  const tab = page.locator('#tab-bar .tab[data-sub-rel="design/api"][data-doc-name="gpio_seq"]');
+  await expect(tab).toHaveCount(1);
+  await expect(tab).not.toHaveClass(/(^|\s)dirty(\s|$)/);
   await page.screenshot({ path: testInfo.outputPath('opened.png') });
   // 開いただけでは何も書かない (自動保存の間隔より長く待つ)。
   await page.waitForTimeout(1500);
@@ -114,6 +117,7 @@ test('roadmap 0855-2 保存先の 2 階層下の図を FILES からクリック 
   await page.locator('#editor').click();
   await page.keyboard.press('Control+s');
   await expect(page.locator('#status-save-result')).toContainText('保存しました', { timeout: 20000 });
+  await expect(tab).not.toHaveClass(/(^|\s)dirty(\s|$)/);
   const want = Buffer.from(rm.after.replace(/\n/g, '\r\n'), 'utf8');
   await expect.poll(() => Buffer.compare(fs.readFileSync(subFile), want), { timeout: 10000 }).toBe(0);
   const savedLf = fs.readFileSync(subFile, 'utf8').replace(/\r\n/g, '\n');

@@ -4687,7 +4687,8 @@ function _diffDocs() {
   var docs = window.MA.workspace.list();
   var activeId = window.MA.workspace.getActiveId();
   return docs.map(function(d) {
-    return (d.id === activeId) ? { id: d.id, name: d.name, dsl: mmdText } : d;
+    // 居場所 (サブフォルダの図の dir・sub) も渡す。前回保存版の基準を直下の同じ名前の図と分けて引く (_diffName)。
+    return (d.id === activeId) ? { id: d.id, name: d.name, dsl: mmdText, dir: d.dir, sub: d.sub } : d;
   });
 }
 
@@ -6143,6 +6144,8 @@ function setupTabs() {
         if (window.MA.toast) window.MA.toast.show(name + '.puml を読めませんでした (' + dir + ')');
         return false;
       }
+      // ディスクにある中身が、その図の「前回保存版」(未保存の ○ / ● を付けない)。基準は直下の同じ名前の図と分ける。
+      if (window.MA.saveDiff) { try { window.MA.saveDiff.mark(_diffName({ name: name, sub: true, dir: dir }), text); } catch (e) {} }
       var d0 = WS.detectType(text);
       var spec = { name: name, sub: true, dir: dir, dsl: text,
                    diagramType: (d0 && modules[d0]) ? d0 : currentDiagramType };
