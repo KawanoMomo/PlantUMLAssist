@@ -1,5 +1,10 @@
 'use strict';
 window.MA = window.MA || {};
+// 画面の語 (src/ui/terms.js) は HTML が先に読む。node の unit で require されたときは
+// 同じ window に語が無ければここで読む (TICKET-roadmap-20261115-2114-4)。
+if (!window.MA.terms && typeof require === 'function') {
+  try { var _termsPath = require.resolve('./terms.js'); delete require.cache[_termsPath]; require(_termsPath); } catch (e) {}
+}
 window.MA.properties = (function() {
   var state = {
     getMmdText: function() { return ''; },
@@ -244,9 +249,9 @@ window.MA.properties = (function() {
         + '<span class="prop-rel-caret">' + (dirty ? '▴' : '▾') + '</span></button>' +
       '<div id="' + id + '"' + (dirty ? '' : ' hidden')
         + ' style="border:1px solid var(--border);border-radius:3px;padding:8px;margin-top:2px;">' +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">向き / Direction</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">' + escHtml(window.MA.terms.direction) + '</div>' +
         '<div id="' + id + '-dir" style="display:flex;gap:3px;margin-bottom:8px;">' + dirBtns + '</div>' +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">多重度 / Multiplicity</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">' + escHtml(window.MA.terms.multiplicity) + '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
           '<input id="' + id + '-mult-left" type="text" value="' + escHtml(o.leftMult || '') + '" placeholder="1"'
             + ' style="flex:1;min-width:0;background:var(--bg-tertiary);border:1px solid var(--border);'
@@ -256,7 +261,7 @@ window.MA.properties = (function() {
             + ' style="flex:1;min-width:0;background:var(--bg-tertiary);border:1px solid var(--border);'
             + 'color:var(--text-primary);padding:3px 6px;border-radius:3px;font-family:var(--font-mono);font-size:12px;">' +
         '</div>' +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">線の色 / Line color</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">' + escHtml(window.MA.terms.lineColor) + '</div>' +
         '<div id="' + id + '-colors" style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">' + swatches +
           '<span style="margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);">-[#red]&gt;</span>' +
         '</div>' +
@@ -308,7 +313,7 @@ window.MA.properties = (function() {
         + '<span class="prop-color-caret">' + (dirty ? '▴' : '▾') + '</span></button>' +
       '<div id="' + id + '"' + (dirty ? '' : ' hidden')
         + ' style="border:1px solid var(--border);border-radius:3px;padding:8px;margin-top:2px;">' +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">' + escHtml(o.label || '色 / Color') + '</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">' + escHtml(o.label || window.MA.terms.color) + '</div>' +
         '<div style="display:flex;align-items:center;">' +
           colorSwatchesHtml(id, colors, current) +
           (o.notation ? '<span style="margin-left:auto;font-family:var(--font-mono);font-size:10px;'

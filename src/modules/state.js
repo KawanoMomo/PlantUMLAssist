@@ -1376,9 +1376,9 @@ window.MA.modules.plantumlState = (function() {
           P.selectFieldHtml('始点 (From)', 'st-tail-from', fromOpts) +
           '<button id="st-tx-pick-from" type="button" style="font-size:10px;padding:2px 8px;margin:-2px 0 6px 0;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">図で From を選び直す</button>' +
           P.selectFieldHtml('終点 (To)', 'st-tail-to', toOpts) +
-          P.fieldHtml('きっかけ / trigger', 'st-tail-trig', '', '例: start') +
-          P.fieldHtml('条件 / guard', 'st-tail-guard', '', '例: retry > 3') +
-          P.fieldHtml('実行する処理 / action', 'st-tail-act', '', '例: log()') +
+          P.fieldHtml('きっかけ', 'st-tail-trig', '', '例: start') +
+          P.fieldHtml('条件', 'st-tail-guard', '', '例: retry > 3') +
+          P.fieldHtml('実行する処理', 'st-tail-act', '', '例: log()') +
           _previewBoxHtml('st-tail-preview') +
           P.selectFieldHtml('次の 1 本の From', 'st-tx-next-mode', [
             { value: 'to', label: '直前の遷移先から', selected: _tx.mode !== 'same' },
@@ -1684,7 +1684,7 @@ window.MA.modules.plantumlState = (function() {
     var from = starts[0].value;
     var ends = SC.endOptions(parsedData, from);
     return '<div id="st-collapse" style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px;">' +
-      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">遷移をまとめる / Collapse</label>' +
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">遷移をまとめる</label>' +
       '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;">' +
         '1 本道に並んだ遷移を 1 本に畳みます (途中の状態の宣言も消えます)。</div>' +
       P.selectFieldHtml('始点', 'st-cl-from', starts.map(function(o) {
@@ -2082,9 +2082,9 @@ window.MA.modules.plantumlState = (function() {
       // 見出しは遷移・クラスと同じ「{種類} · N 行目」、欄名は日本語。
       '<div id="st-sel-head" style="font-size:10px;color:var(--accent);margin-bottom:8px;font-weight:bold;">' +
       window.MA.htmlUtils.escHtml((st.stereotype ? st.stereotype + ' ' : '') + P.lineHead('State', st.line)) + '</div>' +
-      P.fieldHtml('名前 (id)', 'st-id', st.id) +
-      P.fieldHtml('ラベル', 'st-label', st.label || '') +
-      P.selectFieldHtml('ステレオタイプ', 'st-stereo', stereoOptions(st)) +
+      P.fieldHtml(window.MA.terms.id, 'st-id', st.id) +
+      P.fieldHtml(window.MA.terms.label, 'st-label', st.label || '') +
+      P.selectFieldHtml(window.MA.terms.stereotype, 'st-stereo', stereoOptions(st)) +
       // 入れ子の中の状態を選んだとき、どの親の中に
       // 居るかが「Parent: Outer」だけでは孫の代で読み取れない。根から並べる。
       '<div style="font-size:11px;margin:4px 0;color:var(--text-secondary);">居場所: ' +
@@ -2120,7 +2120,7 @@ window.MA.modules.plantumlState = (function() {
       // 色は常時表示にせず「その他… ▾」に畳む。
       P.colorPaletteHtml('st-more', {
         title: 'その他（色）… ',
-        label: '色 / Color',
+        label: window.MA.terms.color,
         notation: 'state X #red',
         colors: colors(),
         current: st.color || '',
@@ -2134,7 +2134,7 @@ window.MA.modules.plantumlState = (function() {
       moveOutHtml +
       '<button id="st-add-tx" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;" title="次に図で押した状態への遷移を入れます (同じ状態を押すと自己遷移)">→ ここから遷移</button>' +
       '<button id="st-add-branch" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">⑂ 分岐 (choice) を追加</button>' +
-      P.primaryButtonHtml('st-update', '更新');
+      P.primaryButtonHtml('st-update', window.MA.terms.apply);
     if (related.length > 0) {
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
               '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">この状態に出入りする遷移</div>';
@@ -2154,7 +2154,7 @@ window.MA.modules.plantumlState = (function() {
     }
     html +=
       '<div style="margin-top:10px;display:flex;gap:6px;">' +
-      P.primaryButtonHtml('st-delete', '✕ 削除 (出入りする遷移も消す)') +
+      P.primaryButtonHtml('st-delete', window.MA.terms.del) +
       '</div>';
     propsEl.innerHTML = html;
 
@@ -2368,14 +2368,14 @@ window.MA.modules.plantumlState = (function() {
       P.selectFieldHtml('From', 'st-tr-from', fromOpts) +
       '<button id="st-tr-swap" title="From と To を入れ替える" style="width:100%;font-size:11px;padding:3px 8px;margin-bottom:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⇄ 向きを入れ替え</button>' +
       P.selectFieldHtml('To', 'st-tr-to', toOpts) +
-      P.fieldHtml('きっかけ / trigger', 'st-tr-trig', tr.trigger || '', '例: start') +
-      P.fieldHtml('条件 / guard', 'st-tr-guard', tr.guard || '', '例: retry > 3') +
-      P.fieldHtml('実行する処理 / action', 'st-tr-act', tr.action || '', '例: log()') +
+      P.fieldHtml('きっかけ', 'st-tr-trig', tr.trigger || '', '例: start') +
+      P.fieldHtml('条件', 'st-tr-guard', tr.guard || '', '例: retry > 3') +
+      P.fieldHtml('実行する処理', 'st-tr-act', tr.action || '', '例: log()') +
       _previewBoxHtml('st-tr-preview') +
       // 線の色も「その他… ▾」に畳む。
       P.colorPaletteHtml('st-tr-more', {
         title: 'その他（線の色）… ',
-        label: '線の色 / Line color',
+        label: window.MA.terms.lineColor,
         notation: '-[#red]->',
         colors: colors(),
         current: tr.color || '',
@@ -2391,7 +2391,7 @@ window.MA.modules.plantumlState = (function() {
         note: window.MA.relationOptions.noteAt(ctx.getMmdText(), tr.line) || '',
         placeholder: '例: リトライ上限を超えた場合のみ',
       }) +
-      P.primaryButtonHtml('st-tr-update', '更新') +
+      P.primaryButtonHtml('st-tr-update', window.MA.terms.apply) +
       P.primaryButtonHtml('st-tr-delete', '✕ 削除');
     propsEl.innerHTML = html;
     _bindTrAddState(tr, parsedData, ctx);
@@ -2603,7 +2603,7 @@ window.MA.modules.plantumlState = (function() {
         ' style="display:' + (otherOpen ? 'flex' : 'none') + ';flex-wrap:wrap;gap:4px;margin:-2px 0 8px;padding:6px;border:1px solid var(--border);border-radius:3px;">' +
         TR_ADD_OTHER.map(function(k) { return chipHtml(k, k.value === _trAddKind); }).join('') + '</div>';
       var head =
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">状態を追加 / Add state</label>' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">状態を追加</label>' +
         '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">種類</label>' +
         '<div id="st-tr-add-kind" style="display:flex;flex-wrap:wrap;gap:4px;">' + chips + '</div></div>' + otherRow;
 
@@ -2798,7 +2798,7 @@ window.MA.modules.plantumlState = (function() {
         '<button id="st-note-up" type="button" style="font-size:11px;padding:2px 8px;cursor:pointer;">↑ 上へ</button>' +
         '<button id="st-note-down" type="button" style="font-size:11px;padding:2px 8px;cursor:pointer;">↓ 下へ</button></div>' +
       '<div style="margin-bottom:6px;"><label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label><textarea id="st-note-text" style="width:100%;min-height:80px;">' + H.escHtml(note.text || '') + '</textarea></div>' +
-      P.primaryButtonHtml('st-note-update', '更新') +
+      P.primaryButtonHtml('st-note-update', window.MA.terms.apply) +
       P.primaryButtonHtml('st-note-delete', '✕ 削除');
     propsEl.innerHTML = html;
 

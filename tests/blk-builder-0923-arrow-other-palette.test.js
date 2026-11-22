@@ -123,7 +123,7 @@ describe('design 2d 図の外とのやり取り', function() {
 
 describe('design 2d パレットの HTML', function() {
   function html(current) {
-    return P.arrowPickerHtml('矢印の種類 / Arrow', 'x-arrow',
+    return P.arrowPickerHtml('矢印の種類', 'x-arrow',
       [{ value: '->', label: '同期', sub: '->' }, { value: '-->', label: '応答・戻り', sub: '-->' }],
       [{ value: '<->', desc: '両方向のやり取り' }, { value: '[->', desc: '図の外から入ってくる' }],
       current);
@@ -168,10 +168,10 @@ describe('design 2d 右ペインが素のプルダウンを持たない', functi
 
   test('「Arrow (その他)」の select は無くなり、パレットに置き換わっている', function() {
     expect(src).not.toContain("'Arrow (その他)'");
-    expect(src).toContain("P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-edit-arrow'");
+    expect(src).toContain("P.arrowPickerHtml(window.MA.terms.arrow, 'seq-edit-arrow'");
   });
 
   test('末尾追加フォームも同じパレットを使う', function() {
-    expect(src).toContain("P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-tail-arrow'");
+    expect(src).toContain("P.arrowPickerHtml(window.MA.terms.arrow, 'seq-tail-arrow'");
   });
 });

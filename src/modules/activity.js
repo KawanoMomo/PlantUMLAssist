@@ -1270,10 +1270,10 @@ window.MA.modules.plantumlActivity = (function() {
                P.fieldHtml('Else label (空で else 省略)', 'act-mod-elselbl', 'no');
       } else if (k === 'while') {
         html = P.fieldHtml('Condition', 'act-mod-cond', '') +
-               P.fieldHtml('Label', 'act-mod-lbl', 'yes');
+               P.fieldHtml(window.MA.terms.edgeLabel, 'act-mod-lbl', 'yes');
       } else if (k === 'repeat') {
         html = P.fieldHtml('Repeat-while condition', 'act-mod-cond', '') +
-               P.fieldHtml('Label', 'act-mod-lbl', 'yes');
+               P.fieldHtml(window.MA.terms.edgeLabel, 'act-mod-lbl', 'yes');
       } else if (k === 'fork') {
         html = P.fieldHtml('Branches', 'act-mod-bcount', '2');
       } else if (k === 'swimlane') {
@@ -2969,7 +2969,7 @@ window.MA.modules.plantumlActivity = (function() {
         + esc(c.label) + '</button>';
     }
     return '<div id="ac-swimlane" style="margin-bottom:8px;">' +
-      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">スイムレーン / Swimlane</label>' +
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.terms.swimlane + '</label>' +
       '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + btns + '</div>' +
       '</div>';
   }
@@ -3210,7 +3210,7 @@ window.MA.modules.plantumlActivity = (function() {
         (on ? '' : 'opacity:0.3;') + '">' + label + '</button>';
     }
     return '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;">' +
-      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">並び替え / Reorder</label>' +
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.terms.reorder + '</label>' +
       '<div style="display:flex;gap:4px;">' +
         btn('ac-move-up', '↑', SR.canMove(text, line, -1), '同じ親の中で 1 つ上の兄弟と入れ替える (Alt+↑)') +
         btn('ac-move-down', '↓', SR.canMove(text, line, 1), '同じ親の中で 1 つ下の兄弟と入れ替える (Alt+↓)') +
@@ -3251,10 +3251,10 @@ window.MA.modules.plantumlActivity = (function() {
           esc(head.name || '(ラベルなし)') + '</div>' +
       '</div>' +
       '<div id="ac-action-label" style="margin-bottom:6px;">' +
-        '<label for="ac-action-text" style="display:block;font-size:10px;color:var(--text-secondary);">ラベル / Label</label>' +
+        '<label for="ac-action-text" style="display:block;font-size:10px;color:var(--text-secondary);">' + window.MA.terms.edgeLabel + '</label>' +
         '<textarea id="ac-action-text" style="width:100%;min-height:60px;">' + esc(node.text || '') + '</textarea>' +
       '</div>' +
-      P.primaryButtonHtml('ac-action-update', '更新') +
+      P.primaryButtonHtml('ac-action-update', window.MA.terms.apply) +
       _actionColorHtml(node.color || '') +
       // design 4b: スイムレーンは読むだけでなく、チップで選び直せる。
       '<div style="margin-top:10px;">' + _swimlaneChipsHtml(ctx.getMmdText(), node.line) + '</div>' +
@@ -3266,7 +3266,7 @@ window.MA.modules.plantumlActivity = (function() {
       // design 4b:「この位置に挿入 / Insert here」— 選んでいるアクションの前後に足す。
       // 押すと図の隙間クリックと同じ挿入メニュー (showInsertPicker) がその位置で開く。
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">この位置に挿入 / Insert here</label>' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.terms.insertHere + '</label>' +
         '<div style="display:flex;gap:4px;">' +
           '<button id="ac-insert-before" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 前に</button>' +
           '<button id="ac-insert-after" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 後に</button>' +
@@ -3289,7 +3289,7 @@ window.MA.modules.plantumlActivity = (function() {
           '</div>' +
           _reorderHtml(ctx.getMmdText(), node.line) +
           '<div style="margin-top:10px;">' +
-            P.primaryButtonHtml('ac-action-delete', '削除 / Delete') +
+            P.primaryButtonHtml('ac-action-delete', window.MA.terms.del) +
           '</div>';
     propsEl.innerHTML = html;
 
@@ -3435,7 +3435,7 @@ window.MA.modules.plantumlActivity = (function() {
                   (b.kind === 'elseif'
                     ? P.fieldHtml('condition', 'ac-branch-cond-' + bi, b.condition || '')
                     : '') +
-                  P.fieldHtml('label', 'ac-branch-lbl-' + bi, b.label || '') +
+                  P.fieldHtml(window.MA.terms.edgeLabel, 'ac-branch-lbl-' + bi, b.label || '') +
                 '</div>';
       }
       // Branch add buttons
@@ -3449,10 +3449,10 @@ window.MA.modules.plantumlActivity = (function() {
       html += '</div>';
     } else if (node.kind === 'while') {
       html += P.fieldHtml('Condition', 'ac-while-cond', node.condition || '');
-      html += P.fieldHtml('Label', 'ac-while-lbl', node.label || 'yes');
+      html += P.fieldHtml(window.MA.terms.edgeLabel, 'ac-while-lbl', node.label || 'yes');
     } else if (node.kind === 'repeat') {
       html += P.fieldHtml('Repeat-while condition', 'ac-rep-cond', node.condition || '');
-      html += P.fieldHtml('Label', 'ac-rep-lbl', node.label || 'yes');
+      html += P.fieldHtml(window.MA.terms.edgeLabel, 'ac-rep-lbl', node.label || 'yes');
     } else if (node.kind === 'fork') {
       var fbrs = node.branches || [];
       html += '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Branches (' + fbrs.length + ')</div>';
@@ -3469,7 +3469,7 @@ window.MA.modules.plantumlActivity = (function() {
       }
       html += '<button id="ac-add-fork-again" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">+ ' + (node.keyword === 'split' ? 'split' : 'fork') + ' again 追加</button>';
     }
-    html += P.primaryButtonHtml('ac-ctrl-update', '更新') +
+    html += P.primaryButtonHtml('ac-ctrl-update', window.MA.terms.apply) +
             P.primaryButtonHtml('ac-ctrl-delete', '✕ 構造ごと削除');
     propsEl.innerHTML = html;
 
@@ -3577,7 +3577,7 @@ window.MA.modules.plantumlActivity = (function() {
     var html =
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead('Swimlane', sw.line) + ' 「' + sw.label + '」') + '</div>' +
       P.fieldHtml('Name', 'ac-sw-name', sw.label) +
-      P.primaryButtonHtml('ac-sw-update', '更新') +
+      P.primaryButtonHtml('ac-sw-update', window.MA.terms.apply) +
       P.primaryButtonHtml('ac-sw-delete', '✕ swimlane 解除');
     propsEl.innerHTML = html;
 
@@ -3613,7 +3613,7 @@ window.MA.modules.plantumlActivity = (function() {
         '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
         '<textarea id="ac-note-text" style="width:100%;min-height:80px;">' + window.MA.htmlUtils.escHtml(note.text || '') + '</textarea>' +
       '</div>' +
-      P.primaryButtonHtml('ac-note-update', '更新') +
+      P.primaryButtonHtml('ac-note-update', window.MA.terms.apply) +
       P.primaryButtonHtml('ac-note-delete', '✕ 削除');
     propsEl.innerHTML = html;
 

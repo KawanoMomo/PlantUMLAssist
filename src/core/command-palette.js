@@ -210,7 +210,7 @@ window.MA.commandPalette = (function() {
   // ここでボタンの文字を言い換えに引き当てる。表に無いボタンは、記号だけを
   // 落として文字をそのまま使う (モジュールがボタンを増やしても古びない)。
   var ACTION_PHRASES = [
-    { match: 'ライフライン推論', title: '呼び出しの開始・終了を自動で入れる', hint: 'activate' },
+    { match: '呼び出しの開始・終了', title: '呼び出しの開始・終了を自動で入れる', hint: 'activate' },
     { match: 'alt/loop',         title: '条件分岐・繰り返しの枠で囲む',       hint: 'alt / loop' },
     { match: 'この前に',         title: '選んだ行の前に足す',                 hint: 'insert before' },
     { match: 'この後に注釈',     title: '選んだ行に説明を書き添える',         hint: 'note' },

@@ -1,6 +1,6 @@
 // @ts-check
 // design 3a「UseCase — 2 つ選択して関係を追加」。Shift+クリックで 2 つ選ぶと
-// 右パネルが「関係を追加 / Add relation」に切り替わり、UML 名称を主・意味の説明を
+// 右パネルが「関係を追加」に切り替わり、UML 名称を主・意味の説明を
 // 副として並べ、矢印の見本と「追加される行」を見せる。
 const { test, expect } = require('@playwright/test');
 const { gotoApp, getEditorText } = require('../helpers');
@@ -19,10 +19,10 @@ async function selectTwo(page) {
 }
 
 test.describe('BLK-builder-20260907-1003-1 — 関係を追加 (design 3a)', () => {
-  test('2 つ選ぶと「関係を追加 / Add relation」に切り替わる', async ({ page }) => {
+  test('2 つ選ぶと「関係を追加」に切り替わる', async ({ page }) => {
     const r = await selectTwo(page);
     if (!r) test.skip();
-    await expect(page.locator('#props-content')).toContainText('関係を追加 / Add relation');
+    await expect(page.locator('#props-content')).toContainText('関係を追加');
     await expect(page.locator('#uc-conn-from')).toBeVisible();
     await expect(page.locator('#uc-conn-to')).toBeVisible();
     await expect(page.locator('#uc-conn-create')).toHaveText('関係を追加');

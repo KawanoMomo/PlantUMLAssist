@@ -62,7 +62,7 @@ test.describe('lifeline select-and-delete (userissue v1.2.3)', () => {
     expect(panel).toContain('ライフライン');
     expect(panel).toContain('activation を全削除');
     // Should NOT show the actor-edit fields
-    expect(panel).not.toContain('Alias 変更時');
+    expect(panel).not.toContain('名前を変えたら関係の行も付け替える');
   });
 
   test('lifeline ✕ button removes only activations for that id', async ({ page }) => {
@@ -104,7 +104,7 @@ test.describe('lifeline select-and-delete (userissue v1.2.3)', () => {
     });
     await page.waitForTimeout(300);
     var panel = await page.locator('#props-content').innerText();
-    expect(panel).toContain('Alias');  // participant edit form has Alias field
+    expect(panel).toContain('名前 (id)');  // participant edit form has the id field (TICKET-roadmap-20261115-2114-4)
     expect(panel).not.toContain('activation を全削除');
   });
 

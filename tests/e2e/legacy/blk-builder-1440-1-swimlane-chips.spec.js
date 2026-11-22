@@ -46,7 +46,7 @@ test('アクションを選ぶと「スイムレーン / Swimlane」のチップ
   await typeDsl(page, ACT);
   await selectAction(page, '入力を受け取る');
 
-  await expect(page.locator('#ac-swimlane')).toContainText('スイムレーン / Swimlane');
+  await expect(page.locator('#ac-swimlane')).toContainText('スイムレーン');
   const chips = page.locator('#ac-swimlane .ac-swim-chip');
   await expect(chips).toHaveText(['（なし）', 'Client', 'Server']);
   await expect(chips.nth(1)).toHaveAttribute('aria-pressed', 'true');

@@ -693,7 +693,7 @@ window.MA.modules.plantumlUsecase = (function() {
       '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
       '<textarea id="uc-note-text" style="width:100%;min-height:70px;font-family:inherit;font-size:12px;">' +
         esc(note.text || '') + '</textarea>' +
-      P.primaryButtonHtml('uc-note-update', '更新') +
+      P.primaryButtonHtml('uc-note-update', window.MA.terms.apply) +
       P.primaryButtonHtml('uc-note-delete', '✕ 削除');
 
     P.bindEvent('uc-note-update', 'click', function() {
@@ -722,11 +722,11 @@ window.MA.modules.plantumlUsecase = (function() {
       // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(P.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
-        P.fieldHtml('Alias (id)', 'uc-edit-id', element.id) +
-        P.fieldHtml('Label', 'uc-edit-label', element.label) +
-        P.primaryButtonHtml('uc-edit-apply', '変更を反映') +
+        P.fieldHtml(window.MA.terms.id, 'uc-edit-id', element.id) +
+        P.fieldHtml(window.MA.terms.label, 'uc-edit-label', element.label) +
+        P.primaryButtonHtml('uc-edit-apply', window.MA.terms.apply) +
         '<div style="margin-top:6px;">' +
-          P.primaryButtonHtml('uc-rename-refs', '名前を変えたら関係の行も付け替える') +
+          P.primaryButtonHtml('uc-rename-refs', window.MA.terms.renameRefs) +
         '</div>' +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
           '<button id="uc-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
@@ -838,9 +838,9 @@ window.MA.modules.plantumlUsecase = (function() {
         P.fieldHtml(relation.kind === 'generalization' ? _fieldLabel('generalization', 'from') : 'From', 'uc-rel-from', uiEnds.from) +
         '<button id="uc-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
         P.fieldHtml(relation.kind === 'generalization' ? _fieldLabel('generalization', 'to') : 'To', 'uc-rel-to', uiEnds.to) +
-        P.fieldHtml('Label', 'uc-rel-label', relation.label) +
+        P.fieldHtml(window.MA.terms.edgeLabel, 'uc-rel-label', relation.label) +
         P.relationOptionsFor('uc-rel-more', ctx.getMmdText(), relation.line) +
-        P.primaryButtonHtml('uc-rel-apply', '変更を反映') +
+        P.primaryButtonHtml('uc-rel-apply', window.MA.terms.apply) +
         '<div style="margin-top:8px;">' +
           '<button id="uc-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         '</div>' +
@@ -943,7 +943,7 @@ window.MA.modules.plantumlUsecase = (function() {
     function ends() { return RA.orient(selData, swapped); }
 
     propsEl.innerHTML =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">関係を追加 / Add relation</div>' +
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">' + window.MA.terms.addRelation + '</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         '<div class="rel-ends">' +
           '<span class="rel-end"><span class="rel-end-cap">From</span>' +
@@ -952,7 +952,7 @@ window.MA.modules.plantumlUsecase = (function() {
           '<span class="rel-end"><span class="rel-end-cap">To</span>' +
             '<strong id="uc-conn-to">' + esc(nameOf(selData[1])) + '</strong></span>' +
         '</div>' +
-        '<div class="rel-section-cap">関係の種類 / Relation</div>' +
+        '<div class="rel-section-cap">' + window.MA.terms.relationKind + '</div>' +
         '<div id="uc-conn-kinds" class="rel-opts">' + RA.optionsHtml('usecase', 'uc-conn', kind) + '</div>' +
         P.fieldHtml('ラベル / Label（任意）', 'uc-conn-label', '', '任意') +
         '<div class="rel-section-cap">追加される行</div>' +
