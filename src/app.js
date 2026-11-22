@@ -438,8 +438,16 @@ function init() {
     document.addEventListener('click', function(ev) {
       if (!menu.contains(ev.target) && ev.target !== btn) close();
     });
-    menu.addEventListener('keydown', function(ev) {
-      if (ev.key === 'Escape') { ev.preventDefault(); close(); btn.focus(); }
+    // Esc は Export ▾ と同じく document で受ける。マウスで開いた直後は手が
+    // #btn-import にあり、メニューの中の keydown だけでは Esc が届かないため。
+    // 図のドラッグ中の Esc (並び替えの中断) を先に通すので、そのときは何もしない。
+    document.addEventListener('keydown', function(ev) {
+      if (ev.key !== 'Escape' || ev.isComposing) return;
+      if (dragState && dragState.dragging) return;
+      if (!menu.classList.contains('open')) return;
+      ev.preventDefault();
+      close();
+      btn.focus();
     });
     [['imp-file', 'btn-open-file'], ['imp-folder', 'btn-tab-folder']].forEach(function(p) {
       var item = document.getElementById(p[0]);
