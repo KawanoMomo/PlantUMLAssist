@@ -2938,7 +2938,19 @@ function init() {
   btnExport.addEventListener('click', function(e) {
     e.stopPropagation();
     exportMenu.classList.toggle('open');
+    if (exportMenu.classList.contains('open')) refreshExportDest();
   });
+  // TICKET-primary-20261115-2240-wish: 書き出し先の行の「替える…」(Export ▾ の項目ではない)。
+  var expDestChange = document.getElementById('export-dest-change');
+  if (expDestChange) {
+    expDestChange.addEventListener('click', function(e) {
+      e.stopPropagation();
+      exportMenu.classList.remove('open');
+      openExportDestPick();
+    });
+  }
+  var expDestBox = document.getElementById('export-dest');
+  if (expDestBox) expDestBox.addEventListener('click', function(e) { e.stopPropagation(); });
   document.addEventListener('click', function() { exportMenu.classList.remove('open'); });
   document.getElementById('exp-svg').addEventListener('click', function() { exportMenu.classList.remove('open'); exportSVG(); });
   document.getElementById('exp-png').addEventListener('click', function() { exportMenu.classList.remove('open'); exportPNG(false); });
@@ -2960,6 +2972,7 @@ function init() {
     e.preventDefault();
     exportReturnFocusEl = document.activeElement;
     exportMenu.classList.add('open');
+    refreshExportDest();
     var firstItem = document.getElementById('exp-svg');
     if (firstItem) firstItem.focus();
   });
@@ -9293,9 +9306,186 @@ function exportSVG() {
   // TICKET-reviewer-20261115-2300: プレビューの整えで落ちた PlantUML の背景 (既定は白) も根に戻す。
   // 透明の図 (skinparam backgroundColor transparent) は控えが空なので透明のまま。
   if (window.MA.svgExport) svgOut = window.MA.svgExport.forSave(svgOut, svgEl.__puaBackground);
-  downloadBlob(exportFileName('svg'),
+  deliverExport('svg', exportFileName('svg'),
     new Blob([svgOut], { type: 'image/svg+xml' }));
 }
+
+// ── 書き出しを保存先の中へ (TICKET-primary-20261115-2240-wish) ──────────────────
+// 保存先から開いた図の書き出しは、ブラウザのダウンロードではなく保存先の中 (既定は図と同じフォルダ、
+// 替えた置き場は保存先の下の別のフォルダ) に図の名前で書き、どこに・何という名前で・何バイト・新規か上書きかを出す。
+// 保存先の無い図 (Import ▾ で開いただけの図・保存前の新しい図・ブラウザ内保存) は今までどおりダウンロード。
+// .puml・本文・設定には触らない (server は押した 1 ファイルだけを書く)。
+function _exportTarget() {
+  try {
+    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    if (!cfg || cfg.backend !== 'file') return null;
+    var WS = window.MA.workspace;
+    var doc = WS ? WS.getActive() : null;
+    if (!doc || !doc.name || _sourcePathOf(doc.id)) return null;
+    if (WS.isValidName && !WS.isValidName(doc.name)) return null;
+    var dir = _docDir(doc);
+    return dir ? { dir: String(dir), name: String(doc.name) } : null;
+  } catch (e) { return null; }
+}
+
+function _exportStorage() {
+  try { return window.localStorage; } catch (e) { return null; }
+}
+
+var _lastExport = null;   // { dir, name, msg } 前回保存先へ書いた結果 (Export ▾ の行に出す)
+
+// Export ▾ を開くたびに、今の図の書き出し先と前回の結果を書き直す (保存先の無い図では行を出さない)。
+function refreshExportDest() {
+  var box = document.getElementById('export-dest');
+  if (!box) return;
+  var ED = window.MA.exportDest;
+  var t = _exportTarget();
+  if (!t || !ED) { box.hidden = true; return; }
+  box.hidden = false;
+  var sub = ED.loadSub(_exportStorage(), t.dir);
+  var place = document.getElementById('export-dest-place');
+  if (place) { place.textContent = ED.placeLabel(sub); place.title = t.dir + (sub ? '/' + sub : ''); }
+  var last = document.getElementById('export-dest-last');
+  if (last) {
+    var mine = _lastExport && _lastExport.dir === t.dir && _lastExport.name === t.name ? _lastExport : null;
+    last.textContent = mine ? '前回: ' + mine.msg : '';
+  }
+}
+
+function deliverExport(kind, downloadName, blob) {
+  var ED = window.MA.exportDest;
+  var t = _exportTarget();
+  if (!t || !ED || !window.fetch) { downloadBlob(downloadName, blob); return Promise.resolve(null); }
+  var sub = ED.loadSub(_exportStorage(), t.dir);
+  return fetch(ED.url(t.dir, t.name, kind, sub), {
+    method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: blob,
+  }).then(function(r) {
+    return r.json().catch(function() { return {}; }).then(function(j) { return { status: r.status, j: j || {} }; });
+  }).then(function(res) {
+    if (res.status === 200 && res.j.ok) {
+      var msg = ED.message(res.j, sub);
+      _lastExport = { dir: t.dir, name: t.name, msg: msg, res: res.j };
+      setSaveStatus(msg);
+      var el = document.getElementById('status-save-result');
+      if (el) {
+        el.setAttribute('data-export-path', res.j.path || '');
+        el.setAttribute('data-export-bytes', String(res.j.bytes || 0));
+        el.setAttribute('data-export-existed', res.j.existed ? '1' : '0');
+        // 何回目の書き出しか (同じ図を続けて書き出しても、前の回の表示と取り違えない)。
+        el.setAttribute('data-export-seq', String(Number(el.getAttribute('data-export-seq') || 0) + 1));
+      }
+      refreshExportDest();
+      return res.j;
+    }
+    // その図が保存先に無い (保存前の新しい図) ときは今までどおりダウンロード。
+    if (res.j && res.j.fallback) { downloadBlob(downloadName, blob); return null; }
+    setSaveStatus('⚠ 書き出せませんでした: ' + (res.j.error || ('HTTP ' + res.status)));
+    return null;
+  }).catch(function(err) {
+    setSaveStatus('⚠ 書き出せませんでした: ' + (err && err.message ? err.message : err));
+    return null;
+  });
+}
+
+// 「替える…」: 保存先の下のフォルダを選ぶ窓。今のフォルダ (図と同じ) か、その下のフォルダか、名前を打った新しいフォルダ。
+// 選ぶだけでは何も書かない (フォルダは次の書き出しで作る)。Esc・やめるで変えずに閉じる。
+function _closeExportDestPick() {
+  var m = document.getElementById('export-dest-pick');
+  if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+function openExportDestPick() {
+  _closeExportDestPick();
+  var ED = window.MA.exportDest;
+  var t = _exportTarget();
+  if (!t || !ED) return null;
+  var storage = _exportStorage();
+  var cur = ED.loadSub(storage, t.dir);
+  var m = document.createElement('div');
+  m.id = 'export-dest-pick';
+  m.setAttribute('role', 'dialog');
+  m.setAttribute('aria-label', '書き出し先のフォルダを選ぶ');
+  var box = document.createElement('div');
+  box.className = 'edp-box';
+  var h = document.createElement('div');
+  h.className = 'edp-title';
+  h.textContent = '書き出し先のフォルダを選ぶ';
+  var curEl = document.createElement('div');
+  curEl.className = 'edp-cur';
+  curEl.textContent = '保存先: ' + t.dir + ' ／ 今の書き出し先: ' + ED.placeLabel(cur);
+  var row = document.createElement('div');
+  row.className = 'edp-row';
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.id = 'export-dest-new';
+  input.spellcheck = false;
+  input.placeholder = '新しいフォルダの名前 (例: out)';
+  input.setAttribute('aria-label', '保存先の下に作る書き出し先のフォルダの名前');
+  var ok = document.createElement('button');
+  ok.type = 'button';
+  ok.id = 'export-dest-new-ok';
+  ok.textContent = 'このフォルダにする';
+  var cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.id = 'export-dest-cancel';
+  cancel.textContent = 'やめる';
+  row.appendChild(input); row.appendChild(ok); row.appendChild(cancel);
+  var list = document.createElement('div');
+  list.className = 'edp-list';
+  list.id = 'export-dest-list';
+  var msg = document.createElement('div');
+  msg.className = 'edp-msg';
+  msg.id = 'export-dest-msg';
+  box.appendChild(h); box.appendChild(curEl); box.appendChild(list); box.appendChild(row); box.appendChild(msg);
+  m.appendChild(box);
+  document.body.appendChild(m);
+
+  function choose(sub) {
+    var n = ED.saveSub(storage, t.dir, sub);
+    if (n === null) {
+      msg.textContent = '⚠ 保存先の下のフォルダの名前を入れてください (.. や . で始まる名前・\\ / 以外の記号 < > : " | ? * は使えません)';
+      input.focus();
+      return;
+    }
+    _closeExportDestPick();
+    refreshExportDest();
+    setSaveStatus('書き出し先を ' + ED.placeLabel(n) + ' にしました');
+  }
+  function addChoice(label, sub) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'edp-choice';
+    b.setAttribute('data-sub', sub);
+    if (sub === cur) b.setAttribute('aria-current', 'true');
+    b.textContent = label;
+    b.addEventListener('click', function() { choose(sub); });
+    list.appendChild(b);
+  }
+  addChoice('図と同じフォルダ (保存先の直下)', '');
+  var FB = window.MA.folderBrowse;
+  if (FB && window.fetch) {
+    fetch(FB.browseUrl(t.dir)).then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
+      if (!document.body.contains(m)) return;
+      var v = FB.view(data);
+      (v && v.ok ? v.dirs : []).forEach(function(d) {
+        if (ED.normSub(d.name)) addChoice('保存先の下の「' + d.name + '」フォルダ', d.name);
+      });
+    }).catch(function() {});
+  }
+  ok.addEventListener('click', function() {
+    var v = String(input.value || '').trim();
+    if (!v) { msg.textContent = '⚠ フォルダの名前を入れるか、上の一覧から選んでください'; input.focus(); return; }
+    choose(v);
+  });
+  cancel.addEventListener('click', _closeExportDestPick);
+  m.addEventListener('mousedown', function(e) { if (e.target === m) _closeExportDestPick(); });
+  m.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _closeExportDestPick(); }
+    else if (e.key === 'Enter' && e.target === input) { e.preventDefault(); ok.click(); }
+  });
+  input.focus();
+  return m;
+}
+window.openExportDestPick = openExportDestPick;
 
 // 図が増えるほど「タブ切替 → Export → SVG」の 3 クリックが
 // 枚数分積み上がっていた。ここではタブを切り替えず、各ドキュメントの DSL を /render に
@@ -9392,7 +9582,7 @@ function exportPNG(transparent) {
   svgToCanvas(transparent, function(canvas) {
     canvas.toBlob(function(blob) {
       if (!blob) return;
-      downloadBlob(exportFileName('png'), blob);
+      deliverExport(transparent ? 'png-transparent' : 'png', exportFileName('png'), blob);
     });
   });
 }

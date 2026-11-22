@@ -1412,6 +1412,10 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/autosave-svg':
             with _fs_lock:
                 return self._handle_autosave_svg_post()
+        # TICKET-primary-20261115-2240-wish: 保存先から開いた図の書き出し (SVG / PNG) を保存先の中へ書く。
+        if self.path.startswith('/export-file?'):
+            with _fs_lock:
+                return self._handle_export_file_post()
         if self.path == '/rename-pairs':
             with _fs_lock:
                 return self._handle_rename_pairs_post()
@@ -2604,6 +2608,78 @@ class Handler(BaseHTTPRequestHandler):
             mtime = None
         self._send_json(200, {'ok': True, 'path': str(svg_path), 'svgMtime': mtime})
 
+
+    # TICKET-primary-20261115-2240-wish: 1 枚書き出しの拡張子。通常の PNG と透過 PNG は別の名前にする
+    # (同じ名前だと後から出した方が前の方を黙って上書きする)。
+    EXPORT_FILE_EXTS = {'svg': '.svg', 'png': '.png', 'png-transparent': '.transparent.png'}
+    EXPORT_FILE_MAX_BYTES = 64 * 1024 * 1024
+
+    @staticmethod
+    def export_sub_parts(sub):
+        """置き場 (保存先からの相対のフォルダ) を区切りごとの名前に分ける。
+
+        保存先の外へ出る・隠しフォルダ・ファイル名に使えない字を含むときは None。空なら [] (図と同じフォルダ)。
+        """
+        if sub is None:
+            return []
+        if not isinstance(sub, str):
+            return None
+        parts = [p for p in sub.replace('\\', '/').split('/') if p != '']
+        if len(parts) > 8:
+            return None
+        for p in parts:
+            if p in ('.', '..') or p.startswith('.') or not is_safe_autosave_name(p):
+                return None
+        return parts
+
+    def _handle_export_file_post(self):
+        """保存先から開いた図の書き出しを、保存先の中 (既定は図と同じフォルダ) に書く。
+
+        query: dir (図の .puml のあるフォルダ) / name (図の名前) / kind (svg / png / png-transparent) /
+        sub (置き場。dir からの相対。空なら dir)。本文は書き出したバイト列そのもの。
+        dir に {name}.puml が無い図は 404 + fallback (今までどおりブラウザのダウンロードで受ける)。
+        書くのは押した書き出しの 1 ファイルだけ (.puml にも控え・印・設定にも触らない)。
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query, keep_blank_values=True).items()}
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+        except ValueError:
+            length = 0
+        if length <= 0 or length > self.EXPORT_FILE_MAX_BYTES:
+            self._send_json(400, {'error': '書き出す中身が空か大きすぎます'})
+            return
+        data = self.rfile.read(length)
+        ext = self.EXPORT_FILE_EXTS.get(params.get('kind', ''))
+        name = params.get('name', '')
+        if not ext:
+            self._send_json(400, {'error': 'kind は svg / png / png-transparent のどれか'})
+            return
+        if not self._autosave_validate_type(name):
+            self._send_json(400, {'error': 'invalid name — パス区切り・制御文字・Windows の禁止文字は使えません'})
+            return
+        parts = self.export_sub_parts(params.get('sub', ''))
+        if parts is None:
+            self._send_json(400, {'error': '置き場は保存先の下のフォルダの名前で指定します (.. や隠しフォルダは使えません)'})
+            return
+        if not params.get('dir'):
+            self._send_json(404, {'error': '保存先がありません', 'fallback': True})
+            return
+        save_dir = self._autosave_resolve_dir(params.get('dir'))
+        if not self._autosave_file_path(save_dir, name).is_file():
+            self._send_json(404, {'error': 'その名前の図が保存先にありません', 'fallback': True})
+            return
+        dest_dir = save_dir.joinpath(*parts) if parts else save_dir
+        dest = dest_dir / (name + ext)
+        try:
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            existed = dest.exists()
+            _atomic_write_bytes(dest, data)
+        except OSError as e:
+            self._send_json(500, {'error': f'write failed: {e}'})
+            return
+        self._send_json(200, {'ok': True, 'path': str(dest), 'rel': '/'.join(parts + [dest.name]),
+                              'dir': str(dest_dir), 'bytes': len(data), 'existed': existed})
 
     # BLK-reviewer-20260908-1103: mtime 比較だけでは「svg が今の puml から作られたか」は
     # 分からない (保存し直しただけで中身は追いついている図と、前々回の編集から

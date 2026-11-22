@@ -1,8 +1,10 @@
 // @ts-check
 // primary 台本 場面 4「書き出し」手順 5:
 //   書き出した一式 (3 枚 x SVG・PNG・PNG（透過背景）) と一覧 (ファイル名・図種・形式・寸法・見えるか・気づき) を
-//   出力フォルダ (台本では {persona_data}\primary\out\scene4f\、scenario では test-results の下) に置き、
+//   出力フォルダ (台本では {persona_data}\primary\out\scene4f\、scenario では保存先の下の scene4f) に置き、
 //   handoff.md に書く。一覧に無い古い出力は「残り」として扱う。
+//   TICKET-primary-20261115-2240-wish: 保存先から開いた図の書き出しは保存先の中へ書かれるので、Export ▾ の
+//   「書き出し先: 替える…」で scene4f を選び、一式をそこへ直接書き出す (ダウンロードを受けて移し替えない)。
 //   台本では persona-data の export-s4 の rev-seq・rev-class・hand-state を使うが、scenario は persona-data を
 //   読まず fixture の hand-seq・hand-state・hand-class (と `!include` する common.puml) を使う。
 // 期待 (principles.md「押した対象だけが変わる」「描ける」):
@@ -12,7 +14,7 @@
 //     PNG の寸法は同じ図の SVG の viewBox に一番近い (2px 以内)、透過 PNG だけ隅が透明
 //   - 3 枚とも 3 形式がそろい、どれも見える (線・文字があり、縁で切れない)
 //   - 一式を作っても本文は 1 行も動かず、保存先の .puml は 1 バイトも変わらない。描ける
-//   - 手数は手順 3 と同じ 1 枚 10、3 枚で 30 以内 (一覧づくりは画面の外の作業なので数えない)
+//   - 手数は手順 3 と同じ 1 枚 10 と書き出し先を替える 3、計 33 以内 (一覧づくりは画面の外の作業なので数えない)
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
@@ -35,7 +37,9 @@ const FORMATS = [
 ];
 // 前回の run が置いたまま、今回の一覧に無い出力 (台本の「列挙に無い古い出力」)。
 const LEFTOVER = 'rev-seq.svg';
-const OPS_MAX = 30;
+const OUT_SUB = 'scene4f';
+// 1 枚 10 (一覧を開く 2 + 図を選ぶ 1 + 一覧を閉じる 1 + 書き出し 2 x 3) x 3 枚 + 書き出し先を替える 3。
+const OPS_MAX = 33;
 const HEAD = '| ファイル名 | 図種 | 形式 | 寸法 | 見えるか | 気づき |';
 
 // ファイルの中身だけから、形式・寸法・見えるか・SVG の図種と text を読む (一覧の値と突き合わせる)。
@@ -82,14 +86,16 @@ test('primary 手順5 (場面4) 書き出した一式と一覧を置き、一覧
     orig[n] = fs.readFileSync(path.join(H.FIXTURES, n + '.puml'));
     fs.writeFileSync(path.join(dir, n + '.puml'), orig[n]);
   }
-  const out = testInfo.outputPath('scene4f');
-  fs.rmSync(out, { recursive: true, force: true });
+  // 一式の置き場は保存先の下の scene4f (前回の残りが 1 つある)。Export ▾ の「書き出し先: 替える…」でそこを選ぶ。
+  const out = path.join(dir, OUT_SUB);
   fs.mkdirSync(out, { recursive: true });
   fs.writeFileSync(path.join(out, LEFTOVER), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>\n');
 
   await H.bootWithSaveDir(page, S.dirFor(__filename));
   let ops = 0;
   const listing = [];
+  let downloads = 0;
+  page.on('download', () => { downloads++; });
 
   for (const d of DOCS) {
     const text = orig[d.name].toString('utf8').replace(/\r\n/g, '\n');
@@ -106,20 +112,25 @@ test('primary 手順5 (場面4) 書き出した一式と一覧を置き、一覧
     const kind = await page.locator('#diagram-type').inputValue();
     expect(kind, d.name + ' を開いた画面の図種').toBe(d.kind);
 
+    // 1 枚目を開いたところで、書き出し先を保存先の下の scene4f に替える (保存先ごとに覚えるので 1 回だけ)。
+    if (d === DOCS[0]) {
+      await page.locator('#btn-export').click();
+      await page.locator('#export-dest-change').click();
+      await expect(page.locator('#export-dest-pick')).toBeVisible();
+      await page.locator('#export-dest-list .edp-choice[data-sub="' + OUT_SUB + '"]').click();
+      ops += 3;
+      await expect(page.locator('#export-dest-pick')).toHaveCount(0);
+    }
+
     for (const f of FORMATS) {
-      const dl = await S.exportVia(page, f.id);
+      const r = await S.exportToFolder(page, f.id);
       ops += 2;
-      expect(dl, d.name + ' の ' + f.id + ' を受け取れる').not.toBeNull();
-      if (!dl) continue;
-      // 透過 PNG の既定の保存名は PNG と同じ (.png) なので、一式に置くときは名前を分ける。
-      const suggested = dl.suggestedFilename();
-      const file = f.id === 'exp-png-transparent' ? d.name + f.ext : suggested;
-      if (f.id === 'exp-png-transparent') H.annotate(testInfo, 'defaultNameClash', d.name + ' ' + suggested);
-      else expect(suggested, d.name + ' の ' + f.id + ' の既定の保存名').toBe(d.name + f.ext);
-      await dl.saveAs(path.join(out, file));
+      // 保存先の scene4f に図の名前で書かれる (通常の PNG と透過 PNG は別の名前)。下端の名前・バイト数は実物どおり。
+      const file = d.name + f.ext;
+      expect(path.resolve(r.path), d.name + ' の ' + f.id + ' の書いた先').toBe(path.resolve(path.join(out, file)));
+      expect(r.msg).toContain(file + ' → 保存先の「' + OUT_SUB + '」フォルダ · ' + fs.statSync(r.path).size + ' バイト · 新規');
       const got = inspect(path.join(out, file));
-      listing.push({ file, kind, format: f.format, size: got.w + 'x' + got.h, visible: got.visible ? 'はい' : 'いいえ',
-        note: f.id === 'exp-png-transparent' ? '既定の保存名は ' + suggested + ' (PNG と重なるので名前を分けた)' : '' });
+      listing.push({ file, kind, format: f.format, size: got.w + 'x' + got.h, visible: got.visible ? 'はい' : 'いいえ', note: '' });
     }
 
     const after = await H.getEditorText(page);
@@ -181,7 +192,8 @@ test('primary 手順5 (場面4) 書き出した一式と一覧を置き、一覧
   for (const n of FILES) {
     expect(Buffer.compare(fs.readFileSync(path.join(dir, n + '.puml')), orig[n]), n + '.puml は 1 バイトも変わらない').toBe(0);
   }
-  expect(fs.readdirSync(dir).sort(), '保存先にほかのファイルが増えない').toEqual(FILES.map((n) => n + '.puml').sort());
+  expect(fs.readdirSync(dir).sort(), '保存先の直下に増えたのは一式の置き場だけ').toEqual(FILES.map((n) => n + '.puml').concat([OUT_SUB]).sort());
+  expect(downloads, 'ダウンロードは来ない').toBe(0);
   await H.expectRendered(page);
   H.annotate(testInfo, 'ops', ops);
   expect(ops).toBeLessThanOrEqual(OPS_MAX);

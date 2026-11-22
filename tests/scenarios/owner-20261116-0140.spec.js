@@ -38,10 +38,11 @@ test('owner 0140 Export ▾ は 1 枚の図の 4 項目で、資料化の控え�
   await expect(items).toHaveText([/SVG/, /^PNGとして保存/, /透過/, /クリップボード/]);
   await expect(page.locator('#export-menu .exp-group-title')).toHaveCount(0);
   await page.keyboard.press('Escape');
-  for (const [id, ext] of [['exp-svg', '.svg'], ['exp-png', '.png'], ['exp-png-transparent', '.png']]) {
-    const dl = await S.exportVia(page, id);
-    expect(dl, id).not.toBeNull();
-    expect(dl.suggestedFilename(), id).toBe('spi_seq' + ext);
+  // 保存先から開いた図なので、今の図の名前で保存先 (図と同じフォルダ) に書かれる (TICKET-primary-20261115-2240-wish)。
+  for (const [id, ext] of [['exp-svg', '.svg'], ['exp-png', '.png'], ['exp-png-transparent', '.transparent.png']]) {
+    const r = await S.exportToFolder(page, id);
+    expect(path.basename(r.path), id).toBe('spi_seq' + ext);
+    expect(fs.statSync(r.path).size, id).toBe(r.bytes);
   }
   await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
   await page.locator('#btn-export').click();

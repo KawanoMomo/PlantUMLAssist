@@ -202,6 +202,27 @@ async function exportVia(page, itemId, timeout) {
   return dl;
 }
 
+// TICKET-primary-20261115-2240-wish: 保存先から開いた図の書き出しは、ダウンロードではなく保存先の中へ書かれる。
+// Export ▾ から 1 項目を選び、画面の下端に出た「書き出しました: 名前 → 置き場 · N バイト · 新規 / 上書き」を待って
+// { path, bytes, existed, msg } を返す (path はディスク上のファイル。中身はそこを読む)。download は来ない。
+async function exportToFolder(page, itemId, timeout) {
+  const st = page.locator('#status-save-result');
+  const before = Number((await st.getAttribute('data-export-seq')) || 0);
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#' + itemId).click();
+  await page.waitForFunction((n) => {
+    const el = document.getElementById('status-save-result');
+    return el && Number(el.getAttribute('data-export-seq') || 0) > n;
+  }, before, { timeout: timeout || 20000 });
+  return st.evaluate((el) => ({
+    path: el.getAttribute('data-export-path') || '',
+    bytes: Number(el.getAttribute('data-export-bytes') || 0),
+    existed: el.getAttribute('data-export-existed') === '1',
+    msg: el.getAttribute('data-full') || el.textContent || '',
+  }));
+}
+
 // ペルソナが毎周使っている GPIO の図 (junior/primary の persona-data の形をそのまま縮めたもの)。
 const GPIO_STATE = [
   '@startuml',
@@ -366,7 +387,7 @@ module.exports = {
   PRIMARY_DOCS, docFor,
   dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode, reopenApp,
   putDoc, readDoc, listDir, clearDir, clearTickets,
-  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, typeDsl, typeDslDrawn, renameActive, runCommand, exportVia,
+  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, typeDsl, typeDslDrawn, renameActive, runCommand, exportVia, exportToFolder,
   GPIO_STATE, GPIO_SEQ, IRQ_SEQ_FOLDED_DASH,
   messageClickPoints, selectedMessageLine, expectMessageHitUniform,
 };

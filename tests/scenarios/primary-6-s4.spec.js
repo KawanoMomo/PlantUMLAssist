@@ -69,18 +69,20 @@ async function openDoc(page, h, d, text) {
   await H.expectRendered(page);
 }
 
-// Export ▾ から 1 項目を選ぶ (2 手)。項目を押してからファイルを受け取るまでを書き出し 1 回の時間にする。
+// Export ▾ から 1 項目を選ぶ (2 手)。保存先から開いた図なので保存先の中へ書かれる (TICKET-primary-20261115-2240-wish)。
+// 項目を押してから、下端に「書き出しました: …」が出る (ファイルが書き終わる) までを書き出し 1 回の時間にする。
 async function exportOnce(page, h, testInfo, label, itemId) {
+  const st = page.locator('#status-save-result');
+  const seq = Number((await st.getAttribute('data-export-seq')) || 0);
   await h.click(page.locator('#btn-export'));
   await page.waitForSelector('#export-menu', { state: 'visible' });
   const t0 = Date.now();
-  const wait = page.waitForEvent('download', { timeout: 20000 }).catch(() => null);
   await h.click(page.locator('#' + itemId));
-  const dl = await wait;
+  await page.waitForFunction((n) => Number(document.getElementById('status-save-result').getAttribute('data-export-seq') || 0) > n,
+    seq, { timeout: 20000 });
   const ms = Date.now() - t0;
-  expect(dl, label + ' の ' + itemId + ' を受け取れる').not.toBeNull();
-  if (!dl) return ms;
-  await dl.saveAs(testInfo.outputPath(label + '.' + itemId + (itemId === 'exp-svg' ? '.svg' : '.png')));
+  const p = await st.getAttribute('data-export-path');
+  expect(p && fs.existsSync(p), label + ' の ' + itemId + ' を保存先に書く').toBe(true);
   H.annotate(testInfo, 'exportMs', ms);
   return ms;
 }

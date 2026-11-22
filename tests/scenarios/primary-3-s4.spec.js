@@ -11,8 +11,9 @@
 //   - PNG・透過 PNG は 8bit RGBA・非インターレースで、寸法は SVG の viewBox と 2px 以内で一致し、
 //     線や文字の画素が画像の縁 (外周 1px) に掛からない (図が切れていない)
 //   - PNG の隅は白の不透明、透過 PNG の隅は透明 (透過を選んだときだけ背景が抜ける)
-//   - 既定の保存名は .puml と同じ名前に拡張子 (hand-seq.svg / hand-seq.png)
-//   - 書き出しても本文は 1 行も動かず、保存先の .puml は 1 バイトも変わらない
+//   - 保存名は .puml と同じ名前に拡張子 (hand-seq.svg / hand-seq.png / hand-seq.transparent.png)。保存先から開いた図なので
+//     図と同じフォルダに書かれる (TICKET-primary-20261115-2240-wish。以前はダウンロードで PNG と透過 PNG が同じ名前だった)
+//   - 書き出しても本文は 1 行も動かず、保存先の .puml は 1 バイトも変わらず、増えるのは押した書き出しだけ
 //   - 手数は 1 枚 10 (一覧を開く 2 + 図を選ぶ 1 + 一覧を閉じる 1 + 書き出し 2 x 3)、3 枚で 30 以内
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
@@ -93,14 +94,12 @@ test('primary 手順3 (場面4) 書き出した SVG・PNG の中身が本文の�
     await H.expectRendered(page);
     const opened = await H.getEditorText(page);
 
-    // SVG: 既定の保存名・text が本文の要素と一致・背景 rect の有無。
-    const dlSvg = await S.exportVia(page, 'exp-svg');
+    // SVG: 保存名・text が本文の要素と一致・背景 rect の有無。保存先から開いた図の書き出しは
+    // 図と同じフォルダに図の名前で書かれる (TICKET-primary-20261115-2240-wish)。
+    const rSvg = await S.exportToFolder(page, 'exp-svg');
     ops += 2;
-    expect(dlSvg, d.name + ' の SVG を受け取れる').not.toBeNull();
-    if (!dlSvg) continue;
-    expect(dlSvg.suggestedFilename(), d.name + ' の SVG の既定の保存名').toBe(d.name + '.svg');
-    const svgFile = testInfo.outputPath(d.name + '.svg');
-    await dlSvg.saveAs(svgFile);
+    const svgFile = path.join(dir, d.name + '.svg');
+    expect(path.resolve(rSvg.path), d.name + ' の SVG の保存名').toBe(path.resolve(svgFile));
     const svg = fs.readFileSync(svgFile, 'utf8');
     const texts = (svg.match(/<text[^>]*>[^<]*<\/text>/g) || []).map((s) => s.replace(/<[^>]+>/g, ''));
     expect(texts.length, d.name + '.svg の text 数は本文の要素数').toBe(elementCount(d.name, text));
@@ -113,13 +112,11 @@ test('primary 手順3 (場面4) 書き出した SVG・PNG の中身が本文の�
 
     // PNG と透過 PNG: 既定の保存名・寸法・線が縁に掛からない・隅の色。
     for (const [id, transparent] of [['exp-png', false], ['exp-png-transparent', true]]) {
-      const dl = await S.exportVia(page, id);
+      const r = await S.exportToFolder(page, id);
       ops += 2;
-      expect(dl, d.name + ' の ' + id + ' を受け取れる').not.toBeNull();
-      if (!dl) continue;
-      expect(dl.suggestedFilename(), d.name + ' の ' + id + ' の既定の保存名').toBe(d.name + '.png');
-      const out = testInfo.outputPath(d.name + (transparent ? '.transparent' : '') + '.png');
-      await dl.saveAs(out);
+      // 通常の PNG と透過 PNG は別の名前 (同じ名前で前の方を黙って上書きしない)。
+      const out = path.join(dir, d.name + (transparent ? '.transparent' : '') + '.png');
+      expect(path.resolve(r.path), d.name + ' の ' + id + ' の保存名').toBe(path.resolve(out));
       const img = decodePng(fs.readFileSync(out));
       const st = inkStats(img);
       H.annotate(testInfo, 'png', d.name + ' ' + id + ' ' + img.w + 'x' + img.h + ' ink=' + st.ink + ' edge=' + st.edge);
@@ -144,7 +141,8 @@ test('primary 手順3 (場面4) 書き出した SVG・PNG の中身が本文の�
   for (const n of FILES) {
     expect(Buffer.compare(fs.readFileSync(path.join(dir, n + '.puml')), orig[n]), n + '.puml は 1 バイトも変わらない').toBe(0);
   }
-  expect(fs.readdirSync(dir).sort(), '保存先にほかのファイルが増えない').toEqual(FILES.map((n) => n + '.puml').sort());
+  const exported = [].concat(...DOCS.map((d) => [d.name + '.svg', d.name + '.png', d.name + '.transparent.png']));
+  expect(fs.readdirSync(dir).sort(), '保存先に増えたのは押した書き出しだけ').toEqual(FILES.map((n) => n + '.puml').concat(exported).sort());
   H.annotate(testInfo, 'ops', ops);
   expect(ops).toBeLessThanOrEqual(OPS_MAX);
 });

@@ -71,14 +71,13 @@ test('primary 手順6 直した図の before / after と書き出した SVG を�
   expect(after).toContain("' 手で整えた図。字下げとコメントは道具に崩させない");
   expect(after).toContain('  SpiDrv -> Hw : WriteReg(CTRL)');
 
-  // Export ▾「SVGとして保存」。.puml と対の名前で、空でない SVG が出る。
-  const download = await S.exportVia(page, 'exp-svg');
+  // Export ▾「SVGとして保存」。保存先から開いた図なので、.puml と対の名前で図と同じフォルダに書かれる
+  // (TICKET-primary-20261115-2240-wish)。空でない SVG を out\scene1\ へ写す。
+  const exp = await S.exportToFolder(page, 'exp-svg');
   ops += 2;
-  expect(download).not.toBeNull();
-  if (!download) return;
-  expect(download.suggestedFilename()).toBe(NAME + '.svg');
+  expect(path.resolve(exp.path)).toBe(path.resolve(path.join(dir, NAME + '.svg')));
   const svgPath = path.join(out, NAME + '.svg');
-  await download.saveAs(svgPath);
+  fs.copyFileSync(exp.path, svgPath);
   const svg = fs.readFileSync(svgPath, 'utf8');
   expect(svg).toContain('<svg');
   const texts = await page.evaluate((s) => {
