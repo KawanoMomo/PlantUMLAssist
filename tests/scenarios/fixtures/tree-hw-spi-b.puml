@@ -1,0 +1,8 @@
+@startuml
+' 2 階層下の図。試験は CRLF に直して置く
+class SpiDrv {
+  - speed : int
+}
+class SpiDrvMon
+SpiDrvMon --> SpiDrv : watches
+@enduml

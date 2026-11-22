@@ -23,22 +23,48 @@ window.MA.folderImpact = (function() {
   // 同名なら開いているタブを採る — 未保存の編集分が入っているのはこちら。
   // 並びは「開いている図が先、その後フォルダの順」。置換の主語は今の作業画面で、
   // フォルダは影響範囲としてその後ろに続く、という読み順に合わせる。
+  //
+  // 保存先の下の木 (サブフォルダ) の図も数える (TICKET-roadmap-20261123-0226-1)。
+  // 同じ名前の図が直下と docs/api にあれば別の図なので、名前では畳まず「居場所の鍵」で畳む。
+  // 鍵は keyOf: 直下の図は名前そのまま (今までの一覧・過去の置換の組と同じ)、サブフォルダの図は
+  // フォルダの絶対パスと名前。行の見出し (label) はサブフォルダの図だけ道付き (docs/api/Foo)。
+  function _normDir(p) {
+    return _s(p).split(String.fromCharCode(92)).join('/').replace(/\/+$/, '').toLowerCase();
+  }
+  function keyOf(name, subDir) {
+    var n = _s(name);
+    return subDir ? 'sub:' + _normDir(subDir) + '|' + n : n;
+  }
+  function _row(d, open) {
+    var name = _s(d.name);
+    var rel = _s(d.rel);
+    return {
+      id: open ? d.id : 'file:' + _s(d.key || name),
+      key: _s(d.key || name),
+      name: name,
+      label: _s(d.label || (rel ? rel + '/' + name : name)),
+      rel: rel,
+      dir: d.dir || null,
+      dsl: _s(d.dsl),
+      open: open,
+    };
+  }
   function merge(openDocs, fileDocs) {
     var out = [];
     var seen = {};
     (Array.isArray(openDocs) ? openDocs : []).forEach(function(d) {
       if (!d) return;
-      var name = _s(d.name);
-      if (!name || seen[name]) return;
-      seen[name] = true;
-      out.push({ id: d.id, name: name, dsl: _s(d.dsl), open: true });
+      var key = _s(d.key || d.name);
+      if (!_s(d.name) || seen[key]) return;
+      seen[key] = true;
+      out.push(_row(d, true));
     });
     (Array.isArray(fileDocs) ? fileDocs : []).forEach(function(d) {
       if (!d) return;
-      var name = _s(d.name);
-      if (!name || seen[name]) return;
-      seen[name] = true;
-      out.push({ id: 'file:' + name, name: name, dsl: _s(d.dsl), open: false });
+      var key = _s(d.key || d.name);
+      if (!_s(d.name) || seen[key]) return;
+      seen[key] = true;
+      out.push(_row(d, false));
     });
     return out;
   }
@@ -57,6 +83,9 @@ window.MA.folderImpact = (function() {
       return {
         id: r && r.id,
         name: r && r.name,
+        key: r && (r.key || r.name),
+        label: r && (r.label || r.name),
+        rel: (r && r.rel) || '',
         count: from ? br.countIn(r && r.dsl, from) : 0,
         open: !!(r && r.open),
         target: isTarget(r),
@@ -115,6 +144,7 @@ window.MA.folderImpact = (function() {
 
   return {
     merge: merge,
+    keyOf: keyOf,
     isTarget: isTarget,
     preview: preview,
     summarize: summarize,
