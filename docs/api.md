@@ -84,7 +84,7 @@ curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日�
 | `POST /open-url` | `{url}` | このリポジトリの GitHub の URL だけを既定のブラウザで開く。他の URL は 400 |
 | `POST /file-op` | `{op, dir, name, to?, toDir?}` | FILES ツリーの右クリック (design 10b)。`op` は `rename` / `copy` / `move` / `reveal`。行き先に同名があれば 409 (上書きしない)。過去版は動かさない |
 | `GET /prefs` | — | この機械に保存した設定 |
-| `GET /data-root` | — | 設定と既定の保存先の置き場所 `{dataRoot, sandbox}`(sandbox は `PUA_DATA_ROOT` で起こしたテスト用) |
+| `GET /data-root` | — | 設定と既定の保存先の置き場所 `{dataRoot, sandbox}`(sandbox は `PUA_DATA_ROOT` で起こしたテスト用。sandbox のサーバは相対の保存先(既定の `./autosave`)を作業フォルダではなく dataRoot の下に解く) |
 | `POST /prefs` | — | 設定を書く |
 | `GET /env` | — | Java / jar の有無、`app` (アプリ版か)、`javaUrl` (Java が無いときの案内先) |
 | `POST /jar-path` | `{path}` | 描画に使う plantuml.jar の場所を設定する。無いファイル・`.jar` でないものは 400 |

@@ -68,6 +68,32 @@ JAR_MIN_SAFE_VERSION = '1.2026.7'
 JAVA_DOWNLOAD_URL = 'https://adoptium.net/temurin/releases/'
 PORT = int(os.environ.get('PUA_PORT', '8766'))
 AUTOSAVE_DEFAULT_DIR = DATA_ROOT / 'autosave'
+
+
+def resolve_save_dir(raw):
+    """画面から来た保存先 (フォルダ) の引数を絶対パスにする。
+
+    TICKET-owner-20261122-2322-1 (data-loss): 試験のサーバ (PUA_DATA_ROOT) では、相対の道 (既定の
+    `./autosave` ほか) をサーバの作業フォルダ (製品のチェックアウト) ではなく DATA_ROOT の下に解く。
+    作業フォルダから解くと、試験がソースから起こす利用者の本物の既定の保存先 (チェックアウトの
+    autosave/) を読み、同じ名前の図を書いていた。PUA_DATA_ROOT の無い利用者のサーバは今のまま
+    (作業フォルダから解く)。絶対パスはどちらでもそのまま。
+    試験の置き場 (作業フォルダの test-results/ の下) を指す相対の道は、試験が自分で用意した図の
+    フォルダなので作業フォルダから解く (e2e は `./test-results/autosave/<spec>` に図を置いて渡す)。
+    """
+    p = Path(raw).expanduser()
+    if not (SANDBOX_DATA_ROOT and not p.is_absolute()):
+        return p.resolve()
+    here = p.resolve()
+    if _path_is_under(here, Path.cwd().resolve() / 'test-results'):
+        return here
+    return (DATA_ROOT / p).resolve()
+
+
+def _path_is_under(p, base):
+    a = os.path.normcase(str(p))
+    b = os.path.normcase(str(base)).rstrip('\\/')
+    return a == b or a.startswith(b + os.sep)
 # TICKET-owner-20261115-1827-1: 保存先 (利用者の Git 作業木) には .puml (と押した書き出し) だけを書く。
 # 図種の控え (_kinds.json)・最後の保存 (_meta.json)・版の控え (_versions/) は設定の置き場の下に
 # 保存先ごとに分けて持つ。保存先に前からある控えは読むだけ (消さない・動かさない)。
@@ -1803,7 +1829,7 @@ class Handler(BaseHTTPRequestHandler):
         """Resolve an autosave dir argument to an absolute Path. Empty/None → default."""
         if not raw:
             return AUTOSAVE_DEFAULT_DIR
-        return Path(raw).expanduser().resolve()
+        return resolve_save_dir(raw)
 
     def _handle_peek_dirs(self):
         """BLK-junior-20260908-0723: 他ペルソナの図を「読むだけ」で見るための行き先一覧。
@@ -1864,7 +1890,7 @@ class Handler(BaseHTTPRequestHandler):
         raw = (params.get('dir') or '').strip()
         if raw:
             try:
-                cur = Path(raw).expanduser().resolve()
+                cur = resolve_save_dir(raw)
             except (OSError, ValueError, RuntimeError):
                 return self._send_json(200, {'ok': False, 'path': raw, 'error': 'フォルダのパスとして読めません'})
         else:
@@ -3488,7 +3514,7 @@ def render_base_dir(raw):
     if not isinstance(raw, str) or not raw.strip() or '\n' in raw or '\x00' in raw:
         return None
     try:
-        p = Path(raw.strip()).expanduser().resolve()
+        p = resolve_save_dir(raw.strip())
     except (OSError, RuntimeError, ValueError):
         return None
     return p if p.is_dir() else None
