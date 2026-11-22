@@ -2843,7 +2843,7 @@ window.MA.modules.plantumlActivity = (function() {
         // 処理欄も他の図種と同じく Enter で確定、改行は Shift+Enter
         // (data-enter="submit" を modal-keys が見る)。複数のアクションを 1 度に入れるのは種別チップ「まとめて」。
         html2 =
-          lbl('処理 (Enter で追加 / Shift+Enter で改行)') +
+          P.textLabelHtml('処理', 'ac-tail-text', { enterHint: true }) +
           '<textarea id="ac-tail-text" data-enter="submit" rows="2" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>';
       } else if (kind === 'if') {
         html2 =
@@ -2863,7 +2863,7 @@ window.MA.modules.plantumlActivity = (function() {
       } else if (kind === 'swimlane') {
         html2 = P.fieldHtml('レーン名', 'ac-tail-lbl', '');
       } else if (kind === 'note') {
-        html2 = lbl('注釈の本文 (Enter で追加 / Shift+Enter で改行)') +
+        html2 = P.textLabelHtml(P.NOTE_BODY, 'ac-tail-ntext', { enterHint: true }) +
           '<textarea id="ac-tail-ntext" data-enter="submit" style="width:100%;min-height:50px;font-family:inherit;font-size:12px;"></textarea>';
       } else if (kind === 'bulk') {
         // 他の図種の「まとめて」と同じ形: 1 行 1 件の欄 +「+ まとめて追加」
@@ -3396,7 +3396,7 @@ window.MA.modules.plantumlActivity = (function() {
           { value: 'left', label: '左' }
         ]) +
         '<div style="margin-bottom:6px;">' +
-          '<label style="display:block;font-size:10px;color:var(--text-secondary);">ノートの本文</label>' +
+          '<label for="ac-new-ntext" style="display:block;font-size:10px;color:var(--text-secondary);">' + P.NOTE_BODY + '</label>' +
           '<textarea id="ac-new-ntext" style="width:100%;min-height:50px;"></textarea>' +
         '</div>' +
         P.primaryButtonHtml('ac-new-nadd', '+ 添える');

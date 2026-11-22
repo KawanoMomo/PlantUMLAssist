@@ -125,6 +125,15 @@ window.MA.richLabelEditor = (function() {
 
     var ta = container.querySelector('.rle-textarea');
     var preview = container.querySelector('.rle-preview');
+    // 本文の欄を見出しに結び付ける (TICKET-owner-20261116-1221-1)。入れ物に id があれば欄は `{入れ物}-text`、
+    // 入れ物の直前の見出し (<label>) が欄を指していなければここを指させる (見出しを押すと欄に移り、見出しの語で欄を引ける)。
+    if (container.id) {
+      ta.id = container.id + '-text';
+      var head = container.previousElementSibling;
+      if (head && head.tagName && head.tagName.toUpperCase() === 'LABEL' && !head.getAttribute('for') && !head.id) {
+        head.setAttribute('for', ta.id);
+      }
+    }
 
     var previewWrap = container.querySelector('.rle-preview-wrap');
     function refreshPreview() {

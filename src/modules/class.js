@@ -1690,7 +1690,7 @@ window.MA.modules.plantumlClass = (function() {
             { value: 'bottom', label: 'Bottom' },
           ]) +
           '<div style="margin-bottom:6px;">' +
-            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文 (Enter で追加 / Shift+Enter で改行)</label>' +
+            P.textLabelHtml(P.NOTE_BODY, 'cl-tail-ntext', { enterHint: true }) +
             '<textarea id="cl-tail-ntext" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;"></textarea>' +
           '</div>' +
           P.primaryButtonHtml('cl-tail-add', '+ 追加');

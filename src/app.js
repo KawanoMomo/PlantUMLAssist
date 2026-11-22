@@ -265,6 +265,8 @@ function init() {
   editorEl = document.getElementById('editor');
   previewSvgEl = document.getElementById('preview-svg');
   propsEl = document.getElementById('props-content');
+  // 右パネルの手で組んだ見出しも欄に結び付ける (描き直すたび。TICKET-owner-20261116-1221-1)
+  if (propsEl && window.MA.properties && window.MA.properties.watchFieldLabels) window.MA.properties.watchFieldLabels(propsEl);
   statusParseEl = document.getElementById('status-parse');
   statusInfoEl = document.getElementById('status-info');
   renderStatusEl = document.getElementById('render-status');

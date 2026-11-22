@@ -384,7 +384,7 @@ window.MA.activityInsert = (function() {
       ];
     }
     if (kind === 'fork') return [{ id: 'branchCount', label: '枝の数', value: '2' }];
-    if (kind === 'note') return [{ id: 'text', label: '注釈の本文', value: '' }];
+    if (kind === 'note') return [{ id: 'text', label: '本文', value: '' }];
     if (kind === 'swimlane') return [{ id: 'name', label: 'レーン名', value: '' }];
     return [];   // break / detach / kill / start / stop は入力なし
   }

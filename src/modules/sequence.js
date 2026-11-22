@@ -1963,7 +1963,7 @@ window.MA.modules.plantumlSequence = (function() {
       html +=
         '<div id="seq-mod-new-inline" style="display:none;margin-top:6px;padding:8px;background:var(--bg-tertiary);border-left:3px solid var(--accent-green);border-radius:3px;">' +
           '<label style="display:block;font-size:10px;color:var(--accent-green);margin-bottom:4px;">新しい参加者を作成</label>' +
-          '<input id="seq-mod-new-alias" type="text" placeholder="Alias (必須)" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;margin-bottom:4px;">' +
+          '<input id="seq-mod-new-alias" type="text" aria-label="新しい参加者の名前" placeholder="Alias (必須)" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;margin-bottom:4px;">' +
           '<select id="seq-mod-new-ptype" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;">' +
             PARTICIPANT_TYPES.map(function(pt) { return '<option value="' + pt + '">' + pt + '</option>'; }).join('') +
           '</select>' +
@@ -2960,14 +2960,14 @@ window.MA.modules.plantumlSequence = (function() {
               P.selectFieldHtml('終点 (To)', 'seq-tail-to', toOptsT) +
               // userissue v1.2.7+: 末尾追加でも Stereotype を入力できるように。
               '<div style="margin-bottom:8px;">' +
-                '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + window.MA.terms.stereotype + '</label>' +
+                '<label for="seq-tail-stereotype" style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + window.MA.terms.stereotype + '</label>' +
                 '<input id="seq-tail-stereotype" type="text" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
               '</div>' +
-              '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-tail-label-rle"></div></div>';
+              '<div style="margin-bottom:8px;">' + P.textLabelHtml('本文', 'seq-tail-label-rle-text') + '<div id="seq-tail-label-rle"></div></div>';
             html +=
               '<div id="seq-tail-new-inline" style="display:none;margin-top:6px;padding:8px;background:var(--bg-tertiary);border-left:3px solid var(--accent-green);border-radius:3px;">' +
                 '<label style="display:block;font-size:10px;color:var(--accent-green);margin-bottom:4px;">新しい参加者を作成</label>' +
-                '<input id="seq-tail-new-alias" type="text" placeholder="Alias (必須)" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;margin-bottom:4px;">' +
+                '<input id="seq-tail-new-alias" type="text" aria-label="新しい参加者の名前" placeholder="Alias (必須)" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;margin-bottom:4px;">' +
                 '<select id="seq-tail-new-ptype" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;">' +
                   PARTICIPANT_TYPES.map(function(pt) { return '<option value="' + pt + '">' + pt + '</option>'; }).join('') +
                 '</select>' +
@@ -2990,7 +2990,7 @@ window.MA.modules.plantumlSequence = (function() {
               P.selectFieldHtml('位置', 'seq-tail-npos', posOpts) +
               P.selectFieldHtml('付ける相手', 'seq-tail-ntarget', partOpts) +
               _noteExtraHtml('seq-tail-nextra', participants) +
-              '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-tail-ntext-rle"></div></div>' +
+              '<div style="margin-bottom:8px;">' + P.textLabelHtml(P.NOTE_BODY, 'seq-tail-ntext-rle-text', { enterHint: true }) + '<div id="seq-tail-ntext-rle"></div></div>' +
               P.primaryButtonHtml('seq-tail-add', '+ 追加');
           } else if (kind === 'block') {
             var bkOpts = GROUP_KINDS.map(function(k) { return { value: k, label: groupLabel(k), selected: k === 'alt' }; });
