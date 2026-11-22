@@ -9294,6 +9294,27 @@ function refreshExportDest() {
     var mine = _lastExport && _lastExport.dir === t.dir && _lastExport.name === t.name ? _lastExport : null;
     last.textContent = mine ? '前回: ' + mine.msg : '';
   }
+  _refreshExportStale(t, sub);
+}
+
+// TICKET-junior-20261122-1520-wish: 置き場の SVG / PNG / 透過 PNG が、保存後に直した本文 (保存先の .puml) より
+// 古いかを「書き出し先:」の行に語で出す。判定は server がディスクの更新時刻で行う (読むだけ。何も書かない)。
+// 古いものが無ければ何も出さない。書き出し直すと deliverExport が行を書き直すので消える。
+var _exportStaleSeq = 0;
+function _refreshExportStale(t, sub) {
+  var el = document.getElementById('export-dest-stale');
+  var ED = window.MA.exportDest;
+  if (!el || !ED || !ED.statusUrl || !window.fetch) return;
+  var seq = ++_exportStaleSeq;
+  fetch(ED.statusUrl(t.dir, t.name, sub))
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .catch(function() { return null; })
+    .then(function(res) {
+      if (seq !== _exportStaleSeq) return;   // 後から開き直した回の答えを古い答えで上書きしない
+      var cur = _exportTarget();
+      if (!cur || cur.dir !== t.dir || cur.name !== t.name) { el.textContent = ''; return; }
+      el.textContent = ED.staleLabel(res);
+    });
 }
 
 function deliverExport(kind, downloadName, blob) {

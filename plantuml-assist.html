@@ -847,6 +847,9 @@ html, body {
 }
 #export-menu #export-dest-last { white-space: normal; word-break: break-all; }
 #export-menu #export-dest-last:empty { display: none; }
+/* TICKET-junior-20261122-1520-wish: 置き場の書き出しが今の本文より古いときだけ語で出す */
+#export-menu #export-dest-stale { color: var(--warning, #d19a66); white-space: normal; }
+#export-menu #export-dest-stale:empty { display: none; }
 #export-dest-pick {
   position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000;
   display: flex; align-items: center; justify-content: center;
@@ -3402,6 +3405,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div id="export-dest" class="menu-note" hidden>
           <span>書き出し先: <span id="export-dest-place"></span></span>
           <button type="button" id="export-dest-change">替える…</button>
+        <div id="export-dest-stale"></div>
           <div id="export-dest-last"></div>
         </div>
         <!-- 「渡す」見出しと名前を付けた図の組の zip・「その他」は TICKET-owner-20261116-0140-prune で外した。

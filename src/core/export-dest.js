@@ -116,9 +116,34 @@ window.MA.exportDest = (function() {
     }).join('、');
   }
 
+  // ── 置き場の書き出しが今の本文より古いか (TICKET-junior-20261122-1520-wish) ──
+  // server の GET /export-file (読むだけ) が、置き場の SVG / PNG / 透過 PNG と保存先の .puml の更新時刻を比べて答える。
+  // Export ▾ の「書き出し先:」の行に、古い書き出しの種類を語で出す。古いものが無ければ何も出さない。
+  function statusUrl(dir, name, sub) {
+    return '/export-file?dir=' + encodeURIComponent(_s(dir)) + '&name=' + encodeURIComponent(_s(name)) +
+      '&sub=' + encodeURIComponent(normSub(sub) || '');
+  }
+
+  // staleKinds(res) — 古い書き出しの種類 (BATCH_KINDS の順)。答えが読めなければ []。
+  function staleKinds(res) {
+    var r = res || {};
+    if (!r.ok || !r.exports || !r.exports.length) return [];
+    var stale = {};
+    r.exports.forEach(function(e) { if (e && e.exists && e.stale && KINDS[e.kind]) stale[e.kind] = true; });
+    return BATCH_KINDS.filter(function(k) { return stale[k]; });
+  }
+
+  // staleLabel(res) — 「SVG · PNG は保存後に直した本文より古い」。古いものが無ければ ''。
+  function staleLabel(res) {
+    var ks = staleKinds(res);
+    if (!ks.length) return '';
+    return ks.map(kindLabel).join(' · ') + ' は保存後に直した本文より古い';
+  }
+
   return {
     KINDS: KINDS, normSub: normSub, key: key, loadSub: loadSub, saveSub: saveSub,
     kindOf: kindOf, fileName: fileName, url: url, placeLabel: placeLabel, message: message,
     BATCH_KINDS: BATCH_KINDS, kindLabel: kindLabel, batchLabel: batchLabel, batchMessage: batchMessage,
+    statusUrl: statusUrl, staleKinds: staleKinds, staleLabel: staleLabel,
   };
 })();

@@ -691,6 +691,8 @@ API_INDEX = {
         {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
         {'endpoint': 'GET /browse-dir', 'summary': '保存先を選ぶ窓でフォルダを辿る (子フォルダ・親・ドライブ。読むだけ)'},
+        {'endpoint': 'GET /export-file', 'summary': '置き場の書き出し (SVG / PNG / 透過 PNG) が保存先の .puml より古いか。読むだけ',
+         'request': '?dir=&name=&sub='},
         {'endpoint': 'GET /tree-dir', 'summary': '保存先の下のサブフォルダを階層のまま (各フォルダの .puml の名前。読むだけ)'},
         {'endpoint': 'GET /git-status', 'summary': '保存先が Git 作業木ならブランチ・ahead/behind・変更 (M/A/D)。読むだけで通信しない',
          'request': '?dir='},
@@ -1408,6 +1410,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._handle_tree_dir()
         if self.path.split('?')[0] == '/browse-dir':
             return self._handle_browse_dir()
+        # TICKET-junior-20261122-1520-wish: 置き場の書き出しが .puml より古いか (読むだけ)。
+        if self.path.split('?')[0] == '/export-file':
+            with _fs_lock:
+                return self._handle_export_file_get()
         # BLK-human-20260923-1702 (design 10c): 保存先の Git を読む口。読むだけで通信しない。
         if self.path.split('?')[0] in ('/git-status', '/git-log', '/git-refs', '/git-show'):
             return self._handle_git_get()
@@ -2769,6 +2775,41 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json(200, {'ok': True, 'path': str(dest), 'rel': '/'.join(parts + [dest.name]),
                               'dir': str(dest_dir), 'bytes': len(data), 'existed': existed})
+
+    def _handle_export_file_get(self):
+        """TICKET-junior-20261122-1520-wish: 置き場にある書き出しが、保存先の .puml より古いかを答える。
+
+        query: dir / name / sub (POST と同じ)。答え: {ok, exports: [{kind, rel, exists, stale}]}。
+        stale は書き出しの更新時刻が .puml の更新時刻より前 (書き出した後に本文を直して保存した)。
+        判定はディスクの .puml と画像の更新時刻だけ。読むだけで、保存先に控え・印のファイルを置かない。
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query, keep_blank_values=True).items()}
+        name = params.get('name', '')
+        if not params.get('dir') or not self._autosave_validate_type(name):
+            return self._send_json(200, {'ok': False, 'exports': []})
+        parts = self.export_sub_parts(params.get('sub', ''))
+        if parts is None:
+            return self._send_json(200, {'ok': False, 'exports': []})
+        try:
+            save_dir = self._autosave_resolve_dir(params.get('dir'))
+            puml = self._autosave_file_path(save_dir, name)
+            if not puml.is_file():
+                return self._send_json(200, {'ok': False, 'exports': []})
+            puml_mtime = puml.stat().st_mtime_ns
+        except (OSError, ValueError, RuntimeError):
+            return self._send_json(200, {'ok': False, 'exports': []})
+        dest_dir = save_dir.joinpath(*parts) if parts else save_dir
+        out = []
+        for kind, ext in self.EXPORT_FILE_EXTS.items():
+            dest = dest_dir / (name + ext)
+            try:
+                st = dest.stat() if dest.is_file() else None
+            except OSError:
+                st = None
+            out.append({'kind': kind, 'rel': '/'.join(parts + [dest.name]), 'exists': st is not None,
+                        'stale': bool(st is not None and st.st_mtime_ns < puml_mtime)})
+        self._send_json(200, {'ok': True, 'exports': out})
 
     # BLK-reviewer-20260908-1103: mtime 比較だけでは「svg が今の puml から作られたか」は
     # 分からない (保存し直しただけで中身は追いついている図と、前々回の編集から
