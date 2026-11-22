@@ -43,6 +43,11 @@ test('junior 手順1 (場面2) 開いた図に、末尾に追加の始点・終�
       await page.getByRole('combobox', { name: '終点 (To)' }).selectOption(t);
       await page.getByRole('button', { name: /^\+ 追加/ }).click();
       await expect.poll(() => H.getEditorText(page)).toMatch(new RegExp('^\\s*' + f + '\\s*-+>+\\s*' + t + '\\b', 'm'));
+      // 利用者は次の 1 本を、右パネルが描き直されて「直前の送り先から続けます」(From = 直前の To・To は空欄) に
+      // なってから選ぶ。本文が変わっただけで選ぶと、選んだ後に描き直しが来て To が空欄に戻り、
+      // 「+ 追加」が何も足さない (全体実行の負荷で選ぶ〜押すの間が延びたときの揺れ。TICKET-releaser-20261123-0142-4)。
+      await expect(page.getByRole('combobox', { name: '始点 (From)' })).toHaveValue(t);
+      await expect(page.getByRole('combobox', { name: '終点 (To)' })).toHaveValue('');
     });
     // 押した対象だけが変わる: メッセージ 1 行が増えるだけ。
     expect(r.diffLines, 'diff lines for ' + f + ' -> ' + t).toBe(1);
