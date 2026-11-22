@@ -83,6 +83,7 @@ const sourceFiles = [
   'src/core/sequence-participant-zone.js',
   'src/core/insert-marker.js',
   'src/core/label-colors.js',
+  'src/ui/terms.js',
   'src/ui/properties.js',
   'src/modules/sequence.js',
   'src/modules/usecase.js',

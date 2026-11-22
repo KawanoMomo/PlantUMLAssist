@@ -84,7 +84,7 @@ window.MA.richLabelEditor = (function() {
     return '<div class="rle-color-panel" hidden'
       + ' style="position:absolute;z-index:10;top:100%;left:0;margin-top:2px;padding:8px;'
       + 'background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;">'
-      + '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;">文字色 / Text color</div>'
+      + '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;">文字色</div>'
       + '<div style="display:flex;gap:4px;align-items:center;">' + swatches + '</div>'
       + recentHtml
       + '<button type="button" class="rle-color-clear" style="display:block;width:100%;margin-top:8px;'

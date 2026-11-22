@@ -95,7 +95,7 @@ test.describe('BLK-builder-0923 コマンドパレットの見出しと Tab 絞�
     await page.keyboard.press('Control+k');
     await expect(page.locator('#cp-list .cp-group[data-cp-group="selected"]'))
       .toHaveText('選択中の要素に対して / Selected');
-    await page.locator('#cp-input').fill('ライフライン推論');
+    await page.locator('#cp-input').fill('呼び出しの開始・終了');
     const items = page.locator('#cp-list .cp-item');
     await expect(items).toHaveCount(1);
     await page.keyboard.press('Enter');

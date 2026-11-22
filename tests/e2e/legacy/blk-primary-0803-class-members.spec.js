@@ -46,8 +46,8 @@ test('属性とメソッドが別々の一覧に分かれ、それぞれに「+ 
   await typeDsl(page, CLS);
   await selectClass(page, 'Uart_Driver');
 
-  await expect(page.locator('#props-pane')).toContainText('属性 / Attributes');
-  await expect(page.locator('#props-pane')).toContainText('メソッド / Methods');
+  await expect(page.locator('#props-pane')).toContainText('属性');
+  await expect(page.locator('#props-pane')).toContainText('メソッド');
   await expect(page.locator('#cl-add-attr')).toBeVisible();
   await expect(page.locator('#cl-add-method')).toBeVisible();
 
@@ -106,7 +106,7 @@ test('種別トグルで class を interface に変えても本体とメンバ�
   await typeDsl(page, CLS);
   await selectClass(page, 'Uart_Driver');
 
-  await expect(page.locator('#props-pane')).toContainText('種別 / Kind');
+  await expect(page.locator('#props-pane')).toContainText('種類');
   await expect(page.locator('.cl-kind-btn[data-kind="class"]'))
     .toHaveAttribute('aria-pressed', 'true');
 

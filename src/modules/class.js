@@ -1826,7 +1826,7 @@ window.MA.modules.plantumlClass = (function() {
   }
 
   function _kindToggleHtml(current) {
-    var html = '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">種別 / Kind</div>' +
+    var html = '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + window.MA.terms.kind + '</div>' +
                '<div id="cl-kind-toggle" style="display:flex;gap:3px;margin-bottom:8px;flex-wrap:wrap;">';
     _KINDS.forEach(function(k) {
       var on = k.kind === current;
@@ -1887,7 +1887,7 @@ window.MA.modules.plantumlClass = (function() {
   }
 
   function _visToggleHtml(idPrefix, current) {
-    var html = '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">可視性 / Visibility</div>' +
+    var html = '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">可視性</div>' +
                '<div class="cl-vis-toggle" data-vis-for="' + idPrefix + '" style="display:flex;gap:3px;margin-bottom:6px;">';
     _VIS.forEach(function(v) {
       var on = v.value === current;
@@ -2060,11 +2060,11 @@ window.MA.modules.plantumlClass = (function() {
         _selHeadHtml(kindLabel, element) +
         // design 4a「種別 / Kind」: 宣言のキーワードをその場で切り替える
         _kindToggleHtml(element.kind) +
-        P.fieldHtml('名前 (id)', 'cl-edit-id', element.id) +
-        P.fieldHtml('表示名', 'cl-edit-label', element.label || '') +
-        P.fieldHtml('ステレオタイプ', 'cl-edit-stereo', element.stereotype || '', '例: entity') +
-        P.primaryButtonHtml('cl-edit-apply', '変更を反映') +
-        ' ' + P.primaryButtonHtml('cl-rename-refs', '名前の変更を関係の行にも反映') +
+        P.fieldHtml(window.MA.terms.id, 'cl-edit-id', element.id) +
+        P.fieldHtml(window.MA.terms.label, 'cl-edit-label', element.label || '') +
+        P.fieldHtml(window.MA.terms.stereotype, 'cl-edit-stereo', element.stereotype || '', '例: entity') +
+        P.primaryButtonHtml('cl-edit-apply', window.MA.terms.apply) +
+        ' ' + P.primaryButtonHtml('cl-rename-refs', window.MA.terms.renameRefs) +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
           '<button id="cl-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
           '<button id="cl-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
@@ -2121,7 +2121,7 @@ window.MA.modules.plantumlClass = (function() {
                       '<pre id="cl-mem-preview-' + mi + '" style="margin:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:3px;padding:5px 6px;font-family:var(--font-mono),Consolas,monospace;font-size:11px;color:var(--text-primary);white-space:pre-wrap;word-break:break-all;min-height:15px;">' +
                         window.MA.htmlUtils.escHtml(String(srcLine).trim()) + '</pre>' +
                     '</div>' +
-                    '<div style="margin-top:6px;">' + P.primaryButtonHtml('cl-mem-update-' + mi, '更新') + '</div>' +
+                    '<div style="margin-top:6px;">' + P.primaryButtonHtml('cl-mem-update-' + mi, window.MA.terms.apply) + '</div>' +
                     '<div style="margin-top:6px;display:flex;gap:6px;">' +
                       '<button type="button" id="cl-mem-up-' + mi + '" data-line="' + m.line + '" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
                       '<button type="button" id="cl-mem-down-' + mi + '" data-line="' + m.line + '" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
@@ -2141,9 +2141,9 @@ window.MA.modules.plantumlClass = (function() {
                '</div>' + rows;
     }
 
-    html += _memberSectionHtml('attribute', '属性 / Attributes', 'cl-add-attr') +
+    html += _memberSectionHtml('attribute', '属性', 'cl-add-attr') +
             '<div id="cl-add-attr-form" style="display:none;margin-top:6px;"></div></div>' +
-            _memberSectionHtml('method', 'メソッド / Methods', 'cl-add-method') +
+            _memberSectionHtml('method', 'メソッド', 'cl-add-method') +
             '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div></div>';
 
     // design 4a: 細かい指定は「その他」に畳む。よく使う 属性 / メソッド を上に残し、
@@ -2199,7 +2199,7 @@ window.MA.modules.plantumlClass = (function() {
             '<button id="cl-add-note-btn" style="margin-top:4px;">＋ ノートを添える</button>' +
           '</div>' +
           // design 4a: 削除はパネルの末尾に「クラスを削除」。
-          '<button id="cl-delete" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">クラスを削除</button>';
+          '<button id="cl-delete" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">' + window.MA.terms.del + '</button>';
 
     propsEl.innerHTML = html;
     GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx, element.id);
@@ -2483,9 +2483,9 @@ window.MA.modules.plantumlClass = (function() {
         _selHeadHtml('Enum', element) +
         // enum にしたあとも種別の欄から戻せる。
         _kindToggleHtml(element.kind) +
-        P.fieldHtml('名前 (id)', 'cl-edit-id', element.id) +
-        P.fieldHtml('ステレオタイプ', 'cl-edit-stereo', element.stereotype || '') +
-        P.primaryButtonHtml('cl-edit-apply', '変更を反映') +
+        P.fieldHtml(window.MA.terms.id, 'cl-edit-id', element.id) +
+        P.fieldHtml(window.MA.terms.stereotype, 'cl-edit-stereo', element.stereotype || '') +
+        P.primaryButtonHtml('cl-edit-apply', window.MA.terms.apply) +
         GP.editFieldHtml('cl-edit', parsedData.groups, element.line) +
       '</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;">' +
@@ -2496,7 +2496,7 @@ window.MA.modules.plantumlClass = (function() {
     });
     html += P.fieldHtml('新しい値', 'cl-add-val-name', '', '例: PURPLE') +
             P.primaryButtonHtml('cl-add-val', '+ Value 追加') +
-            '</div>' + '<button id="cl-delete" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">クラスを削除</button>';
+            '</div>' + '<button id="cl-delete" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">' + window.MA.terms.del + '</button>';
     propsEl.innerHTML = html;
     GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx, element.id);
     _bindKindToggle(element, propsEl, ctx);
@@ -2599,9 +2599,9 @@ window.MA.modules.plantumlClass = (function() {
         P.fieldHtml(RR.fieldLabel(relation.kind, 'from'), 'cl-rel-from', uiEnds.from) +
         '<button id="cl-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
         P.fieldHtml(RR.fieldLabel(relation.kind, 'to'), 'cl-rel-to', uiEnds.to) +
-        P.fieldHtml('Label', 'cl-rel-label', relation.label || '') +
+        P.fieldHtml(window.MA.terms.edgeLabel, 'cl-rel-label', relation.label || '') +
         P.relationOptionsFor('cl-rel-more', ctx.getMmdText(), relation.line) +
-        P.primaryButtonHtml('cl-rel-apply', '変更を反映') +
+        P.primaryButtonHtml('cl-rel-apply', window.MA.terms.apply) +
         ' <button id="cl-rel-delete" type="button" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         // 手本の矢印から種類を選び直さずに同じ関連を引く。
         '<button id="cl-rel-same" type="button" style="width:100%;margin-top:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">⇢ この関連と同じものを引く</button>' +
@@ -2687,7 +2687,7 @@ window.MA.modules.plantumlClass = (function() {
         '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
         '<textarea id="cl-note-text" style="width:100%;min-height:80px;">' + (note.text || '').replace(/[<>&]/g, '') + '</textarea>' +
       '</div>' +
-      P.primaryButtonHtml('cl-note-update', '更新') +
+      P.primaryButtonHtml('cl-note-update', window.MA.terms.apply) +
       P.primaryButtonHtml('cl-note-delete', '✕ 削除');
     propsEl.innerHTML = html;
 
@@ -2728,8 +2728,8 @@ window.MA.modules.plantumlClass = (function() {
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
         window.MA.htmlUtils.escHtml(P.lineHead(group.kind === 'namespace' ? '境界 (namespace)' : '境界', group.startLine, group.endLine)) + '</label>' +
-        P.fieldHtml('Label', 'cl-grp-label', group.label) +
-        P.primaryButtonHtml('cl-grp-apply', '変更を反映') +
+        P.fieldHtml(window.MA.terms.label, 'cl-grp-label', group.label) +
+        P.primaryButtonHtml('cl-grp-apply', window.MA.terms.apply) +
         ' <button id="cl-grp-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 境界削除</button>' +
       '</div>';
     propsEl.innerHTML = html;
@@ -2782,7 +2782,7 @@ window.MA.modules.plantumlClass = (function() {
           { value: 'nested',         label: 'Nested (+--, outer +-- inner)' },
           { value: 'dependency',     label: 'Dependency (..>)' },
         ]) +
-        P.fieldHtml('Label', 'cl-conn-label', '', '任意') +
+        P.fieldHtml(window.MA.terms.edgeLabel, 'cl-conn-label', '', '任意') +
         P.primaryButtonHtml('cl-conn-create', '+ Connect') +
       '</div>';
 

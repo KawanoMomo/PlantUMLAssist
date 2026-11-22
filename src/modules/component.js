@@ -753,13 +753,13 @@ window.MA.modules.plantumlComponent = (function() {
       // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
-        P.fieldHtml('Alias (id)', 'co-edit-id', element.id) +
-        P.fieldHtml('Label', 'co-edit-label', element.label) +
+        P.fieldHtml(window.MA.terms.id, 'co-edit-id', element.id) +
+        P.fieldHtml(window.MA.terms.label, 'co-edit-label', element.label) +
         // design 5d: ステレオタイプ (<<service>> など)。空にすれば外れる
-        P.fieldHtml('Stereotype', 'co-edit-stereo', element.stereotype || '', '例: service (空で外す)') +
-        P.primaryButtonHtml('co-edit-apply', '変更を反映') +
+        P.fieldHtml(window.MA.terms.stereotype, 'co-edit-stereo', element.stereotype || '', '例: service (空で外す)') +
+        P.primaryButtonHtml('co-edit-apply', window.MA.terms.apply) +
         '<div style="margin-top:6px;">' +
-          P.primaryButtonHtml('co-rename-refs', 'Alias 変更を関連 Relation にも追従') +
+          P.primaryButtonHtml('co-rename-refs', window.MA.terms.renameRefs) +
         '</div>' +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
           '<button id="co-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
@@ -835,9 +835,9 @@ window.MA.modules.plantumlComponent = (function() {
         P.fieldHtml('To', 'co-rel-to', relation.to) +
         P.fieldHtml('ラベル / Label（任意）', 'co-rel-label', relation.label) +
         P.relationOptionsFor('co-rel-more', ctx.getMmdText(), relation.line) +
-        P.primaryButtonHtml('co-rel-apply', '変更を反映') +
+        P.primaryButtonHtml('co-rel-apply', window.MA.terms.apply) +
         '<div style="margin-top:8px;">' +
-          '<button id="co-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除 / Delete</button>' +
+          '<button id="co-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">' + window.MA.terms.del + '</button>' +
         '</div>' +
       '</div>';
     propsEl.innerHTML = html;
@@ -923,7 +923,7 @@ window.MA.modules.plantumlComponent = (function() {
           { value: 'provides',    label: 'Provides (lollipop -())' },
           { value: 'requires',    label: 'Requires (lollipop )-)' },
         ]) +
-        P.fieldHtml('Label', 'co-conn-label', '', '任意') +
+        P.fieldHtml(window.MA.terms.edgeLabel, 'co-conn-label', '', '任意') +
         P.primaryButtonHtml('co-conn-create', '+ Connect') +
       '</div>';
 

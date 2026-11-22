@@ -73,7 +73,7 @@ window.MA.relationKindCards = (function() {
   // cardsHtml: 見出し + カード列。各カードは class=<cls>、data-value に種類を持つ。
   function cardsHtml(cls, kinds, current) {
     var html = '<div style="margin-bottom:8px;">' +
-      '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:4px;">関係の種類 / Relation</label>';
+      '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:4px;">関係の種類</label>';
     for (var i = 0; i < kinds.length; i++) {
       var k = kinds[i];
       var on = k.value === current;

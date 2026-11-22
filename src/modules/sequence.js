@@ -876,12 +876,12 @@ window.MA.modules.plantumlSequence = (function() {
     var esc = window.MA.htmlUtils.escHtml;
     if (!supported) {
       return '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);' +
-        'margin-bottom:2px;">線の色 / Line color</label>' +
+        'margin-bottom:2px;">' + window.MA.terms.lineColor + '</label>' +
         '<div id="' + idPrefix + '-unsupported" style="font-size:10px;color:var(--text-secondary);">' +
         'この矢印 (片羽根) は色を指定できません</div></div>';
     }
     var html = '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);' +
-      'margin-bottom:2px;">線の色 / Line color</label><div style="display:flex;gap:4px;flex-wrap:wrap;">';
+      'margin-bottom:2px;">' + window.MA.terms.lineColor + '</label><div style="display:flex;gap:4px;flex-wrap:wrap;">';
     _lineColors().forEach(function(c) {
       var on = (c.value || '') === (current || '');
       html += '<button type="button" class="' + idPrefix + '-swatch" id="' + idPrefix + '-' + (c.value || 'default') + '"' +
@@ -1392,7 +1392,7 @@ window.MA.modules.plantumlSequence = (function() {
       rangeHtml +
       P.selectFieldHtml('ブロック種類', 'seq-wrap-kind', opts) +
       '<div style="margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">条件 / Condition</label>' +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + window.MA.terms.condition + '</label>' +
         '<input id="seq-wrap-label" type="text" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
       '</div>' +
       '<div style="display:flex;gap:8px;margin-top:12px;">' +
@@ -1589,10 +1589,10 @@ window.MA.modules.plantumlSequence = (function() {
     return '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">参加者を' +
         (position === 'before' ? '左' : '右') + 'に追加</h3>' +
       '<div style="margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Alias</label>' +
+        '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + window.MA.terms.id + '</label>' +
         '<input id="seq-part-alias" type="text" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
       '</div>' +
-      P.selectFieldHtml('Type', 'seq-part-type', opts) +
+      P.selectFieldHtml(window.MA.terms.kind, 'seq-part-type', opts) +
       '<div style="display:flex;gap:8px;margin-top:12px;">' +
         '<button id="seq-part-cancel" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:8px;border-radius:4px;cursor:pointer;">キャンセル</button>' +
         '<button id="seq-part-confirm" style="flex:1;background:var(--accent);border:none;color:#fff;padding:8px;border-radius:4px;cursor:pointer;">確定</button>' +
@@ -1919,12 +1919,12 @@ window.MA.modules.plantumlSequence = (function() {
         P.selectFieldHtml('始点 (From)', 'seq-mod-from', fromOpts) +
         // 矢印は末尾に追加・選択パネルと同じ 4 つのボタン +
         // 「その他の矢印…」で選ぶ (プルダウン 1 つで選ぶ窓はここだけだった)。現在値は hidden #seq-mod-arrow。
-        P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-mod-arrow',
+        P.arrowPickerHtml(window.MA.terms.arrow, 'seq-mod-arrow',
           quickArrowOptions(), otherArrowOptions(), '->') +
         P.selectFieldHtml('終点 (To)', 'seq-mod-to', toOpts) +
         // userissue v1.2.7+: 「ここに挿入」 modal にも Stereotype 入力欄を追加。
         '<div style="margin-bottom:8px;">' +
-          '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
+          '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + window.MA.terms.stereotype + '</label>' +
           '<input id="seq-mod-stereotype" type="text" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
         '</div>' +
         '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-mod-label-rle"></div></div>';
@@ -1942,22 +1942,22 @@ window.MA.modules.plantumlSequence = (function() {
       var bkOpts = GROUP_KINDS.map(function(k) { return { value: k, label: groupLabel(k), selected: k === bkSel }; });
       html +=
         P.selectFieldHtml('Kind', 'seq-mod-bkind', bkOpts) +
-        P.fieldHtml('Label', 'seq-mod-blabel', '', '例: x > 0');
+        P.fieldHtml(window.MA.terms.edgeLabel, 'seq-mod-blabel', '', '例: x > 0');
     } else if (kind === 'separator' || kind === 'delay') {
       // design 5c: どちらも本文 1 つだけ。記法は placeholder で見せる。
       html += P.fieldHtml('本文（任意）', 'seq-mod-mtext', '',
         kind === 'separator' ? '例: 初期化ここまで' : '例: 応答待ち');
     } else if (kind === 'ref') {
       html +=
-        P.selectFieldHtml('かかる参加者 / Over', 'seq-mod-rtarget', partOpts) +
+        P.selectFieldHtml('かかる参加者', 'seq-mod-rtarget', partOpts) +
         P.fieldHtml('本文', 'seq-mod-mtext', '', '例: 認証シーケンス参照');
     } else if (kind === 'activation') {
       html +=
-        P.selectFieldHtml('する事 / Action', 'seq-mod-aact', [
+        P.selectFieldHtml('する事', 'seq-mod-aact', [
           { value: 'activate', label: 'activate', selected: true },
           { value: 'deactivate', label: 'deactivate' },
         ]) +
-        P.selectFieldHtml('相手 / Target', 'seq-mod-atgt', withSelected(partOpts, (resolveAnchor(parsed, line) || {}).to));
+        P.selectFieldHtml('相手', 'seq-mod-atgt', withSelected(partOpts, (resolveAnchor(parsed, line) || {}).to));
     }
     if (kind === 'message') {
       html +=
@@ -2951,7 +2951,7 @@ window.MA.modules.plantumlSequence = (function() {
               // design 2d: 末尾追加でも同じ矢印パレットから選ぶ。
               // 現在値は hidden #seq-tail-arrow が持つ。
               // 確定後も矢印の種類 (応答・戻り など) を保つ。
-              P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-tail-arrow',
+              P.arrowPickerHtml(window.MA.terms.arrow, 'seq-tail-arrow',
                 quickArrowOptions(), otherArrowOptions(),
                 (TMm && TMm.field('seq-tail-arrow')) || '->') +
               // design 5d: 末尾追加でも線の色を先に決められる。
@@ -2960,7 +2960,7 @@ window.MA.modules.plantumlSequence = (function() {
               P.selectFieldHtml('終点 (To)', 'seq-tail-to', toOptsT) +
               // userissue v1.2.7+: 末尾追加でも Stereotype を入力できるように。
               '<div style="margin-bottom:8px;">' +
-                '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
+                '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + window.MA.terms.stereotype + '</label>' +
                 '<input id="seq-tail-stereotype" type="text" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
               '</div>' +
               '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-tail-label-rle"></div></div>';
@@ -3000,11 +3000,11 @@ window.MA.modules.plantumlSequence = (function() {
               P.primaryButtonHtml('seq-tail-add', '+ 追加');
           } else if (kind === 'activation') {
             html =
-              P.selectFieldHtml('する事 / Action', 'seq-tail-aact', [
+              P.selectFieldHtml('する事', 'seq-tail-aact', [
                 { value: 'activate', label: 'activate', selected: true },
                 { value: 'deactivate', label: 'deactivate' },
               ]) +
-              P.selectFieldHtml('相手 / Target', 'seq-tail-atgt', partOpts) +
+              P.selectFieldHtml('相手', 'seq-tail-atgt', partOpts) +
               P.primaryButtonHtml('seq-tail-add', '+ 追加');
           } else if (kind === 'bulk') {
             html =
@@ -3181,7 +3181,7 @@ window.MA.modules.plantumlSequence = (function() {
           var msgOnlyButtons = '';
           if (kind === 'message') {
             msgOnlyButtons =
-              '<button class="seq-infer-activation" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">ライフライン推論 (activate/deactivate)</button>';
+              '<button class="seq-infer-activation" data-line="' + line + '" style="width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px 10px;margin-bottom:4px;border-radius:4px;font-size:11px;cursor:pointer;">' + window.MA.terms.inferActivation + '</button>';
           }
           return '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
             '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">この位置に挿入</label>' +
@@ -3237,13 +3237,13 @@ window.MA.modules.plantumlSequence = (function() {
               '<div style="flex:1;min-width:0;">' + P.selectFieldHtml('To', 'seq-edit-to', toOpts) + '</div>' +
             '</div>' +
             // design 2d: よく使う 4 種は常時、残りは「その他の矢印… ▾」のパレットに。
-            P.arrowPickerHtml('矢印の種類 / Arrow', 'seq-edit-arrow',
+            P.arrowPickerHtml(window.MA.terms.arrow, 'seq-edit-arrow',
               quickArrowOptions(), otherArrowOptions(),
               activeArrowKey(mm.from, mm.to, stripArrowColor(mm.arrow))) +
             // design 5d: 線色。矢印の形はそのままに色だけ差し替える。
             lineColorRowHtml('seq-edit-color', arrowColor(mm.arrow), arrowSupportsColor(mm.arrow)) +
             '<div style="margin-bottom:8px;">' +
-              '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">Stereotype <span style="color:#32CD32;">&lt;&lt; &gt;&gt;</span> <span style="color:var(--text-secondary);font-weight:normal;">(任意・上段にライムグリーンで表示)</span></label>' +
+              '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + window.MA.terms.stereotype + '</label>' +
               '<input id="seq-edit-stereotype" type="text" value="' + escHtml(msgParts.stereotype) + '" placeholder="例: async / sync / important" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-size:12px;box-sizing:border-box;">' +
             '</div>' +
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-msg-label-rle"></div></div>' +
@@ -3347,11 +3347,11 @@ window.MA.modules.plantumlSequence = (function() {
           '</div>';
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(pp.label) + '</strong><br><span style="color:var(--text-secondary);">' + escHtml(P.lineHead(pp.ptype, selLine)) + '</span></div>' +
-            P.selectFieldHtml('Type', 'seq-edit-ptype', pOpts2) +
-            P.fieldHtml('Alias', 'seq-edit-alias', pp.id) +
-            // 図に出る文字の欄は部品を問わず「本文」。
-            '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文</label><div id="seq-edit-label-rle"></div></div>' +
-            '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);margin:8px 0;"><input id="seq-edit-rename-refs" type="checkbox" checked> Alias 変更時に他要素の参照も追従</label>' +
+            P.selectFieldHtml(window.MA.terms.kind, 'seq-edit-ptype', pOpts2) +
+            P.fieldHtml(window.MA.terms.id, 'seq-edit-alias', pp.id) +
+            // 参加者の図に出る名前は 6 図種と同じ「表示名」(メッセージ・注釈の文字は「本文」)。
+            '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + window.MA.terms.label + '</label><div id="seq-edit-label-rle"></div></div>' +
+            '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);margin:8px 0;"><input id="seq-edit-rename-refs" type="checkbox" checked> ' + window.MA.terms.renameRefs + '</label>' +
             paletteHtml +
             actionBarHtml(selLine, 'participant', pp.id);
           var ln = pp.line;
@@ -3542,8 +3542,8 @@ window.MA.modules.plantumlSequence = (function() {
           var gtypeOpts = GROUP_KINDS.map(function(k) { return { value: k, label: groupLabel(k), selected: k === gg.gtype }; });
           propsEl.innerHTML =
             '<div style="background:rgba(124,140,248,0.1);border-left:3px solid var(--accent);padding:6px 10px;margin-bottom:12px;font-size:11px;"><strong>' + escHtml(gg.gtype + (gg.label ? ' ' + gg.label : '')) + '</strong><br><span style="color:var(--text-secondary);">' + escHtml(P.lineHead('Block', gg.line, gg.endLine)) + '</span></div>' +
-            P.selectFieldHtml('種類 / Type', 'seq-edit-gtype', gtypeOpts) +
-            P.fieldHtml('条件 / Condition', 'seq-edit-glabel', gg.label || '') +
+            P.selectFieldHtml(window.MA.terms.kind, 'seq-edit-gtype', gtypeOpts) +
+            P.fieldHtml(window.MA.terms.condition, 'seq-edit-glabel', gg.label || '') +
             _groupRangeHtml(ctx.getMmdText(), gg, escHtml) +
             '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
               '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">else 追加 (alt/critical)</label>' +

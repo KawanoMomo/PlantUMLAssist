@@ -65,8 +65,8 @@ test('手順5 シーケンスの alt 枠は左上の札を押して選べ、右�
   // 札を押すと枠が選ばれ、挿入メニューは開かない。
   await page.mouse.click(tab.x, tab.y);
   await expect(page.locator('#seq-edit-add-else')).toBeVisible();
-  await expect(page.locator('#props-pane')).toContainText('条件 / Condition');
-  await expect(page.locator('#props-pane')).toContainText('種類 / Type');
+  await expect(page.locator('#props-pane')).toContainText('条件');
+  await expect(page.locator('#props-pane')).toContainText('種類');
 
   // 右パネルから else を足す。
   await page.locator('#seq-edit-else-cond').fill('失敗');
