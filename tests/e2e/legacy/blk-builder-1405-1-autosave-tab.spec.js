@@ -48,7 +48,9 @@ test.describe('設定「自動保存」タブ (design 1a)', () => {
     await expect(cards.nth(2)).toContainText('復元しない（常にテンプレート）');
   });
 
-  test('保存先が 2 枚のカードで、ファイルを選ぶとディレクトリ欄が出る', async ({ page }) => {
+  // TICKET-owner-20261122-1240-1: 保存先のパスを打つ欄は外し、ファイルを選ぶと今の保存先が文字で出る
+  // (選び直すのは「保存先のフォルダを選ぶ…」の窓)。
+  test('保存先が 2 枚のカードで、ファイルを選ぶと今の保存先の表示が出る (パスを打つ欄は無い)', async ({ page }) => {
     await openSettings(page);
     const cards = page.locator('#cfg-backend-cards .cfg-mode-card');
     await expect(cards).toHaveCount(2);
@@ -58,6 +60,8 @@ test.describe('設定「自動保存」タブ (design 1a)', () => {
     await expect(page.locator('#cfg-file-dir-row')).toBeHidden();
     await page.locator('#cfg-backend-cards input[value="file"]').check();
     await expect(page.locator('#cfg-file-dir-row')).toBeVisible();
+    await expect(page.locator('#cfg-file-dir-cur')).toContainText('今の保存先');
+    await expect(page.locator('#cfg-pane-autosave input[type="text"]')).toHaveCount(0);
     await page.locator('#cfg-backend-cards input[value="localStorage"]').check();
     await expect(page.locator('#cfg-file-dir-row')).toBeHidden();
   });

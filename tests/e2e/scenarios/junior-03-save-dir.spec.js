@@ -5,6 +5,7 @@
 // 毎周必ず通る保存だけがボタンを持たず、Ctrl+K で「ファイルを保存」と打つ経路しか
 // 無かった。保存先チップの隣に [💾 保存] を常時出す。
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
 const S = require('./_scenario');
 
 const DIR = S.dirFor(__filename);
@@ -27,18 +28,25 @@ test('手順3 設定で保存先を変えると、上部バーの表示がその
   // 保存先の無い新規の図は、上部バーにフォルダの段を出さない (ファイル名だけ)。
   await expect(page.locator('#top-crumbs .top-crumb')).toHaveCount(0);
 
+  // TICKET-owner-20261122-1240-1: ⚙ 設定の保存先の欄は外した。設定の「保存先のフォルダを選ぶ…」から窓を開き、
+  // 窓の欄 (パスを打つ所は窓の中の 1 か所) で決める。窓は実在するフォルダだけを保存先にする。
+  fs.mkdirSync(S.absDirFor(__filename), { recursive: true });
+  const DIR_TAIL = DIR.replace(/^\.\//, '');
   await page.locator('#top-save-target').click();
   await expect(page.locator('#cfg-modal')).toBeVisible();
-  await page.locator('input[name="cfg-backend"][value="file"]').check();
-  await page.locator('#cfg-file-dir').fill(DIR);
-  await page.locator('#cfg-ok').click();
+  await page.locator('#cfg-tab-autosave').click();
+  await page.locator('#cfg-file-dir-pick').click();
+  await expect(page.locator('#target-pick')).toHaveCount(1);
+  await page.locator('#target-pick-path').fill(DIR);
+  await page.locator('#target-pick-ok').click();
+  await expect(page.locator('#target-pick')).toHaveCount(0);
   await page.waitForTimeout(400);
 
   // 到達条件: 保存先が設定済みだと画面から読める。
   const chip = page.locator('#top-save-target');
   await expect(chip).toHaveAttribute('data-mode', 'file');
   await expect(chip).toHaveClass(/configured/);
-  expect(await chip.getAttribute('title')).toContain(DIR);
+  expect(await chip.getAttribute('title')).toContain(DIR_TAIL);
   // design 10a (BLK-builder-20260924-1715-1): 上部バー左のパンくずにも保存先のフォルダ名が出る。
   await expect(page.locator('#top-crumbs .top-crumb')).toHaveText([DIR.replace(/[\\/]+$/, '').split(/[\\/]/).pop()]);
   await expect(page.locator('#folder-panel .folder-item[data-file-name="diagram1"]')).toHaveCount(0);
@@ -51,7 +59,7 @@ test('手順3 設定で保存先を変えると、上部バーの表示がその
   // design 9a: 保存ボタンは状態を出す。未保存なら ● 保存 + Ctrl+S。
   await expect(save).toHaveAttribute('data-save-state', 'dirty');
   await expect(save).toContainText('保存');
-  expect(await save.getAttribute('title')).toContain(DIR);
+  expect(await save.getAttribute('title')).toContain(DIR_TAIL);
 
   // 到達条件その3: 押すと保存フォルダへ書かれ、どこへ書いたかが下端に出る。
   await S.clearDir(page, DIR);

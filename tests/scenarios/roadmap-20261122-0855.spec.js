@@ -74,9 +74,9 @@ test('roadmap 0855-1 未設定の初回から 2 階層下のフォルダをク�
   let clicks = 0;
   const keys = 0;
   const t0 = Date.now();
-  // FILES の「保存先」見出しを右クリック →「別のフォルダを保存先にする…」。
+  // FILES の「保存先」見出しを右クリック →「保存先のフォルダを選ぶ…」(TICKET-owner-20261122-1240-1 で入口の語を窓の見出しに揃えた)。
   await mouseClick(page, page.locator('#btn-tab-folder'), 'right'); clicks++;
-  await mouseClick(page, page.locator('#files-ctx-menu .files-ctx-item', { hasText: '別のフォルダを保存先にする…' })); clicks++;
+  await mouseClick(page, page.locator('#files-ctx-menu .files-ctx-item', { hasText: '保存先のフォルダを選ぶ…' })); clicks++;
   const pick = page.locator('#target-pick');
   await expect(pick).toBeVisible();
   await expect(page.locator('#target-pick-here')).toContainText(root.split(/[\\/]/).pop());
@@ -128,7 +128,7 @@ test('roadmap 0855-1 FILES・Import ▾・Ctrl+K・⚙ 設定の 4 つの入口�
 
   // FILES
   await mouseClick(page, page.locator('#btn-tab-folder'), 'right');
-  await mouseClick(page, page.locator('#files-ctx-menu .files-ctx-item', { hasText: '別のフォルダを保存先にする…' }));
+  await mouseClick(page, page.locator('#files-ctx-menu .files-ctx-item', { hasText: '保存先のフォルダを選ぶ…' }));
   await expectOneWindow();
   // Import ▾
   await mouseClick(page, page.locator('#btn-import'));

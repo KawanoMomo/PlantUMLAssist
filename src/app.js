@@ -1957,6 +1957,7 @@ function init() {
       var AO0 = window.MA.autosaveOptions;
       var show = AO0 ? AO0.needsFileDir(backend) : (backend === 'file');
       if (dirRow) dirRow.style.display = show ? 'block' : 'none';
+      showCfgFileDir();
     }
 
     // ── design 1a: 自動保存タブの中身 ────────────────────────────────
@@ -2503,8 +2504,6 @@ function init() {
       renderRestoreCards(cfg.restoreMode);
       var backend = AO ? AO.normalizeBackend(cfg.backend) : (cfg.backend || 'localStorage');
       renderBackendCards(backend);
-      var dirInput = document.getElementById('cfg-file-dir');
-      if (dirInput) dirInput.value = cfg.fileDir || './autosave';
       applyBackendVisibility(backend);
       refreshMetaInfo();
       if (ST) {
@@ -2674,23 +2673,14 @@ function init() {
       var backendRadios = document.getElementsByName('cfg-backend');
       var backend = 'localStorage';
       for (var j = 0; j < backendRadios.length; j++) if (backendRadios[j].checked) { backend = backendRadios[j].value; break; }
-      var fileDirEl = document.getElementById('cfg-file-dir');
-      var fileDir = fileDirEl ? (fileDirEl.value.trim() || './autosave') : './autosave';
-      // バックスラッシュ区切りの絶対パスは往復で
-      // 壊れることがあり、壊れた値のまま保存されると 📂一覧が黙って空になる。
-      // 保存する前にここで直せる崩れは直し (\ → /)、直せない崩れは保存しない。
-      var dirMsgEl = document.getElementById('cfg-file-dir-msg');
-      if (dirMsgEl) { dirMsgEl.textContent = ''; dirMsgEl.style.color = ''; }
+      // TICKET-owner-20261122-1240-1: 保存先のフォルダは ⚙ では打たない (窓の中の 1 か所で選ぶ)。
+      // 「設定を保存」は今の保存先をそのまま使う。窓で決めた保存先を前の値で上書きしない。
+      var fileDir = _cfgCurrentFileDir();
+      // 前の版で ⚙ の欄に打った \ 区切りの値は、直せる崩れなら / に直して保存する (直せない値は触らない)。
       var SDH = window.MA.saveDirCheck;
       if (SDH && backend === 'file') {
         var chk = SDH.check(fileDir);
-        if (!chk.ok) {
-          if (dirMsgEl) dirMsgEl.textContent = '⚠ ' + chk.reason;
-          if (fileDirEl) fileDirEl.focus();
-          return;   // 設定モーダルは閉じない。壊れた値のまま先へ進ませない
-        }
-        fileDir = chk.value;
-        if (fileDirEl) fileDirEl.value = fileDir;
+        if (chk.ok) fileDir = chk.value;
       }
       if (window.MA.autoSave) {
         var prevCfg = window.MA.autoSave.getConfig() || {};
@@ -3493,9 +3483,9 @@ function initCommandPalette() {
       // ツールの一覧そのものを引く経路をここに置く (メニューは画面左上に開く)。
       { id: 'tab-tools', title: 'ツールの一覧を開く / Tools', hint: 'Tabs', keywords: ['tool', 'menu', 'つーる', 'どうぐ', 'ぶんるい', 'めにゅー'], run: function() { setTimeout(function() { clickById('btn-tab-tools'); }, 0); } },
       { id: 'tab-new', title: '新しい図を開く / New diagram', hint: 'Tabs', keywords: ['new', 'tab', 'あたらしい', 'ず'], button: 'btn-tab-new', run: function() { clickById('btn-tab-new'); } },
-      // 保存先の行の右クリック「別のフォルダを保存先にする…」と同じ窓。
-      // 右クリックの入口と同じ名前にする (前の名前「保存先を変える」は検索語に残す)。
-      { id: 'change-target', title: '別のフォルダを保存先にする… / Change save folder', hint: 'Files', keywords: ['保存先を変える', 'べつのフォルダ', '別のフォルダ', '保存先', 'ほぞんさき', 'かえる', '変える', '自動保存', 'じどうほぞん', 'save', 'folder', 'autosave', 'target'], run: function() { setTimeout(openChangeTarget, 0); } },
+      // 保存先の行の右クリック・Import ▾・⚙ 設定と同じ窓を、窓の見出しと同じ語で出す (TICKET-owner-20261122-1240-1)。
+      // 前の名前「別のフォルダを保存先にする」「保存先を変える」と英語は検索語に残す。
+      { id: 'change-target', title: '保存先のフォルダを選ぶ…', hint: 'Files', keywords: ['別のフォルダを保存先にする', '保存先を変える', 'べつのフォルダ', '別のフォルダ', '保存先', 'ほぞんさき', 'えらぶ', '選ぶ', 'かえる', '変える', '自動保存', 'じどうほぞん', 'change save folder', 'save', 'folder', 'autosave', 'target'], run: function() { setTimeout(openChangeTarget, 0); } },
       { id: 'tab-folder', title: 'FILES: 保存先を開く / Files: save folder', hint: 'Files', keywords: ['folder', 'files', 'tree', 'list', 'いちらん', 'ふぉるだ', 'ほぞんさき'], button: 'btn-tab-folder', run: function() { _ensureFolderListOpen(); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], button: 'btn-tab-rename', run: function() { clickById('btn-tab-rename'); } },
       { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], button: 'btn-tab-lines', run: function() { clickById('btn-tab-lines'); } },
@@ -5422,10 +5412,28 @@ function refreshReadonlyTree(force) {
   return _ensurePeekDirs(!!force).then(function() { renderReadonlyTree(); return true; });
 }
 
-// ── 別のフォルダを保存先にする (design 10a / 10b) ─────────
-// ツリーからは別のフォルダを保存先にできず、⚙ 設定 → 自動保存 → ファイル → パス → 設定を保存 の 5 手だった。
-// 保存先の行・「保存先」見出しの右クリックと Ctrl+K「保存先を変える」から同じ 1 つの窓を開く。
-// 窓は「読むだけ」節と同じ一覧 (隣のフォルダ) とパスの欄。書く値は ⚙ 設定の保存先の欄と同じ (autoSave の fileDir)。
+// ── 保存先のフォルダを選ぶ (design 10a / 10b) ─────────
+// 保存先の行・「保存先」見出しの右クリック・Import ▾・Ctrl+K・⚙ 設定の 4 つの入口が、同じ語
+// 「保存先のフォルダを選ぶ…」で同じ 1 つの窓を開く (TICKET-owner-20261122-1240-1)。
+// パスを打つ所は窓の中の 1 か所だけ。書く値は autoSave の fileDir (⚙ 設定は今の値を見せるだけ)。
+
+// ⚙ 設定の「設定を保存」が使う保存先 = 今の設定の値 (⚙ には打つ欄が無い)。
+function _cfgCurrentFileDir() {
+  try {
+    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    var d = cfg && cfg.fileDir ? String(cfg.fileDir).trim() : '';
+    return d || './autosave';
+  } catch (e) { return './autosave'; }
+}
+// ⚙ 設定の自動保存に、今の保存先のフォルダを文字で見せる (打つ欄ではない)。
+function showCfgFileDir() {
+  var el = document.getElementById('cfg-file-dir-cur');
+  if (!el) return;
+  var d = _cfgCurrentFileDir();
+  el.textContent = '今の保存先: ' + d;
+  el.title = d;
+}
+
 function changeSaveTarget(dir) {
   var v = String(dir == null ? '' : dir).trim();
   if (!v) return Promise.resolve({ ok: false, reason: 'フォルダを選ぶか、パスを入れてください' });
@@ -5441,8 +5449,7 @@ function changeSaveTarget(dir) {
   // 開いているタブは前の保存先のファイルを指し続ける (書き先を新しいフォルダへ付け替えない)。
   _holdOpenDocsBeforeTargetChange(prev, 'file', v);
   AS.setConfig({ backend: 'file', fileDir: v });
-  var inp = document.getElementById('cfg-file-dir');
-  if (inp) inp.value = v;
+  showCfgFileDir();
   updateTopSaveTarget();
   // 保存先の一覧 (見出しの件数・部品のフォルダ) を替えた先で読み直す。前の保存先は「読むだけ」に並ぶ。
   if (prev.fileDir !== v || prev.backend !== 'file') { try { reloadFolderListNow(); } catch (e) {} }
@@ -5631,6 +5638,14 @@ function openChangeTarget() {
   function applyTyped() {
     var v = String(path.value || '').trim();
     if (!v) { msg.textContent = '⚠ フォルダを選ぶか、パスを入れてください'; path.focus(); return Promise.resolve(null); }
+    // パスを打つ所はこの欄 1 か所 (TICKET-owner-20261122-1240-1 で ⚙ 設定の欄を外した)。
+    // 直せる崩れ (\ 区切り・引用符) は直し、直せない崩れ (制御文字・区切りの落ちた値) は理由を出して断る。
+    var SDH = window.MA.saveDirCheck;
+    if (SDH) {
+      var chk = SDH.check(v);
+      if (!chk.ok) { msg.textContent = '⚠ ' + chk.reason; path.focus(); return Promise.resolve(null); }
+      v = chk.value;
+    }
     return go(v).then(function(r) {
       if (!r || !r.ok) { path.focus(); return r; }
       return apply(r.path);
@@ -6465,8 +6480,7 @@ function setupTabs() {
         var how = document.createElement('div');
         how.className = 'folder-empty';
         how.id = 'folder-missing-hint';
-        how.textContent = '⚙設定 → 自動保存 → 保存先ディレクトリを確かめてください'
-          + '(区切りは / が安全です)。';
+        how.textContent = '⚙設定 → 自動保存 →「保存先のフォルダを選ぶ…」で選び直してください。';
         panel.appendChild(how);
         return;
       }
