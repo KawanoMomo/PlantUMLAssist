@@ -63,6 +63,68 @@ window.MA.properties = (function() {
   // 見出しの語で欄を引ける (支援技術・Playwright の getByRole(…, { name }) )。見た目・欄の id は変えない。
   function _for(id) { return ' for="' + escHtml(id) + '"'; }
 
+  // 文字を打つ欄 (本文・処理など textarea / 本文欄の部品) の見出し (TICKET-owner-20261116-1221-1)。
+  // 見出しは語だけにして `for` で欄に結び付け、Enter で確定する欄の打ち方の案内は見出しの外の 1 行に出す
+  // (見出しの語で欄を引ける。案内の字が欄の名前に混ざらない)。注釈の本文の見出しは 6 図種とも NOTE_BODY。
+  var ENTER_HINT = 'Enter で追加 / Shift+Enter で改行';
+  var NOTE_BODY = '本文';
+  function textLabelHtml(label, forId, opts) {
+    opts = opts || {};
+    return '<label' + _for(forId) + ' style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
+      (opts.enterHint
+        ? '<div class="field-hint" id="' + escHtml(forId) + '-hint" style="font-size:10px;color:var(--text-secondary);opacity:0.8;margin-bottom:2px;">' + ENTER_HINT + '</div>'
+        : '');
+  }
+
+  // 手で組んだ見出し (<label>…</label> の直後に欄) も欄に結び付ける共通の網 (TICKET-owner-20261116-1221-1)。
+  // for も中の欄も無い見出しの直後が文字・選ぶ欄なら、その欄に (id が無ければ振って) for を張る。
+  // 直後が本文欄の部品 (rich-label-editor) の入れ物なら、その中の textarea に張る。
+  // 直後が欄でない見出し (「末尾に追加」等の区切り) は触らない。見た目・並び・欄の値は変えない。
+  var _autoFieldSeq = 0;
+  function _isTextField(el) {
+    if (!el || !el.tagName) return false;
+    var tag = el.tagName.toUpperCase();
+    if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (tag !== 'INPUT') return false;
+    var t = String(el.getAttribute('type') || 'text').toLowerCase();
+    return /^(text|search|number|email|url|tel|password)$/.test(t);
+  }
+  function _rleTextarea(el) {
+    if (!el || !el.children) return null;
+    for (var i = 0; i < el.children.length; i++) {
+      var c = el.children[i];
+      if (c.classList && c.classList.contains('rle-textarea')) return c;
+    }
+    return null;
+  }
+  function linkFieldLabels(root) {
+    if (!root || !root.querySelectorAll) return 0;
+    var n = 0;
+    Array.prototype.forEach.call(root.querySelectorAll('label'), function(label) {
+      if (label.getAttribute('for') || label.id) return;
+      if (label.querySelector('input, select, textarea')) return;
+      var next = label.nextElementSibling;
+      var field = _isTextField(next) ? next : _rleTextarea(next);
+      if (!field) return;
+      if (field.getAttribute('aria-label') || field.getAttribute('aria-labelledby')) return;
+      if (field.labels && field.labels.length) return;
+      if (!field.id) field.id = (field !== next && next.id) ? next.id + '-text' : 'pua-field-' + (++_autoFieldSeq);
+      label.setAttribute('for', field.id);
+      n++;
+    });
+    return n;
+  }
+  // 右パネルは図種ごと・種別の切り替えごとに中身を描き直すので、描き直すたびに張り直す。
+  function watchFieldLabels(root) {
+    if (!root || root.__puaLabelWatch) return;
+    root.__puaLabelWatch = true;
+    linkFieldLabels(root);
+    if (typeof window.MutationObserver === 'function') {
+      new window.MutationObserver(function() { linkFieldLabels(root); })
+        .observe(root, { childList: true, subtree: true });
+    }
+  }
+
   // fieldHtml: standard text input field with label
   function fieldHtml(label, id, value, placeholder) {
     return '<div style="margin-bottom:8px;">' +
@@ -624,6 +686,11 @@ window.MA.properties = (function() {
     bindDateField: bindDateField,
     // HTML builders
     fieldHtml: fieldHtml,
+    textLabelHtml: textLabelHtml,
+    linkFieldLabels: linkFieldLabels,
+    watchFieldLabels: watchFieldLabels,
+    ENTER_HINT: ENTER_HINT,
+    NOTE_BODY: NOTE_BODY,
     selectFieldHtml: selectFieldHtml,
     segmentedFieldHtml: segmentedFieldHtml,
     arrowPickerHtml: arrowPickerHtml,
