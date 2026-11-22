@@ -558,8 +558,9 @@ window.MA.modules.plantumlClass = (function() {
     return set;
   }
 
-  function normalizeIdInput(rawInput, parsed) {
-    return window.MA.idNormalizer.normalize(rawInput, _existingClassIdSet(parsed), 'C');
+  // text = 今の本文 (描き直し前の古い parsed で別名を重ねない)。
+  function normalizeIdInput(rawInput, parsed, text) {
+    return window.MA.idNormalizer.normalize(rawInput, _existingClassIdSet(parsed), 'C', text);
   }
 
   function addClass(text, id, label, stereotype, generics) {
@@ -1748,7 +1749,7 @@ window.MA.modules.plantumlClass = (function() {
         var k = document.getElementById('cl-tail-kind').value;
         if (k === 'class' || k === 'interface' || k === 'abstract') {
           var rawAl = document.getElementById('cl-tail-alias').value;
-          var normCl = normalizeIdInput(rawAl, parsedData);
+          var normCl = normalizeIdInput(rawAl, parsedData, ctx.getMmdText());
           if (!normCl.valid) { alert('Alias 必須'); return; }
           var rawLbl = document.getElementById('cl-tail-label').value.trim();
           var lbl = rawLbl || normCl.label;
@@ -1762,7 +1763,7 @@ window.MA.modules.plantumlClass = (function() {
           out = GP.applyAdd('class', 'cl-tail', parsedData.groups, t, out);
         } else if (k === 'enum') {
           var rawAl2 = document.getElementById('cl-tail-alias').value;
-          var normEn = normalizeIdInput(rawAl2, parsedData);
+          var normEn = normalizeIdInput(rawAl2, parsedData, ctx.getMmdText());
           if (!normEn.valid) { alert('Alias 必須'); return; }
           var valsStr = document.getElementById('cl-tail-values').value;
           var vals = valsStr.split(/\r?\n/).map(function(s) { return s.trim(); }).filter(function(s) { return s; });

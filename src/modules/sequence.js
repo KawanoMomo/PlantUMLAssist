@@ -321,8 +321,9 @@ window.MA.modules.plantumlSequence = (function() {
   // permissive) but messages referencing it fail to match, so the new
   // participant becomes an isolated lifeline. Normalize alias to ASCII
   // (P1, P2, ...) and keep the typed string as the display label.
-  function normalizeIdInput(rawInput, parsed) {
-    return window.MA.idNormalizer.normalize(rawInput, _existingParticipantIdSet(parsed), 'P');
+  // text = 今の本文 (描き直し前の古い parsed で別名を重ねない)。
+  function normalizeIdInput(rawInput, parsed, text) {
+    return window.MA.idNormalizer.normalize(rawInput, _existingParticipantIdSet(parsed), 'P', text);
   }
   function fmtBlock(kind, label) {
     return (label ? kind + ' ' + label : kind) + '\n\nend';
@@ -3097,7 +3098,7 @@ window.MA.modules.plantumlSequence = (function() {
               var labelVal = (rleObj ? rleObj.getValue() : '').trim();
               if (fr === '__new__' || to === '__new__') {
                 var rawNewAl = document.getElementById('seq-tail-new-alias').value;
-                var inlineNorm = normalizeIdInput(rawNewAl, parsedData);
+                var inlineNorm = normalizeIdInput(rawNewAl, parsedData, ctx.getMmdText());
                 if (!inlineNorm.valid) { alert('新しい参加者の Alias は必須です'); return; }
                 var ptype = document.getElementById('seq-tail-new-ptype').value;
                 window.MA.history.pushHistory();
@@ -3123,7 +3124,7 @@ window.MA.modules.plantumlSequence = (function() {
               }
             } else if (kind === 'participant') {
               var rawAl = document.getElementById('seq-tail-alias').value;
-              var partNorm = normalizeIdInput(rawAl, parsedData);
+              var partNorm = normalizeIdInput(rawAl, parsedData, ctx.getMmdText());
               if (!partNorm.valid) { alert('Alias 必須'); return; }
               var rawPlbl = document.getElementById('seq-tail-plabel').value.trim();
               window.MA.history.pushHistory();

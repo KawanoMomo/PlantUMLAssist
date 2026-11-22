@@ -125,8 +125,9 @@ window.MA.modules.plantumlComponent = (function() {
     return set;
   }
 
-  function normalizeIdInput(rawInput, parsed) {
-    return window.MA.idNormalizer.normalize(rawInput, _existingComponentIdSet(parsed), 'C');
+  // text = 今の本文 (描き直し前の古い parsed で別名を重ねない)。
+  function normalizeIdInput(rawInput, parsed, text) {
+    return window.MA.idNormalizer.normalize(rawInput, _existingComponentIdSet(parsed), 'C', text);
   }
 
   function addComponent(text, id, label, stereotype) { return insertBeforeEnd(text, fmtComponent(id, label || id, stereotype)); }
@@ -672,7 +673,7 @@ window.MA.modules.plantumlComponent = (function() {
         var out = t;
         if (kind === 'component') {
           var rawAl = document.getElementById('co-tail-alias').value;
-          var normCo = normalizeIdInput(rawAl, parsedData);
+          var normCo = normalizeIdInput(rawAl, parsedData, ctx.getMmdText());
           if (!normCo.valid) { alert('Alias 必須'); return; }
           var rawLbl = document.getElementById('co-tail-label').value.trim();
           window.MA.history.pushHistory();
@@ -681,7 +682,7 @@ window.MA.modules.plantumlComponent = (function() {
           out = GP.applyAdd('component', 'co-tail', parsedData.groups, t, out);
         } else if (kind === 'interface') {
           var rawAl2 = document.getElementById('co-tail-alias').value;
-          var normIf = normalizeIdInput(rawAl2, parsedData);
+          var normIf = normalizeIdInput(rawAl2, parsedData, ctx.getMmdText());
           if (!normIf.valid) { alert('Alias 必須'); return; }
           var rawLbl2 = document.getElementById('co-tail-label').value.trim();
           window.MA.history.pushHistory();
@@ -690,7 +691,7 @@ window.MA.modules.plantumlComponent = (function() {
           out = GP.applyAdd('component', 'co-tail', parsedData.groups, t, out);
         } else if (kind === 'port') {
           var rawAl3 = document.getElementById('co-tail-alias').value;
-          var normPt = normalizeIdInput(rawAl3, parsedData);
+          var normPt = normalizeIdInput(rawAl3, parsedData, ctx.getMmdText());
           if (!normPt.valid) { alert('Alias 必須'); return; }
           var parentEl = document.getElementById('co-tail-parent');
           var parentId = parentEl ? parentEl.value : '';

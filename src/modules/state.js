@@ -28,8 +28,10 @@ window.MA.modules.plantumlState = (function() {
     return set;
   }
 
-  function normalizeIdInput(rawInput, parsed) {
-    return window.MA.idNormalizer.normalize(rawInput, _existingIdSet(parsed), 'S');
+  // text = 今の本文。追加フォームの parsedData は描き直しが届くまで古いので、
+  // 続けて足すと前に足した別名を数え損ねる (3 つとも `as S1` になる)。今の本文からも数える。
+  function normalizeIdInput(rawInput, parsed, text) {
+    return window.MA.idNormalizer.normalize(rawInput, _existingIdSet(parsed), 'S', text);
   }
 
   // 遷移行の線の色 (`A -[#red]-> B`) を読む。
@@ -1452,7 +1454,7 @@ window.MA.modules.plantumlState = (function() {
         var addPseudo = function(stereo, fallbackPrefix) {
           var raw = document.getElementById('st-other-id').value;
           if (!raw || !raw.trim()) raw = fallbackPrefix;
-          var norm = normalizeIdInput(raw, parsedData);
+          var norm = normalizeIdInput(raw, parsedData, ctx.getMmdText());
           if (!norm.valid) { alert('名前 必須'); return; }
           var t0 = ctx.getMmdText();
           var out0 = addState(t0, norm.id, norm.label, stereo);
@@ -1563,7 +1565,7 @@ window.MA.modules.plantumlState = (function() {
         var whereTarget = whereP.mode === 'inside' ? whereP.target : (tgtEl ? tgtEl.value : '');
         if (k === 'state') {
           var rawId = document.getElementById('st-tail-id').value;
-          var normSt = normalizeIdInput(rawId, parsedData);
+          var normSt = normalizeIdInput(rawId, parsedData, ctx.getMmdText());
           if (!normSt.valid) { alert('ID 必須'); return; }
           var stereoEl = document.getElementById('st-tail-stereo');
           var st = (stereoEl && stereoEl.value) || null;
@@ -1583,7 +1585,7 @@ window.MA.modules.plantumlState = (function() {
           }
         } else if (k === 'composite') {
           var rawCid = document.getElementById('st-tail-id').value;
-          var normC = normalizeIdInput(rawCid, parsedData);
+          var normC = normalizeIdInput(rawCid, parsedData, ctx.getMmdText());
           if (!normC.valid) { alert('ID 必須'); return; }
           if (where.indexOf('region:') === 0) {
             var headR = (normC.label && normC.label !== normC.id)
@@ -2751,7 +2753,7 @@ window.MA.modules.plantumlState = (function() {
       if (!where) return;
       var raw = (document.getElementById('st-tr-add-id') || {}).value || '';
       var norm = String(raw).trim()
-        ? normalizeIdInput(raw, parsedData)
+        ? normalizeIdInput(raw, parsedData, ctx.getMmdText())
         : { valid: true, id: window.MA.stateChild.uniqueChildId(parsedData, _baseName()), label: '' };
       if (!norm.valid) { alert('名前を入れてください'); return; }
       var t = ctx.getMmdText();
@@ -2939,7 +2941,7 @@ window.MA.modules.plantumlState = (function() {
       var out = t;
       if (k === 'state') {
         var id = (document.getElementById('st-mod-id') || {}).value || '';
-        var modNorm = normalizeIdInput(id, parsed);
+        var modNorm = normalizeIdInput(id, parsed, ctx.getMmdText());
         if (!modNorm.valid) { alert('ID 必須'); return; }
         out = addStateAtLine(t, line, position, modNorm.id, null, modNorm.label);
       } else {
