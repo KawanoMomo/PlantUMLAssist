@@ -664,6 +664,7 @@ API_INDEX = {
          'request': "{type, dir, svg}"},
         {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
+        {'endpoint': 'GET /browse-dir', 'summary': '保存先を選ぶ窓でフォルダを辿る (子フォルダ・親・ドライブ。読むだけ)'},
         {'endpoint': 'GET /git-status', 'summary': '保存先が Git 作業木ならブランチ・ahead/behind・変更 (M/A/D)。読むだけで通信しない',
          'request': '?dir='},
         {'endpoint': 'GET /git-log', 'summary': 'その図 (file 省略で保存先全体) に関係するコミット。新しい順',
@@ -1359,6 +1360,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/peek-dirs':
             with _fs_lock:
                 return self._handle_peek_dirs()
+        if self.path.split('?')[0] == '/browse-dir':
+            return self._handle_browse_dir()
         # BLK-human-20260923-1702 (design 10c): 保存先の Git を読む口。読むだけで通信しない。
         if self.path.split('?')[0] in ('/git-status', '/git-log', '/git-refs', '/git-show'):
             return self._handle_git_get()
@@ -1822,6 +1825,59 @@ class Handler(BaseHTTPRequestHandler):
         # 図が 1 枚も無いフォルダは行き先にならない (自分の保存先だけは空でも残す)。
         entries = [e for e in entries if e['files'] > 0 or e['current']]
         self._send_json(200, {'current': str(cur), 'parent': str(parent), 'dirs': entries})
+
+    def _handle_browse_dir(self):
+        """TICKET-roadmap-20261122-0855-1: 保存先を選ぶ窓でフォルダを辿る口。
+
+        1 つのフォルダの子フォルダ (と各フォルダの .puml の枚数)・親・ドライブを返す。
+        読むだけ: どのフォルダにも何も書かない (控え・設定も置かない)。PC の中だけで外へは送らない。
+        dir が空なら、試験用の PUA_DATA_ROOT があればそこ、無ければ利用者のホームから辿り始める。
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        raw = (params.get('dir') or '').strip()
+        if raw:
+            try:
+                cur = Path(raw).expanduser().resolve()
+            except (OSError, ValueError, RuntimeError):
+                return self._send_json(200, {'ok': False, 'path': raw, 'error': 'フォルダのパスとして読めません'})
+        else:
+            cur = DATA_ROOT if SANDBOX_DATA_ROOT else Path.home()
+        if not cur.exists():
+            return self._send_json(200, {'ok': False, 'path': str(cur), 'error': 'そのフォルダはありません'})
+        if not cur.is_dir():
+            return self._send_json(200, {'ok': False, 'path': str(cur), 'error': 'フォルダではありません (ファイルです)'})
+
+        def puml_count(p):
+            try:
+                return sum(1 for f in p.iterdir() if f.is_file() and f.suffix.lower() == '.puml')
+            except OSError:
+                return -1
+
+        files = puml_count(cur)
+        if files < 0:
+            return self._send_json(200, {'ok': False, 'path': str(cur), 'error': 'そのフォルダは読めません (権限がありません)'})
+        dirs = []
+        try:
+            children = sorted((c for c in cur.iterdir() if c.is_dir()), key=lambda p: p.name.lower())
+        except OSError:
+            children = []
+        for child in children:
+            # 隠しフォルダ (.git・.pua など) は保存先の候補にしない。
+            if child.name.startswith('.') or child.name.startswith('$'):
+                continue
+            dirs.append({'name': child.name, 'path': str(child), 'files': puml_count(child)})
+        parent = cur.parent
+        drives = []
+        # 試験 (PUA_DATA_ROOT) では利用者の本物のドライブを並べない。
+        if os.name == 'nt' and not SANDBOX_DATA_ROOT:
+            for letter in 'CDEFGHIJKLMNOPQRSTUVWXYZ':
+                d = letter + ':\\'
+                if os.path.exists(d):
+                    drives.append(d)
+        self._send_json(200, {'ok': True, 'path': str(cur),
+                              'parent': '' if parent == cur else str(parent),
+                              'files': files, 'dirs': dirs, 'drives': drives})
 
     def _autosave_validate_type(self, dt):
         """Return True if dt is a safe filename component."""

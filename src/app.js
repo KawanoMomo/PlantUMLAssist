@@ -464,6 +464,12 @@ function init() {
       close();
       openFromClipboard();
     });
+    // 保存先を決める・替える窓 (FILES の右クリック・Ctrl+K・⚙ 設定と同じ 1 つ)。
+    var tgt = document.getElementById('imp-target');
+    if (tgt) tgt.addEventListener('click', function() {
+      close();
+      openChangeTarget();
+    });
   })();
 
   // 上部バーのパンくずのフォルダ名。押したら設定を開く (保存先を変えられる)。
@@ -2624,6 +2630,13 @@ function init() {
       }
     };
     document.getElementById('cfg-cancel').addEventListener('click', close);
+    // 保存先のフォルダは FILES・Import ▾・Ctrl+K と同じ 1 つの窓で辿って選ぶ。
+    // 設定の窓は保存せずに閉じてから開く (設定の「保存」が選んだ保存先を前の値で上書きしないように)。
+    var pickDir = document.getElementById('cfg-file-dir-pick');
+    if (pickDir) pickDir.addEventListener('click', function() {
+      close();
+      openChangeTarget();
+    });
     var closeX = document.getElementById('cfg-close');
     if (closeX) closeX.addEventListener('click', close);
     document.getElementById('cfg-ok').addEventListener('click', function() {
@@ -5327,22 +5340,66 @@ function _closeChangeTarget() {
   var m = document.getElementById('target-pick');
   if (m) m.parentNode.removeChild(m);
 }
+// 窓が開いている間の Esc は、手が窓の外 (右クリックのメニューが手を戻した行など) にあっても窓を閉じる。
+// 先に受けて止めるので、背後の選択を外す Esc などは動かない。
+window.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape' || e.isComposing) return;
+  if (!document.getElementById('target-pick')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  _closeChangeTarget();
+}, true);
+
+// TICKET-roadmap-20261122-0855-1: 保存先を決める・替える窓は 1 つ (FILES の右クリック・Import ▾・Ctrl+K・⚙ 設定)。
+// 窓の中でフォルダを辿り (子へ・親へ・ドライブ・最近使ったフォルダ)、今いるフォルダを保存先にする。
+// 辿る・選ぶだけではどのフォルダにも何も書かない (/browse-dir は読むだけ)。パスを打って決めることもできる。
+function _fileBackendDir() {
+  try {
+    var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    return cfg && cfg.backend === 'file' && cfg.fileDir ? String(cfg.fileDir) : '';
+  } catch (e) { return ''; }
+}
 
 function openChangeTarget() {
   _closeChangeTarget();
   var PF = window.MA.peekFolder;
+  var FB = window.MA.folderBrowse;
   var m = document.createElement('div');
   m.id = 'target-pick';
   m.setAttribute('role', 'dialog');
-  m.setAttribute('aria-label', '別のフォルダを保存先にする');
+  m.setAttribute('aria-label', '保存先のフォルダを選ぶ');
   var box = document.createElement('div');
   box.className = 'target-pick-box';
   var h = document.createElement('div');
   h.className = 'target-pick-title';
-  h.textContent = '別のフォルダを保存先にする';
+  h.textContent = '保存先のフォルダを選ぶ';
   var cur = document.createElement('div');
   cur.className = 'target-pick-cur';
-  cur.textContent = '今の保存先: ' + _wsFileDir() + '（替えると「読むだけ」に並びます。開いているタブは開いたファイルに保存します）';
+  var curDir = _fileBackendDir();
+  cur.textContent = curDir
+    ? '今の保存先: ' + curDir + '（替えると「読むだけ」に並びます。開いているタブは開いたファイルに保存します）'
+    : '保存先はまだ決まっていません。フォルダを辿って「このフォルダを保存先にする」を押します';
+  var nav = document.createElement('div');
+  nav.className = 'target-pick-nav';
+  nav.id = 'target-pick-nav';
+  var up = document.createElement('button');
+  up.type = 'button';
+  up.id = 'target-pick-up';
+  up.textContent = '↑ 親へ';
+  nav.appendChild(up);
+  var recentBox = document.createElement('div');
+  recentBox.className = 'target-pick-nav';
+  recentBox.id = 'target-pick-recent';
+  var here = document.createElement('div');
+  here.className = 'target-pick-here';
+  var herePath = document.createElement('div');
+  herePath.className = 'target-pick-here-path';
+  herePath.id = 'target-pick-here';
+  var hereOk = document.createElement('button');
+  hereOk.type = 'button';
+  hereOk.id = 'target-pick-here-ok';
+  hereOk.textContent = 'このフォルダを保存先にする';
+  here.appendChild(herePath); here.appendChild(hereOk);
   var list = document.createElement('div');
   list.className = 'target-pick-list';
   list.id = 'target-pick-list';
@@ -5366,50 +5423,124 @@ function openChangeTarget() {
   cancel.id = 'target-pick-cancel';
   cancel.textContent = 'やめる';
   row.appendChild(path); row.appendChild(ok); row.appendChild(cancel);
-  box.appendChild(h); box.appendChild(cur); box.appendChild(list); box.appendChild(row); box.appendChild(msg);
+  box.appendChild(h); box.appendChild(cur); box.appendChild(nav); box.appendChild(recentBox);
+  box.appendChild(here); box.appendChild(list); box.appendChild(row); box.appendChild(msg);
   m.appendChild(box);
   document.body.appendChild(m);
+
+  var view = null;   // 今いるフォルダ (/browse-dir の答え)
+  function alive() { return document.getElementById('target-pick') === m; }
 
   function apply(dir) {
     msg.textContent = '';
     return changeSaveTarget(dir).then(function(r) {
-      if (!r.ok) { msg.textContent = '⚠ ' + r.reason; path.focus(); return r; }
+      if (!r.ok) { msg.textContent = '⚠ ' + r.reason; return r; }
+      if (FB) {
+        try { FB.saveRecent(window.localStorage, FB.pushRecent(FB.loadRecent(window.localStorage), r.dir)); } catch (e) {}
+      }
       _closeChangeTarget();
       setSaveStatus('保存先を ' + (PF ? PF.baseName(r.dir) : r.dir) + ' にしました（前の保存先は「読むだけ」に並びます）');
       return r;
     });
   }
-  function renderList() {
+  function fetchView(dir) {
+    if (!FB || !window.fetch) return Promise.resolve({ ok: false, error: 'フォルダを辿れません', path: String(dir || '') });
+    return fetch(FB.browseUrl(dir))
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) { return FB.view(data); })
+      .catch(function() { return FB.view(null); });
+  }
+  // dir へ移る。読めない・存在しないフォルダには移らず、理由を出す (今いるフォルダのまま)。
+  function go(dir) {
+    msg.textContent = '';
+    return fetchView(dir).then(function(v) {
+      if (!alive()) return v;
+      if (!v.ok) { msg.textContent = '⚠ ' + v.error + (v.path ? ': ' + v.path : ''); return v; }
+      view = v;
+      render();
+      return v;
+    });
+  }
+  function render() {
+    herePath.textContent = FB ? FB.hereText(view) : (view ? view.path : '');
+    herePath.title = view ? view.path : '';
+    hereOk.disabled = !view;
+    up.disabled = !(view && view.parent);
+    // ドライブ (試験の PUA_DATA_ROOT では出さない)。
+    Array.prototype.slice.call(nav.querySelectorAll('.target-pick-drive')).forEach(function(b) { nav.removeChild(b); });
+    (view && view.drives || []).forEach(function(d) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'target-pick-drive';
+      b.textContent = d;
+      b.addEventListener('click', function() { go(d); });
+      nav.appendChild(b);
+    });
+    recentBox.innerHTML = '';
+    var recent = FB ? FB.loadRecent(window.localStorage) : [];
+    if (recent.length) {
+      var lab = document.createElement('span');
+      lab.className = 'target-pick-sub';
+      lab.textContent = '最近使ったフォルダ:';
+      recentBox.appendChild(lab);
+      recent.forEach(function(d) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'target-pick-recent';
+        b.title = d;
+        b.setAttribute('data-dir', d);
+        b.textContent = FB.baseName(d);
+        b.addEventListener('click', function() { go(d); });
+        recentBox.appendChild(b);
+      });
+    }
     list.innerHTML = '';
-    var others = PF ? PF.others(_peekDirs) : [];
-    if (!others.length) {
+    var dirs = view ? view.dirs : [];
+    if (!dirs.length) {
       var none = document.createElement('div');
       none.className = 'target-pick-none';
-      none.textContent = '隣に図のあるフォルダはありません。パスを入れてください';
+      none.textContent = view ? 'この下にフォルダはありません' : 'フォルダを読み込み中…';
       list.appendChild(none);
       return;
     }
-    others.forEach(function(d) {
+    dirs.forEach(function(d) {
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'target-pick-dir';
       b.setAttribute('data-dir', d.path);
       b.title = d.path;
-      b.textContent = d.name + '  ' + d.files + ' 図';
-      b.addEventListener('click', function() { apply(d.path); });
+      b.textContent = FB.dirLabel(d);
+      b.addEventListener('click', function() { go(d.path); });
       list.appendChild(b);
     });
   }
-  ok.addEventListener('click', function() { apply(path.value); });
+  // 打ったパスも、辿れる (存在して読める) フォルダだけを保存先にする。
+  function applyTyped() {
+    var v = String(path.value || '').trim();
+    if (!v) { msg.textContent = '⚠ フォルダを選ぶか、パスを入れてください'; path.focus(); return Promise.resolve(null); }
+    return go(v).then(function(r) {
+      if (!r || !r.ok) { path.focus(); return r; }
+      return apply(r.path);
+    });
+  }
+  up.addEventListener('click', function() { if (view && view.parent) go(view.parent); });
+  hereOk.addEventListener('click', function() { if (view) apply(view.path); });
+  ok.addEventListener('click', applyTyped);
   cancel.addEventListener('click', _closeChangeTarget);
   m.addEventListener('mousedown', function(e) { if (e.target === m) _closeChangeTarget(); });
   m.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _closeChangeTarget(); }
-    else if (e.key === 'Enter' && e.target === path) { e.preventDefault(); apply(path.value); }
+    else if (e.key === 'Enter' && e.target === path) { e.preventDefault(); applyTyped(); }
   });
-  renderList();
-  _ensurePeekDirs(true).then(function() { if (document.getElementById('target-pick') === m) renderList(); });
-  path.focus();
+  render();
+  // 保存先があればその親 (隣のフォルダが並ぶ) から、無ければ server の既定 (ホーム / 試験用のフォルダ) から辿る。
+  fetchView(curDir).then(function(v) {
+    if (!alive()) return;
+    if (v.ok && curDir && v.parent) return go(v.parent);
+    if (v.ok) { view = v; render(); return; }
+    return go('');
+  });
+  hereOk.focus();
   return m;
 }
 window.openChangeTarget = openChangeTarget;
