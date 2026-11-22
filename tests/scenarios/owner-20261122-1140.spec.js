@@ -9,7 +9,10 @@
 //   - 一覧の開け閉め・行の印・図を開くの後、保存先以下に増えたファイル 0・変わったファイル 0
 //   - 前から置いた _roles.json は mtime と中身が不変 (読まず・書かず・消さない)
 //   - 開いた図は本文のまま描ける
-// TICKET-owner-20261122-2322-2 (置換の組を保存先に書かない) は同じ scenario に自分の期待を足す。
+// TICKET-owner-20261122-2322-2 (置換の組を保存先に書かない) は同じ scenario に自分の期待を足す:
+//   - 保存先 (直下 2 枚・2 階層下 1 枚) で Ctrl+H の置換を 1 回 (実マウス) した後、保存先以下に増えたファイル 0、
+//     変わったのは置換した .puml だけ (`_renames/pairs.json` を保存先に書かない)。開き直した Ctrl+H に今の組が出る
+//   - 前の版が保存先に置いた `_renames/pairs.json` は組として出て、置換しても mtime と中身が不変。FILES に `_renames` の行が 0
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
@@ -130,4 +133,129 @@ test('前の版が置いた役の宣言 (_roles.json) がある保存先でも�
   expect(Object.keys(after).sort(), '保存先以下に増えた・消えたファイルは無い').toEqual(Object.keys(before).sort());
   for (const k of Object.keys(before)) expect(after[k], k + ' は変わらない').toEqual(before[k]);
   expect(after['_roles.json'].mtimeMs, '_roles.json の mtime は不変').toBe(before['_roles.json'].mtimeMs);
+});
+
+// ---- TICKET-owner-20261122-2322-2: 置換の組は保存先に書かない ----
+
+async function mouseClick(page, locator) {
+  await expect(locator).toBeVisible();
+  await locator.scrollIntoViewIfNeeded();
+  const box = await locator.boundingBox();
+  if (!box) throw new Error('no box');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
+
+const SEQ1 = () => H.fixture('seq-1.puml').replace(/\r\n/g, '\n');
+// 名前を語として持つ行だけが替わる (SpiDrvMon は別の名前なので替わらない)。
+const SEQ1_RENAMED = () => SEQ1().replace(/\bSpiDrv\b/g, 'SpiCore');
+
+// FILES の直下の a を実マウスで開き、2 階層下のフォルダが FILES に出るのを待つ。
+async function openAFromFiles(page) {
+  await mouseClick(page, page.locator('#files-parts .files-part-file[data-file-name="a"]'));
+  await expect(page.locator('#editor')).toHaveValue(SEQ1(), { timeout: 20000 });
+  await H.waitDrawn(page, DOCS[0].words);
+  await expect(page.locator('#files-subtree .files-sub-dir[data-sub-rel="sub"]')).toHaveCount(1, { timeout: 10000 });
+}
+
+async function openRename(page) {
+  await mouseClick(page, page.locator('#editor'));
+  await page.keyboard.press('Control+h');
+  await expect(page.locator('#rename-panel')).toHaveClass(/open/);
+}
+
+// Ctrl+H で SpiDrv → SpiCore を 1 回当てる (欄は実マウスで押してから打つ)。
+async function renameOnce(page) {
+  await openRename(page);
+  await mouseClick(page, page.locator('#rename-from'));
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('SpiDrv');
+  await mouseClick(page, page.locator('#rename-to'));
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('SpiCore');
+  await expect(page.locator('#btn-rename-apply')).toBeEnabled();
+  await mouseClick(page, page.locator('#btn-rename-apply'));
+  await expect.poll(() => H.getEditorText(page)).toBe(SEQ1_RENAMED());
+  await H.waitDrawn(page, ['SpiCore']);
+  await H.expectRendered(page);
+  await mouseClick(page, page.locator('#btn-rename-cancel'));
+  await expect(page.locator('#rename-panel')).not.toHaveClass(/open/);
+}
+
+function expectOnlyAChanged(before, after, dir) {
+  expect(Object.keys(after).sort(), '保存先以下に増えた・消えたファイルは無い').toEqual(Object.keys(before).sort());
+  for (const k of Object.keys(before)) {
+    if (k === 'a.puml') continue;
+    expect(after[k], k + ' は変わらない').toEqual(before[k]);
+  }
+  expect(after['a.puml'].sha1, '置換した a.puml は替わる').not.toBe(before['a.puml'].sha1);
+  expect(fs.readFileSync(path.join(dir, 'a.puml'), 'utf8').replace(/\r\n/g, '\n')).toBe(SEQ1_RENAMED());
+}
+
+test('2322-2 Ctrl+H で置換しても保存先に置換の組のファイルは増えず、変わるのは置換した .puml だけ。開き直すと組が出る', async ({ page }, testInfo) => {
+  test.setTimeout(120 * 1000);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e && e.message || e)));
+  const sub = 'renames-' + process.pid + '-' + Date.now();
+  const dir = path.join(ABS, sub);
+  place(dir);
+  const before = snapshot(dir);
+  await H.bootWithSaveDir(page, REL + '/' + sub);
+
+  await openAFromFiles(page);
+  await renameOnce(page);
+  await page.waitForTimeout(1500);   // 自動保存の待ち (200ms) と組の記録の往復を越えて見る
+  const after = snapshot(dir);
+  expectOnlyAChanged(before, after, dir);
+  expect(fs.existsSync(path.join(dir, '_renames')), '保存先に _renames を作らない').toBe(false);
+  await expect(page.locator('#files-subtree .files-sub-dir[data-sub-rel="_renames"]')).toHaveCount(0);
+
+  // アプリを開き直して Ctrl+H。さっきの組が過去の置換の組に出る。
+  await S.reopenApp(page);
+  await openRename(page);
+  await expect(page.locator('#rename-redo button.rr-row[data-from="SpiDrv"][data-to="SpiCore"]')).toHaveCount(1, { timeout: 10000 });
+  await page.screenshot({ path: testInfo.outputPath('rename-redo-after-reopen.png') });
+  expect(Object.keys(snapshot(dir)).sort(), '開き直しても保存先のファイルは増えない').toEqual(Object.keys(before).sort());
+  expect(errors, errors.join('\n')).toEqual([]);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('2322-2 前の版が保存先に置いた _renames/pairs.json は組として出て、置換しても mtime と中身が変わらない。FILES に _renames が出ない', async ({ page }, testInfo) => {
+  test.setTimeout(120 * 1000);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e && e.message || e)));
+  // 設定の置き場は試験の間残るので、毎回まっさらな保存先 (前の版の控えだけを持つ) にする。
+  const sub = 'legacy-renames-' + process.pid + '-' + Date.now();
+  const dir = path.join(ABS, sub);
+  place(dir);
+  const legacy = path.join(dir, '_renames', 'pairs.json');
+  fs.mkdirSync(path.dirname(legacy), { recursive: true });
+  fs.writeFileSync(legacy, JSON.stringify({ pairs: [
+    { from: 'CanDrv', to: 'Can_Driver', at: '2026-11-01T09:00:00Z', hits: 2, applied_at: '2026-11-01T09:00:00Z' },
+  ] }, null, 1), 'utf8');
+  const old = new Date('2026-01-02T03:04:05Z');
+  fs.utimesSync(legacy, old, old);
+  const before = snapshot(dir);
+  await H.bootWithSaveDir(page, REL + '/' + sub);
+
+  await openAFromFiles(page);
+  await expect(page.locator('#files-subtree .files-sub-dir[data-sub-rel="_renames"]'), 'FILES に _renames の行は出ない').toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('files-no-renames.png') });
+  await openRename(page);
+  await expect(page.locator('#rename-redo button.rr-row[data-from="CanDrv"][data-to="Can_Driver"]'), '前の組が出る').toHaveCount(1, { timeout: 10000 });
+  await mouseClick(page, page.locator('#btn-rename-cancel'));
+  await renameOnce(page);
+  await page.waitForTimeout(1500);
+  const after = snapshot(dir);
+  expectOnlyAChanged(before, after, dir);
+  expect(after['_renames/pairs.json'].mtimeMs, 'pairs.json の mtime は不変').toBe(before['_renames/pairs.json'].mtimeMs);
+
+  // 開き直すと、前の組と今の組の両方が出る (前の組を引き継いで、設定の置き場に持つ)。
+  await S.reopenApp(page);
+  await openRename(page);
+  await expect(page.locator('#rename-redo button.rr-row[data-from="SpiDrv"][data-to="SpiCore"]')).toHaveCount(1, { timeout: 10000 });
+  await expect(page.locator('#rename-redo button.rr-row[data-from="CanDrv"][data-to="Can_Driver"]')).toHaveCount(1);
+  const after2 = snapshot(dir);
+  expect(after2['_renames/pairs.json'], '開き直しても pairs.json は不変').toEqual(before['_renames/pairs.json']);
+  expect(errors, errors.join('\n')).toEqual([]);
+  fs.rmSync(dir, { recursive: true, force: true });
 });

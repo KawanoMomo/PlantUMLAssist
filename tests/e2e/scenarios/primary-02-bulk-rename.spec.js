@@ -116,8 +116,10 @@ test('手順2 過去に当てた置換の組が、打つ前に「適用済み / 
 // 最後に [置換] で当てた組だけ。打った組は履歴の行には残る。
 // 組はフォルダに残り続けるので、他のケースに混ざらないよう専用のフォルダで行う。
 test('手順2 当てずに閉じた組は居座らず、開き直すと最後に当てた組が両欄に入る', async ({ page }) => {
-  const dir = DIR + '-seed';
-  fs.rmSync(path.join(S.absDirFor(__filename) + '-seed', '_renames'), { recursive: true, force: true });
+  // 組は保存先ではなく設定の置き場に保存先ごとに残る (TICKET-owner-20261122-2322-2) ので、
+  // 前の回の組が混ざらないよう回ごとに新しい保存先にする。
+  const seed = '-seed-' + process.pid + '-' + Date.now();
+  const dir = DIR + seed;
   await S.bootWithSaveDir(page, dir);
   await S.clearDir(page, dir);
   for (const n of S.PRIMARY_DOCS) await S.putDoc(page, dir, n, S.docFor(n, 'SpiDrv'));
@@ -163,7 +165,8 @@ test('手順2 当てずに閉じた組は居座らず、開き直すと最後に
   await expect(page.locator('#rename-from')).toHaveValue('SpiDrv');
   await expect(page.locator('#rename-to')).toHaveValue('Spi_Driver');
   await expect(page.locator('#rename-from')).toBeFocused();
-  fs.rmSync(path.join(S.absDirFor(__filename) + '-seed', '_renames'), { recursive: true, force: true });
+  expect(fs.existsSync(path.join(S.absDirFor(__filename) + seed, '_renames')), '保存先に _renames を作らない').toBe(false);
+  fs.rmSync(S.absDirFor(__filename) + seed, { recursive: true, force: true });
 });
 
 // BLK-primary-20260914-1306-friction: 上のケースは「当たった置換」が履歴に残ることに

@@ -1938,8 +1938,9 @@ class Handler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _tree_skip(name):
-        """ツリーに出さないフォルダ。隠し (.git・.pua)・$ で始まる系・旧い控えの置き場 (_versions)。"""
-        return name.startswith('.') or name.startswith('$') or name == Handler.VERSIONS_DIRNAME
+        """ツリーに出さないフォルダ。隠し (.git・.pua)・$ で始まる系・旧い控えの置き場 (_versions・_renames)。"""
+        return (name.startswith('.') or name.startswith('$')
+                or name in (Handler.VERSIONS_DIRNAME, Handler.RENAMES_DIRNAME))
 
     def _handle_tree_dir(self):
         """保存先 dir の下の実在のフォルダを、実在の階層のまま返す (保存先そのものの図は /autosave が返す)。
@@ -2356,15 +2357,26 @@ class Handler(BaseHTTPRequestHandler):
     # 毎回打ち直すことになっていた。組は図と同じく保存フォルダの持ち物なので、
     # フォルダ側に置く。当たらなかった組 (hits 0) も残すのは、「もう残っていない
     # ことを確かめるためだけの空打ち」こそ消したい手数だから。
+    # TICKET-owner-20261122-2322-2: 組は保存先 (利用者の Git 作業木) ではなく、図種の控え・版の控えと
+    # 同じ設定の置き場 (folder_state_dir) に保存先ごとに持つ。前に保存先へ書いた `_renames/pairs.json` は
+    # 読むだけ (新しい置き場に組が無い間の引き継ぎ。書かない・消さない・動かさない)。
     RENAMES_DIRNAME = '_renames'
     RENAMES_MAX = 200
 
     def _renames_path(self, save_dir):
-        return save_dir / self.RENAMES_DIRNAME / 'pairs.json'
+        """組を書く・読む置き場 (設定の置き場の下)。"""
+        return folder_state_dir(save_dir) / self.RENAMES_DIRNAME / 'pairs.json'
+
+    def _legacy_renames_path(self, save_dir):
+        """前に保存先へ書いていた組。読むだけ。"""
+        return Path(save_dir) / self.RENAMES_DIRNAME / 'pairs.json'
 
     def _read_rename_pairs(self, save_dir):
+        p = self._renames_path(save_dir)
+        if not p.exists():
+            p = self._legacy_renames_path(save_dir)
         try:
-            data = json.loads(self._renames_path(save_dir).read_text(encoding='utf-8'))
+            data = json.loads(p.read_text(encoding='utf-8'))
         except (ValueError, OSError):
             return []
         if not isinstance(data, dict):
