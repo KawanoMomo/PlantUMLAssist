@@ -390,7 +390,19 @@ window.MA.commandPalette = (function() {
   // 完全一致した道具のコマンドは 0、それ以外は 1。見出しをまたぐのはこの 1 段だけ。
   // 図の中身 (図に足す / 要素へ移動) は見出し順のまま読ませる — そちらは
   // 「何を探しているか」ではなく「今どこを見ているか」で並んでいた方が読める。
-  function _exactRank(item, s) {
+  // 行番号だけを打った問い合わせ (「15」「L15」「15 行目」) の行番号。それ以外は null。
+  // レビューの指摘は「15 行目の Open()」のように行番号で来る (roadmap v7.0 必須 3)。
+  // 同名ラベルの混ざる図で 1 本を名指しする手は、行番号を打って Enter の 1 本道にする。
+  var LINE_QUERY_RE = /^(?:l\s*)?(\d{1,6})\s*(?:行目?)?$/i;
+  function lineQuery(query) {
+    var m = LINE_QUERY_RE.exec(_s(query).trim());
+    return m ? parseInt(m[1], 10) : null;
+  }
+
+  function _exactRank(item, s, line) {
+    // 打った行番号の行 (図の要素へ移動) は、どの見出しの候補よりも先に出す。
+    // 数字を含むだけの他の候補 (「15 行目」を部分に持つ 115 行目・図に足す行) に先頭を取らせない。
+    if (line != null && item && item.group === 'jump' && item.line === line) return -1;
     if (s >= 0) return 1;
     var g = (item && item.group) || 'command';
     return (g === 'command' || TOOL_GROUPS.indexOf(g) >= 0) ? 0 : 1;
@@ -399,9 +411,12 @@ window.MA.commandPalette = (function() {
   function filter(items, query) {
     var q = _s(query).trim();
     if (!q) return (items || []).slice();
+    var line = lineQuery(q);
     var scored = [];
     (items || []).forEach(function(item, i) {
       var s = score(item, q);
+      // 「L15」は見出しにも「15 行目」にも字のままでは当たらないが、行番号の名指しなので拾う。
+      if (line != null && item && item.group === 'jump' && item.line === line) s = EXACT_FIELD;
       if (s === null) return;
       scored.push({ item: item, s: s, i: i });
     });
@@ -410,7 +425,7 @@ window.MA.commandPalette = (function() {
     // 含むだけの候補に前の見出しから抜かれる (「保存」で「前回保存からの差分」が 1 位に
     // なった)。完全一致だけは見出しより先に出す。それ以外は従来どおり見出し順。
     scored.sort(function(a, b) {
-      return _exactRank(a.item, a.s) - _exactRank(b.item, b.s)
+      return _exactRank(a.item, a.s, line) - _exactRank(b.item, b.s, line)
         || groupIndex(a.item) - groupIndex(b.item) || a.s - b.s || a.i - b.i;
     });
     return scored.map(function(x) { return x.item; });
@@ -457,6 +472,7 @@ window.MA.commandPalette = (function() {
     cycleGroup: cycleGroup,
     filterByGroup: filterByGroup,
     filter: filter,
+    lineQuery: lineQuery,
     score: score,
     moveIndex: moveIndex,
     describeAction: describeAction,

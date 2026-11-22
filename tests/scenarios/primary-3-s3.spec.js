@@ -157,3 +157,113 @@ test('primary 手順3 (場面3) 同名ラベルの混ざる 3 図で指摘の 5 
   expect(fixed, '指摘の件数').toBe(5);
   H.annotate(testInfo, 'ops', ops);
 });
+
+// 同じ手順 3 を、図の上で探して押す代わりに Ctrl+K で名指しして行う (roadmap v7.0 必須 3・クライテリア 3)。
+// 指摘は「15 行目の Open()」「done の 2 本目」のように行番号か名前で来る。
+//   - 行番号: Ctrl+K → 行番号 → Enter (クリック 0・6 打鍵以内) でその行の要素が選ばれ、右パネルの見出しがその行番号を言う
+//   - 名前: ラベルを打つと同名の候補が行の順に全部並び、各行で行番号と From → To が読める
+//   - 選んで右パネルで直した差分はその 1 行 (消えた 1 + 足した 1)。同名の他の行はバイト不変
+test('primary 手順3 (場面3) 同名ラベルの 1 本を Ctrl+K の行番号・名前で選んで直すと、その行だけが変わる', async ({ page }, testInfo) => {
+  test.setTimeout(150 * 1000);
+  const dir = S.absDirFor(__filename) + '-palette';
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  const src = fs.readFileSync(path.join(H.FIXTURES, 'rev-s3-seq.puml'));
+  fs.writeFileSync(path.join(dir, 'rev-seq.puml'), src);
+  await H.bootWithSaveDir(page, S.dirFor(__filename) + '-palette');
+  await S.openFolder(page);
+  await page.locator('#folder-panel .folder-item[data-file-name="rev-seq"]').first().dblclick();
+  const text = src.toString('utf8').replace(/\r\n/g, '\n');
+  await expect(page.locator('#editor')).toHaveValue(text, { timeout: 20000 });
+  await H.waitDrawn(page, ['CtlMon', 'Open()', 'Read()', 'done']);
+  await S.closeFolderList(page);
+  await H.expectRendered(page);
+  const lines = text.split('\n');
+  const lineOf = (l) => lines.indexOf(l) + 1;
+  expect(lines.filter((l) => l.trim().endsWith(': Open()')).length, '同名の Open() は 3 本').toBe(3);
+  expect(lines.filter((l) => l.trim().endsWith(': done')).length, '同名の done は 2 本').toBe(2);
+
+  const selectedLines = () => page.evaluate(() =>
+    (window.MA.selection.getSelected() || []).map((s) => s.line));
+  const jumpRows = page.locator('#cp-list .cp-item[data-cp-id^="relation:"], #cp-list .cp-item[data-cp-id^="element:"]');
+  const firstRow = page.locator('#cp-list .cp-item').first();
+
+  // ── 1. 行番号で名指し: 「15 行目の Open()」(CtlMon -> Bus) ──
+  const target = 'CtlMon -> Bus : Open()';
+  const tl = lineOf(target);
+  expect(tl).toBe(15);
+  let keys = 0;
+  await page.keyboard.press('Control+k'); keys += 1;
+  await expect(page.locator('#cp-modal')).toBeVisible();
+  await page.keyboard.type(String(tl)); keys += String(tl).length;
+  await expect(firstRow, '行番号を打つと、その行の候補が先頭').toHaveAttribute('data-cp-id', 'relation:' + tl);
+  await expect(firstRow).toContainText('CtlMon');
+  await expect(firstRow).toContainText(tl + ' 行目');
+  await page.screenshot({ path: testInfo.outputPath('palette-line.png') });
+  await page.keyboard.press('Enter'); keys += 1;
+  expect(keys, '行番号で選ぶ打鍵').toBeLessThanOrEqual(6);
+  await expect.poll(selectedLines, '選ばれたのはその行の要素だけ').toEqual([tl]);
+  await expect(page.locator('#props-content'), '右パネルの見出しがその行番号を言う').toContainText('Message · ' + tl + ' 行目');
+  await expect(page.locator('#props-content')).toContainText('CtlMon -> Bus');
+
+  let r = await H.measure(page, testInfo, async () => {
+    const ta = page.locator('.rle-textarea:visible').first();
+    await ta.click();
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('Open(mon)');
+    await page.keyboard.press('Tab');
+  }, ['Open(mon)']);
+  expect(r.diffLines, '直した 1 行だけ (消えた 1 + 足した 1)').toBe(2);
+  expect(H.removedLines(r.before, r.after)).toEqual([target]);
+  let after = r.after.split('\n');
+  expect(after[tl - 1]).toBe('CtlMon -> Bus : Open(mon)');
+  for (let i = 0; i < lines.length; i++) if (i !== tl - 1) expect(after[i], (i + 1) + ' 行目は不変').toBe(lines[i]);
+  await H.expectRendered(page);
+  expect(r.renderMs).toBeLessThanOrEqual(RENDER_MS_MAX);
+
+  // ── 2. 名前で名指し: done は同名 2 本。行の順に並び、行番号と From → To が読める ──
+  const cur = r.after.split('\n');
+  const dones = cur.map((l, i) => ({ l, n: i + 1 })).filter((x) => x.l.trim().endsWith(': done'));
+  expect(dones.map((x) => x.n)).toEqual([19, 20]);
+  await page.keyboard.press('Control+k');
+  await expect(page.locator('#cp-modal')).toBeVisible();
+  await page.keyboard.type('done');
+  const doneIds = dones.map((x) => 'relation:' + x.n);
+  await expect.poll(async () => (await page.locator('#cp-list .cp-item').evaluateAll((els) =>
+    els.map((e) => e.getAttribute('data-cp-id')))).slice(0, doneIds.length),
+  '同名の候補が先頭から行の順に全部並ぶ').toEqual(doneIds);
+  await expect(jumpRows.nth(0)).toContainText('Bus --> Ctl : done');
+  await expect(jumpRows.nth(0)).toContainText('19 行目');
+  await expect(jumpRows.nth(1)).toContainText('Bus --> CtlMon : done');
+  await expect(jumpRows.nth(1)).toContainText('20 行目');
+  // 指摘の 1 本は 19 行目 (Ctl 宛て)。先頭のまま Enter。
+  await page.keyboard.press('Enter');
+  await expect.poll(selectedLines).toEqual([19]);
+  await expect(page.locator('#props-content')).toContainText('Message · 19 行目');
+  r = await H.measure(page, testInfo, async () => {
+    const ta = page.locator('.rle-textarea:visible').first();
+    await ta.click();
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('ok');
+    await page.keyboard.press('Tab');
+  }, ['ok']);
+  expect(r.diffLines).toBe(2);
+  expect(H.removedLines(r.before, r.after)).toEqual(['Bus --> Ctl : done']);
+  after = r.after.split('\n');
+  expect(after[18]).toBe('Bus --> Ctl : ok');
+  expect(after[19], '同名の他の行はバイト不変').toBe('Bus --> CtlMon : done');
+  for (let i = 0; i < cur.length; i++) if (i !== 18) expect(after[i]).toBe(cur[i]);
+  await H.expectRendered(page);
+
+  // ── 3. Open() を打つと 3 本が行の順に並ぶ (今は 15 行目を直したので残る 2 本 + Open(mon))。
+  await page.keyboard.press('Control+k');
+  await expect(page.locator('#cp-modal')).toBeVisible();
+  await page.keyboard.type('Open()');
+  const opens = after.map((l, i) => ({ l, n: i + 1 })).filter((x) => x.l.trim().endsWith(': Open()'));
+  expect(opens.map((x) => x.n)).toEqual([12, 14]);
+  await expect.poll(async () => (await page.locator('#cp-list .cp-item').evaluateAll((els) =>
+    els.map((e) => e.getAttribute('data-cp-id')))).slice(0, 2)).toEqual(['relation:12', 'relation:14']);
+  await expect(jumpRows.nth(1), '字下げした行も From → To で読める').toContainText('Bus -> Dev : Open()');
+  await page.keyboard.press('Escape');
+  H.annotate(testInfo, 'ops', 4);
+});
