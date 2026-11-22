@@ -87,8 +87,38 @@ window.MA.exportDest = (function() {
       (r.existed ? '上書き' : '新規') + (r.path ? '（' + r.path + '）' : '');
   }
 
+  // ── 保存先の一覧で印を付けた図をまとめて書き出す (TICKET-roadmap-20261122-0855-5) ──
+  // 1 枚ずつの書き出しと同じ置き場・同じ名前の決まりで、印を付けた図を 1 回で書く。
+  // 描けない図は書かずに名前を言う (空の画像・直前の図を書かない)。zip・控えは作らない。
+  var KIND_LABELS = { 'svg': 'SVG', 'png': 'PNG', 'png-transparent': 'PNG（透過背景）' };
+  var BATCH_KINDS = ['svg', 'png', 'png-transparent'];
+
+  function kindLabel(kind) { return KIND_LABELS[kind] || ''; }
+
+  // batchLabel(n) — 一覧の「選んだ図を書き出す」ボタンの文言。押す前に枚数が読める。
+  function batchLabel(n) {
+    var k = Number(n) || 0;
+    return k > 0 ? '選んだ ' + k + ' 枚を書き出す' : '選んだ図を書き出す';
+  }
+
+  // batchMessage(results, kind, sub) — まとめて書いた後の 1 行。
+  // results: [{ name, ok, error? }]。書いた枚数・形式・置き場と、書けなかった図の名前。
+  function batchMessage(results, kind, sub) {
+    var list = results || [];
+    var done = list.filter(function(r) { return r && r.ok; });
+    var fail = list.filter(function(r) { return r && !r.ok; });
+    var head = done.length
+      ? '書き出しました: ' + done.length + ' 枚 (' + kindLabel(kind) + ') → ' + placeLabel(sub)
+      : '書き出せませんでした: 0 枚 (' + kindLabel(kind) + ')';
+    if (!fail.length) return head;
+    return head + ' ／ 書かなかった図: ' + fail.map(function(r) {
+      return _s(r.name) + '（' + (_s(r.error) || '描けません') + '）';
+    }).join('、');
+  }
+
   return {
     KINDS: KINDS, normSub: normSub, key: key, loadSub: loadSub, saveSub: saveSub,
     kindOf: kindOf, fileName: fileName, url: url, placeLabel: placeLabel, message: message,
+    BATCH_KINDS: BATCH_KINDS, kindLabel: kindLabel, batchLabel: batchLabel, batchMessage: batchMessage,
   };
 })();

@@ -7317,8 +7317,68 @@ function setupTabs() {
     // 画面の外へ出るので、印を付ける行の上に固定して常に見えるようにする。
     bar.appendChild(folderOpenButton());
     // 印を付けた図を開かずに zip にする「選んだ図を SVG で書き出す」は TICKET-owner-20261116-0140-prune で外した
-    // (複数の図をまとめて書き出す zip はやらない。書き出しは Export ▾ の 1 枚ずつ)。
+    // (zip はやらない)。TICKET-roadmap-20261122-0855-5: 代わりに、印を付けた図を選んだ形式で、1 枚ずつの書き出しと
+    // 同じ置き場・同じ名前で保存先へまとめて書く (タブで開く行の並び。新しい窓は出さない)。
+    var ED = window.MA.exportDest;
+    if (ED && ED.batchLabel) {
+      var kind = document.createElement('select');
+      kind.className = 'folder-export-kind';
+      kind.id = 'folder-export-kind';
+      kind.title = 'まとめて書き出す形式';
+      kind.setAttribute('aria-label', 'まとめて書き出す形式');
+      ED.BATCH_KINDS.forEach(function(k) {
+        var o = document.createElement('option');
+        o.value = k;
+        o.textContent = ED.kindLabel(k);
+        kind.appendChild(o);
+      });
+      kind.addEventListener('click', function(ev) { ev.stopPropagation(); });
+      bar.appendChild(kind);
+      bar.appendChild(folderExportButton(kind));
+      var result = document.createElement('span');
+      result.className = 'folder-export-result';
+      result.id = 'folder-export-result';
+      result.setAttribute('role', 'status');
+      bar.appendChild(result);
+    }
     return bar;
+  }
+
+  var _folderExporting = false;
+  function folderExportButton(kindEl) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-export-many';
+    b.id = 'folder-export-many';
+    b.title = '印を付けた図を、選んだ形式で保存先へまとめて書き出す (1 枚ずつの書き出しと同じ置き場・同じ名前。タブは開かない)';
+    b.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var FS = window.MA.folderSelect;
+      if (!FS || _folderExporting) return;
+      var names = FS.selectAll(folderNames).filter(function(n) { return FS.has(folderPicked, n); });
+      if (names.length === 0) return;
+      var kind = kindEl.value || 'svg';
+      var result = panel.querySelector('.folder-export-result');
+      _folderExporting = true;
+      b.disabled = true;
+      exportManyToFolder(names, kind, _wsFileDir(), function(i, n) {
+        b.textContent = '書き出しています… (' + (i + 1) + ' / ' + n + ')';
+      }).then(function(out) {
+        _folderExporting = false;
+        syncFolderPickUi();
+        if (!out) return;
+        var done = out.results.filter(function(r) { return r.ok; });
+        var fail = out.results.filter(function(r) { return !r.ok; });
+        if (result) {
+          result.textContent = out.msg;
+          result.setAttribute('data-done', String(done.length));
+          result.setAttribute('data-failed', fail.map(function(r) { return r.name; }).join('/'));
+          result.setAttribute('data-seq', String(Number(result.getAttribute('data-seq') || 0) + 1));
+        }
+        setSaveStatus(out.msg);
+      });
+    });
+    return b;
   }
 
   function folderOpenButton() {
@@ -7355,6 +7415,12 @@ function setupTabs() {
     if (open) {
       open.textContent = FS.openLabel(folderPicked, folderNames, _openDocNames());
       open.disabled = FS.toOpen(folderPicked, folderNames, _openDocNames()).length === 0;
+    }
+    var exp = panel.querySelector('.folder-export-many');
+    if (exp && window.MA.exportDest && !_folderExporting) {
+      var picked = FS.selectAll(folderNames).filter(function(n) { return FS.has(folderPicked, n); }).length;
+      exp.textContent = window.MA.exportDest.batchLabel(picked);
+      exp.disabled = picked === 0;
     }
   }
 
@@ -9755,6 +9821,103 @@ function exportPNG(transparent) {
     });
   });
 }
+
+// ── 保存先の一覧で印を付けた図をまとめて書き出す (TICKET-roadmap-20261122-0855-5) ──────────
+// 1 枚ずつの書き出し (deliverExport) と同じ置き場 (保存先ごとに覚えた書き出し先)・同じ名前 ({名前}.svg /
+// {名前}.png / {名前}.transparent.png) で、印を付けた図を一覧の並びのまま 1 枚ずつ描いて保存先へ書く。
+// タブは開かず、今の図・本文・.puml には触れない。描けない図 (PlantUML の文法エラー) は書かずに名前を返す
+// (空の画像・直前の図を書かない)。zip・控えは作らない。
+
+// server が描いた SVG の文字列を、画面の図と同じ整え (寸法を属性へ・style を外す・埋め込みの元 DSL を落とす) にする。
+function _svgTextForImage(svgText) {
+  var doc = null;
+  try { doc = new DOMParser().parseFromString(String(svgText || ''), 'image/svg+xml'); } catch (e) { doc = null; }
+  var root = doc && doc.documentElement;
+  if (!root || String(root.nodeName).toLowerCase() !== 'svg' || doc.getElementsByTagName('parsererror').length) return null;
+  var size = normalizeSvgSize(root);
+  if (window.MA.svgExport) window.MA.svgExport.stripNonRendered(root);
+  return { text: new XMLSerializer().serializeToString(root), w: size.w, h: size.h };
+}
+
+// SVG の文字列を PNG の Blob にする (1 枚ずつの svgToCanvas と同じく、透過でなければ白で塗ってから描く)。
+function _svgTextToPngBlob(svgText, transparent) {
+  return new Promise(function(resolve) {
+    var s = _svgTextForImage(svgText);
+    if (!s) { resolve(null); return; }
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      canvas.width = s.w;
+      canvas.height = s.h;
+      var ctx = canvas.getContext('2d');
+      if (!transparent) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      ctx.drawImage(img, 0, 0, s.w, s.h);
+      canvas.toBlob(function(blob) { resolve(blob || null); });
+    };
+    img.onerror = function() { resolve(null); };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s.text);
+  });
+}
+
+// その図の本文。保存先の直下の図をタブで開いていればタブの本文 (1 枚ずつの書き出しと同じく、画面の図を書く)、
+// 開いていなければ保存先のファイル。
+function _batchExportDsl(name, dir) {
+  var WS = window.MA.workspace;
+  var doc = WS && WS.findByName ? WS.findByName(name) : null;
+  if (doc && (!WS.dirOf || !WS.samePath || WS.samePath(WS.dirOf(doc.id, dir), dir))) {
+    var act = WS.getActive();
+    if (act && act.id === doc.id && editorEl) return Promise.resolve(editorEl.value);
+    if (typeof doc.dsl === 'string') return Promise.resolve(doc.dsl);
+  }
+  return WS ? WS.loadFile(name, dir) : Promise.resolve(null);
+}
+
+function _batchExportOne(name, dir, kind, sub) {
+  var ED = window.MA.exportDest;
+  function fail(why) { return { name: name, ok: false, error: why }; }
+  return _batchExportDsl(name, dir).then(function(dsl) {
+    if (dsl == null || !String(dsl).trim()) return fail('読めません');
+    return renderDslToSvg(String(dsl), dir).then(function(svg) {
+      if (!svg || String(svg).indexOf('<svg') < 0) return fail('描けません');
+      var made = kind === 'svg'
+        ? Promise.resolve(new Blob([String(svg)], { type: 'image/svg+xml' }))
+        : _svgTextToPngBlob(svg, kind === 'png-transparent');
+      return made.then(function(blob) {
+        if (!blob || !blob.size) return fail('画像にできません');
+        return fetch(ED.url(dir, name, kind, sub), {
+          method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: blob,
+        }).then(function(r) {
+          return r.json().catch(function() { return {}; }).then(function(j) {
+            if (r.status === 200 && j && j.ok) return { name: name, ok: true, res: j };
+            return fail((j && j.error) || ('HTTP ' + r.status));
+          });
+        });
+      });
+    }, function() { return fail('描けません'); });
+  }).catch(function(e) { return fail(String((e && e.message) || e || '書けません')); });
+}
+
+// names を一覧の並びのまま 1 枚ずつ書く。onStep(i, n) で進み具合を返す。
+// 結果は { results: [{ name, ok, error?, res? }], sub, msg }。
+function exportManyToFolder(names, kind, dir, onStep) {
+  var ED = window.MA.exportDest;
+  if (!ED || !dir || !window.fetch) return Promise.resolve(null);
+  var sub = ED.loadSub(_exportStorage(), dir);
+  var list = (names || []).slice();
+  var results = [];
+  function step(i) {
+    if (i >= list.length) {
+      return { results: results, sub: sub, msg: ED.batchMessage(results, kind, sub) };
+    }
+    if (onStep) { try { onStep(i, list.length); } catch (e) {} }
+    return _batchExportOne(list[i], dir, kind, sub).then(function(r) { results.push(r); return step(i + 1); });
+  }
+  return Promise.resolve().then(function() { return step(0); });
+}
+window.exportManyToFolder = exportManyToFolder;
 
 function exportClipboard() {
   if (!navigator.clipboard || !window.ClipboardItem) {
