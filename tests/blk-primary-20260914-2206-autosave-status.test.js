@@ -44,7 +44,6 @@ describe('自動保存が「どこまで届いたか」を残す', function() {
       return Promise.resolve({ ok: true, json: function() { return Promise.resolve({}); } });
     };
     as.setFileNameResolver(null);
-    as.setFileGuard(null);
   });
 
   test('ファイルへ書いた回は where=file と書き先の名前が残る', function() {

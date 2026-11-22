@@ -358,7 +358,7 @@ html, body {
 #files-panel #folder-panel .folder-filterbar,
 #files-panel #folder-panel .folder-pickbar,
 #files-panel #folder-panel .folder-vault-bar { flex-wrap: wrap; }
-#files-panel #folder-panel .folder-row > button:not(.folder-item):not(.folder-role),
+#files-panel #folder-panel .folder-row > button:not(.folder-item),
 #files-panel #folder-panel .folder-row > .folder-kind { width: auto; flex: 0 0 auto; }
 /* 「保存先」節の中はツリー (部品のフォルダ → ファイルの行と札) だけ。
    旧 一覧 (#folder-panel) は節の中では出さず、ツリーの束ね元として DOM にだけ置く。
@@ -1187,44 +1187,6 @@ html, body {
   background: transparent;
   border: none;
 }
-/* 実データ / テンプレの分類 */
-#folder-panel button.folder-role {
-  flex: 0 0 auto;
-  width: auto;
-  font-size: 9px;
-  min-width: 18px;
-  border: 1px solid var(--border);
-  border-radius: 2px;
-  padding: 0 3px;
-  margin-right: 3px;
-  color: var(--text-secondary);
-  background: transparent;
-}
-#folder-panel button.folder-role.role-data { border-color: var(--border); color: var(--text-secondary); }
-#folder-panel button.folder-role.role-template { border-color: var(--accent); color: var(--accent); }
-#folder-panel button.folder-role.role-dirty {
-  border-color: var(--accent-red);
-  color: var(--accent-red);
-  font-weight: bold;
-}
-#folder-panel button.folder-role.role-unknown { border-style: dashed; }
-#folder-panel button.folder-role-accept {
-  flex: 0 0 auto;
-  width: auto;
-  font-size: 9px;
-  border: 1px solid var(--accent-red);
-  color: var(--accent-red);
-  border-radius: 3px;
-  padding: 0 4px;
-  margin-left: 3px;
-  background: transparent;
-}
-#folder-panel .folder-role-summary {
-  font-size: 10px;
-  color: var(--text-secondary);
-  padding: 2px 6px;
-}
-#folder-panel .folder-role-summary.has-dirty { color: var(--accent-red); }
 /* 行の 1 枚削除 */
 #folder-panel button.folder-delete {
   flex: 0 0 auto; width: auto; font-size: 9px; white-space: nowrap;
@@ -3997,7 +3959,6 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/swimlane-move.js"></script>
 <script src="src/core/save-diff.js"></script>
 <script src="src/core/version-timeline.js"></script>
-<script src="src/core/file-role.js"></script>
 <script src="src/core/command-palette.js"></script>
 <script src="src/core/diagram-rail.js"></script>
 <script src="src/core/tool-menu.js"></script>

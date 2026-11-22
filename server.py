@@ -440,7 +440,7 @@ _shutdown_started = False
 # BLK-builder-20260908-0744-2-red: the server answers requests on one thread per
 # connection (ThreadingHTTPServer), so two clients can now be inside a handler at
 # the same time. Everything the handlers write to disk -- prefs, autosave DSL /
-# SVG, file-roles -- is read-modify-write on a shared file, so it is serialised
+# SVG -- is read-modify-write on a shared file, so it is serialised
 # here. Renders are already serialised by _daemon_lock.
 _fs_lock = threading.Lock()
 
@@ -709,8 +709,6 @@ API_INDEX = {
         {'endpoint': 'GET /rename-pairs', 'summary': 'そのフォルダで打たれた置換の組', 'request': '?dir='},
         {'endpoint': 'POST /rename-pairs', 'summary': '置換の組を 1 つ覚える',
          'request': "{dir, from, to, hits, applied}"},
-        {'endpoint': 'POST /file-roles', 'summary': '保存フォルダの _roles.json を置き換える',
-         'request': "{dir, roles}"},
         {'endpoint': 'POST /file-op', 'summary': 'FILES ツリーの右クリック: 図の名前変更 / 複製 / 別フォルダへ移動 / 場所を開く'},
         {'endpoint': 'GET /prefs', 'summary': 'この機械に保存した設定'},
         {'endpoint': 'GET /data-root', 'summary': '設定と既定の保存先の置き場所 {dataRoot, sandbox} (sandbox は PUA_DATA_ROOT で起こしたテスト用)'},
@@ -1470,9 +1468,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/cohort-ack':
             with _fs_lock:
                 return self._handle_cohort_ack_post()
-        if self.path == '/file-roles':
-            with _fs_lock:
-                return self._handle_file_roles_post()
         # BLK-human-20260923-1701 (design 10b): FILES ツリーの右クリック・ドラッグから
         # ファイル単位の操作 (名前変更 / 複製 / 別フォルダへ移動 / 場所を開く) を受ける口。
         if self.path == '/file-op':
@@ -2002,14 +1997,6 @@ class Handler(BaseHTTPRequestHandler):
     def _autosave_meta_path(self, save_dir):
         return self._state_path(save_dir, '_meta.json')
 
-    def _roles_path(self, save_dir):
-        """BLK-reviewer-20260908-0203-wish: ファイルが実データかテンプレかの宣言。
-
-        保存フォルダの隣に置く。GUI の設定ではなくフォルダの属性なので、
-        別の PC で開いても・audit.js から読んでも同じ答えになる。
-        """
-        return save_dir / '_roles.json'
-
     def _kinds_path(self, save_dir):
         """BLK-junior-20260912-2103-wish: 保存したときの図種の控え。
 
@@ -2054,17 +2041,6 @@ class Handler(BaseHTTPRequestHandler):
                 json.dumps({'kinds': kinds}, ensure_ascii=False), encoding='utf-8')
         except OSError:
             pass  # 控えは best-effort。書けなくても保存そのものは通す
-
-    def _read_file_roles(self, save_dir):
-        p = self._roles_path(save_dir)
-        if not p.exists():
-            return {}
-        try:
-            data = json.loads(p.read_text(encoding='utf-8'))
-        except (ValueError, OSError):
-            return {}
-        roles = data.get('roles') if isinstance(data, dict) else None
-        return roles if isinstance(roles, dict) else {}
 
     def _autosave_file_path(self, save_dir, dt):
         return save_dir / (dt + '.puml')
@@ -2836,54 +2812,6 @@ class Handler(BaseHTTPRequestHandler):
         digest = rest[:end].strip()
         return digest if len(digest) == 40 and all(c in '0123456789abcdef' for c in digest) else None
 
-    def _handle_file_roles_post(self):
-        """保存フォルダの _roles.json を丸ごと置き換える。
-
-        BLK-reviewer-20260908-0203-wish: 22 枚を毎回同列に扱わざるを得なかったのは、
-        「これはテンプレだ」という宣言の置き場所が無かったため。図の隣に置く。
-        """
-        length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(length).decode('utf-8')
-        try:
-            data = json.loads(body)
-        except ValueError:
-            self._send_json(400, {'error': 'invalid JSON'})
-            return
-        if not isinstance(data, dict):
-            self._send_json(400, {'error': 'body must be an object'})
-            return
-        roles = data.get('roles')
-        if not isinstance(roles, dict):
-            self._send_json(400, {'error': 'roles must be an object'})
-            return
-        clean = {}
-        for name, rec in roles.items():
-            if not self._autosave_validate_type(name):
-                self._send_json(400, {'error': f'invalid name: {name!r}'})
-                return
-            if not isinstance(rec, dict) or rec.get('role') not in ('data', 'template'):
-                self._send_json(400, {'error': f'role must be data or template: {name!r}'})
-                return
-            base = rec.get('baseline')
-            at = rec.get('at')
-            clean[name] = {
-                'role': rec['role'],
-                'baseline': base if isinstance(base, str) else None,
-                'at': at if isinstance(at, str) else None,
-            }
-        save_dir = self._autosave_resolve_dir(data.get('dir'))
-        if not (save_dir.exists() and save_dir.is_dir()):
-            self._send_json(404, {'error': '保存フォルダがありません'})
-            return
-        try:
-            self._roles_path(save_dir).write_text(
-                json.dumps({'version': 1, 'roles': clean}, ensure_ascii=False, indent=1),
-                encoding='utf-8')
-        except OSError as e:
-            self._send_json(500, {'error': f'write failed: {e}'})
-            return
-        self._send_json(200, {'ok': True, 'roles': clean})
-
     # --- autosave GET --------------------------------------------------------
 
     def _handle_autosave_get(self):
@@ -2953,9 +2881,8 @@ class Handler(BaseHTTPRequestHandler):
         gone = [{'name': n, 'versions': vcounts[n]}
                 for n in sorted(set(vcounts) - set(files))]
         meta = self._autosave_read_meta(save_dir)
-        # BLK-reviewer-20260908-0203-wish: 実データ / テンプレの宣言は一覧と同時に要る。
-        # 別呼び出しにすると、印が付く前の一覧が一瞬出て「未分類 22 枚」に見える。
-        roles = self._read_file_roles(save_dir) if exists else {}
+        # 実データ / テンプレの宣言 (前の版が保存先に置いた JSON) は TICKET-owner-20261122-1140-prune で
+        # 読むのをやめた。前の版が保存先に残した宣言は読まず・書かず・消さない。
         # 「直近 N 分以内に更新された図」の今の時刻 (now) と、SVG を描き直して比べた控え
         # (_svg-verify.json の verified) は TICKET-owner-20261116-0241-prune で返すのをやめた。
         # 前の版が保存先に残した _svg-verify.json は読まず、消しもしない。
@@ -2966,7 +2893,7 @@ class Handler(BaseHTTPRequestHandler):
             entry['savedKind'] = saved_kinds.get(entry['name'], '')
         self._resolve_unstamped_svg_sources(save_dir, entries)
         self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
-                              'dir': str(save_dir), 'exists': exists, 'roles': roles,
+                              'dir': str(save_dir), 'exists': exists,
                               'gone': gone,
                               'kinds': saved_kinds})
 
@@ -3085,12 +3012,9 @@ class Handler(BaseHTTPRequestHandler):
                         target.unlink()
                     except OSError:
                         pass
-            # BLK-reviewer-20260908-0203-wish: 図を全部消したら「これはテンプレだ」の
-            # 宣言も一緒に消す。図が無いのに宣言だけ残ると、同じ名前で作り直した
-            # 別物が前の baseline と比べられ、身に覚えのない汚染として赤くなる。
-            # 「図を全部消す」は利用者が押す片付けなので、保存先に前からある控えも今までどおり消す。
-            for side in (self._autosave_meta_path(save_dir), save_dir / '_meta.json',
-                         self._roles_path(save_dir)):
+            # 「図を全部消す」は利用者が押す片付けなので、保存先に前からある控え (_meta.json) も今までどおり消す。
+            # 前の版が置いた実データ / テンプレの宣言は TICKET-owner-20261122-1140-prune から読まず・消さない。
+            for side in (self._autosave_meta_path(save_dir), save_dir / '_meta.json'):
                 if side.exists():
                     try:
                         side.unlink()
@@ -3139,15 +3063,6 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 self._kinds_path(save_dir).write_text(
                     json.dumps({'kinds': kinds}, ensure_ascii=False), encoding='utf-8')
-            except OSError:
-                pass
-        roles = self._read_file_roles(save_dir)
-        if dt in roles:
-            del roles[dt]
-            try:
-                self._roles_path(save_dir).write_text(
-                    json.dumps({'version': 1, 'roles': roles}, ensure_ascii=False, indent=1),
-                    encoding='utf-8')
             except OSError:
                 pass
         self._send_json(200, {'ok': True, 'deleted': dt,
