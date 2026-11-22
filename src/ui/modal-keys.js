@@ -211,12 +211,60 @@ window.MA.modalKeys = (function() {
     btn.click();
   }
 
+  // 窓が開いたら (中身を差し替えたときも) 手を窓の最初の欄に置く (TICKET-owner-20261122-0301-1)。
+  // 窓を開く経路は図種・種類ごとに別でも、ここ 1 か所で当てる。開いた側がもう窓の中の欄に手を置いていれば触らない。
+  // 置く先: 打てる欄 (本文欄があれば本文) → 選ぶ欄 → ボタン (種類を選ぶ一覧)。「キャンセル」には置かない。
+  function firstModalField(modal) {
+    var el = firstTypingField(modal);
+    if (el) return el;
+    var list = modal.querySelectorAll('select, button');
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (c.disabled || _hiddenIn(c, modal)) continue;
+      if (c.tagName === 'BUTTON' && /-cancel$/.test(c.id || '')) continue;
+      return c;
+    }
+    return null;
+  }
+  function focusIntoModal(modal) {
+    if (!isOpen(modal)) return false;
+    var doc = modal.ownerDocument || document;
+    var act = doc.activeElement;
+    if (act && act !== doc.body && modal.contains(act)) return false;
+    var el = firstModalField(modal);
+    if (!el) return false;
+    try { el.focus(); } catch (e) { return false; }
+    return doc.activeElement === el;
+  }
+  // 手が窓の外 (背後のボタン・BODY) にあっても、Esc は開いている窓を保存せずに閉じる。
+  // 背後の選択を外す document の Esc には流さない (窓を閉じた後も選択はそのまま)。
+  function openModalOf(doc) {
+    for (var i = 0; i < EDIT_MODALS.length; i++) {
+      var m = doc.getElementById(EDIT_MODALS[i]);
+      if (isOpen(m)) return m;
+    }
+    return null;
+  }
+  function onDocEscape(e) {
+    if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    var doc = (e.target && e.target.ownerDocument) || document;
+    var modal = openModalOf(doc);
+    if (!modal || (e.target && e.target.nodeType === 1 && modal.contains(e.target))) return;
+    press(visibleButton(modal, '-cancel'), e);
+  }
+
   function bindModal(modal) {
     if (!modal || modal._maModalKeys) return;
     modal._maModalKeys = true;
     modal.addEventListener('keydown', onModalKey);
     modal.addEventListener('rle-enter', onModalRle);
     modal.addEventListener('rle-escape', onModalRle);
+    var W = (modal.ownerDocument && modal.ownerDocument.defaultView) || (typeof window !== 'undefined' ? window : null);
+    if (W && typeof W.MutationObserver === 'function') {
+      new W.MutationObserver(function() { focusIntoModal(modal); })
+        .observe(modal, { attributes: true, attributeFilter: ['style'], childList: true, subtree: true });
+    }
   }
   function init(doc) {
     doc = doc || document;
@@ -225,6 +273,7 @@ window.MA.modalKeys = (function() {
     if (!doc._maTailKeys) {
       doc._maTailKeys = true;
       doc.addEventListener('keydown', onTailKey);
+      doc.addEventListener('keydown', onDocEscape);
       doc.addEventListener('rle-enter', onTailRle);
       doc.addEventListener('focusin', onTailFocus);
       doc.addEventListener('mouseup', onTailMouseUp, true);
@@ -240,5 +289,6 @@ window.MA.modalKeys = (function() {
 
   return { init: init, bindModal: bindModal, EDIT_MODALS: EDIT_MODALS,
     isTailEnterArea: isTailEnterArea, isDefaultField: isDefaultField,
-    firstTypingField: firstTypingField, refocusAfterAdd: refocusAfterAdd };
+    firstTypingField: firstTypingField, refocusAfterAdd: refocusAfterAdd,
+    firstModalField: firstModalField, focusIntoModal: focusIntoModal, onDocEscape: onDocEscape };
 })();

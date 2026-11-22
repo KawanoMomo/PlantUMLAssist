@@ -676,11 +676,13 @@ function init() {
   }
 
   // ピッカーを閉じたら跡も消す (確定した場合は描き直しで overlay ごと作り直される)。
+  // 押したボタンが窓を閉じた後では窓が開いているかを読めないので、捕捉の段 (ボタンの処理より前) で見る
+  // (Esc で窓の「キャンセル」が押されたときも同じ。TICKET-owner-20261122-0301-1)。
   document.addEventListener('click', function(e) {
     var m = document.getElementById('seq-modal');
     if (!m || m.style.display === 'none') return;
     if (m.contains(e.target)) setTimeout(_clearBandPickMark, 0);
-  }, false);
+  }, true);
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') _clearBandPickMark();
   }, false);
