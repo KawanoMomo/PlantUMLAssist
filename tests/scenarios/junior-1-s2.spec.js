@@ -19,12 +19,13 @@ const MSGS = [
 test('junior 手順1 (場面2) 開いた図に、末尾に追加の始点・終点を見出しの語で選んでメッセージを 8 本足す', async ({ page }, testInfo) => {
   await H.bootWith(page, null);
 
-  // Import ▾ → .puml を開く。
+  // Import ▾ → .puml を開く (利用者と同じく項目を押し、開いたファイル選択の窓で選ぶ。項目を押すとメニューは閉じる)。
   await page.locator('#btn-import').click();
   await expect(page.locator('#imp-file')).toBeVisible();
-  await page.locator('#file-input').setInputFiles(path.join(H.FIXTURES, 'junior-s1-out.puml'));
+  const [fc] = await Promise.all([page.waitForEvent('filechooser'), page.locator('#imp-file').click()]);
+  await fc.setFiles(path.join(H.FIXTURES, 'junior-s1-out.puml'));
   await expect.poll(() => H.getEditorText(page)).toContain('participant "サーバ" as Srv');
-  await page.keyboard.press('Escape');
+  await expect(page.locator('#imp-file')).toBeHidden();
   await H.waitDrawn(page, ['利用者', 'サーバ']);
 
   const from = page.getByRole('combobox', { name: '始点 (From)' });

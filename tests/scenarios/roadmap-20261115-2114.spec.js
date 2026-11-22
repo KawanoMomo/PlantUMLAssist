@@ -52,7 +52,7 @@ test('roadmap 2114 外した機能の控えが残る保存先を開いても描�
   await page.addInitScript((keys) => {
     try { Object.keys(keys).forEach((k) => window.localStorage.setItem(k, keys[k])); } catch (e) {}
   }, OLD_KEYS);
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   await S.openFolderItem(page, NAME);
   await expect(page.locator('#editor')).toHaveValue(/Spi_Write\(\)/, { timeout: 20000 });
   await S.closeFolderList(page);

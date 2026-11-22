@@ -26,7 +26,7 @@ test('owner 0921 外した補助の無い画面で、入れ子の図とコンポ
   fs.writeFileSync(statePath, STATE, 'utf8');
   fs.writeFileSync(path.join(dir, 'gpio_component.puml'), COMP, 'utf8');
 
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   // 外したタブを覚えていた設定。
   await page.evaluate(() => { localStorage.setItem('plantuml-settings-tab', 'coverage'); });
 

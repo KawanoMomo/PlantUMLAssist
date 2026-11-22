@@ -25,7 +25,7 @@ test('owner 0840 括弧付きの名前の図は一覧で普通の図として並
   fs.writeFileSync(material, SEQ, 'utf8');
   fs.writeFileSync(path.join(dir, 'gpio_state.puml'), STATE, 'utf8');
 
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
 
   // (1) 一覧の行に版の印・監査の印は無い。図種の印は残る。
   await S.openFolder(page);

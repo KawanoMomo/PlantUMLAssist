@@ -20,7 +20,7 @@ test('owner 1841 要求 ID・担当範囲の注記を持つ図は、開いて保
   fs.writeFileSync(file, original, 'utf8');
   const bytes = fs.readFileSync(file);
 
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   await S.openFolder(page);
   await page.locator('#folder-panel .folder-item[data-file-name="req-1"]').first().dblclick();
   await expect(page.locator('#editor')).toHaveValue(original, { timeout: 20000 });
@@ -43,7 +43,7 @@ test('owner 1841 要求 ID・担当範囲の注記を持つ図は、開いて保
     'btn-tab-unify', 'exp-req-trace', 'status-consistency', 'status-eventsync']) {
     await expect(page.locator('#' + id), id).toHaveCount(0);
   }
-  await page.locator('#btn-tab-tools').click();
+  await H.openToolMenu(page);
   const menu = page.locator('#tool-menu');
   await expect(menu).toBeVisible();
   await expect(menu).not.toContainText('確かめる');

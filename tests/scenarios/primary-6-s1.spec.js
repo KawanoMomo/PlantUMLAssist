@@ -32,7 +32,7 @@ test('primary 手順6 直した図の before / after と書き出した SVG を�
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
 
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   let ops = 0;
 
   // 直す図を保存先の一覧から開く。

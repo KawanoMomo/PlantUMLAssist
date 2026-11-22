@@ -46,7 +46,8 @@ test('owner 0621 Ctrl+H のパネルは 置換前 / 置換後 / 当てる図 / �
       window.localStorage.setItem('plantuml-rename-history', old);
     } catch (e) {}
   }, OLD_HISTORY);
-  await gotoApp(page);
+  await gotoApp(page, { foldedTools: true });
+  await H.expectDefaultTabBar(page);
   await H.setText(page, SEQ);
   await H.waitDrawn(page, ['SpiDrv', 'Reg']);
 
@@ -107,7 +108,7 @@ test('owner 0621 外した道具の控えが残った保存先でも、開いて
   await page.addInitScript((old) => {
     try { window.localStorage.setItem('plantuml-rename-history', old); } catch (e) {}
   }, OLD_HISTORY);
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   // bootWithSaveDir は localStorage を消してから設定を書くので、控えはその後に足す。
   await page.evaluate((old) => { localStorage.setItem('plantuml-rename-history', old); }, OLD_HISTORY);
   await S.openFolder(page);

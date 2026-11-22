@@ -35,7 +35,7 @@ test('primary 手順1 保存先の 6 図種の図を 1 枚ずつ開くと、本�
     fs.writeFileSync(path.join(dir, d.name + '.puml'), originals[d.name], 'utf8');
   }
 
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   let ops = 0;
 
   // TICKET-owner-20261115-1827-2: FILES の保存先は seq-1 などの先頭の図種の語を部品名に読まない。

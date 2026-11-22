@@ -7,7 +7,8 @@
 //   - 開いただけで本文は fixture と 1 字も変わらない (コメント・字下げも残る)
 //   - 書き出しただけで本文は 1 行も動かない
 //   - 開いた図が状態遷移図として描け、受けた .svg は空でなく状態名と遷移のラベルの文字を持つ
-//   - 手数は Import ▾ → (ファイル選択) と Export ▾ → SVGとして保存 の 3 クリック以内
+//   - 手数は Import ▾ → .puml を開く と Export ▾ → SVGとして保存 の 4 クリック以内 (利用者の手数。
+//     以前は隠れた file input へ直接渡して 3 と数えていた。TICKET-owner-20261116-0340-1)
 //   - 開いてから描画までは 1 秒以内 (全体実行の負荷の下は 3 秒。上限で揺れを吸収する)
 const fs = require('fs');
 const path = require('path');
@@ -22,13 +23,16 @@ test('junior 手順1 (場面4) .puml を Import ▾ から開き、Export ▾ �
   await H.bootWith(page, null);
 
   let clicks = 0;
-  // Import ▾ →「.puml を開く」。ファイル選択の窓は file input に渡す。
+  // Import ▾ →「.puml を開く」。利用者と同じく項目を押し、開いたファイル選択の窓で選ぶ
+  // (項目を押すとメニューは閉じるので Escape は押さない)。
   await page.locator('#btn-import').click(); clicks++;
   await expect(page.locator('#imp-file')).toBeVisible();
+  const [fc] = await Promise.all([page.waitForEvent('filechooser'), page.locator('#imp-file').click()]);
+  clicks++;
   const t0 = Date.now();
-  await page.locator('#file-input').setInputFiles(path.join(H.FIXTURES, FILE));
+  await fc.setFiles(path.join(H.FIXTURES, FILE));
   await expect.poll(() => H.getEditorText(page)).toContain('Spi_Throttle');
-  await page.keyboard.press('Escape');
+  await expect(page.locator('#imp-file')).toBeHidden();
   await H.waitDrawn(page, WORDS);
   const renderMs = Date.now() - t0;
   H.annotate(testInfo, 'renderMs', renderMs);
@@ -63,6 +67,7 @@ test('junior 手順1 (場面4) .puml を Import ▾ から開き、Export ▾ �
   H.annotate(testInfo, 'diffLines', d);
   expect(d).toBe(0);
   expect(after).toBe(opened);
-  expect(clicks).toBeLessThanOrEqual(3);
+  H.annotate(testInfo, 'clicks', clicks);
+  expect(clicks).toBeLessThanOrEqual(4);
   await H.expectRendered(page);
 });

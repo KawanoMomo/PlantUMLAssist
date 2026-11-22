@@ -8,6 +8,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
+const H = require('./_helpers');
 const S = require('../e2e/scenarios/_scenario');
 
 const SEQ = ['@startuml', 'title SPI 初期化', 'participant App', 'participant SpiDrv', 'App -> SpiDrv : Spi_Init()', '@enduml', ''].join('\n');
@@ -36,7 +37,7 @@ test('owner 2141 読むだけの図は右の枠に 1 枚で出てどこにも書
     } catch (e) {}
   });
   const mine = S.dirFor(__filename) + '/mine';
-  await S.bootWithSaveDir(page, mine);
+  await H.bootWithSaveDir(page, mine);
   await S.putDoc(page, mine, 'spi_seq', SEQ);
   await page.waitForTimeout(1100);   // server の刻印は秒。版が同じ秒に潰れないように
   await S.putDoc(page, mine, 'spi_seq', SEQ2);
@@ -87,7 +88,7 @@ test('owner 2141 読むだけの図は右の枠に 1 枚で出てどこにも書
   // (4) ツール ▾ に「レビュー」の分類は無く、Ctrl+K の比較の行も出ない。
   await page.locator('#btn-compare-close').click();
   await expect(page.locator('#compare-pane')).toBeHidden();
-  await page.locator('#btn-tab-tools-mini:visible, #btn-tab-tools:visible').first().click();
+  await H.openToolMenu(page);
   await expect(page.locator('#tool-menu')).toBeVisible();
   // TICKET-roadmap-20261115-2114-2: パネルは 1 段の一覧。レビューの項目 (指摘・変更の履歴) が無いことを見る。
   await expect(page.locator('#tool-menu .tool-menu-list .tool-menu-item').first()).toBeVisible();

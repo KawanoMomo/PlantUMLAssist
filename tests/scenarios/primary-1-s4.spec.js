@@ -44,7 +44,7 @@ test('primary 手順1 (場面4) 書き出す 3 図種の写しを保存先に作
     expect(s, n + ' の skinparam').toMatch(/^skinparam /m);
   }
 
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   await H.expectRendered(page);
 
   let ops = 0;

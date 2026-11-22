@@ -80,7 +80,7 @@ test('primary 手順3 (場面2) 手書きの 3 図を保存先の一覧から開
     orig[n] = fs.readFileSync(path.join(H.FIXTURES, n + '.puml'));
     fs.writeFileSync(path.join(dir, n + '.puml'), orig[n]);
   }
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
 
   for (const d of DOCS) {
     const text = orig[d.name].toString('utf8').replace(/\r\n/g, '\n');

@@ -51,7 +51,7 @@ test('primary 手順2 (場面4) 保存先の一覧から 3 図を開き、SVG・
     fs.writeFileSync(path.join(dir, n + '.puml'), orig[n]);
   }
 
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   let ops = 0;
 
   for (const d of DOCS) {

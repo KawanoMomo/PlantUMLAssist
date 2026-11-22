@@ -40,7 +40,7 @@ test('owner 2140 外した調べ物の控えが残った保存先でも、開い
       localStorage.setItem('plantuml-lineage', JSON.stringify({ spi_seq: { parent: 'old_seq', dir: './x' } }));
     } catch (e) { /* 控えが書けない環境でも開けることは別に確かめる */ }
   });
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   await S.openFolder(page);
   await page.locator('#folder-panel .folder-item[data-file-name="spi_seq"]').first().dblclick();
   await expect(page.locator('#editor')).toHaveValue(SEQ, { timeout: 20000 });
@@ -61,7 +61,7 @@ test('owner 2140 ツール ▾ に「探す」は無く、残った道具をど�
   await H.bootWith(page, SEQ);
   await H.waitDrawn(page, ['SpiDrv', 'Reg']);
 
-  await page.locator('#btn-tab-tools').click();
+  await H.openToolMenu(page);
   // TICKET-roadmap-20261115-2114-2: パネルは 1 段の一覧 (分類の列は無い)。一覧の文字で「探す」が無いことを見る。
   await expect(page.locator('#tool-menu .tool-menu-list .tool-menu-item').first()).toBeVisible();
   const menuText = await page.locator('#tool-menu').allTextContents();
