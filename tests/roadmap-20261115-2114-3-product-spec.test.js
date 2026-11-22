@@ -75,7 +75,29 @@ var V6_MUST_SCENARIOS = [
   'tests/scenarios/roadmap-20261122-0855-2.spec.js',   // 必須 3 サブフォルダをツリーで扱う
   'tests/scenarios/roadmap-20261122-0855-3.spec.js',   // 必須 4 ツリーの右クリックでフォルダの中を整える
 ];
+// v7.0 の必須 1〜4 の scenario (roadmap/v7.0.md クライテリア 6。TICKET-roadmap-20261123-0226-2)。
+// 場面は問わず、仕様書のどこかの行の「確かめる」が指していればよい。前書きの「渡す順」の 4 行も同じ spec を名指しする。
+var V7_MUST_SCENARIOS = [
+  'tests/scenarios/owner-20261122-1140.spec.js',       // 必須 1 作業木に余計な物を書かない
+  'tests/scenarios/roadmap-20261123-0226-1.spec.js',   // 必須 2 置換が木の全体へ届く
+  'tests/scenarios/primary-3-s3.spec.js',              // 必須 3 行番号で 1 本を名指しする
+  'tests/scenarios/junior-2-s4.spec.js',               // 必須 4 書き出しが古いかを読める
+];
+var ALL_SCENES = null;
+// 表の行を数えない所 (製品の約束・読み方の「画面の語」の表)。それ以外の場面の表の本文の行は全部、#N か版で始まる。
+function strayRows(stray) {
+  return stray.filter(function(s) { return s.scene && s.scene !== '製品の約束' && s.scene !== '読み方'; })
+    .map(function(s) { return s.scene + ': ' + s.line; });
+}
+// 前書き (最初の ## より前) が名指しする scenario。
+function prefaceSpecs(text) {
+  var head = text.slice(0, Math.max(0, text.indexOf('\n## ')));
+  var out = [], m, re = /`(tests\/scenarios\/[^`]+)`/g;
+  while ((m = re.exec(head))) out.push(m[1]);
+  return out;
+}
 function missingMust(rows, scenes, must) {
+  if (scenes === ALL_SCENES) scenes = rows.map(function(r) { return r.scene; });
   var seen = {};
   rows.forEach(function(r) { if (scenes.indexOf(r.scene) >= 0) r.checks.forEach(function(p) { seen[p] = true; }); });
   return must.filter(function(p) { return !seen[p]; });
@@ -127,8 +149,34 @@ describe('製品仕様書 docs/spec/product-spec.md', function() {
     expect(missingMust(S.rows, V6_SCENES, V6_MUST_SCENARIOS)).toEqual([]);
   });
 
-  test('表題と前書きは v6.0', function() {
-    expect(SPEC.split(/\r?\n/)[0]).toBe('# 製品仕様書 — PlantUMLAssist v6.0');
+  test('表題と前書きは v7.0', function() {
+    expect(SPEC.split(/\r?\n/)[0]).toBe('# 製品仕様書 — PlantUMLAssist v7.0');
+  });
+
+  test('v7.0 の必須 1〜4 の scenario を指す行があり、前書きが 1 件の変更を渡す順に同じ 4 本を名指しする', function() {
+    expect(missingMust(S.rows, ALL_SCENES, V7_MUST_SCENARIOS)).toEqual([]);
+    var pre = prefaceSpecs(SPEC);
+    expect(V7_MUST_SCENARIOS.filter(function(p) { return pre.indexOf(p) < 0; })).toEqual([]);
+    pre.forEach(function(p) { expect(p + ':' + existsInRepo(p)).toBe(p + ':true'); });
+  });
+
+  test('全部の場面の表の行が数えられる (#N でも版でもない行が無い)', function() {
+    expect(strayRows(S.stray)).toEqual([]);
+  });
+
+  test('v5.0.0 以後の振る舞いの変更を票・コミットと並べた ECN と、図を道で見分ける ADR ドラフトがある', function() {
+    var ecn = fs.readFileSync(path.join(ROOT, 'docs', 'ecn', 'ECN-011_v5.0.0-to-v7.0-behavior.md'), 'utf8');
+    // v7.0 の必須の票とマージが並ぶ。
+    ['TICKET-owner-20261122-1140-prune', 'TICKET-owner-20261122-2322-2', 'TICKET-roadmap-20261123-0226-1',
+      'TICKET-primary-20261122-0621-wish', 'TICKET-junior-20261122-1520-wish'].forEach(function(id) {
+      var line = ecn.split(/\r?\n/).filter(function(l) { return l.indexOf('| ' + id + ' |') >= 0; })[0] || '';
+      expect(id + ':' + /\|\s*[0-9a-f]{7}(\s[0-9a-f]{7})*\s*\|\s*$/.test(line)).toBe(id + ':true');
+    });
+    var adr = fs.readFileSync(path.join(ROOT, 'docs', 'adr', 'drafts', 'cross-diagram-ops-by-place.md'), 'utf8');
+    expect(adr).toContain('未採番');
+    expect(adr).toContain('居場所');
+    expect(SPEC).toContain('docs/adr/drafts/cross-diagram-ops-by-place.md');
+    expect(SPEC).toContain('docs/ecn/ECN-011_v5.0.0-to-v7.0-behavior.md');
   });
 
   test('「フォルダで図を扱う」は仕事の順の小見出しで分ける', function() {
@@ -196,6 +244,13 @@ describe('突き合わせが変異で落ちる', function() {
   test('必須の scenario を指す行が無ければ欠けとして出る', function() {
     var rows = [{ scene: '書き出す', checks: ['tests/scenarios/a.spec.js'] }, { scene: '描く', checks: ['tests/scenarios/b.spec.js'] }];
     expect(missingMust(rows, V6_SCENES, ['tests/scenarios/a.spec.js', 'tests/scenarios/b.spec.js'])).toEqual(['tests/scenarios/b.spec.js']);
+  });
+
+  test('v7.0: どの場面でも必須の spec を指す行が無ければ欠け、前書きの名指し・数えない行も拾う', function() {
+    var rows = [{ scene: '開く', checks: ['tests/scenarios/a.spec.js'] }];
+    expect(missingMust(rows, ALL_SCENES, ['tests/scenarios/a.spec.js', 'tests/scenarios/b.spec.js'])).toEqual(['tests/scenarios/b.spec.js']);
+    expect(prefaceSpecs('# T\n\n1. x (`tests/scenarios/a.spec.js`)\n\n## 開く\n\n`tests/scenarios/z.spec.js`')).toEqual(['tests/scenarios/a.spec.js']);
+    expect(strayRows([{ scene: '読み方', line: '| `id` |' }, { scene: '開く', line: '| 新 | x |' }])).toEqual(['開く: | 新 | x |']);
   });
 
   test('README の見出しを拾う', function() {
