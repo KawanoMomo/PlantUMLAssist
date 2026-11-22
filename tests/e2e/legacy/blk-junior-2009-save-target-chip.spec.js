@@ -3,6 +3,8 @@
 // 図種を変えるたびに ⚙設定 → ファイル → パス再入力 → OK を習慣で打ち直していた。
 // 上部バーに保存先が常時出て、保存が Ctrl+K の 1 操作で済むことを見る。
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
 const { gotoApp } = require('../helpers');
 
 async function bootWith(page, cfg) {
@@ -47,14 +49,18 @@ test.describe('BLK-junior-2009 保存先が設定済みだと画面で分かる'
     await expect(chip).not.toHaveClass(/configured/);
   });
 
-  test('チップを押すと設定が開き、設定で保存先を変えるとその場で表示が変わる', async ({ page }) => {
+  // TICKET-owner-20261122-1240-1: ⚙ の保存先の欄は外した。設定の「保存先のフォルダを選ぶ…」から窓で決める。
+  test('チップを押すと設定が開き、設定から保存先を選ぶとその場で表示が変わる', async ({ page }) => {
+    const rel = './test-results/autosave/blk-junior-2009-save-target-chip/e2e-blk-j2009';
+    fs.mkdirSync(path.join(__dirname, '..', '..', '..', rel.replace(/^\.\//, '')), { recursive: true });
     await bootWith(page, LS_CFG);
     await page.locator('#top-save-target').click();
     await expect(page.locator('#cfg-modal')).toBeVisible();
-    await page.locator('input[name="cfg-backend"][value="file"]').check();
-    await page.locator('#cfg-file-dir').fill('./test-results/autosave/blk-junior-2009-save-target-chip/e2e-blk-j2009');
-    await page.locator('#cfg-ok').click();
-    await page.waitForTimeout(300);
+    await page.locator('#cfg-tab-autosave').click();
+    await page.locator('#cfg-file-dir-pick').click();
+    await page.locator('#target-pick-path').fill(rel);
+    await page.locator('#target-pick-ok').click();
+    await expect(page.locator('#target-pick')).toHaveCount(0);
     await expect(page.locator('#top-save-target')).toHaveText('e2e-blk-j2009');
   });
 

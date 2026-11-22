@@ -47,9 +47,9 @@ window.MA.fileMenu = (function() {
     { sep: true },
     { id: 'set-target', label: '保存先にする' },
     { id: 'set-readonly', label: '読むだけにする' },
-    // 保存先の行・「保存先」見出しから別のフォルダを保存先に替える
-    // (隣のフォルダから選ぶか、パスを入れる)。今は ⚙ 設定 → 自動保存 → ファイル → パス の 5 手だった。
-    { id: 'change-target', label: '別のフォルダを保存先にする…', targetOnly: true },
+    // 保存先の行・「保存先」見出しから保存先のフォルダを選ぶ窓を開く。Import ▾・Ctrl+K・⚙ 設定の入口と
+    // 同じ語 (窓の見出しと同じ) にする (TICKET-owner-20261122-1240-1)。
+    { id: 'change-target', label: '保存先のフォルダを選ぶ…', targetOnly: true },
     // 旧 📂 一覧 (要約・選ぶバー・SVG の鮮度…) はツリーから外し、
     // 今の保存先の右クリックからだけ中央の枠に開く。
     { sep: true, targetOnly: true },
@@ -98,7 +98,7 @@ window.MA.fileMenu = (function() {
       // 保存先は書く場所なので読むだけにはできない。別のフォルダを保存先にすると、ここは「読むだけ」に並ぶ。
       if (o.id === 'set-readonly' && kind === 'target') {
         o.disabled = true;
-        o.title = '保存先は読むだけにできません (別のフォルダを保存先にすると、ここは「読むだけ」に並びます)';
+        o.title = '保存先は読むだけにできません (「保存先のフォルダを選ぶ…」で別のフォルダを選ぶと、ここは「読むだけ」に並びます)';
       }
       if (o.id === 'set-readonly' && kind === 'readonly') {
         o.disabled = true;

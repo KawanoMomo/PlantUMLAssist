@@ -297,7 +297,7 @@ html, body {
   box-shadow: 0 8px 24px rgba(0,0,0,0.35); font-size: 12px;
 }
 #files-ctx-menu[hidden] { display: none; }
-/* 別のフォルダを保存先にする窓 (保存先の右クリック / Ctrl+K「保存先を変える」) */
+/* 保存先のフォルダを選ぶ窓 (FILES の右クリック・Import ▾・Ctrl+K・⚙ 設定の 4 つの入口が同じ語で開く) */
 #target-pick { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; background: rgba(0,0,0,0.35); }
 #target-pick .target-pick-box { width: min(520px, 92vw); background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,0.45); font-size: 13px; }
 #target-pick .target-pick-title { font-weight: 600; margin-bottom: 4px; }
@@ -3763,16 +3763,14 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     </div>
 
     <div style="margin-bottom:10px;">
-      <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:6px;">保存先 / Backend</div>
+      <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:6px;">保存先</div>
       <div id="cfg-backend-cards"></div>
-      <!-- 保存先のフォルダは FILES・Import ▾・Ctrl+K と同じ 1 つの窓で辿って選ぶ (TICKET-roadmap-20261122-0855-1) -->
-      <button type="button" id="cfg-file-dir-pick" style="margin-top:6px;font-size:12px;padding:4px 10px;border-radius:4px;border:1px solid var(--accent);background:var(--bg-tertiary);color:var(--text-primary);cursor:pointer;">フォルダを辿って選ぶ…</button>
+      <!-- 保存先のフォルダは FILES・Import ▾・Ctrl+K と同じ 1 つの窓で辿って選ぶ (TICKET-roadmap-20261122-0855-1)。
+           パスを打つ所は窓の中の 1 か所だけ。⚙ には今の保存先の表示と窓を開くボタンだけを置く (TICKET-owner-20261122-1240-1) -->
       <div id="cfg-file-dir-row" style="display:none;margin-top:6px;font-size:12px;">
-        <label style="display:block;margin-bottom:4px;color:var(--text-secondary);">保存先ディレクトリ</label>
-        <input type="text" id="cfg-file-dir" placeholder="./autosave" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:monospace;">
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">server.py からの相対パス、 または絶対パス。 存在しなければ保存時に自動作成。 区切りは / が安全です (\ は往復で壊れることがあるため / に直して保存します)。</div>
-        <div id="cfg-file-dir-msg" style="font-size:10px;color:var(--accent-red);margin-top:2px;white-space:pre-wrap;"></div>
+        <div id="cfg-file-dir-cur" style="color:var(--text-secondary);font-family:monospace;word-break:break-all;"></div>
       </div>
+      <button type="button" id="cfg-file-dir-pick" style="margin-top:6px;font-size:12px;padding:4px 10px;border-radius:4px;border:1px solid var(--accent);background:var(--bg-tertiary);color:var(--text-primary);cursor:pointer;">保存先のフォルダを選ぶ…</button>
     </div>
 
     </div><!-- /#cfg-pane-autosave -->

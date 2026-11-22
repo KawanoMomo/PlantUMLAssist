@@ -5,6 +5,8 @@
 // (1) 実在しない保存先は名指しで「見つかりません」と言う
 // (2) 壊れた値は ⚙設定 の時点で保存させない (往復で壊れる \ は / に直す)
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
 const { gotoApp } = require('../helpers');
 
 async function setSaveDir(page, dir) {
@@ -65,33 +67,42 @@ test.describe('BLK-primary-20260908-0103 保存先が違うことが分かる', 
     await expect(page.locator('#folder-panel')).toContainText('保存フォルダに図がありません');
   });
 
-  test('⚙設定: バックスラッシュ区切りで打っても / に直して保存する', async ({ page }) => {
-    await gotoApp(page);
+  // TICKET-owner-20261122-1240-1: パスを打つ所は ⚙ 設定の欄から「保存先のフォルダを選ぶ…」の窓の欄 1 か所へ寄せた。
+  // 直す・断るの確かめは窓の欄で行う (⚙ 設定のボタンから窓を開く)。
+  async function openPickFromSettings(page) {
     await openSettings(page);
-    await page.locator('#cfg-backend-cards input[value="file"]').check();
-    await page.locator('#cfg-file-dir').fill('');
-    await page.locator('#cfg-file-dir').type('E:' + '\\' + '01_Loop' + '\\' + 'persona-data' + '\\' + 'primary');
-    await page.locator('#cfg-ok').click();
-    await page.waitForTimeout(500);
+    await page.locator('#cfg-tab-autosave').click();
+    await page.locator('#cfg-file-dir-pick').click();
+    await expect(page.locator('#target-pick')).toHaveCount(1);
+    // 窓が最初のフォルダを読み終えてから打つ (読み終わりが理由の欄を消さないように)。
+    await expect(page.locator('#target-pick-here')).not.toHaveText('');
+  }
+
+  test('保存先を選ぶ窓: バックスラッシュ区切りで打っても / に直して保存する', async ({ page }) => {
+    const abs = path.resolve(__dirname, '..', '..', '..', 'test-results', 'autosave', 'blk-primary-0103-save-dir-missing', 'bs');
+    fs.mkdirSync(abs, { recursive: true });
+    await gotoApp(page);
+    await openPickFromSettings(page);
+    await page.locator('#target-pick-path').fill(abs.replace(/\//g, '\\'));
+    await page.locator('#target-pick-ok').click();
+    await expect(page.locator('#target-pick')).toHaveCount(0);
 
     const dir = await page.evaluate(() => window.MA.autoSave.getConfig().fileDir);
-    expect(dir).toBe('E:/01_Loop/persona-data/primary');
-    // 設定モーダルは閉じている (通常の保存経路)。
-    await expect(page.locator('#cfg-modal')).toBeHidden();
+    expect(dir).not.toContain('\\');
+    expect(dir).toMatch(/\/test-results\/autosave\/blk-primary-0103-save-dir-missing\/bs$/);
   });
 
-  test('⚙設定: 壊れた値は保存させず、理由を出してモーダルを閉じない', async ({ page }) => {
+  test('保存先を選ぶ窓: 壊れた値は保存させず、理由を出して窓を閉じない', async ({ page }) => {
     await gotoApp(page);
     await setSaveDir(page, './autosave');
-    await openSettings(page);
-    await page.locator('#cfg-backend-cards input[value="file"]').check();
+    await openPickFromSettings(page);
     // BLK-primary-20260908-0103 の実際の壊れ値。
-    await page.locator('#cfg-file-dir').fill('E:\u0001_Looppersona-dataprimary');
-    await page.locator('#cfg-ok').click();
+    await page.locator('#target-pick-path').fill('E:\u0001_Looppersona-dataprimary');
+    await page.locator('#target-pick-ok').click();
     await page.waitForTimeout(500);
 
-    await expect(page.locator('#cfg-modal')).toBeVisible();
-    await expect(page.locator('#cfg-file-dir-msg')).toContainText('バックスラッシュ');
+    await expect(page.locator('#target-pick')).toHaveCount(1);
+    await expect(page.locator('#target-pick-msg')).toContainText('バックスラッシュ');
     expect(await page.evaluate(() => window.MA.autoSave.getConfig().fileDir)).toBe('./autosave');
   });
 });
