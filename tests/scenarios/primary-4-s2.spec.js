@@ -83,7 +83,8 @@ test('primary 手順4 (場面2) 手書きのコメント行の直下に GUI で 
   expect(H.removedLines(r.before, r.after), '消えた行').toEqual([]);
   const added = H.removedLines(r.after, r.before);
   expect(added, '足した行').toHaveLength(1);
-  expect(added[0], '足した行の中身').toMatch(/^\s*Mon\s*->\s*Drv\s*:\s*status\s*$/);
+  // 足した行は押した ready と同じ字下げで入る (alt の中身の段がずれない)。
+  expect(added[0], '足した行の中身 (押した行と同じ字下げ)').toMatch(/^    Mon -> Drv : status$/);
 
   // 足した行はコメント行の直下 (押した ready の直前)。コメントも ready も字下げごとそのまま。
   const afterLines = r.after.split('\n');
