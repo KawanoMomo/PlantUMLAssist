@@ -1,4 +1,5 @@
 - releaser: version 5.2.0(primary 場面 3 手順 1・2 の scenario 追加を含むマイナー)
+- TICKET-releaser-20261122-2154-3: primary 台本 場面 3 手順 3 の scenario `tests/scenarios/primary-3-s3.spec.js` を足した(同名ラベルの混ざる 3 図で指摘の 5 件(seq のラベル 3・class の属性 1・state の条件 1)を図から 1 件ずつ直すと、差分は押した 1 行だけで同名の他の行・字下げ・コメントは動かず、描ける)。fixture `rev-s3-seq.puml`・`rev-s3-state.puml` を足した。製品のコードは変えない
 - TICKET-releaser-20261122-2154-2: primary 台本 場面 3 手順 2 の scenario `tests/scenarios/primary-2-s3.spec.js` を足した(保存先の一覧から rev-seq・rev-class を 1 枚ずつ開くと図種どおりに描け、同名の属性も 2 か所とも描かれ、開いただけでは本文も保存先も 1 バイトも変わらない。1 枚 4 手)。製品のコードは変えない
 - TICKET-releaser-20261122-2154-1: primary 台本 場面 3 手順 1 の scenario `tests/scenarios/primary-1-s3.spec.js` を足した(同名ラベルの混ざるレビュー用の rev-seq・rev-class(CRLF)と common の写しを保存先に置き、起こして一覧を見ても 1 バイトも変わらない)。fixture `rev-seq.puml`・`rev-class-crlf.puml` を足した。製品のコードは変えない
 - TICKET-primary-20261115-2120-wish: 下端の右に今のタブのファイルの改行と文字コードを 1 語(例: `CRLF · UTF-8 BOM`)で出す。タブを替えるとそのタブの値に替わり、保存後は書いたバイトの値を出すので、改行・BOM が保たれたかを別の道具で開かずに確かめられる。保存先の一覧から開いた BOM 付きの図は保存で BOM が落ちていたのを直した(上書きする相手の BOM を引き継ぐ)。押して切り替える機能は無い
