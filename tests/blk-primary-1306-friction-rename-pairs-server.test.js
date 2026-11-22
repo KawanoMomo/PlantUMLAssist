@@ -1,7 +1,9 @@
 'use strict';
-// BLK-primary-20260914-1306-friction: 組は保存フォルダ (_renames/pairs.json) の持ち物。
+// BLK-primary-20260914-1306-friction: 組は保存フォルダごとの持ち物。
 // ブラウザを変えても残ること・同じ組が 1 行にまとまることを、実際に server を
 // 起こして確かめる。
+// TICKET-owner-20261122-2322-2: 置き場は保存先ではなく設定の置き場 (folder_state_dir(保存先)/_renames/pairs.json)。
+// 保存先には何も書かず、前に保存先へ書いた _renames/pairs.json は読むだけ。
 const { execFileSync } = require('child_process');
 const path = require('path');
 
@@ -28,8 +30,16 @@ function runPython(body) {
     'def get():',
     '    url = base + "/rename-pairs?dir=" + urllib.parse.quote(tmp)',
     '    return json.loads(urllib.request.urlopen(url, timeout=10).read().decode("utf-8"))',
+    'import os',
+    'def files(d):',
+    '    out = []',
+    '    for root, dirs, fs in os.walk(d):',
+    '        for f in fs:',
+    '            out.append(os.path.relpath(os.path.join(root, f), d).replace(os.sep, "/"))',
+    '    return sorted(out)',
   ].concat(body).concat([
     'server.shutdown()',
+    'shutil.rmtree(str(srv.folder_state_dir(tmp)), ignore_errors=True)',
     'shutil.rmtree(tmp, ignore_errors=True)',
   ]).join('\n');
   return execFileSync('python', ['-c', script], {
@@ -89,5 +99,40 @@ describe('POST/GET /rename-pairs', function() {
       'print(json.dumps([bool(rows["SpiDrv"].get("applied_at")), "applied_at" in rows["SpiRegs"]]))',
     ]);
     expect(JSON.parse(out)).toEqual([true, false]);
+  });
+
+  test('組を覚えても保存先には何も書かず、設定の置き場の _renames/pairs.json に書く (TICKET-owner-20261122-2322-2)', function() {
+    const out = runPython([
+      'open(os.path.join(tmp, "a.puml"), "w").write("@startuml\\nA -> B\\n@enduml\\n")',
+      'post({"dir": tmp, "from": "SpiDrv", "to": "SpiCore", "hits": 7, "applied": True})',
+      'print(json.dumps([files(tmp), files(str(srv.folder_state_dir(tmp))), [r["from"] for r in get()["pairs"]]]))',
+    ]);
+    expect(JSON.parse(out)).toEqual([['a.puml'], ['_renames/pairs.json'], ['SpiDrv']]);
+  });
+
+  test('前に保存先へ書いた _renames/pairs.json は読めて、組を足しても中身と mtime を変えず、前の組を引き継ぐ', function() {
+    const out = runPython([
+      'legacy = os.path.join(tmp, "_renames", "pairs.json")',
+      'os.makedirs(os.path.dirname(legacy))',
+      'text = json.dumps({"pairs": [{"from": "CanDrv", "to": "Can_Driver", "at": "2026-11-01T09:00:00Z", "hits": 2}]})',
+      'open(legacy, "w", encoding="utf-8").write(text)',
+      'os.utime(legacy, (1700000000, 1700000000))',
+      'first = [r["from"] for r in get()["pairs"]]',
+      'post({"dir": tmp, "from": "SpiDrv", "to": "SpiCore", "hits": 7, "applied": True})',
+      'second = [r["from"] for r in get()["pairs"]]',
+      'print(json.dumps([first, second, open(legacy, encoding="utf-8").read() == text,',
+      '                  int(os.path.getmtime(legacy)), files(tmp)]))',
+    ]);
+    expect(JSON.parse(out)).toEqual([['CanDrv'], ['SpiDrv', 'CanDrv'], true, 1700000000, ['_renames/pairs.json']]);
+  });
+
+  test('FILES のツリー (/tree-dir) は保存先の _renames を図のフォルダとして並べない', function() {
+    const out = runPython([
+      'os.makedirs(os.path.join(tmp, "_renames"))',
+      'os.makedirs(os.path.join(tmp, "sub", "deep"))',
+      'rows = json.loads(urllib.request.urlopen(base + "/tree-dir?dir=" + urllib.parse.quote(tmp), timeout=10).read().decode("utf-8"))',
+      'print(json.dumps(sorted(d["rel"] for d in rows.get("dirs", []))))',
+    ]);
+    expect(JSON.parse(out)).toEqual(['sub', 'sub/deep']);
   });
 });

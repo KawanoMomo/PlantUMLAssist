@@ -78,7 +78,7 @@ curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日�
 | `POST /tickets` | `{dir, ticket}` | 変更チケットを 1 枚書く (id ごと置き換え) |
 | `DELETE /tickets` | `?dir=&id=` | 変更チケットを 1 枚消す |
 | `GET /rename-pairs` | `?dir=` | そのフォルダで打たれた置換の組 (新しい順) |
-| `POST /rename-pairs` | `{dir, from, to, hits}` | 置換の組を 1 つ覚える (同じ組は 1 行) |
+| `POST /rename-pairs` | `{dir, from, to, hits}` | 置換の組を 1 つ覚える (同じ組は 1 行)。組は保存先ではなく設定の置き場 (保存先ごと) に書く。保存先に前からある `_renames/pairs.json` は読むだけ |
 | `GET /version` | — | アプリの版・コミット・日付 (`{version, commit, date}`。git tag が正本) |
 | `GET /update-check` | — | 押したときだけ GitHub Releases の latest を 1 回読み `{current, release:{tag_name, html_url, assets}}` か `{current, error}`。落とさない・実行しない |
 | `POST /open-url` | `{url}` | このリポジトリの GitHub の URL だけを既定のブラウザで開く。他の URL は 400 |
