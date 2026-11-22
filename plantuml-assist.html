@@ -1424,6 +1424,33 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   cursor: default;
 }
 #folder-panel button.folder-open-many:disabled:hover { background: transparent; }
+/* TICKET-roadmap-20261122-0855-5: 印を付けた図を選んだ形式でまとめて書き出す (開く行の並び) */
+#folder-panel .folder-pickbar { flex-wrap: wrap; }
+#folder-panel select.folder-export-kind {
+  flex: 0 0 auto;
+  font-size: 11px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+#folder-panel button.folder-export-many {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 11px;
+  white-space: nowrap;
+}
+#folder-panel button.folder-export-many:disabled { color: var(--text-secondary); cursor: default; }
+#folder-panel button.folder-export-many:disabled:hover { background: transparent; }
+#folder-panel .folder-export-result {
+  flex: 1 1 100%;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#folder-panel .folder-export-result:empty { display: none; }
 
 /* 差分バッジと一覧 (前回保存時点との差) */
 #tab-bar .tab .tab-dot {
