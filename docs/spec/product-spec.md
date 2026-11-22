@@ -50,10 +50,10 @@ unit `tests/roadmap-20261115-2114-4-terms.test.js` が、この表と `src/ui/te
 
 | 整理表 | 機能 | できること | 入口 | 振る舞い | 確かめる |
 |---|---|---|---|---|---|
-| #14 #8 | ファイルを開く | 手元の `.puml` を開いて直す | 上部バー「Import ▾」→「ファイルを開く…」/「クリップボードから開く」、タブ列の「開く」、ドラッグ&ドロップ | 開いただけでは本文は変わらない。改行コード・文字コードは開いたままを保つ | `tests/e2e/scenarios/human-06-open-local-files.spec.js` |
+| #14 #8 | ファイルを開く | 手元の `.puml` を開いて直す | 上部バー「Import ▾」→「ファイルを開く…」/「クリップボードから開く」、ドラッグ&ドロップ | 開いただけでは本文は変わらない。改行コード・文字コードは開いたままを保つ | `tests/e2e/scenarios/human-06-open-local-files.spec.js` |
 | #2 | タブで複数の図を開く | 6 図種の図を 1 枚ずつタブで開き、切り替えて直す | タブ列・タブ列の ＋(新しい図) | タブを替えても他のタブの本文は変わらない。再読み込みしても開いていた図を失わない | `tests/e2e/legacy/blk-human-1850-diagram-tabs.spec.js` |
 | #3 | 図種レール | 新しい図の図種を選ぶ | 左端の「SEQ」/「UC」/「CMP」/「CLS」/「ACT」/「ST」 | 図種を替えても書いてある本文を上書きしない | `tests/e2e/legacy/blk-builder-0803-4-diagram-rail.spec.js` |
-| #96 | 最近開いた図 | 前に開いた図を開き直す | Ctrl+K の「最近開いた図」 | 開くだけ。本文は変わらない | `tests/blk-junior-20260915-2346-recent-files.test.js` |
+| #96 | 最近開いた図 | 前に開いた図を開き直す | 保存フォルダの一覧の上端(Import ▾ →「保存フォルダの図を開く(一覧)」)の「最近開いた図」、Ctrl+K の「最近開いた図」 | 開くだけ。本文は変わらない | `tests/blk-junior-20260915-2346-recent-files.test.js` |
 | #31 #78 | 日本語名・別名つき宣言 | `interface "GPIO制御" as IGpio` のような宣言を壊さず開いて直す。Alias 欄に日本語を打つと、識別子を自動で割り当てると押す前に知らせる | 追加フォームの Alias 欄 | 表示名と識別子を取り違えない。開いた宣言の書き方は変えない | `tests/e2e/legacy/blk-junior-0630-alias-hint.spec.js` |
 | #67 #73 #80 | 図種の判定 | 旧記法の activity 図・宣言だけのコンポーネント図・略記だけのユースケース図を正しい図種で開く | 開いたとき(自動) | 判定は読むだけ。本文は変えない | `tests/e2e/scenarios/migrator-03-legacy-activity.spec.js` |
 
