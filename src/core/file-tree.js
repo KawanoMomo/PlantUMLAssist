@@ -199,6 +199,32 @@ window.MA.fileTree = (function() {
     return d.slice(r.length + 1).split('/').filter(Boolean);
   }
 
+  // TICKET-owner-20261122-2322-3: 保存先の直下とサブフォルダにある同じ名前の図を 2 枚以上開いたとき、
+  // タブと「開いている図」の行に添えるフォルダの道。名前が重ならない図は '' (今の見た目のまま)。
+  // docs は workspace の図 ({id, name, sub, dir})。relOf(doc) はその図の保存先からの道 ('spi'・'docs/api'。直下は '')。
+  // 返り値は { id: 添える語 }。サブフォルダの図は 'spi/'、直下の図は '(直下)'。
+  var ROOT_HINT = '(直下)';
+  function sameNameHints(docs, relOf) {
+    var list = docs || [];
+    var count = {};
+    function key(d) { return _s(d && d.name).toLowerCase(); }
+    list.forEach(function(d) { var k = key(d); if (k) count[k] = (count[k] || 0) + 1; });
+    var out = {};
+    list.forEach(function(d) {
+      if (!d) return;
+      var k = key(d);
+      if (!k || count[k] < 2) { out[d.id] = ''; return; }
+      var rel = _s(typeof relOf === 'function' ? relOf(d) : '').replace(/\/+$/, '');
+      // 道が測れないサブフォルダの図 (保存先を替えた直後など) を「直下」とは言わない。フォルダ名で言う。
+      if (!rel && d.sub && d.dir) {
+        var parts = _s(d.dir).split(String.fromCharCode(92)).join('/').replace(/\/+$/, '').split('/');
+        rel = parts[parts.length - 1] || '';
+      }
+      out[d.id] = rel ? rel + '/' : ROOT_HINT;
+    });
+    return out;
+  }
+
   // 畳んだままでも読める件数。読むだけはフォルダの数、GIT は「main · M 2 ↑1」。
   // 右の枠に出している相手の札は TICKET-owner-20261115-2141-prune で外した (読むだけの図は 1 枚を見るだけ)。
   function readonlyCountLabel(total) {
@@ -291,6 +317,8 @@ window.MA.fileTree = (function() {
     filter: filter,
     subTreeRows: subTreeRows,
     relSegments: relSegments,
+    sameNameHints: sameNameHints,
+    ROOT_HINT: ROOT_HINT,
     readonlyCountLabel: readonlyCountLabel,
     readonlyRows: readonlyRows,
     gitCountLabel: gitCountLabel,
