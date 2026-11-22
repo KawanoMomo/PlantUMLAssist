@@ -296,6 +296,14 @@ html, body {
 #target-pick #target-pick-path { flex: 1 1 auto; min-width: 0; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; font: inherit; }
 #target-pick .target-pick-row button { flex: 0 0 auto; font: inherit; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer; }
 #target-pick .target-pick-msg { color: var(--error, #f87171); font-size: 12px; min-height: 1em; margin-top: 6px; }
+/* フォルダを辿る (TICKET-roadmap-20261122-0855-1): 今いるフォルダ・親へ・ドライブ・最近使ったフォルダ */
+#target-pick .target-pick-nav { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+#target-pick .target-pick-nav button { font: inherit; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer; }
+#target-pick .target-pick-nav button:disabled { opacity: 0.45; cursor: default; }
+#target-pick .target-pick-here { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+#target-pick .target-pick-here-path { flex: 1 1 auto; min-width: 0; font-family: var(--font-mono), Consolas, monospace; font-size: 12px; word-break: break-all; }
+#target-pick #target-pick-here-ok { flex: 0 0 auto; font: inherit; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+#target-pick .target-pick-sub { font-size: 11px; color: var(--text-secondary); margin: 2px 0; }
 #files-ctx-menu .files-ctx-title {
   padding: 3px 12px 5px; font-size: 10px; color: var(--text-secondary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -3401,6 +3409,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button id="imp-file">ファイルを開く…<span class="menu-key">Ctrl+O</span></button>
         <button id="imp-clipboard">クリップボードから開く</button>
         <button id="imp-folder">保存フォルダの図を開く（一覧）</button>
+        <button id="imp-target">保存先のフォルダを選ぶ…</button>
         <div class="menu-note">エディタやプレビューへドラッグ&amp;ドロップでも開けます（複数可）</div>
       </div>
     </div>
@@ -3792,6 +3801,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <div style="margin-bottom:10px;">
       <div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:6px;">保存先 / Backend</div>
       <div id="cfg-backend-cards"></div>
+      <!-- 保存先のフォルダは FILES・Import ▾・Ctrl+K と同じ 1 つの窓で辿って選ぶ (TICKET-roadmap-20261122-0855-1) -->
+      <button type="button" id="cfg-file-dir-pick" style="margin-top:6px;font-size:12px;padding:4px 10px;border-radius:4px;border:1px solid var(--accent);background:var(--bg-tertiary);color:var(--text-primary);cursor:pointer;">フォルダを辿って選ぶ…</button>
       <div id="cfg-file-dir-row" style="display:none;margin-top:6px;font-size:12px;">
         <label style="display:block;margin-bottom:4px;color:var(--text-secondary);">保存先ディレクトリ</label>
         <input type="text" id="cfg-file-dir" placeholder="./autosave" style="width:100%;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:monospace;">
@@ -3948,6 +3959,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-select.js"></script>
 <script src="src/core/folder-filter.js"></script>
 <script src="src/core/peek-folder.js"></script>
+<script src="src/core/folder-browse.js"></script>
 <script src="src/core/ref-folders.js"></script>
 <script src="src/core/side-pane.js"></script>
 <script src="src/core/senior-pane.js"></script>
