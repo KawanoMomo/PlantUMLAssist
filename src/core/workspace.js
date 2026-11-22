@@ -437,6 +437,17 @@ window.MA.workspace = (function() {
     return _copy(d);
   }
 
+  // TICKET-roadmap-20261122-0855-3: 図を別のフォルダへ移したとき、タブの居場所を付いていかせる。
+  // sub が真ならそのサブフォルダの図に、偽なら今の保存先 (直下) の図に戻す (dir は持たない)。名前はそのまま。
+  function setPlace(id, dir, sub) {
+    var d = _find(id);
+    if (!d) return null;
+    if (sub && dir) { d.dir = String(dir); d.sub = true; }
+    else { delete d.dir; delete d.sub; }
+    persist();
+    return _copy(d);
+  }
+
   // タブの書き先のフォルダ。留めていなければ fallback (今の保存先)。
   function dirOf(id, fallback) {
     var d = _find(id);
@@ -708,6 +719,7 @@ window.MA.workspace = (function() {
     reset: reset,
     holdDir: holdDir,
     setDir: setDir,
+    setPlace: setPlace,
     dirOf: dirOf,
     sanitizeName: sanitizeName,
     isValidName: isValidName,

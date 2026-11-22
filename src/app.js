@@ -4208,6 +4208,15 @@ function _diffName(doc) {
   return 'sub:' + String(doc.dir).split(String.fromCharCode(92)).join('/').toLowerCase() + '|' + doc.name;
 }
 
+// 「この図の履歴」(版の控え) を読むフォルダ。今開いているサブフォルダの図ならそのフォルダ、ほかは今の保存先
+// (TICKET-roadmap-20261122-0855-3。前はサブフォルダの図でも直下の同じ名前の図の版を読んでいた)。
+function _histDirFor(name) {
+  var a = null;
+  try { a = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { a = null; }
+  if (a && a.sub && a.dir && a.name === String(name == null ? '' : name)) return a.dir;
+  return _wsFileDir();
+}
+
 // サブフォルダの図の、保存先から見たフォルダの道 ('docs/api')。サブフォルダの図でなければ ''。
 function _docSubRel(doc) {
   if (!doc || !doc.sub || !doc.dir) return '';
@@ -4299,6 +4308,7 @@ function _isUntouchedDoc(doc) {
 function writeDocToFolder(doc, fileDir) {
   if (!doc || !window.MA.workspace) return false;
   if (_sourcePathOf(doc.id)) return false;  // 手元から開いたファイルは元の場所にだけ書く
+  if (_docWriteHeld(doc.id)) return false;  // 移動・名前変更の途中
   // まだ見本のままのタブは書かない。
   if (_isUntouchedDoc(doc)) return false;
   if (_blockedFileWrite(doc.name)) {
@@ -4363,6 +4373,11 @@ function saveActiveDoc() {
     if (doc && cfg && cfg.backend === 'file' && _isUntouchedDoc(doc)) {
       renderDiffBadge();
       try { renderLiveDiffChip(); } catch (e) {}
+      return doc;
+    }
+    if (doc && cfg && cfg.backend === 'file' && _docWriteHeld(doc.id)) {
+      // FILES の右クリックで移動・名前変更している途中 (付け替えが済むまで前の場所へ書かない)。
+      renderDiffBadge();
       return doc;
     }
     if (doc && cfg && cfg.backend === 'file') {
@@ -4523,14 +4538,59 @@ function promptRenameDoc(docId, message, suggest) {
 // 「＋ 新しい図」のタブを開く。名前 diagramN は開いているタブに加えて
 // 保存先にある .puml の名前とも重ならないものにし (diagram2.puml が在れば diagram3)、
 // 1 度書けるまで「新しい図」の印を付ける (印のある図は既にある別のファイルを書き換えない)。
-function openNewDocTab(diagramType, dsl) {
+// subDir (任意): 保存先の下のサブフォルダに作る (TICKET-roadmap-20261122-0855-3。FILES のサブフォルダの右クリック「新しい図」)。
+// その図はそのフォルダを居場所に持ち、1 度書けた時点でそのフォルダに 1 枚できる。
+function openNewDocTab(diagramType, dsl, subDir) {
   var WS = window.MA.workspace;
-  var dir = _wsFileDir();
+  var dir = subDir || _wsFileDir();
   var name = WS.newDocName ? WS.newDocName(dir) : 'diagram' + (WS.count() + 1);
-  var doc = WS.open({ name: name, diagramType: diagramType, dsl: dsl, fresh: true });
+  var spec = { name: name, diagramType: diagramType, dsl: dsl, fresh: true };
+  if (subDir) { spec.sub = true; spec.dir = subDir; }
+  var doc = WS.open(spec);
   _recheckNewDocName(doc && doc.id, dir);
   return doc;
 }
+
+// FILES のサブフォルダの右クリック「新しい図」。＋ と同じく白紙で作り、そのフォルダを書き先にする。
+window.openNewDocInSubFolder = function(subDir) {
+  if (!subDir) return null;
+  saveActiveDoc();
+  var BD = window.MA.blankDoc;
+  var doc = openNewDocTab(currentDiagramType, BD ? BD.blankDsl(currentDiagramType) : '@startuml\n@enduml', subDir);
+  applyActiveDoc();
+  return doc;
+};
+
+// ── 書いている途中の図の居場所を替える (TICKET-roadmap-20261122-0855-3) ──
+// FILES の右クリックで開いているタブの図を移動・名前変更するとき、ディスクの付け替えの間はそのタブを書かない
+// (自動保存が前の場所へ書き戻すと 2 枚になる)。付け替えが済んだらタブの名前・居場所・前回保存版の基準を
+// 新しい場所へ移す。未保存の本文はタブに残したまま (以後の Ctrl+S・自動保存は新しい場所だけに書く)。
+var _docWriteHold = {};
+function _docWriteHeld(id) { return !!(id && _docWriteHold[id]); }
+window.MA.holdDocWrites = function(id, on) {
+  if (!id) return;
+  if (on) _docWriteHold[id] = true; else delete _docWriteHold[id];
+};
+// to: { name?, dir?, sub? }。dir を渡すと居場所を替える (sub が偽なら今の保存先に従うタブに戻す)。
+window.MA.retargetDoc = function(id, to) {
+  var WS = window.MA.workspace;
+  var SD = window.MA.saveDiff;
+  if (!WS || !id || !to) return null;
+  var d = null;
+  (WS.list() || []).forEach(function(x) { if (x && x.id === id) d = x; });
+  if (!d) return null;
+  var base = SD ? SD.baselineOf(_diffName(d)) : null;
+  if (to.dir !== undefined && WS.setPlace) WS.setPlace(id, to.dir, !!to.sub);
+  if (to.name && to.name !== d.name) WS.rename(id, to.name);
+  var now = null;
+  (WS.list() || []).forEach(function(x) { if (x && x.id === id) now = x; });
+  if (now && SD && base && typeof base.dsl === 'string') {
+    try { SD.mark(_diffName(now), base.dsl); } catch (e) {}
+  }
+  try { renderTabs(); } catch (e) {}
+  try { updateTopSaveTarget(); } catch (e) {}
+  return now;
+};
 
 // 保存先の一覧をまだ読んでいなかった (覚えている名前が古い) ときのために、開いた後に読み直し、
 // 付けた名前が保存先の図と重なっていれば、まだ書いていないうちに次の空いた番号へ替える。
@@ -6717,6 +6777,8 @@ function setupTabs() {
       // 一覧から開いたままの本文は書かない (開いたときのまま。元ファイルは既にこの内容)。
       var SL = window.MA.sourceLock;
       if (SL && doc && SL.decide(doc.id, doc.dsl).action === 'skip') return { name: '', reason: 'unchanged' };
+      // FILES の右クリックで移動・名前変更している途中のタブは書かない (前の場所へ書き戻さない)。
+      if (doc && _docWriteHeld(doc.id)) return { name: '', reason: 'moving' };
       // 書き先のフォルダもタブごと (保存先を替える前に開いたタブは開いたフォルダ)。
       // まだ 1 度も書いていない新しい図は印を添える (既にある別の図へは書かない)。
       // 書いたタブの印も添える (自分で書いた続きは図種の読みが替わっても別名へ回さない)。
@@ -6934,7 +6996,7 @@ function setupTabs() {
 
   function loadVersions(name) {
     var VH = window.MA.versionHistory;
-    var url = '/autosave-versions?dir=' + encodeURIComponent(_wsFileDir())
+    var url = '/autosave-versions?dir=' + encodeURIComponent(_histDirFor(name))
       + '&type=' + encodeURIComponent(name);
     return window.fetch(url)
       .then(function(r) { return r.ok ? r.json() : null; })
@@ -6945,7 +7007,7 @@ function setupTabs() {
   // 今の {name}.puml を過去の中身で塗り潰さない。
   function openVersion(name, stamp) {
     var VH = window.MA.versionHistory;
-    var url = '/autosave-versions?dir=' + encodeURIComponent(_wsFileDir())
+    var url = '/autosave-versions?dir=' + encodeURIComponent(_histDirFor(name))
       + '&type=' + encodeURIComponent(name) + '&stamp=' + encodeURIComponent(stamp);
     window.fetch(url).then(function(r) { return r.ok ? r.text() : null; }).then(function(text) {
       if (text == null) {
@@ -6975,13 +7037,23 @@ function setupTabs() {
   // (server は上書きの手前で今の中身を控えるので、戻し自体も失われない)。
   function restoreVersionInto(name, stamp) {
     var VH = window.MA.versionHistory;
-    var dir = _wsFileDir();
+    var dir = _histDirFor(name);
     var url = '/autosave-versions?dir=' + encodeURIComponent(dir)
       + '&type=' + encodeURIComponent(name) + '&stamp=' + encodeURIComponent(stamp);
 
     function finish(text) {
       if (!_applyLineEditText(text)) {
-        if (window.MA.toast) window.MA.toast.show(VH.unchangedLine(name, stamp));
+        // 消した図をタブが開いたまま戻すときは、版の中身とタブの本文が同じ (本文は動かない)。
+        // ファイルが無ければ、その中身でファイルを書き直す (TICKET-roadmap-20261122-0855-3。前は「同じ」と言うだけで戻らなかった)。
+        window.MA.workspace.loadFile(name, dir).then(function(cur) {
+          if (cur == null) {
+            saveFile();
+            if (window.MA.toast) window.MA.toast.show(VH.restoredLine(name, stamp));
+            appendSaveStatus(VH.restoredLine(name, stamp));
+            return;
+          }
+          if (window.MA.toast) window.MA.toast.show(VH.unchangedLine(name, stamp));
+        });
         return;
       }
       if (window.MA.toast) window.MA.toast.show(VH.restoredLine(name, stamp));
@@ -7017,7 +7089,7 @@ function setupTabs() {
   function compareVersion(name, stamp) {
     var VH = window.MA.versionHistory;
     var WS = window.MA.workspace;
-    var dir = _wsFileDir();
+    var dir = _histDirFor(name);
     var url = '/autosave-versions?dir=' + encodeURIComponent(dir)
       + '&type=' + encodeURIComponent(name) + '&stamp=' + encodeURIComponent(stamp);
     return window.fetch(url).then(function(r) { return r.ok ? r.text() : null; }).then(function(text) {
@@ -9239,7 +9311,7 @@ function _trLoadPick(name, dsl) {
   _trPick = null;
   _trName = String(name == null ? '' : name);
   if (!TR || !VH || !_trName) return Promise.resolve(null);
-  var url = '/autosave-versions?dir=' + encodeURIComponent(_wsFileDir())
+  var url = '/autosave-versions?dir=' + encodeURIComponent(_histDirFor(_trName))
     + '&type=' + encodeURIComponent(_trName);
   return window.fetch(url)
     .then(function(r) { return r.ok ? r.json() : null; })
@@ -9255,7 +9327,7 @@ function _trLoadPick(name, dsl) {
 function restoreTwinDoc() {
   var TR = window.MA.twinRestore;
   if (!TR || !_trPick || !_trName) return;
-  var url = '/autosave-versions?dir=' + encodeURIComponent(_wsFileDir())
+  var url = '/autosave-versions?dir=' + encodeURIComponent(_histDirFor(_trName))
     + '&type=' + encodeURIComponent(_trName) + '&stamp=' + encodeURIComponent(_trPick.stamp);
   var pick = _trPick, name = _trName;
   window.fetch(url).then(function(r) { return r.ok ? r.text() : null; }).then(function(text) {

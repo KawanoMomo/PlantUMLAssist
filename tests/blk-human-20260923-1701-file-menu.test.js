@@ -57,11 +57,12 @@ describe('フォルダの右クリック (design 10b)', function() {
     var it = FM.folderItems({ kind: 'target' });
     // BLK-primary-20260925-0232-design: 別のフォルダを保存先に替える入口が 2 つの灰色の後に並ぶ。
     // 「6 図種をまとめて作る」は TICKET-owner-20261116-0321-prune で外した。
-    expect(ids(it)).toEqual(['new-doc', '-', 'set-target', 'set-readonly', 'change-target', '-', 'open-list']);
-    expect(it[2].disabled).toBe(true);
-    // BLK-owner-20260924-1836-prune: 「読むだけにする」は覗く窓を開かない。保存先は書く場所なので押せない。
+    // TICKET-roadmap-20261122-0855-3: 「新しい図」のすぐ下に「新しいフォルダ」(実際にフォルダを作る)。
+    expect(ids(it)).toEqual(['new-doc', 'new-folder', '-', 'set-target', 'set-readonly', 'change-target', '-', 'open-list']);
     expect(it[3].disabled).toBe(true);
-    expect(it[3].title).toContain('読むだけ');
+    // BLK-owner-20260924-1836-prune: 「読むだけにする」は覗く窓を開かない。保存先は書く場所なので押せない。
+    expect(it[4].disabled).toBe(true);
+    expect(it[4].title).toContain('読むだけ');
   });
 
   // 部品のフォルダ (名前で束ねた見出し) は TICKET-owner-20261116-0321-prune で外した。
