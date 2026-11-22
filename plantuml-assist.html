@@ -3177,6 +3177,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 #status-parse[data-dot="ok"]::before { color: var(--accent-green); }
 #status-parse[data-dot="bad"]::before { color: var(--accent-red); }
 #status-info  { color: var(--text-secondary); }
+#status-format { color: var(--text-secondary); margin-right: 8px; }
+#status-format[hidden] { display: none; }
 /* 下端はどの幅でも 1 行。項目の中で折り返さず、
    入りきらない分は保存直後の 1 行 (#status-save-result) が省略記号で縮む (全文は title)。 */
 #statusbar { overflow: hidden; min-width: 0; }
@@ -3812,6 +3814,9 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
     <span id="status-autosave" style="color:var(--text-secondary);"></span>
     <span id="status-save-result" role="status" style="color:var(--text-secondary);"></span>
     <span class="sb-spacer" aria-hidden="true"></span>
+    <!-- 今のタブのディスクの改行・文字コード (例: CRLF · UTF-8 BOM)。読むだけで、押して切り替えない。
+         改行だけが変わる保存は本文の行が同じで差分に出ないので、保たれたかをここで見る -->
+    <span id="status-format" title="この図のファイルの改行・文字コード" hidden></span>
     <!-- 下端の「± 差分」「● 前回保存版 ＋a −b」は TICKET-owner-20261115-2141-prune で外した
          (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。
          保存すると内容が大きく消える形のときだけ、守りとして警告の札を出す (押すと消える行と「戻す」) -->

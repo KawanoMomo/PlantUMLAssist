@@ -46,8 +46,8 @@ curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日�
 
 | 窓口 | 要求 | 返り |
 | --- | --- | --- |
-| `GET /autosave` | `?dir=&type=` | 図の一覧 (`dsl` `hash` `svgSource` など) |
-| `POST /autosave` | `{type, dir, dsl}` | 図の DSL を保存する |
+| `GET /autosave` | `?dir=&type=` | 図の一覧 (`dsl` `hash` `svgSource` など)。`type` 付きは 1 枚の本文 (LF) と、ディスクの改行・文字コードを見出し `X-Pua-Eol` `X-Pua-Encoding` `X-Pua-Bom` で返す |
+| `POST /autosave` | `{type, dir, dsl, eol?, bom?}` | 図の DSL を保存する。`eol` `bom` が無ければ上書きする相手のファイルの改行・BOM を引き継ぎ、書いた値を `eol` `encoding` `bom` で返す |
 | `DELETE /autosave` | `?dir=&type=` | 保存を消す |
 | `POST /autosave-svg` | `{type, dir, svg}` | 書き出した svg を保存する (印を刻む) |
 | `GET /autosave-versions` | `?dir=&type=` | 1 枚の図の版の一覧 |

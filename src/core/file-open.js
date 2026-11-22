@@ -64,6 +64,18 @@ window.MA.fileOpen = (function() {
     return t;
   }
 
+  // 下端に添える今のタブの改行・文字コードの 1 語 (例: "CRLF · UTF-8 BOM")。
+  // 手書きの道具 (VS Code の状態バー) と同じ読み。分からない図 (まだ書いていない新しい図) は ''。
+  // 改行だけが変わる保存は本文の行が同じで「差分」に出ないので、保たれたかをこの 1 語で見る。
+  function formatLabel(meta) {
+    var m = meta || {};
+    if (m.eol !== 'lf' && m.eol !== 'crlf') return '';
+    var enc = String(m.encoding || 'utf-8').toLowerCase();
+    var encText = (enc === 'shift_jis' || enc === 'sjis' || enc === 'cp932') ? 'Shift_JIS'
+      : (m.bom ? 'UTF-8 BOM' : 'UTF-8');
+    return (m.eol === 'crlf' ? 'CRLF' : 'LF') + ' · ' + encText;
+  }
+
   // server の /native-write に渡す形。
   function writeBody(path, text, meta) {
     var m = meta || {};
@@ -339,6 +351,7 @@ window.MA.fileOpen = (function() {
     detectEol: detectEol,
     decode: decode,
     restoreText: restoreText,
+    formatLabel: formatLabel,
     writeBody: writeBody,
     partition: partition,
     isSupportedLine: isSupportedLine,

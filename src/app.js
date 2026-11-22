@@ -4443,6 +4443,8 @@ function applyActiveDoc() {
   renderTabs();
   // 保存が届いた先も図ごとに違う。
   try { renderAutoSaveStatus(); } catch (e) {}
+  // 改行・文字コードの 1 語もこのタブのもの。
+  try { renderFileFormat(); } catch (e) {}
   // 開いたファイルの未対応記法と、起動直後の入口。
   try { renderUnsupportedPanel(); } catch (e) {}
   try { renderOpenEmptyHint(); } catch (e) {}
@@ -8878,8 +8880,35 @@ function _withSourceEol(doc) {
   var m = _openedSourceOf(doc && doc.id);
   var eol = m && m.eol;
   if (!doc || (eol !== 'lf' && eol !== 'crlf')) return doc;
-  return { id: doc.id, name: doc.name, diagramType: doc.diagramType, dsl: doc.dsl, eol: eol };
+  // BOM も開いたときのまま (付けないと server は保存先の同名ファイルの BOM を引き継ぐ)。
+  return { id: doc.id, name: doc.name, diagramType: doc.diagramType, dsl: doc.dsl, eol: eol, bom: !!m.bom };
 }
+
+// 今のタブのファイルの改行・文字コード。元のファイルへ書き戻す図は開いたときの値
+// (書き戻しもその値で行う)、保存先の図は server が読んだ・書いたときに言ったディスクの値。
+// まだどこにも書いていない新しい図は null (下端に何も出さない)。
+function _docFormat(doc) {
+  if (!doc) return null;
+  var src = _openedSourceOf(doc.id);
+  if (src && src.path) return src;
+  var WS = window.MA.workspace;
+  var f = (WS && WS.fileFormatOf) ? WS.fileFormatOf(doc.name, _docDir(doc)) : null;
+  return f || src || null;
+}
+
+// 下端の 1 語 (例: CRLF · UTF-8 BOM)。タブを替えたとき・保存先へ書いたときに描き直す。
+function renderFileFormat() {
+  var el = document.getElementById('status-format');
+  if (!el) return;
+  var FO = window.MA.fileOpen;
+  var doc = window.MA.workspace ? window.MA.workspace.getActive() : null;
+  var t = (FO && FO.formatLabel) ? FO.formatLabel(_docFormat(doc)) : '';
+  el.textContent = t;
+  el.hidden = !t;
+}
+window.addEventListener('pua:folder-changed', function() {
+  try { renderFileFormat(); } catch (e) {}
+});
 
 function openFile() {
   var AB = window.MA.appBridge;
