@@ -71,19 +71,38 @@ window.MA.exportDest = (function() {
       '&kind=' + encodeURIComponent(_s(kind)) + '&sub=' + encodeURIComponent(normSub(sub) || '');
   }
 
-  // placeLabel(sub) — 置き場の言い方。
-  function placeLabel(sub) {
+  // placeLabel(sub, folder) — 置き場の言い方。
+  // folder はサブフォルダの図の、保存先から見たフォルダの道 ('docs/api')。直下の図は ''。
+  // 置き場は図のフォルダごとに覚える (TICKET-owner-20261122-2242-1)。サブフォルダを「保存先」と呼ばず、道で言う。
+  function placeLabel(sub, folder) {
     var n = normSub(sub);
-    return n ? '保存先の「' + n + '」フォルダ' : '図と同じフォルダ';
+    var f = normSub(folder) || '';
+    if (!f) return n ? '保存先の「' + n + '」フォルダ' : '図と同じフォルダ';
+    return n ? '図のフォルダ（' + f + '）の下の「' + n + '」フォルダ' : '図と同じフォルダ（' + f + '）';
   }
 
-  // message(res, sub) — 書いた直後に出す 1 行。名前・置き場・バイト数・新規 / 上書き。
+  // sameFolderChoice(folder) — 置き場の窓の「図と同じフォルダ」の選択肢の言い方。
+  function sameFolderChoice(folder) {
+    var f = normSub(folder) || '';
+    return f ? '図と同じフォルダ (' + f + ')' : '図と同じフォルダ (保存先の直下)';
+  }
+
+  // subChoice(name, folder) — 置き場の窓の、図のフォルダの下のフォルダの選択肢の言い方。
+  function subChoice(name, folder) {
+    var f = normSub(folder) || '';
+    return f ? '図のフォルダ (' + f + ') の下の「' + _s(name) + '」フォルダ' : '保存先の下の「' + _s(name) + '」フォルダ';
+  }
+
+  // slashPath(p) — 画面に出すパスの区切りを / に揃える (直下の図とサブフォルダの図で書き方を変えない)。
+  function slashPath(p) { return _s(p).replace(/\\/g, '/'); }
+
+  // message(res, sub, folder) — 書いた直後に出す 1 行。名前・置き場・バイト数・新規 / 上書き。
   // 全文の末尾の（）にディスク上のパスを付ける (下端の短い形では落ち、title と読み上げに残る)。
-  function message(res, sub) {
+  function message(res, sub, folder) {
     var r = res || {};
     var rel = _s(r.rel);
     var name = rel.split('/').pop();
-    return '書き出しました: ' + name + ' → ' + placeLabel(sub) + ' · ' + Number(r.bytes || 0) + ' バイト · ' +
+    return '書き出しました: ' + name + ' → ' + placeLabel(sub, folder) + ' · ' + Number(r.bytes || 0) + ' バイト · ' +
       (r.existed ? '上書き' : '新規') + (r.path ? '（' + r.path + '）' : '');
   }
 
@@ -143,6 +162,7 @@ window.MA.exportDest = (function() {
   return {
     KINDS: KINDS, normSub: normSub, key: key, loadSub: loadSub, saveSub: saveSub,
     kindOf: kindOf, fileName: fileName, url: url, placeLabel: placeLabel, message: message,
+    sameFolderChoice: sameFolderChoice, subChoice: subChoice, slashPath: slashPath,
     BATCH_KINDS: BATCH_KINDS, kindLabel: kindLabel, batchLabel: batchLabel, batchMessage: batchMessage,
     statusUrl: statusUrl, staleKinds: staleKinds, staleLabel: staleLabel,
   };
