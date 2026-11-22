@@ -1,3 +1,4 @@
+- releaser: v6.1.0(ツール ▾ の一括適用を外す、試験サーバの保存先を試験用に、場面 2 手順 4・6 の scenario)
 ## v6.0.0 (2026-11-22) 保存フォルダで図を扱うメジャー。v5.0.0 以降の機能一覧は loop/releases/v6.0.0.md
 - TICKET-releaser-20261123-0142-2: primary 台本 場面 2 手順 6 の scenario `tests/scenarios/primary-6-s2.spec.js` を足した(手書きの 3 図を保存先から開いて 1 か所ずつ直し、Ctrl+S と SVG の書き出しのあと、直す前 / 直した後・SVG・一覧 handoff.md を scene2h に置く。保存した差分は直した 1 行だけで LF のまま、一覧の差分行数が置いた一式と合い、古い出力は残りとして一覧に出る)
 - TICKET-releaser-20261123-0142-1: primary 台本 場面 2 手順 4 の scenario `tests/scenarios/primary-4-s2.spec.js` を足した(保存先から開いた手書きの hand-seq で、字下げしたコメント行の直下のメッセージを押して「↑ この前にメッセージ追加」で 1 行足し、差分が足した 1 行だけ・コメントと字下げの行が 1 字も動かない・描けることを見る)
