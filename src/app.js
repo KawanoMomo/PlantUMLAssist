@@ -1204,6 +1204,24 @@ function init() {
     if (!up && e.key !== 'ArrowDown') return;
     var lineNum = this.value.substring(0, this.selectionStart).split('\n').length;
     var DUR = window.MA.dslUpdater;
+    // 選択が複数行にまたがるときは、選んだ行の塊をまとめて動かし、選択は塊に付いていく
+    // (TICKET-junior-20261122-1001-wish。終わりが行頭ちょうどの行は選んだ行に数えない)。
+    var selStart = this.selectionStart, selEnd = this.selectionEnd;
+    var endLine = this.value.substring(0, selEnd).split('\n').length;
+    if (selEnd > selStart && endLine > lineNum && this.value.charAt(selEnd - 1) === '\n') endLine -= 1;
+    if (endLine > lineNum) {
+      var all = this.value.split('\n');
+      var blk = up ? DUR.moveLinesUp(this.value, lineNum, endLine) : DUR.moveLinesDown(this.value, lineNum, endLine);
+      e.preventDefault();
+      if (blk === this.value) return;   // 端: DSL は 1 バイトも変えない
+      // 塊の隣の 1 行 (と改行 1 字) ぶんだけ選択をずらす。
+      var shift = (up ? all[lineNum - 2] : all[endLine]).length + 1;
+      this.value = blk;
+      this.selectionStart = up ? selStart - shift : selStart + shift;
+      this.selectionEnd = up ? selEnd - shift : selEnd + shift;
+      this.dispatchEvent(new Event('input'));
+      return;
+    }
     var next = up ? DUR.moveLineUp(this.value, lineNum) : DUR.moveLineDown(this.value, lineNum);
     e.preventDefault();
     if (next === this.value) return;   // 端の行: DSL は 1 バイトも変えない
