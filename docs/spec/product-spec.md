@@ -168,7 +168,7 @@ unit `tests/roadmap-20261115-2114-4-terms.test.js` が、この表と `src/ui/te
 
 | 整理表 | 機能 | できること | 入口 | 振る舞い | 確かめる |
 |---|---|---|---|---|---|
-| #147 | Export ▾ | 今の図を SVG / PNG / PNG(透過背景)/ クリップボードに書き出す | 上部バー「Export ▾」(「SVGとして保存」「PNGとして保存」「PNG（透過背景）」「クリップボードにコピー」)、Ctrl+E | 利用者が押した 1 枚だけを書く。本文は変わらない | `tests/e2e/scenarios/junior-05-export-image.spec.js` |
+| #147 | Export ▾ | 今の図を SVG / PNG / PNG(透過背景)/ クリップボードに書き出す | 上部バー「Export ▾」(「SVGとして保存」「PNGとして保存」「PNG（透過背景）」「クリップボードにコピー」)、Ctrl+E | 利用者が押した 1 枚だけを書く。本文は変わらない。SVG と PNG は PlantUML の背景(既定は白地)を持ち、透明は「PNG(透過背景)」と `skinparam backgroundColor transparent` の図だけ | `tests/e2e/scenarios/junior-05-export-image.spec.js`、`tests/reviewer-20261115-2300-svg-background.test.js` |
 
 ## フォルダで図を扱う
 

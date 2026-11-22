@@ -4077,6 +4077,9 @@ function normalizeSvgSize(svgEl) {
     svgEl.setAttribute('width', String(w));
     svgEl.setAttribute('height', String(h));
   }
+  // TICKET-reviewer-20261115-2300: PlantUML が style に書いた背景 (既定は白) は下で style ごと消えるので、
+  // 「SVG として保存」が書き出しに戻せるよう要素に控える (属性にしないので書き出しにもプレビューにも出ない)。
+  svgEl.__puaBackground = window.MA.svgExport ? window.MA.svgExport.backgroundOf(svgEl.getAttribute('style')) : '';
   svgEl.removeAttribute('style');
   // FEAT-033 (resolves UI-010): 図を縦横同率で表示する。
   // plantuml-assist.html の `#preview-svg svg { max-width: 100% }` は幅だけを
@@ -9121,7 +9124,9 @@ function exportSVG() {
   // 画面に入れた時点で `<?plantuml-src …?>` はコメントに
   // 化けており、畳んだ文字列に `--` があると保存した svg が XML として壊れる。
   // 埋め込みは差分・突き合わせが読むので落とさず、元の処理命令に戻す。
-  if (window.MA.svgExport) svgOut = window.MA.svgExport.restoreEmbeddedSource(svgOut);
+  // TICKET-reviewer-20261115-2300: プレビューの整えで落ちた PlantUML の背景 (既定は白) も根に戻す。
+  // 透明の図 (skinparam backgroundColor transparent) は控えが空なので透明のまま。
+  if (window.MA.svgExport) svgOut = window.MA.svgExport.forSave(svgOut, svgEl.__puaBackground);
   downloadBlob(exportFileName('svg'),
     new Blob([svgOut], { type: 'image/svg+xml' }));
 }

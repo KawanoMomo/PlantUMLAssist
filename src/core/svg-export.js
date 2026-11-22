@@ -64,6 +64,48 @@ window.MA.svgExport = (function() {
       function(_, folded) { return '<?plantuml-src ' + folded + '?>'; });
   }
 
+  // backgroundOf(style) — PlantUML が根の svg の style に書く背景
+  // (`style="width:78px;height:134px;background:#FFFFFF;"`) の色。無ければ ''。
+  // `skinparam backgroundColor transparent` の図は PlantUML が背景を書かないので '' (透明のまま)。
+  // プレビューに入れるときの整え (app.js の normalizeSvgSize) が style を外すので、外す前に読んでおく。
+  var COLOR_RE = /^[#0-9A-Za-z(),.%\s-]{1,40}$/;
+  function backgroundOf(style) {
+    var m = /(?:^|;)\s*background(?:-color)?\s*:\s*([^;]+)/i.exec(String(style == null ? '' : style));
+    if (!m) return '';
+    var c = m[1].trim();
+    return COLOR_RE.test(c) ? c : '';
+  }
+
+  // withBackground(text, color) — 「SVG として保存」の文字列の根の svg に、PlantUML が描いたときの
+  // 背景 (既定は白) を戻す。color が空なら何もしない (透明の図は透明のまま)。
+  // 根の svg の開きタグの style だけを触り、図形・文字・寸法には触れない。既に背景があればそのまま。
+  function withBackground(text, color) {
+    var s = String(text == null ? '' : text);
+    var c = String(color == null ? '' : color).trim();
+    if (!c || !COLOR_RE.test(c)) return s;
+    var m = /<svg\b[^>]*>/.exec(s);
+    if (!m) return s;
+    var tag = m[0];
+    var decl = 'background:' + c + ';';
+    var next;
+    var sm = /\sstyle="([^"]*)"/.exec(tag);
+    if (sm) {
+      if (backgroundOf(sm[1])) return s;
+      var body = sm[1].replace(/\s+$/, '');
+      if (body && body.charAt(body.length - 1) !== ';') body += ';';
+      next = tag.replace(sm[0], ' style="' + body + decl + '"');
+    } else {
+      next = tag.replace(/^<svg\b/, '<svg style="' + decl + '"');
+    }
+    return s.slice(0, m.index) + next + s.slice(m.index + tag.length);
+  }
+
+  // forSave(text, color) — 「SVG として保存」で書く文字列。埋め込みの元 DSL を処理命令に戻し、
+  // PlantUML が描いたときの背景を根に戻す (プレビューの整えで落ちた白地を書き出しに残す)。
+  function forSave(text, color) {
+    return withBackground(restoreEmbeddedSource(text), color);
+  }
+
   // isBrokenComment(text) — XML として壊れるコメント (中に `--` がある) が
   // 残っていないか。残っていれば Image は必ず onerror になる。
   function isBrokenComment(text) {
@@ -106,6 +148,9 @@ window.MA.svgExport = (function() {
     stripNonRendered: stripNonRendered,
     stripEmbeddedSourceText: stripEmbeddedSourceText,
     restoreEmbeddedSource: restoreEmbeddedSource,
+    backgroundOf: backgroundOf,
+    withBackground: withBackground,
+    forSave: forSave,
     isBrokenComment: isBrokenComment,
     reasonFor: reasonFor,
     sizeOf: sizeOf,
