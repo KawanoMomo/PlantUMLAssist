@@ -979,6 +979,25 @@ def _file_eol(path):
     return 'crlf' if crlf and crlf >= lf else 'lf'
 
 
+def _file_bom(path):
+    """既にあるファイルが UTF-8 の BOM で始まるか。無い・読めないなら None。
+
+    保存先の一覧から開いた図は本文から BOM が落ちて届く (fetch の text())。
+    書くときに上書きする相手の BOM を引き継がないと、無変更保存でも先頭 3 バイトが消える。
+    """
+    try:
+        with open(str(path), 'rb') as f:
+            return f.read(3) == b'\xef\xbb\xbf'
+    except OSError:
+        return None
+
+
+def _newline_name(newline):
+    """open() の newline を、書いた改行の名前 ('lf' / 'crlf') に直す (None は platform の既定)。"""
+    nl = newline if newline is not None else os.linesep
+    return 'crlf' if nl == '\r\n' else 'lf'
+
+
 def _atomic_write_text(path, text, encoding='utf-8', newline=None):
     """`path` を、読んでいる側に途中経過を見せずに置き換える。"""
     tmp = path.with_name(path.name + '.tmp-' + str(os.getpid()) + '-' + str(threading.get_ident()))
@@ -2547,14 +2566,23 @@ class Handler(BaseHTTPRequestHandler):
         if newline is None:
             newline = _eol_newline(_file_eol(file_path)
                                    or _file_eol(self._autosave_file_path(save_dir, dt)))
+        # BOM も同じ: 指定 (手元から開いた図) が無ければ上書きする相手 (無ければ名前を回す前の元の図) の
+        # BOM を引き継ぐ。下端の「改行・文字コード」の 1 語が、書いた後もディスクのバイトと一致するように。
+        bom = data.get('bom')
+        if not isinstance(bom, bool):
+            bom = _file_bom(file_path)
+            if bom is None:
+                bom = _file_bom(self._autosave_file_path(save_dir, dt))
+            bom = bool(bom)
         # 同じ図種の中での上書きは今までどおり。消える中身は先に控える。
         self._stash_version(save_dir, target, dsl)
         try:
             # 改行を指定されたときは、本文をいったん LF に揃えてから書く
             # (\r\n のまま newline='\r\n' で書くと \r\r\n になる)。
-            _atomic_write_text(file_path,
-                               dsl.replace('\r\n', '\n') if newline else dsl,
-                               newline=newline)
+            body_text = dsl.replace('\r\n', '\n') if newline else dsl
+            if bom and not body_text.startswith('﻿'):
+                body_text = '﻿' + body_text
+            _atomic_write_text(file_path, body_text, newline=newline)
         except OSError as e:
             self._send_json(500, {'error': f'write failed: {e}'})
             return
@@ -2578,7 +2606,9 @@ class Handler(BaseHTTPRequestHandler):
         self._note_saved_kind(save_dir, target, data.get('kind'))
         out = {'ok': True, 'meta': meta, 'path': str(file_path),
                'savedAs': target, 'kind': new_kind,
-               'savedKind': self._read_saved_kinds(save_dir).get(target, '')}
+               'savedKind': self._read_saved_kinds(save_dir).get(target, ''),
+               # 書いたバイトの改行・文字コード (下端の 1 語)。保存先へは UTF-8 で書く。
+               'eol': _newline_name(newline), 'encoding': 'utf-8', 'bom': bom}
         if target != dt:
             out['renamedFrom'] = dt
             out['prevKind'] = prev_kind
@@ -2846,12 +2876,18 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 content = file_path.read_text(encoding='utf-8')
+                # 本文は LF に揃えて返す (BOM は受け手の fetch が落とす)。ディスクの改行・BOM は
+                # 見出しで別に言う (下端の「改行・文字コード」の 1 語)。
+                _t, src_enc, src_bom, src_eol = decode_source_bytes(file_path.read_bytes())
             except OSError as e:
                 self._send_json(500, {'error': f'read failed: {e}'})
                 return
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('X-Pua-Eol', src_eol)
+            self.send_header('X-Pua-Encoding', src_enc)
+            self.send_header('X-Pua-Bom', '1' if src_bom else '0')
             self.end_headers()
             self.wfile.write(content.encode('utf-8'))
             return

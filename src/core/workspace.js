@@ -479,6 +479,27 @@ window.MA.workspace = (function() {
     } catch (e) { /* 知らせが届かなくても保存そのものは済んでいる */ }
   }
 
+  // 保存先の図の改行・文字コード ({eol, encoding, bom})。読んだとき (GET の X-Pua-* 見出し) と
+  // 書いたとき (POST の返り) に server が言うディスクの値を、図の場所 (フォルダ + 名前) ごとに持つ。
+  // 下端の 1 語 (今のタブの改行・文字コード) はここを読む。
+  var _formats = [];
+  function _noteFormat(name, fileDir, f) {
+    if (!f || (f.eol !== 'lf' && f.eol !== 'crlf')) return;
+    var fmt = { eol: f.eol, encoding: String(f.encoding || 'utf-8'), bom: !!f.bom };
+    var dir = _dir(fileDir);
+    for (var i = 0; i < _formats.length; i++) {
+      if (_formats[i].name === name && samePath(_formats[i].dir, dir)) { _formats[i].fmt = fmt; return; }
+    }
+    _formats.push({ name: String(name), dir: dir, fmt: fmt });
+  }
+  function fileFormatOf(name, fileDir) {
+    var dir = _dir(fileDir);
+    for (var i = 0; i < _formats.length; i++) {
+      if (_formats[i].name === name && samePath(_formats[i].dir, dir)) return _formats[i].fmt;
+    }
+    return null;
+  }
+
   function saveToFile(doc, fileDir) {
     if (!doc || !isValidName(doc.name)) return Promise.resolve(false);
     try {
@@ -499,6 +520,8 @@ window.MA.workspace = (function() {
           // 書き戻す。付けないと server は platform の既定 (Windows は CRLF) で
           // 書き、元が LF のファイルが保存するだけで全行書き換わる。
           eol: (doc.eol === 'lf' || doc.eol === 'crlf') ? doc.eol : undefined,
+          // BOM も同じ。付けなければ server は上書きする相手のファイルの BOM を引き継ぐ。
+          bom: (typeof doc.bom === 'boolean') ? doc.bom : undefined,
         }),
         keepalive: true,
       }).then(function(r) {
@@ -517,6 +540,7 @@ window.MA.workspace = (function() {
         // 回された先は autoSave の知らせに寄せる (聞き手は 1 か所でよい)。
         if (!r.json) { _announce('written', doc.name, fileDir); return true; }
         return r.json().then(function(data) {
+          _noteFormat((data && data.savedAs) || doc.name, fileDir, data);
           _announce('written', (data && data.savedAs) || doc.name, fileDir);
           if (window.MA.autoSave && window.MA.autoSave.noteFileRenamed) {
             window.MA.autoSave.noteFileRenamed(data);
@@ -660,7 +684,13 @@ window.MA.workspace = (function() {
     if (!isValidName(name)) return Promise.resolve(null);
     try {
       return window.fetch('/autosave?type=' + encodeURIComponent(name) + '&dir=' + encodeURIComponent(_dir(fileDir)))
-        .then(function(r) { return r.ok ? r.text() : null; })
+        .then(function(r) {
+          if (!r.ok) return null;
+          // 本文は LF に揃い BOM も落ちて届くので、ディスクの改行・BOM は見出しで受け取る。
+          var h = r.headers && r.headers.get ? function(k) { return r.headers.get(k); } : function() { return null; };
+          _noteFormat(name, fileDir, { eol: h('X-Pua-Eol'), encoding: h('X-Pua-Encoding'), bom: h('X-Pua-Bom') === '1' });
+          return r.text();
+        })
         .catch(function() { return null; });
     } catch (e) {
       return Promise.resolve(null);
@@ -735,6 +765,7 @@ window.MA.workspace = (function() {
     listFolder: listFolder,
     deleteFile: deleteFile,
     loadFile: loadFile,
+    fileFormatOf: fileFormatOf,
     detectType: detectType,
   };
 })();
