@@ -27,7 +27,7 @@ function build(mod, dsl, svgInner) {
   document.body.innerHTML = '<svg id="src" xmlns="http://www.w3.org/2000/svg">' + svgInner +
     '</svg><svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg>';
   mod.buildOverlay(document.getElementById('src'), mod.parse(dsl), document.getElementById('ov'));
-  return Array.prototype.map.call(document.querySelectorAll('#ov rect[data-type]'), function(r) {
+  return Array.prototype.map.call(document.querySelectorAll('#ov rect[data-type]:not([data-hit-kind="framebelt"])'), function(r) {
     return r.getAttribute('data-type') + ':' + r.getAttribute('data-id') + '@' + r.getAttribute('data-line');
   });
 }

@@ -17,7 +17,7 @@ var loadErrors = [];
   'src/core/parser-utils.js', 'src/core/history.js', 'src/core/selection.js',
   'src/core/relation-options.js', 'src/core/relation-kind-cards.js',
   'src/core/relation-roles.js', 'src/core/group-place.js',
-  'src/ui/properties.js', 'src/modules/class.js',
+  'src/ui/terms.js', 'src/ui/properties.js', 'src/modules/class.js',
 ].forEach(function(rel) {
   var code = fs.readFileSync(path.join(ROOT, rel), 'utf-8');
   try {

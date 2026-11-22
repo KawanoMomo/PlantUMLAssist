@@ -1,9 +1,7 @@
 'use strict';
 // BLK-junior-20260915-0307: 「部品を起こす」で開いた spi_sequence の図名を変えて
 // Ctrl+S したら、保存フォルダに新しい名前と spi_sequence.puml が内容同一のまま
-// 2 枚残り、Export の「1 枚を資料化」は古い spi_sequence 側を拾って
-// spi_sequence(資料用).puml/png という変更前の名前で資料を作った。
-// ここでは「前の名前のファイルをどうするか」の判断を固定する。
+// 2 枚残った。ここでは「前の名前のファイルをどうするか」の判断を固定する。
 
 const RS = require('../src/core/rename-sweep');
 
@@ -54,10 +52,12 @@ describe('rename-sweep — 図名を変えたあとの前の名前のファイ�
     expect(t).toContain('spi_sequence.puml はそのまま残しています');
   });
 
-  test('古い名前を消せなかったら、資料化の対象に残ることまで言う', function() {
+  test('古い名前を消せなかったら、保存フォルダに残っている事実だけを言う', function() {
     const p = RS.plan({ from: 'spi_sequence', to: 'SPI初期化', saved: true, oldDsl: DSL, currentDsl: DSL });
     const t = RS.resultText(p, { saved: true, deleted: false, error: '保存フォルダに届きませんでした' });
     expect(t).toContain('消せませんでした');
-    expect(t).toContain('資料化の対象に古い名前が残ります');
+    expect(t).toContain('保存フォルダに前の名前のファイルが残っています');
+    // TICKET-owner-20261116-0840-prune: 資料化は外したので、その語で知らせない。
+    expect(t).not.toContain('資料');
   });
 });

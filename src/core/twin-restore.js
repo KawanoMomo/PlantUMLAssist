@@ -3,7 +3,6 @@ window.MA = window.MA || {};
 
 // twin-restore — 保存フォルダの中で「別名なのに中身がバイト完全一致した」組を
 // 全部その場で挙げ、巻き込まれた図を 1 操作で元の中身に戻す
-// (BLK-primary-20260912-2206-wish)。
 //
 // save-swap は「いま保存した 1 枚が別名の図と一致したか」を言う。primary の事故は
 // driver_common_class / plantuml-class / diagram1 の 3 枚が同時に壊れており、

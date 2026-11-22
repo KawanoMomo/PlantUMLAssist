@@ -84,7 +84,7 @@ test.describe('BLK-builder-1050 関係のその他の設定 (design 3c)', () => 
     await openRelation(page, UC, 4);
     await page.locator('#uc-rel-more-btn').click();
     const text = await page.locator('#uc-rel-more').innerText();
-    for (const s of ['向き / Direction', '多重度 / Multiplicity', '線の色 / Line color',
+    for (const s of ['向き', '多重度', '線の色',
                      'この線にノートを添える', 'Esc で閉じる', '変更は即座に DSL へ反映']) {
       expect(text).toContain(s);
     }

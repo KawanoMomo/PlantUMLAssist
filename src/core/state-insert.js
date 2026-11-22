@@ -36,15 +36,15 @@ window.MA.stateInsert = (function() {
     if (((parsed && parsed.transitions) || []).length > 0) {
       out.push({ value: 'transition', label: 'この遷移の途中' });
     }
-    // BLK-human-20260915-1206: 以前は「既に中身を持つ状態」がある図でしか
+    // 以前は「既に中身を持つ状態」がある図でしか
     // 出さなかったので、最初の 1 つを GUI から作る道がどこにも無かった。
     // 中身を持たない状態もその場で `{ }` に開くので、状態が 1 つでもあれば出す。
-    // BLK-owner-20260925-0312-3: 親は名前で並べ、この 1 つのプルダウンで選び終える
+    // 親は名前で並べ、この 1 つのプルダウンで選び終える
     // (「選んだ状態の中」+ 下の「中に入れる複合状態」の 2 段は、図で選んだ状態と
     // 下の欄の親が食い違っても気づけなかった)。値は `in:{状態の id}`。
     // 入れ子は「Run › Busy の中」— クラス・コンポーネントの「境界『X』の中」と同じ言い方。
     insideOptions(parsed).forEach(function(o) { out.push(o); });
-    // BLK-migrator-20260925-1332: 最初の並行領域が空の複合状態 (`state X {` の直後に `--`) は
+    // 最初の並行領域が空の複合状態 (`state X {` の直後に `--`) は
     // PlantUML が描画の途中で落ちる。「の中」は閉じ `}` の直前 (最後の領域) に入るので、その空の領域へ
     // 置く道を位置に並べる。値は `region:{区切りの行}`。
     emptyRegions(parsed, text).forEach(function(r) {
@@ -138,7 +138,7 @@ window.MA.stateInsert = (function() {
     });
   }
 
-  // 「の中」の相手。BLK-human-20260915-1206 以降は中身の有無で絞らない。
+  // 「の中」の相手。以降は中身の有無で絞らない。
   // 入れ子の中の状態は「Outer › Inner」と出す — 同じ名前の子が別の親に
   // 居るとき、どちらを指しているかが名前だけでは分からない。
   function compositeOptions(parsed) {
@@ -221,7 +221,7 @@ window.MA.stateInsert = (function() {
     var target = null;
     var cs = _composites(parsed);
     for (var i = 0; i < cs.length; i++) if (cs[i].id === compositeId) { target = cs[i]; break; }
-    // BLK-human-20260915-1206: まだ中身を持たない状態が相手なら、その場で
+    // まだ中身を持たない状態が相手なら、その場で
     // `{ }` に開いてから入れる (「先に composite に変換」を利用者にさせない)。
     if (!target) return _insertIntoSimple(text, parsed, compositeId, newLines);
     var lines = String(text).split('\n');
@@ -235,7 +235,7 @@ window.MA.stateInsert = (function() {
     return lines.join('\n');
   }
 
-  // ── 遷移を選んだ右パネルの「状態を追加」(BLK-builder-20260924-1252-2, design 4c) ──
+  // ── 遷移を選んだ右パネルの「状態を追加」(design 4c) ──
   // design 4c は遷移を選んだパネルに「状態を追加 / Add state」と「追加する位置」
   // (この遷移の途中 / 図の末尾 / From の中) を置く。追加タブへ回って挟む遷移を
   // 選び直さなくても、いま選んでいる遷移を相手にして 1 手で足せるようにする。
@@ -273,7 +273,7 @@ window.MA.stateInsert = (function() {
   }
 
   // 選べる位置。複合状態は中身の無い箱を遷移に挟まない (追加タブと同じ)。
-  // BLK-builder-20260924-2341-1 (design 4c): 入口・出口ポイントは複合状態の縁に付くので「From の中」だけ。
+  // 入口・出口ポイントは複合状態の縁に付くので「From の中」だけ。
   // 開始・終了・履歴は置く所が相手で決まる (pseudoFromTransition) ので位置を選ばせない。
   var STEREO_KINDS = { choice: 1, fork: 1, join: 1, entryPoint: 1, exitPoint: 1 };
   var EDGE_KINDS = { entryPoint: 1, exitPoint: 1 };

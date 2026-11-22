@@ -1,0 +1,10 @@
+@startuml
+' hw 側の手順。直下の a とは別の図 (同じ名前)
+participant Hw
+participant SpiDrv
+participant SpiDrvMon
+
+Hw -> SpiDrv : irq()
+  SpiDrv -> Hw : ReadReg(STAT)
+SpiDrvMon -> SpiDrv : poll()
+@enduml

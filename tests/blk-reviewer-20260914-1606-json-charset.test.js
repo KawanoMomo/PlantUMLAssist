@@ -1,5 +1,6 @@
 'use strict';
 // BLK-reviewer-20260914-1606 「POST /verify-svg のエラー応答が読めない」。
+// /verify-svg は TICKET-owner-20261116-0241-prune で外したので、JSON の仕様を返す GET /render で確かめる。
 //
 // 摩擦: cp932 のコンソールから curl / python で 400 を受けると、日本語のエラー本文・
 // fields 説明・example が端末の側で化け、正しいフィールド名を知るために server.py を
@@ -50,28 +51,28 @@ function declared(ctype) {
 describe('JSON 応答の文字コードを呼ぶ側が選べる (BLK-reviewer-20260914-1606)', function() {
 
   test('既定は utf-8 を名乗り、実バイト列も utf-8 で読める', function() {
-    const got = fetchRaw('/verify-svg');
+    const got = fetchRaw('/render');
     expect(got.status).toBe(200);
     expect(declared(got.ctype)).toBe('utf-8');
     const text = got.bytes.toString('utf8');
-    expect(JSON.parse(text).endpoint).toBe('POST /verify-svg');
+    expect(JSON.parse(text).endpoint).toBe('POST /render');
     // 日本語がそのまま入っている (\uXXXX に潰していない)。
     expect(/[぀-ヿ一-龯]/.test(text)).toBe(true);
   });
 
   test('?charset=ascii は us-ascii を名乗り、実バイト列に非 ASCII が 1 バイトも無い', function() {
-    const got = fetchRaw('/verify-svg?charset=ascii');
+    const got = fetchRaw('/render?charset=ascii');
     expect(got.status).toBe(200);
     expect(declared(got.ctype)).toBe('us-ascii');
     expect(got.bytes.every(function(b) { return b < 0x80; })).toBe(true);
     // 逃がしても中身は同じ。日本語は \uXXXX から戻る。
     const doc = JSON.parse(got.bytes.toString('ascii'));
-    expect(doc.endpoint).toBe('POST /verify-svg');
-    expect(/[぀-ヿ一-龯]/.test(doc.summary)).toBe(true);
+    expect(doc.endpoint).toBe('POST /render');
+    expect(/[぀-ヿ一-龯]/.test(doc.request.fields.text)).toBe(true);
   });
 
   test('Accept-Charset: shift_jis は Shift_JIS を名乗り、実バイト列も cp932 である', function() {
-    const got = fetchRaw('/verify-svg', { 'Accept-Charset': 'shift_jis' });
+    const got = fetchRaw('/render', { 'Accept-Charset': 'shift_jis' });
     expect(declared(got.ctype)).toBe('shift_jis');
     // utf-8 では読めない (= 本当に cp932 で返っている)。
     expect(got.bytes.every(function(b) { return b < 0x80; })).toBe(false);
@@ -79,75 +80,8 @@ describe('JSON 応答の文字コードを呼ぶ側が選べる (BLK-reviewer-20
   });
 
   test('知らない charset は utf-8 に落ちる (宣言と実体は食い違わない)', function() {
-    const got = fetchRaw('/verify-svg?charset=ebcdic');
+    const got = fetchRaw('/render?charset=ebcdic');
     expect(declared(got.ctype)).toBe('utf-8');
-    expect(JSON.parse(got.bytes.toString('utf8')).endpoint).toBe('POST /verify-svg');
-  });
-
-  test('400 の日本語が化けても、ASCII の併記だけで正しい形が分かる', function() {
-    // reviewer の手順そのもの: types を落とした POST を cp932 の端末で受ける。
-    // 化けたバイト列から ASCII だけを拾っても types / dir / mode が読めること。
-    const script = [
-      'import importlib.util, json, threading, urllib.request, http.server',
-      `spec = importlib.util.spec_from_file_location("puaserver", r"${path.join(projectRoot, 'server.py')}")`,
-      'srv = importlib.util.module_from_spec(spec)',
-      'spec.loader.exec_module(srv)',
-      'httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), srv.Handler)',
-      'threading.Thread(target=httpd.serve_forever, daemon=True).start()',
-      'port = httpd.server_address[1]',
-      'req = urllib.request.Request("http://127.0.0.1:%d/verify-svg" % port,',
-      '                             data=json.dumps({"dir": "x"}).encode("utf-8"),',
-      '                             headers={"Content-Type": "application/json"})',
-      'try:',
-      '    body = urllib.request.urlopen(req).read()',
-      'except urllib.error.HTTPError as e:',
-      '    body = e.read()',
-      'print(json.dumps({"body": list(body)}))',
-    ].join('\n');
-    const out = execFileSync('python', ['-c', script], {
-      cwd: projectRoot, encoding: 'utf8', timeout: 60000,
-    }).trim();
-    const bytes = Buffer.from(JSON.parse(out.split('\n').pop()).body);
-    // cp932 の端末が見る「化けた文字列」を、ASCII 以外を落として再現する。
-    const garbled = bytes.toString('latin1').replace(/[^\x20-\x7e]/g, '');
-    expect(garbled).toContain("'types' is required");
-    expect(garbled).toContain('array of diagram names');
-    expect(garbled).toContain('full path');
-    expect(garbled).toContain("'local' (default");
-    // 打ち直しに使う example も ASCII なのでそのまま読める。
-    expect(garbled).toContain('curl -sS -X POST');
-  });
-
-  test('/verify-svg の 400 はどの理由でも ASCII の言い直しを添える', function() {
-    const fs = require('fs');
-    const SERVER = fs.readFileSync(path.join(projectRoot, 'server.py'), 'utf8');
-    const at = SERVER.indexOf('def _handle_verify_svg_post');
-    const body = SERVER.slice(at, SERVER.indexOf('\n    def ', at + 10));
-    const sends = body.match(/_send_json\(400,/g) || [];
-    expect(sends.length).toBeGreaterThan(0);
-    expect((body.match(/'errorAscii':/g) || []).length).toBe(sends.length);
-  });
-
-  test('fieldsAscii が日本語の fields と同じ項目を漏れなく持つ', function() {
-    const fs = require('fs');
-    const SERVER = fs.readFileSync(path.join(projectRoot, 'server.py'), 'utf8');
-    ['types', 'dir', 'mode'].forEach(function(k) {
-      const at = SERVER.indexOf("'fieldsAscii': {");
-      const block = SERVER.slice(at, SERVER.indexOf('\n    },', at));
-      expect(block).toContain("'" + k + "':");
-    });
-  });
-
-  test('400 の expected に、化けたままでも読める ASCII の逃げ道が載る', function() {
-    // ここは源文で見る (400 を出すには POST が要る。応答の中身の規約を守ればよい)。
-    const fs = require('fs');
-    const SERVER = fs.readFileSync(path.join(projectRoot, 'server.py'), 'utf8');
-    const at = SERVER.indexOf('VERIFY_SVG_EXPECTED = {');
-    const block = SERVER.slice(at, SERVER.indexOf('\n}\n', at));
-    expect(block).toContain("'charset'");
-    const line = /'charset':\s*"([^"]*)"/.exec(block)[1];
-    expect(line).toContain('?charset=ascii');
-    // 逃げ道の一行自体が非 ASCII を含んでいたら、化けた応答の中で読めない。
-    expect(/^[\x20-\x7e]+$/.test(line)).toBe(true);
+    expect(JSON.parse(got.bytes.toString('utf8')).endpoint).toBe('POST /render');
   });
 });

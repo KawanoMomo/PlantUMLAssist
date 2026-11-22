@@ -128,7 +128,7 @@ describe('多重度 / Multiplicity', function() {
   });
 });
 
-describe('線の色 / Line color', function() {
+describe('線の色', function() {
   test('色は線の中に `-[#red]>` の形で入る', function() {
     expect(RO.setLineColor('A --> B', 'red')).toBe('A -[#red]-> B');
     expect(RO.setLineColor('A -> B', 'red')).toBe('A -[#red]> B');
@@ -230,7 +230,7 @@ describe('その他の設定パレットの HTML', function() {
 
   test('design が挙げる 4 つの見出しが並ぶ', function() {
     var h = html(DEFAULT);
-    ['向き / Direction', '多重度 / Multiplicity', '線の色 / Line color', 'この線にノートを添える']
+    ['向き', '多重度', '線の色', 'この線にノートを添える']
       .forEach(function(s) { expect(h).toContain(s); });
   });
 

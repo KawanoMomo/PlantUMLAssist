@@ -178,7 +178,7 @@ window.MA.activityBranchPattern = (function() {
   }
 
   // 挿入する行のかたまり。indent は挿入位置の字下げ、枝の中はその 2 つ内側。
-  // 中身の無い枝は空のまま (BLK-owner-20260927-0745-1: 入れていない `:;` を書かない)。
+  // 中身の無い枝は空のまま (入れていない `:;` を書かない)。
   function linesFor(p, indent) {
     if (!p) return [];
     var ind = _s(indent);

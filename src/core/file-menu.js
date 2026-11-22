@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // file-menu — FILES ツリーのファイル・フォルダの右クリックに集める操作 (design 10b)。
 //
-// BLK-human-20260923-1701: ファイル 1 枚に対する操作が、タブ列 (一時控え・並べて比較)、
+// ファイル 1 枚に対する操作が、
 // ツール ▾ (この図の変遷)、下端の札 (前回保存版) と散らばっていて、「この図に何ができるか」を
 // 入口ごとに探し直していた。10b はファイルの右クリックに全部を集める。
 // フォルダの右クリックは「そこに作る」「そこを保存先 / 読むだけにする」。
@@ -17,17 +17,15 @@ window.MA.fileMenu = (function() {
   // 「過去のコミットと比較…」は保存先が Git のときだけ押せる (10c)。
   var FILE_ITEMS = [
     { id: 'open', label: '開く', key: 'Enter' },
-    { id: 'open-side', label: '右に並べて開く' },
+    // 右の枠に並べて開く行と比較の 3 行 (読むだけ / 前回保存版 / 過去のコミット) は
+    // TICKET-owner-20261115-2141-prune で外した。前の版と比べるのは「この図の履歴」の行から。
     { sep: true },
-    { id: 'cmp-readonly', label: '読むだけのフォルダの同じ図と比較' },
-    { id: 'cmp-saved', label: '前回保存版と比較' },
-    { id: 'cmp-commit', label: '過去のコミットと比較…', tag: 'Git', needsGit: true },
     { id: 'history', label: 'この図の履歴を表示' },
     { sep: true },
     { id: 'rename', label: '名前を変更', key: 'F2' },
     { id: 'copy', label: '複製' },
     { id: 'move', label: '別のフォルダへ移動…' },
-    { id: 'draft', label: '一時控えにする' },
+    // 下書きの印を付ける行は TICKET-owner-20261116-0241-prune で外した (保存先の一覧で畳む仕分けごと)。
     { sep: true },
     { id: 'export-svg', label: 'SVG で書き出す' },
     { id: 'reveal', label: 'エクスプローラで場所を開く' },
@@ -35,25 +33,24 @@ window.MA.fileMenu = (function() {
     { id: 'delete', label: '削除', key: 'Delete', danger: true },
   ];
 
-  // フォルダの右クリック。部品のフォルダ (`SPI 4 / 6`) はファイル名の頭で束ねた見出しで
-  // 実在のディレクトリではないので、「保存先にする / 読むだけにする」は出さない。
-  // 読むだけのフォルダ (design 10a「右クリックから「並べて比較」できます」「編集はできません」) は
-  // 並べて比較が先頭で、そこに作る 2 つは出さない (BLK-builder-20260924-1749-3)。
+  // フォルダの右クリック。フォルダは保存先と読むだけの実在のフォルダだけ
+  // (ファイル名の頭で束ねた部品のフォルダは TICKET-owner-20261116-0321-prune で外した)。
+  // 読むだけのフォルダ (編集はできない) には、そこに作る 2 つは出さない。
+  // 読むだけのフォルダの図は、行を開いて図を押すと右の枠に 1 枚で出る (右クリックの操作は無い)。
+  // フォルダの右クリックの比較の行と、フォルダの図を覗く窓は
+  // TICKET-owner-20261115-2141-prune で外した。
+  // TICKET-roadmap-20261122-0855-3: 保存先とその下のフォルダ (kind 'sub') には「新しいフォルダ」(実際にフォルダを作る)。
+  // サブフォルダの右クリックは、そこに作る 2 つだけ (保存先・読むだけの切り替えは保存先の行で)。
   var FOLDER_ITEMS = [
-    { id: 'compare', label: '並べて比較', readonlyOnly: true },
-    // BLK-owner-20260924-1836-prune: 覗く窓 (#peek-modal) はツリーで選んだフォルダの「道具の置き場」
-    // (部品ビュー・指摘から選ぶ・ドメインで揃える・同名で並べる・自分の部品を探す・テンプレート)。
-    // 入口はここ (と「読むだけ」見出しの目の印) で、窓の中でフォルダを選び直させない。
-    { id: 'peek', label: 'このフォルダの図を調べる…', readonlyOnly: true },
     { id: 'new-doc', label: '新しい図', writable: true },
-    { id: 'new-part', label: '6 図種をまとめて作る', writable: true },
-    { sep: true, realOnly: true },
-    { id: 'set-target', label: '保存先にする', realOnly: true },
-    { id: 'set-readonly', label: '読むだけにする', realOnly: true },
-    // BLK-primary-20260925-0232-design: 保存先の行・「保存先」見出しから別のフォルダを保存先に替える
-    // (隣のフォルダから選ぶか、パスを入れる)。今は ⚙ 設定 → 自動保存 → ファイル → パス の 5 手だった。
-    { id: 'change-target', label: '別のフォルダを保存先にする…', targetOnly: true },
-    // BLK-owner-20260924-0637-1: 旧 📂 一覧 (要約・選ぶバー・対象 set・SVG の鮮度…) はツリーから外し、
+    { id: 'new-folder', label: '新しいフォルダ', writable: true },
+    { sep: true },
+    { id: 'set-target', label: '保存先にする' },
+    { id: 'set-readonly', label: '読むだけにする' },
+    // 保存先の行・「保存先」見出しから保存先のフォルダを選ぶ窓を開く。Import ▾・Ctrl+K・⚙ 設定の入口と
+    // 同じ語 (窓の見出しと同じ) にする (TICKET-owner-20261122-1240-1)。
+    { id: 'change-target', label: '保存先のフォルダを選ぶ…', targetOnly: true },
+    // 旧 📂 一覧 (要約・選ぶバー・SVG の鮮度…) はツリーから外し、
     // 今の保存先の右クリックからだけ中央の枠に開く。
     { sep: true, targetOnly: true },
     { id: 'open-list', label: '保存先の一覧を開く', targetOnly: true },
@@ -65,7 +62,7 @@ window.MA.fileMenu = (function() {
     return o;
   }
 
-  // ctx: { git, draft, isCurrentTarget }
+  // ctx: { git, isCurrentTarget }
   function fileItems(ctx) {
     var c = ctx || {};
     return FILE_ITEMS.map(function(it) {
@@ -74,32 +71,34 @@ window.MA.fileMenu = (function() {
         o.disabled = true;
         o.title = '保存先が Git リポジトリのときに使えます';
       }
-      // 一時控えは裏返す操作なので、今の状態に合わせて言い換える。
-      if (o.id === 'draft' && c.draft) o.label = '一時控えを外す';
       return o;
     });
   }
 
-  // ctx: { kind: 'target' | 'part' | 'readonly' }
+  // ctx: { kind: 'target' | 'readonly' }
   function folderItems(ctx) {
-    var kind = _s((ctx || {}).kind) || 'part';
-    var real = kind !== 'part';
-    return FOLDER_ITEMS.filter(function(it) {
+    var kind = _s((ctx || {}).kind) || 'target';
+    if (kind === 'sub') {
+      return FOLDER_ITEMS.filter(function(it) { return it.writable; }).map(_copy);
+    }
+    var items = FOLDER_ITEMS.filter(function(it) {
       if (it.targetOnly) return kind === 'target';
-      if (it.readonlyOnly) return kind === 'readonly';
       if (it.writable && kind === 'readonly') return false;
-      return real || !it.realOnly;
-    }).map(function(it) {
+      return true;
+    });
+    // 先頭に来た区切りは出さない (読むだけのフォルダは作る 2 つが無く、区切りから始まる)。
+    while (items.length && items[0].sep) items = items.slice(1);
+    return items.map(function(it) {
       var o = _copy(it);
       if (o.id === 'set-target' && kind === 'target') {
         o.disabled = true;
         o.title = '今の保存先です';
       }
-      // BLK-owner-20260924-1836-prune: 「読むだけにする」は名前どおりの操作だけをする (覗く窓は開かない)。
+      // 「読むだけにする」は名前どおりの操作だけをする (覗く窓は開かない)。
       // 保存先は書く場所なので読むだけにはできない。別のフォルダを保存先にすると、ここは「読むだけ」に並ぶ。
       if (o.id === 'set-readonly' && kind === 'target') {
         o.disabled = true;
-        o.title = '保存先は読むだけにできません (別のフォルダを保存先にすると、ここは「読むだけ」に並びます)';
+        o.title = '保存先は読むだけにできません (「保存先のフォルダを選ぶ…」で別のフォルダを選ぶと、ここは「読むだけ」に並びます)';
       }
       if (o.id === 'set-readonly' && kind === 'readonly') {
         o.disabled = true;
@@ -136,12 +135,11 @@ window.MA.fileMenu = (function() {
     return j;
   }
 
-  // BLK-builder-20260924-2316-3 (design 10b「↑↓ で移動、Enter で開く」): 図を開くとツリーが描き直され、
+  // 図を開くとツリーが描き直され、
   // 押した行の button が DOM から外れてフォーカスが body に落ちていた (続けて ↓ で次の図へ移れない)。
   // 描き直す前の行を「種類 (class) + 目印の属性」で覚え、描き直した後の同じ行を探してフォーカスを戻す。
-  var ROW_CLASSES = ['files-row', 'files-part-file', 'files-part-head', 'files-part-missing-all',
-    'files-part-missing-kind', 'files-ro-folder', 'files-ro-file'];
-  var ROW_ATTRS = ['data-doc-id', 'data-file-name', 'data-part', 'data-kind', 'data-ro-dir', 'data-ro-name'];
+  var ROW_CLASSES = ['files-row', 'files-part-file', 'files-ro-folder', 'files-ro-file', 'files-sub-dir', 'files-sub-file'];
+  var ROW_ATTRS = ['data-doc-id', 'data-file-name', 'data-ro-dir', 'data-ro-name', 'data-sub-rel'];
 
   // el: ツリーの行 (button)。行でなければ null。
   function rowKey(el) {
@@ -207,7 +205,7 @@ window.MA.fileMenu = (function() {
     return v;
   }
 
-  // BLK-builder-20260924-1917-1 (design 10b): ツリーの上で名前を直すとき、決まりに合わない名前の理由 (1 行)。
+  // ツリーの上で名前を直すとき、決まりに合わない名前の理由 (1 行)。
   // 合っていれば ''。isValid は workspace.isValidName (判定の正本はそちら)、rule は nameRuleText。
   function renameProblem(next, isValid, rule) {
     var n = _s(next);
@@ -228,85 +226,30 @@ window.MA.fileMenu = (function() {
     return base + Date.now();
   }
 
-  // 部品のフォルダへドラッグした図の新しい名前。部品はファイル名の頭の語なので、
-  // 別の部品へ移す = 頭の語を差し替える (`spi_init_sequence` → `adc_init_sequence`)。
-  // 同じ部品へ落としたとき・頭の語が読めないときは null。
-  function renameForPart(name, toPart) {
-    var n = _s(name);
-    var to = _s(toPart).trim().toLowerCase();
-    if (!n || !to) return null;
-    var m = /^([^_\-\s]+)([_\-\s].*)?$/.exec(n);
-    if (!m) return null;
-    var FT = window.MA.fileTree;
-    // BLK-builder-20260924-1719-3: 区切りの無い日本語名 (`TIMERドライバ状態遷移`) は、ツリーと同じく
-    // 先頭の英数字の語が部品。そこだけを差し替え、全部大文字の部品名なら大文字で書く。
-    var sp = FT && FT.splitPart ? FT.splitPart(n) : null;
-    if (sp && sp.part !== m[1]) {
-      if (sp.part.toLowerCase() === to) return null;
-      var up = sp.part === sp.part.toUpperCase() && /[A-Z]/.test(sp.part);
-      var cap = !up && /^[A-Z][^A-Z]*$/.test(sp.part);
-      return (up ? to.toUpperCase() : cap ? to.charAt(0).toUpperCase() + to.slice(1) : to) + sp.rest;
-    }
-    if (m[1].toLowerCase() === to) return null;
-    // 図種の語だけの名前 (`sequence`) は部品を持たないので、頭に部品を足す。
-    if (!m[2] && FT && FT.kindOf(n)) return to + '_' + n;
-    return to + (m[2] || '');
-  }
-
-  // BLK-builder-20260924-1831-2 (design 10b): 「別のフォルダへ移動…」の行き先。
-  // 絶対パスを打たせる前に、ツリーに見えている行き先をメニューの中に並べる:
-  // 保存先の部品フォルダ (今いる部品以外。ドラッグと同じく名前の頭を替える) → 隣の保存フォルダ
-  // → 最後に「パスを入力…」(一覧に無い所へ)。
-  // parts: [{ part: 'timer', label: 'TIMER' }]、dirs: [{ path, name }]
-  function moveTargets(name, parts, dirs) {
-    var n = _s(name);
+  // 「別のフォルダへ移動…」の行き先。
+  // 絶対パスを打たせる前に、ツリーに見えている行き先 (隣の保存フォルダ) をメニューの中に並べ、
+  // 最後に「パスを入力…」(一覧に無い所へ)。名前は変えない。
+  // ファイル名の頭を部品名に差し替えて部品のフォルダへ移す行は TICKET-owner-20261116-0321-prune で外した。
+  // dirs: [{ path, name }]
+  function moveTargets(name, dirs) {
     var out = [];
     var seen = {};
-    (parts || []).forEach(function(p) {
-      var key = _s(p && p.part).toLowerCase();
-      if (!key || seen['p:' + key]) return;
-      seen['p:' + key] = true;
-      var to = renameForPart(n, key);
-      if (!to) return;
-      var label = _s(p.label) || key.toUpperCase();
-      out.push({ id: 'move-part', part: key, label: label, tag: '部品', to: to,
-        title: '部品のフォルダ ' + label + ' へ移す (名前は ' + to + ' になります)' });
-    });
-    var dirRows = [];
     (dirs || []).forEach(function(d) {
       var path = _s(d && d.path);
-      if (!path || seen['d:' + path]) return;
-      seen['d:' + path] = true;
+      if (!path || seen[path]) return;
+      seen[path] = true;
       var label = _s(d.name) || path.split(/[\\/]/).filter(Boolean).pop() || path;
-      dirRows.push({ id: 'move-dir', dir: path, label: label, tag: 'フォルダ',
+      // 保存先とその下のフォルダ (inTarget) は「保存先の下」、隣の保存フォルダは「フォルダ」の札。
+      out.push({ id: 'move-dir', dir: path, label: label, tag: d.inTarget ? '保存先の下' : 'フォルダ',
         title: path + ' へ移す (名前はそのまま)' });
     });
-    if (out.length && dirRows.length) out.push({ sep: true });
-    out = out.concat(dirRows);
     if (out.length) out.push({ sep: true });
     out.push({ id: 'move-path', label: 'パスを入力…', title: '一覧に無いフォルダへ移すときは、フォルダのパスを打って指定します' });
     return out;
   }
 
   // 外からツリーへ落としたファイルのうち取り込むもの。.puml / .plantuml / .uml / .txt。
-  // 返り値は { name, file } の並び (name は拡張子を落とした図の名前)。
-  // 外から部品のフォルダに落とした図の名前 (design 10b「外から .puml をツリーに落とすと、
-  // そのフォルダへ取り込みます」。BLK-builder-20260924-1915-4)。部品はファイル名の頭の語なので、
-  // その部品の下に出るように名前を組む:
-  //   - もうその部品の名前 (`timer_state` を TIMER へ) … そのまま
-  //   - 図種の語を持つ名前 (`gpt_state` を TIMER へ) … ツリー内の移動と同じく頭の語を差し替える
-  //   - 図種の語が無い名前 (`memo` を TIMER へ) … 頭に部品を足す (元の名前を消さない)
-  // 部品が無い (保存先の見出し・空きに落とした) ときは元の名前。
-  function importNameForPart(name, part) {
-    var n = _s(name);
-    var to = _s(part).trim().toLowerCase();
-    if (!n || !to) return n;
-    var FT = window.MA.fileTree;
-    if (FT && FT.partOf && FT.partOf(n) === to) return n;
-    if (FT && FT.kindOf && FT.kindOf(n)) return renameForPart(n, to) || n;
-    return to + '_' + n;
-  }
-
+  // 返り値は { name, file } の並び (name は拡張子を落とした図の名前。保存先の直下へ元の名前で置く)。
   function importables(files) {
     var out = [];
     Array.prototype.forEach.call(files || [], function(f) {
@@ -330,9 +273,7 @@ window.MA.fileMenu = (function() {
     cleanName: cleanName,
     renameProblem: renameProblem,
     copyName: copyName,
-    renameForPart: renameForPart,
     moveTargets: moveTargets,
     importables: importables,
-    importNameForPart: importNameForPart,
   };
 })();

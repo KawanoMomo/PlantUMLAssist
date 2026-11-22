@@ -43,12 +43,29 @@ describe('ボタンの文言は一意に指す (BLK-junior-20260908-0203)', func
     expect(collide.join(', ')).toBe('');
   });
 
+  // 同じ 1 つの窓を開く別の場所の入口は、同じ語で出す (principles「同じ操作は同じ語」)。
+  // TICKET-owner-20261122-1240-1: Import ▾ と ⚙ 設定の「保存先のフォルダを選ぶ…」は同じ窓 (#target-pick) を開く。
+  var SAME_OP = [['imp-target', 'cfg-file-dir-pick']];
+  function sameOp(a, b) {
+    if (a.text !== b.text) return false;
+    return SAME_OP.some(function(g) { return g.indexOf(a.id) >= 0 && g.indexOf(b.id) >= 0; });
+  }
+
+  test('同じ操作の入口として許した組は、本当に同じ語である', function() {
+    var labels = buttonLabels(html());
+    SAME_OP.forEach(function(g) {
+      var texts = g.map(function(id) { return (labels.filter(function(b) { return b.id === id; })[0] || {}).text; });
+      expect(!!texts[0]).toBe(true);
+      expect(texts[1]).toBe(texts[0]);
+    });
+  });
+
   test('「保存」を含むボタンどうしで、片方が他方の部分文字列にならない', function() {
     var labels = buttonLabels(html()).filter(function(b) { return b.text.indexOf('保存') >= 0; });
     var bad = [];
     labels.forEach(function(a) {
       labels.forEach(function(b) {
-        if (a === b) return;
+        if (a === b || sameOp(a, b)) return;
         if (b.text.indexOf(a.text) >= 0) bad.push(a.id + '「' + a.text + '」 ⊂ ' + b.id + '「' + b.text + '」');
       });
     });

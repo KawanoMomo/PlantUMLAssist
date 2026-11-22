@@ -18,50 +18,22 @@ test.beforeEach(async ({ page }) => {
   await gotoApp(page);
 });
 
-test('ツールボタンで分類のメニューが開き、Ctrl+K の注記が出る', async ({ page }) => {
+// TICKET-roadmap-20261115-2114-2 (整理表 #4): 分類の中身が外れて残りは 3 行になったので、
+// 左の分類の列を外し、残った道具だけの 1 段の一覧にした。
+test('ツールボタンで 1 段の一覧のメニューが開き、Ctrl+K の注記が出る', async ({ page }) => {
   await expect(page.locator('#tool-menu')).toBeHidden();
   await page.locator('#btn-tab-tools').click();
 
   const menu = page.locator('#tool-menu');
   await expect(menu).toBeVisible();
-await expect(menu.locator('.tool-menu-cat .tool-cat-name')).toHaveText([
-    '図をつくる', '書き換える', '探す', '確かめる', 'レビュー', '渡す',
+  await expect(menu.locator('.tool-menu-cat')).toHaveCount(0);
+  await expect(menu.locator('.tool-menu-list .tool-menu-item .tool-menu-label')).toHaveText([
+    '行を書き換える', '部品名を一括置換する',
   ]);
+  // 「複数クラスに一括適用する」は TICKET-owner-20261122-1023-prune で外した。
+  await expect(page.locator('#btn-tab-apply')).toHaveCount(0);
   await expect(menu.locator('.tool-menu-note')).toHaveText('Ctrl+K でも引けます');
   await expect(page.locator('#btn-tab-tools')).toHaveAttribute('aria-expanded', 'true');
-});
-
-test('「レビュー」の分類から変更サマリを開ける', async ({ page }) => {
-  await page.locator('#btn-tab-tools').click();
-  // design 9b: 分類を選ぶと右列がその分類に切り替わる。
-  await page.locator('.tool-menu-cat[data-group="review"]').click();
-  const group = page.locator('.tool-menu-group[data-group="review"]');
-  await expect(group).toBeVisible();
-  // 件数は tool-menu.js の分類を正本にする (項目が増えるたびに数字を書き換えない)。
-  const want = await page.evaluate(() => window.MA.toolMenu.panelGroups()
-    .filter((g) => g.key === 'review')[0].items.length);
-  await expect(group.locator('.tool-menu-item')).toHaveCount(want);
-  await group.locator('[data-target="btn-tab-board"]').click();
-
-  // メニューは選んだ時点で閉じ、元のボタンと同じパネルが開く
-  await expect(page.locator('#tool-menu')).toBeHidden();
-  await expect(page.locator('#cb-modal')).toBeVisible();
-});
-
-// BLK-owner-20260918-0329-prune: 「渡す」(zip にして渡す) の入口は Export ▾ に集めた。
-// BLK-human-20260923-1601 (design 9b): 左列の地図としては 6 分類目に「渡す」が並ぶが、
-// 押した先は Export ▾ と同じ 1 つの経路で、Export ▾ からも 3 つとも引ける。
-test('「渡す」は Export ▾ にまとまり、ツールメニューからも同じ経路で開く', async ({ page }) => {
-  await page.locator('#btn-tab-tools').click();
-  await page.locator('.tool-menu-cat[data-group="give"]').click();
-  await expect(page.locator('.tool-menu-group[data-group="give"]')).toBeVisible();
-  await page.keyboard.press('Escape');
-
-  await page.locator('#btn-export').click();
-  await expect(page.locator('#export-menu')).toBeVisible();
-  for (const id of ['#exp-docset', '#exp-delivery', '#exp-handoff']) {
-    await expect(page.locator(id)).toBeVisible();
-  }
 });
 
 test('Esc とメニュー外のクリックで閉じる', async ({ page }) => {
@@ -77,26 +49,26 @@ test('Esc とメニュー外のクリックで閉じる', async ({ page }) => {
 });
 
 test('タブ列から畳むと機能ボタンが消え、次に開いても畳んだままになる', async ({ page }) => {
-  await expect(page.locator('#btn-tab-board')).toBeVisible();
+  await expect(page.locator('#btn-tab-lines')).toBeVisible();
 
   await page.locator('#btn-tab-tools').click();
   await page.locator('#tool-menu-fold').click();
 
   // 畳んだ後は既定 (＋ と右端のツール ▾) に戻る (BLK-builder-20260924-1815-3)
-  await expect(page.locator('#btn-tab-board')).toBeHidden();
-  await expect(page.locator('#btn-tab-handoff')).toBeHidden();
+  await expect(page.locator('#btn-tab-lines')).toBeHidden();
+  await expect(page.locator('#btn-tab-rename')).toBeHidden();
   await expect(page.locator('#btn-tab-new')).toBeVisible();
   await expect(page.locator('#btn-tab-tools-mini')).toBeVisible();
 
   // 畳んでもメニュー経由では引ける
   await page.locator('#btn-tab-tools-mini').click();
-  await pickTool(page, 'btn-tab-board');
-  await expect(page.locator('#cb-modal')).toBeVisible();
+  await pickTool(page, 'btn-tab-lines');
+  await expect(page.locator('#lines-panel')).toHaveClass(/open/);
 
   // 再読み込みしても畳んだ状態を憶えている
   await page.reload();
   await page.waitForSelector('#preview-svg');
-  await expect(page.locator('#btn-tab-board')).toBeHidden();
+  await expect(page.locator('#btn-tab-lines')).toBeHidden();
 
   // 既定に戻ったので、パネルに切り替えの行は出ない (design 9b)
   await page.locator('#btn-tab-tools-mini').click();
@@ -105,78 +77,75 @@ test('タブ列から畳むと機能ボタンが消え、次に開いても畳�
 
 // BLK-builder-20260908-0858-2: パネル類 (外側 click で閉じる作りのもの) をメニューから開くと、
 // 選んだ click がそのまま document へ上がって開いた直後に閉じていた。
-test('メニューから「この図の指摘」を開くと、パネルが開いたまま残る', async ({ page }) => {
+// (この図の指摘 は 1840-prune、レビューの分類 (基準の図との指摘・前回保存からの差分) は
+// TICKET-owner-20261115-2141-prune で外したので、同じ作りの「行を書き換える」で見る)
+test('メニューから「行を書き換える」を開くと、パネルが開いたまま残る', async ({ page }) => {
   await page.locator('#btn-tab-tools').click();
-  await pickTool(page, 'btn-tab-pins');
-  await expect(page.locator('#pin-panel')).toHaveClass(/open/);
+  await pickTool(page, 'btn-tab-lines');
+  await expect(page.locator('#lines-panel')).toHaveClass(/open/);
 });
 
-// BLK-human-20260923-1601 (design 9b): 左 6 分類・右小見出しの 2 段パネル。
-// 縦 1 列に 40 件近く並んでいたときは「確かめる」「レビュー」が画面の下にはみ出していた。
-test('分類はホバーで切り替わり、どの分類もパネル内をスクロールさせない', async ({ page }) => {
+// BLK-human-20260923-1601 (design 9b): パネル内をスクロールさせない。
+test('一覧は小見出しで区切って出て、パネル内をスクロールさせない', async ({ page }) => {
   await page.locator('#btn-tab-tools').click();
   const menu = page.locator('#tool-menu');
   await expect(menu).toBeVisible();
 
-  // 開いた時点では 1 つ目の分類だけが右列に出ている
-  await expect(page.locator('.tool-menu-group[data-group="make"]')).toBeVisible();
-  await expect(page.locator('.tool-menu-group[data-group="review"]')).toBeHidden();
-
-  // ホバーで右列が切り替わる
-  await page.locator('.tool-menu-cat[data-group="review"]').hover();
-  await expect(page.locator('.tool-menu-group[data-group="review"]')).toBeVisible();
-  await expect(page.locator('.tool-menu-group[data-group="make"]')).toBeHidden();
-
   // 小見出しで区切って出る (BLK-owner-20260924-1836-prune: 「見比べる」の「他の保存フォルダを覗く」は
   // FILES「読むだけ」の右クリックへ移し、パネル下端の案内 1 行に落とした)
-  await expect(page.locator('.tool-menu-group[data-group="review"] .tool-menu-sub'))
-    .toHaveText(['指摘', '変更の履歴']);
+  await expect(page.locator('#tool-menu .tool-menu-list .tool-menu-sub')).toHaveText(['まとめて直す']);
   await expect(page.locator('#tool-menu-files-note')).toContainText('FILES の読むだけ');
 
   // パネルの中は溢れない (1 画面に収まる)
-  for (const key of ['make', 'edit', 'find', 'check', 'review', 'give']) {
-    await page.locator('.tool-menu-cat[data-group="' + key + '"]').hover();
-    const over = await menu.evaluate((el) => el.scrollHeight - el.clientHeight);
-    expect(over).toBeLessThanOrEqual(1);
-  }
+  const over = await menu.evaluate((el) => el.scrollHeight - el.clientHeight);
+  expect(over).toBeLessThanOrEqual(1);
 });
 
-test('絞り込み欄は全分類を横断し、キーボードだけで実行できる', async ({ page }) => {
+test('絞り込み欄は一覧の全項目から当て、キーボードだけで実行できる', async ({ page }) => {
   await page.locator('#btn-tab-tools').click();
   const filter = page.locator('#tool-menu-filter');
   await expect(filter).toBeFocused();
   await expect(page.locator('.tool-menu-note')).toHaveText('Ctrl+K でも引けます');
 
-  // 「渡す」の項目も「レビュー」の項目も、分類を開かずに候補へ出る
-  await filter.fill('zip');
+  // 「書き換える」の項目は、分類を開かずに候補へ出る (「一括」で当たるのは 一括置換 の 1 行。
+  // 一括適用 は TICKET-owner-20261122-1023-prune で外した)。
+  // 「図をつくる」の分類は TICKET-owner-20261116-0321-prune で外した。
+  await filter.fill('一括');
   const hits = page.locator('.tool-menu-hits .tool-menu-item');
-  await expect(hits).toHaveCount(2);
-  await filter.fill('サマリ');
-  await expect(page.locator('.tool-menu-hits [data-target="btn-tab-board"]')).toBeVisible();
+  await expect(hits).toHaveCount(1);
+  await expect(hits.first()).toHaveAttribute('data-target', 'btn-tab-rename');
+  await filter.fill('行を書き換える');
+  await expect(page.locator('.tool-menu-hits [data-target="btn-tab-lines"]')).toBeVisible();
 
   // Enter でそのまま開く
   await page.keyboard.press('Enter');
   await expect(page.locator('#tool-menu')).toBeHidden();
-  await expect(page.locator('#cb-modal')).toBeVisible();
+  await expect(page.locator('#lines-panel')).toHaveClass(/open/);
 });
 
-test('←→ で分類、↑↓ で項目を選び、Enter で開く', async ({ page }) => {
-  await page.locator('#btn-tab-tools').click();
-  // 図をつくる → 書き換える → 探す → 確かめる → レビュー
-  for (let i = 0; i < 4; i += 1) await page.keyboard.press('ArrowRight');
-  await expect(page.locator('.tool-menu-cat[data-group="review"]'))
-    .toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('.tool-menu-group[data-group="review"]')).toBeVisible();
+// TICKET-owner-20261122-1023-prune: 外した「複数クラスに一括適用する」は Ctrl+K でも出ない。
+test('Ctrl+K で「一括適用」と打っても行が出ない', async ({ page }) => {
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+k');
+  await expect(page.locator('#cp-input')).toBeVisible();
+  await page.locator('#cp-input').fill('一括適用');
+  await page.waitForTimeout(200);
+  const rows = await page.locator('.cp-item').allTextContents();
+  for (const r of rows) expect(r).not.toContain('一括適用');
+  await page.locator('#cp-input').fill('一括置換');
+  await expect(page.locator('.cp-item').filter({ hasText: '一括置換' }).first()).toBeVisible();
+});
 
-  // レビューの先頭の項目 (⇔ 並べて見る は 1509-prune で、他の保存フォルダを覗く は 1836-prune でレビューから外れた)
+test('↑↓ で項目を選び、Enter で開く', async ({ page }) => {
+  await page.locator('#btn-tab-tools').click();
+  await expect(page.locator('#tool-menu .tool-menu-list')).toBeVisible();
+
+  // 一覧の先頭の項目は 行を書き換える
   await page.keyboard.press('ArrowDown');
-  await expect(page.locator('.tool-menu-item[data-target="btn-tab-review"]'))
-    .toHaveAttribute('aria-current', 'true');
-  await page.keyboard.press('ArrowUp');
-  await expect(page.locator('.tool-menu-item[data-target="btn-tab-board"]'))
+  await expect(page.locator('.tool-menu-item[data-target="btn-tab-lines"]'))
     .toHaveAttribute('aria-current', 'true');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#cb-modal')).toBeVisible();
+  await expect(page.locator('#lines-panel')).toHaveClass(/open/);
 
   // Esc で閉じる
   await page.keyboard.press('Escape');

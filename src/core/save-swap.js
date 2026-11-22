@@ -2,7 +2,7 @@
 window.MA = window.MA || {};
 
 // save-swap — 「この保存で、図の中身が別名の図と入れ替わっていないか」を保存の
-// その場で見る (BLK-reviewer-20260912-2103-wish)。
+// その場で見る。
 //
 // reviewer が見つけた事故: driver_common_class.puml が 7 クラス・メソッド 35 個超から
 // 3 行に激減し、その 3 行が plantuml-class.puml とバイト完全一致していた。

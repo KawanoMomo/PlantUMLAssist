@@ -111,6 +111,13 @@ test.describe('BLK-junior-20260906-2043 分岐 (choice) 追加', () => {
 
   test('UC-7: 選択中の state から分岐に入るトリガーを付けられる', async ({ page }) => {
     await openStateDiagram(page);
+    // 新規タブは白紙で開く (BLK-junior-20260909-0703) ので、Idle のある図を自分で入れる。
+    await page.evaluate((text) => {
+      var ed = document.getElementById('editor');
+      ed.value = text;
+      ed.dispatchEvent(new Event('input'));
+    }, '@startuml\nstate Idle\nstate Error\n[*] --> Idle\nIdle --> Error : fail\n@enduml\n');
+    await page.waitForTimeout(500);
     // overlay クリックは描画待ちになるので、選択そのものを API から立てる。
     await page.evaluate(() => {
       window.MA.selection.setSelected([{ type: 'state', id: 'Idle' }]);

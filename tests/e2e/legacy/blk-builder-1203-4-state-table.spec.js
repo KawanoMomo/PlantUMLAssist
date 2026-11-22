@@ -116,12 +116,11 @@ test.describe('BLK-builder-1203-4 状態遷移表', () => {
       .toContainText('空欄をクリックすると遷移を新規追加します');
   });
 
-  test('CSV で書き出しボタンがある', async ({ page }) => {
+  // TICKET-owner-20261116-0840-prune: 表の CSV 書き出しは外した (書き出しは Export ▾ の 4 項目だけ)。
+  test('見出しに CSV で書き出しのボタンは無い', async ({ page }) => {
     await openState(page);
-    await expect(page.locator('#btn-state-table-csv')).toBeVisible();
-    const csv = await page.evaluate(() => window.MA.stateTable.toCsv(
-      window.MA.stateTable.build(window.MA.modules.plantumlState.parse(
-        /** @type {HTMLTextAreaElement} */ (document.getElementById('editor')).value))));
-    expect(csv.split('\r\n')[0]).toBe('現在の状態 \\ きっかけ,（きっかけなし）,start,stop,done');
+    await expect(page.locator('#btn-state-table-toggle')).toBeVisible();
+    await expect(page.locator('#btn-state-table-csv')).toHaveCount(0);
+    await expect(page.locator('#state-table-head')).not.toContainText('CSV');
   });
 });

@@ -21,7 +21,7 @@ test('shot: 畳んだタブ列とツールメニュー', async ({ page }) => {
     // BLK-primary-20260908-0923-design (7b): 既定ではタブ列に「ツール ▾」も無いので、
     // メニューは Ctrl+K から開く。
     await page.keyboard.press('Control+k');
-    await page.locator('#cp-input').fill('ツールを分類から選ぶ');
+    await page.locator('#cp-input').fill('ツールの一覧を開く');
     await page.keyboard.press('Enter');
     await page.waitForTimeout(300);
   }

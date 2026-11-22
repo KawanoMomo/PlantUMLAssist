@@ -141,7 +141,7 @@ window.MA.sequenceScaffold = (function() {
     return { title: _s(src.title), participants: participants, messages: messages, block: _block(src.block) };
   }
 
-  // BLK-human-20260923-2002: メッセージ行ごとの「枠」列。'' = 枠の外 / 'main' = 枠の中 / 'else' = else の後。
+  // メッセージ行ごとの「枠」列。'' = 枠の外 / 'main' = 枠の中 / 'else' = else の後。
   function _inBlock(v) {
     var t = _s(v);
     return (t === 'main' || t === 'else') ? t : '';
@@ -157,7 +157,7 @@ window.MA.sequenceScaffold = (function() {
     };
   }
 
-  // BLK-human-20260923-1330:「PlantUML として正当な入力を GUI が拒まない」。
+  // 「PlantUML として正当な入力を GUI が拒まない」。
   // errors は本当に生成できないものだけ。意図を確かめたいだけのものは warnings に落とし、
   // ok は errors だけで決める (警告が出ていても「追加」は押せて、押せば追加される)。
   function validate(spec, text) {
@@ -226,7 +226,7 @@ window.MA.sequenceScaffold = (function() {
   }
 
   // 追加される行を「題名 / 参加者の宣言 / 本文」に分けて返す。
-  // BLK-human-20260923-2002: 宣言は参加者の欄へ、本文は挿入位置へ入るので、行き先ごとに分ける。
+  // 宣言は参加者の欄へ、本文は挿入位置へ入るので、行き先ごとに分ける。
   function plan(text, spec) {
     var s = normalizeSpec(spec, text);
     var out = { title: '', decls: [], body: [] };
@@ -298,7 +298,7 @@ window.MA.sequenceScaffold = (function() {
     return /^\s*@(?:start|end)uml\b/im.test(_s(text));
   }
 
-  // BLK-human-20260923-2002: 挿入位置を決める。anchor = { line, position: 'after'|'before', hint }
+  // 挿入位置を決める。anchor = { line, position: 'after'|'before', hint }
   // (hint はプレビューの当たり判定や「帯の外 / 中」の選択 { zone, bandLine })。
   // 単発の挿入と同じく sequence-activation-insert.resolve で帯の内 / 外を決める。
   // 返り値: { anchorLine, position, target (本文を入れる 1 始まりの行。その行の前に入る), zone, part, band,
@@ -350,7 +350,7 @@ window.MA.sequenceScaffold = (function() {
   // 1 手でシーケンス一式を書き込む。不正な spec なら text をそのまま返す
   // (呼び手が validate せずに呼んでも DSL を壊さない)。
   // where (resolveWhere の返り値) があれば本文はその位置に、無ければ図の末尾に入る。
-  // 宣言はどちらでも参加者の欄 (BLK-human-20260915-1205) に入る。
+  // 宣言はどちらでも参加者の欄 に入る。
   // 返り値: { text, bodyStart, bodyEnd } — 本文が入った 1 始まりの行範囲 (本文が無ければ 0)。
   function applyAt(text, spec, where) {
     var p = plan(text, spec);

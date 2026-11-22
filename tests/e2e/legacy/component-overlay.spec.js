@@ -1,15 +1,23 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, switchTypeWithSample } = require('../helpers');
+
+// アプリは前回の図を開き直すので、図種を切り替えただけでは前の図が残り、枠が無いまま skip していた。
+// component の見本 (WebApp / IAuth / WebApp -() IAuth) を置き、その枠が張られるまで待つ。
+async function openComponentSample(page) {
+  await gotoApp(page);
+  await switchTypeWithSample(page, 'plantuml-component');
+  await page.locator('#overlay-layer rect[data-type="relation"]').first()
+    .waitFor({ state: 'attached', timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(800);
+}
 
 test.describe('Component overlay-driven', () => {
   test('clicking component in SVG selects it', async ({ page }) => {
-    await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-component');
-    await page.waitForTimeout(2500);
+    await openComponentSample(page);
     var rect = page.locator('#overlay-layer rect[data-type="component"]').first();
     var count = await rect.count();
-    if (count === 0) test.skip();
+    expect(count, '部品の枠がある').toBeGreaterThan(0);
     await rect.click();
     await page.waitForTimeout(300);
     var sel = await page.evaluate(function() { return window.MA.selection.getSelected(); });
@@ -18,14 +26,12 @@ test.describe('Component overlay-driven', () => {
   });
 
   test('shift+click 2 elements opens connect panel with 4 kind options', async ({ page }) => {
-    await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-component');
-    await page.waitForTimeout(2500);
+    await openComponentSample(page);
     var c = page.locator('#overlay-layer rect[data-type="component"]').first();
     var i = page.locator('#overlay-layer rect[data-type="interface"]').first();
     var cCount = await c.count();
     var iCount = await i.count();
-    if (cCount === 0 || iCount === 0) test.skip();
+    expect(cCount * iCount, '部品と interface の枠がある').toBeGreaterThan(0);
     await c.click();
     await i.click({ modifiers: ['Shift'] });
     await page.waitForTimeout(300);
@@ -38,14 +44,12 @@ test.describe('Component overlay-driven', () => {
   });
 
   test('multi-select connect creates relation in DSL', async ({ page }) => {
-    await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-component');
-    await page.waitForTimeout(2500);
+    await openComponentSample(page);
     var c = page.locator('#overlay-layer rect[data-type="component"]').first();
     var i = page.locator('#overlay-layer rect[data-type="interface"]').first();
     var cCount = await c.count();
     var iCount = await i.count();
-    if (cCount === 0 || iCount === 0) test.skip();
+    expect(cCount * iCount, '部品と interface の枠がある').toBeGreaterThan(0);
     var lineCountBefore = (await getEditorText(page)).split('\n').length;
     await c.click();
     await i.click({ modifiers: ['Shift'] });
@@ -57,13 +61,13 @@ test.describe('Component overlay-driven', () => {
   });
 
   test('relation kind selector switches DSL arrow on update', async ({ page }) => {
-    await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-component');
-    await page.waitForTimeout(2500);
+    await openComponentSample(page);
     var relRect = page.locator('#overlay-layer rect[data-type="relation"]').first();
     var count = await relRect.count();
-    if (count === 0) test.skip();
-    await relRect.click();
+    expect(count, '関係の枠がある').toBeGreaterThan(0);
+    // 関係の線は細い当たり (path.link-hit) が枠の rect より手前にあるので、実マウスで枠の真ん中を押す。
+    var relBox = await relRect.boundingBox();
+    await page.mouse.click(relBox.x + relBox.width / 2, relBox.y + relBox.height / 2);
     await page.waitForTimeout(300);
     // BLK-builder-20260907-1003-3 (design 3b): 種別は select ではなくカードで選び、即反映する
     await page.locator('.co-rel-card[data-value="dependency"]').click();
@@ -75,9 +79,7 @@ test.describe('Component overlay-driven', () => {
   test('console error count is 0 during overlay interactions', async ({ page }) => {
     var errors = [];
     page.on('console', function(msg) { if (msg.type() === 'error') errors.push(msg.text()); });
-    await gotoApp(page);
-    await page.locator('#diagram-type').selectOption('plantuml-component');
-    await page.waitForTimeout(2500);
+    await openComponentSample(page);
     var c = page.locator('#overlay-layer rect[data-type="component"]').first();
     if ((await c.count()) > 0) {
       await c.click();

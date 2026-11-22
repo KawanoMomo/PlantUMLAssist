@@ -12,7 +12,7 @@ window.MA.exportShortcuts = (function() {
   // design 2c のアートボードに出ている 2 つだけ。増やすときは設定の
   // ショートカット一覧 (settings-tabs) にも同時に足す。
   var BINDINGS = [
-    { id: 'exp-svg',       keys: 'Ctrl+Shift+S', key: 's', desc: 'SVG として保存' },
+    { id: 'exp-svg',       keys: 'Ctrl+Shift+S', key: 's', desc: 'SVG で書き出す' },
     { id: 'exp-clipboard', keys: 'Ctrl+Shift+C', key: 'c', desc: 'クリップボードにコピー' },
   ];
 

@@ -50,7 +50,8 @@ window.MA.autosaveOptions = (function() {
     },
     {
       id: 'file',
-      title: 'ファイル / File',
+      // TICKET-owner-20261122-1240-1: ⚙ の保存先の見出しから英語の併記を外す。
+      title: 'ファイル',
       desc: 'ディスク永続・git 管理可。server.py が動いている必要があります。',
     },
   ];

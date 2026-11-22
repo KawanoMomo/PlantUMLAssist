@@ -1,268 +1,58 @@
 # PlantUMLAssist
 
-PlantUML 記法の **GUI 編集ツール**。Python バックエンド + HTML/JS フロント。[MermaidAssist](../05_MermaidAssist) の sister project。
+PlantUML 記法の本文(`.puml`)を正本に、GUI で UML 図を直すローカルのツール。Python の `server.py` + 単一 HTML `plantuml-assist.html` + `src/`(ビルド無し)。
 
 ![](docs/images/01-sequence-default.png)
 
-DSL を直接書かなくても、SVG 上の図形をクリック / プロパティパネルからフォーム入力で UML 図を作成・編集できます。
+6 図種(シーケンス / ユースケース / コンポーネント / クラス / アクティビティ / 状態遷移)。図の要素を押す・右パネルのフォームで足すと、押した要素の行だけを最小の差分で本文に書き戻す。
+描画は PC の中の `lib/plantuml.jar` で行い、図を外へ送らない。手書きや他の道具で作った既存の `.puml` を壊さず開いて直せる。
 
-## 特徴
+機能の全部は製品仕様書 [`docs/spec/product-spec.md`](docs/spec/product-spec.md)(場面ごとに、できること・入口・振る舞い・確かめる spec)。v5.0.0 以後の振る舞いの変更は [`docs/ecn/ECN-011_v5.0.0-to-v7.0-behavior.md`](docs/ecn/ECN-011_v5.0.0-to-v7.0-behavior.md)。
 
-- **Tier1 ロードマップ完成 (v1.0.0)**: Sequence / Use Case / Component / Class / Activity / State の **6 図形すべて** が overlay-driven で完備
-- **3 種類の編集スタイル** を組み合わせて使える
-  - DSL エディタで直接編集 (左ペイン)
-  - フォームから追加 (右ペイン下部の「末尾に追加」)
-  - **SVG プレビュー上の図形をクリック** (overlay-driven、v0.5.0)
-- **local (Java daemon) / online (plantuml.com)** 両モード対応。`local` モードは常駐 JVM で 10〜30ms/render
-- **DiagramModule v2** インターフェース (MermaidAssist 踏襲)
-- DSL エディタは Tab/Shift+Tab でインデント挿入、Ctrl+Z/Ctrl+Y で Undo/Redo
+v7.0 は、保存先のフォルダの木の中で 1 件の変更(設計変更・レビュー指摘)を取りこぼさず反映して渡す版: ⇄ 一括置換(Ctrl+H)がサブフォルダの図にも届き、指摘の 1 本を Ctrl+K の行番号で選び、保存先に `.puml` と押した書き出しのほかを書かず、Export ▾ の「書き出し先:」の行で書き出しが古いかを読んでから渡す。
 
 ## できること
 
-### Sequence Diagram
+### 開く
 
-参加者間のメッセージのやり取りを時系列で記述する図。
+Import ▾(ファイルを開く…・クリップボードから開く・保存フォルダの図を開く（一覧）)、ドラッグ&ドロップ、FILES ツリー。前に開いた図は、保存フォルダの一覧の上端(Import ▾ →「保存フォルダの図を開く（一覧）」)の「最近開いた図」と Ctrl+K から開き直す。タブで複数の図を開き、左端の図種レールで新しい図の図種を選ぶ。日本語名・別名つきの宣言や旧記法の図もそのまま開く。
 
-![Sequence default](docs/images/01-sequence-default.png)
+### 直す(6 図種で共通の操作)
 
-- メッセージを **クリックで選択** → kind 切替 / ラベル編集 / 削除 / Undo
-- 「末尾に追加」フォームから participant / メッセージ / note / alt-loop ブロック / activate を追加
-- 行間にホバーで `+ ここに挿入` ガイドが出る → クリックで途中挿入 popup
-- Participant を SVG 上で **drag して並び替え**
-- Note / alt / loop / opt / par / break / critical ブロックの後付け囲み
+図の要素にマウスを乗せると枠が出て、押すと右パネルで直せる。右パネルの「末尾に追加」と「まとめて」で足し、図の行間の ＋ で途中に差し込む。本文と図の相互ジャンプ、↑↓ で選び続ける、Ctrl+Z / Ctrl+Y、位置を保ったズーム、図の設定(図名・タイトル・外観)、Ctrl+K コマンドパレット(行番号 `15`・`L15` か名前を打つと「図の要素へ移動」でその行を選べる。同名ラベルは行の順に並ぶ)、ツール ▾(行を書き換える・部品名を一括置換する)、⚙ 設定。
 
-メッセージ選択時の編集パネル:
+### 直す(図種ごとの操作)
 
-![Sequence message selected](docs/images/02-sequence-message-selected.png)
+シーケンス図の矢印の種類・向き・通し番号・alt / loop の範囲・注釈の位置、状態遷移図の子状態・擬似状態・状態遷移表、クラス図の属性と関係、アクティビティ図の分岐パターン、コンポーネント図の関係のカード・ステレオタイプ・境界、ユースケース図の 2 つ選んで関係を追加。
 
-無選択時のフォーム (kind selector で対象種別を切替):
+### 描く
 
-![Sequence tail-add](docs/images/10-sequence-tail-add.png)
+打つたび・操作のたびに `lib/plantuml.jar` で描き直す(`POST /render`。仕様は `GET /render` が JSON で返す)。描けないときも直前の図を残し、読めない行を知らせる。`!include` した共通ファイルも描く。
 
-### UseCase Diagram (v0.3.0)
+### 保存する
 
-要求分析・ハザード分析・規格対応で使う actor / usecase / package の図。
+Ctrl+S と自動保存で、保存先から開いた図はそのファイルに書く。直していない図はバイト単位で一致したまま。保存先に書くのは `.puml` と押した書き出しだけ。前の版は FILES の右クリック「この図の履歴」で見比べ・戻せる。
 
-![UseCase default](docs/images/03-usecase-default.png)
+### 書き出す
 
-#### 対応 DSL 要素
+上部バー Export ▾ で今の図を SVG / PNG / PNG(透過背景)/ クリップボードに書き出す(Ctrl+E。項目は「SVG で書き出す」「PNG で書き出す」「PNG（透過背景）で書き出す」「クリップボードにコピー」)。SVG は FILES のファイルの右クリックと Ctrl+K にも同じ「SVG で書き出す」で出る(Ctrl+K は「書き出」で 3 形式を引ける)。保存先から開いた図は、ダウンロードではなく保存先の中に図の名前で書く(既定は図と同じフォルダ。Export ▾ の「書き出し先:」の「替える…」で保存先の下の別のフォルダに替えられる)。書いた先・名前・新規か上書きかを下端に出す。書き出した後に本文を直して保存すると、Export ▾ の「書き出し先:」の行に置き場の書き出しが古い旨が出て、書き出し直すと消える。保存先の無い図は今までどおりダウンロード。
 
-- `actor` (キーワード形式 / 短縮 `:Label:`)
-- `usecase` (キーワード形式 / 短縮 `(Label)`)
-- `package "Label" { ... }` 境界 (`rectangle` も同義として受理)
-- 4 種の関係:
-  - association `A --> B` (label 任意)
-  - generalization `A <|-- B` (parent <|-- child 方向)
-  - include `A ..> B : <<include>>`
-  - extend `A ..> B : <<extend>>`
+### フォルダで図を扱う
 
-#### 図形をクリックして編集
+- フォルダを開く・替える: 保存先は「保存先のフォルダを選ぶ…」の 1 つの窓(FILES の右クリック・Import ▾・Ctrl+K・⚙ 設定のどれからでも同じ語で開く)でフォルダを辿って選ぶ(パスは打たなくてよい。打つときも窓の中の 1 か所だけ)。
+- 図を見つけて開く: FILES ツリーに保存先とその下のフォルダが実在の階層のまま出る。図を押して開き、絞り込み欄と Ctrl+P で名前から引く(同じ名前の図はフォルダの道で見分ける)。
+- 作る・移す・名前を変える・消す: フォルダの右クリックで「新しい図」「新しいフォルダ」、図の右クリックで名前変更・複製・移動(保存先の下のフォルダへ)・削除。開いているタブは新しい場所に付いていき、消した図は「この図の履歴」から戻せる。
+- まとめて扱う一覧: 保存フォルダの一覧で保存先の直下の図を並べて絞り、印を付けてまとめて開く。
+- 読むだけ: 隣のフォルダの図を書かずに開いて見る「読むだけ」節。
+- GIT: 保存先の Git の変更・履歴を見る GIT 節。
 
-actor / usecase / package / relation を **SVG 上でクリック** すると右パネルが編集モードに切替わる。
+### 図をまたいで名前を替える
 
-![UseCase actor selected](docs/images/04-usecase-actor-selected.png)
+ツール ▾ → 部品名を一括置換する(Ctrl+H)で、開いている図と保存先の図をまたいで部品名を替える。「保存先の下の全部の図も数える (サブフォルダの図も)」で、保存先の直下とその下のどの階層の図も道付き(`hw/a`)で数えて当て、同じ名前の図はフォルダの道で見分ける。置換した開いていない図は「置換前に戻す」で戻せる(開いている図は Ctrl+Z)。過去の置換の組を押すと両欄が埋まる。置換の組は保存先に書かない。
 
-#### Multi-Select Connect (v0.5.0)
+### 配布と確かめる入口
 
-**Shift+クリックで 2 つの図形を選択** すると Connect form が出て、関係種別を選んで `+ Connect` で線を引ける。tail-add フォームで From/To を選び直す手間を省略できる。
-
-![UseCase multi-select connect](docs/images/05-usecase-multi-select-connect.png)
-
-#### Canonical 出力 (ADR-105)
-
-GUI からの編集はすべて keyword-first canonical 形式で emit (例: `actor "Power User" as PU`)。短縮記法 (`:X:` / `(L)`) は parser で受理しますが、保存時に正規化されます。
-
-#### サンプル DSL
-
-```plantuml
-@startuml
-title Sample UseCase
-actor User
-usecase "Login Flow" as Login
-package "Authentication" {
-  usecase Validate
-}
-User --> Login
-Login ..> Validate : <<include>>
-@enduml
-```
-
-### Component Diagram (v0.4.0)
-
-システムブロック構成・モジュール依存・インターフェース表現の図。
-
-![Component default](docs/images/06-component-default.png)
-
-#### 対応 DSL 要素
-
-- `component` (キーワード形式 / 短縮 `[X]`)
-- `interface` (キーワード形式 / 短縮 `() X`)
-- `port` (component の `{ }` block 内に配置)
-- `package "Label" { ... }` 境界 (`folder`/`frame`/`node`/`rectangle` も同義として受理)
-- 4 種の関係:
-  - association `A -- B` (label 任意)
-  - dependency `A ..> B` (label 任意)
-  - provides (lollipop) `component -() interface`
-  - requires (lollipop) `interface )- component`
-
-#### Relation 編集
-
-矢印を **クリックで選択** → kind 切替 (associatian ↔ dependency ↔ lollipop) / from/to swap / ラベル編集 / 削除。
-
-![Component relation selected](docs/images/07-component-relation-selected.png)
-
-#### Multi-Select Connect (4 kind)
-
-UseCase と同じ multi-select connect。Component は **provides/requires が方向固定** (component → interface) なので、kind 切替時に自動で from/to を入れ替えます。
-
-![Component connect panel](docs/images/08-component-connect-panel.png)
-
-#### Port 階層追加
-
-「末尾に追加」で kind=Port を選ぶと **Parent component** セレクタが出る。component が自動で `{ }` block 形式に変換され、port が中に配置される (PlantUML が要求する正規構造)。
-
-![Component port block](docs/images/09-component-port-block.png)
-
-#### Canonical 出力 (ADR-106)
-
-GUI からの編集はすべて keyword-first canonical 形式で emit (例: `component "Web App" as WA`)。短縮記法 (`[X]` / `() X` / `folder/frame/node/rectangle`) は parser で受理しますが、保存時に正規化されます。
-
-#### サンプル DSL
-
-```plantuml
-@startuml
-title Sample Component
-package "Backend" {
-  component WebApp {
-    port p1
-  }
-  interface IAuth
-}
-WebApp -() IAuth
-WebApp ..> Logger
-@enduml
-```
-
-### Class Diagram (v0.6.0)
-
-OO 設計で頻出。class / interface / abstract class / enum + 6 種関係 + member (attribute / method) を編集可能。
-
-#### 対応 DSL 要素
-
-- `class` (キーワード形式 / quoted label)
-- `interface` (専用キーワード優先、`<<interface>>` stereotype は parse-only)
-- `abstract class` (2 トークン強制)
-- `enum` (block 必須)
-- 6 種の関係:
-  - association `--`
-  - inheritance `<|--` (parent <|-- child)
-  - implementation `<|..` (interface <|.. class)
-  - composition `*--` (container *-- contained)
-  - aggregation `o--` (container o-- part)
-  - dependency `..>`
-- Stereotype `<<X>>`
-- Generics `Foo<T>`, `Map<K, V>`
-- Nesting: `package "Label" {}` + `namespace foo {}`
-
-#### Member 編集
-
-class / interface / abstract を **クリックで選択** → property panel に attribute / method リストが表示。各行に削除ボタン。`+ Attribute 追加` / `+ Method 追加` で visibility / static / abstract / 型 を入力するフォームが展開。
-
-#### Multi-Select Connect (6 kind)
-
-UseCase / Component と同じ Shift+click 流儀。Class は **6 種の関係** から選択。implementation は方向固定 (interface → class)、kind 切替時に自動 swap。
-
-#### Canonical 出力 (ADR-107)
-
-GUI 編集はすべて keyword-first canonical 形式で emit (例: `abstract class Shape <<Geometry>>`)。短縮形式 / 揺れ形式 (`abstract Foo` / `class Foo <<interface>>` / 順序揺れ等) は parser で受理しますが保存時に正規化。
-
-#### サンプル DSL
-
-```plantuml
-@startuml
-title Sample Class
-
-abstract class Shape {
-  + {abstract} area() : double
-}
-class Circle <<Geometry>> {
-  - radius : double
-  + area() : double
-}
-class Rectangle {
-  - width : double
-  - height : double
-  + area() : double
-}
-interface Drawable {
-  + draw() : void
-}
-enum Color {
-  RED
-  GREEN
-  BLUE
-}
-
-Shape <|-- Circle
-Shape <|-- Rectangle
-Drawable <|.. Circle
-Drawable <|.. Rectangle
-Circle *-- Color
-@enduml
-```
-
-#### v0.6.0 制約 (v0.6.1+ で対応予定)
-
-- Member 個別 SVG クリック選択 (現在は class 全体選択 → panel 内 member リスト)
-- 内部クラス (class 内 class 定義)
-- Note on class
-
-### v0.6.1 — Class polish (Member click + Note on class)
-
-- **Member 個別 click**: SVG 上の attribute / method / enum-value 行を直接クリック → 該当 member の inline edit が auto-expand
-- **Note on class**: 1 行 / 複数行 directional note を property panel から作成・編集・削除。class 削除時に紐付く note も自動削除
-- **Activity v0.7.0 へ向けた API**: `extractMultiLineTextBBoxes` を `core/overlay-builder` に汎化、複数行 text の per-line bbox 取得を共通化
-
-### v0.7.0 — Activity Diagram (Tier1 #5)
-
-- **新記法 primary** (`start` / `:action;` / `if/while/repeat/fork`) + legacy parse-only
-- **制御構造**: if/elseif/else/endif、while/endwhile、repeat/repeat while、fork/fork again/end fork
-- **Swimlane** (`|name|`) + **Note** (`note right` / `note left`、1行+複数行)
-- **Overlay-driven** (action rect / decision diamond / start-stop ellipse / fork bar)
-- ADR-109: canonical form 確定
-
-### v0.7.1 — Activity polish (mid-flow insertion)
-
-- preview hover で `+ ここに挿入` ガイド + 空白 click で modal による途中挿入
-- Sequence と同じ UX を Activity でも (action 限定 MVP)
-- `addActionAtLine` / `resolveInsertLine` / `showInsertForm` API 整備
-
-### v1.0.0 — State Diagram (Tier1 #6) + Tier1 完成
-
-- **State Diagram**: simple + composite (1-level nesting) + initial/final + choice + history pseudo-states
-- **Transitions** with full label syntax (`trigger [guard] / action`)
-- **Notes** (`note left of NAME` / `note right of NAME`、1 行 + 複数行)
-- **hoverInsert** 最初から組み込み (途中での state / transition 挿入、Class パターン流用 overlay)
-- ADR-110: State canonical DSL form
-- **Tier1 完成**: Sequence / UseCase / Component / Class / Activity / State の 6 図形すべてが overlay-driven で完備
-
-## Overlay-Driven Editing 共通操作 (v0.5.0)
-
-Sequence / UseCase / Component のすべてで以下が共通:
-
-- **クリック**: 図形を単一選択 → property panel が編集モードに
-- **再クリック**: 選択解除 (toggle)
-- **Shift+クリック**: 複数選択 (UseCase / Component で 2 つまで → Connect form 表示)
-- **空白クリック**: 選択解除
-
-## v0.6.0 制約 (v0.7.0+ で対応予定)
-
-- drag-to-connect (SVG 上で線を drag して関係作成)
-- package 範囲選択 → wrap (既存要素を package で囲む)
-- 要素を別 package へ drag 移動
-- Sequence の multi-select connect (現状 Sequence は form-based のみ)
-- Class diagram の SVG 上 member 個別クリック選択
-- Activity / State の各 diagram
+Windows 単体アプリ(portable zip / インストーラ。`start.bat`・`PlantUMLAssist.exe`)、⚙ 設定 → 情報「更新を確認」、確かめる入口 `scripts\build.ps1` / `test.ps1` / `verify.ps1`。
 
 ## セットアップ
 
@@ -281,16 +71,17 @@ bash lib/fetch-plantuml.sh
 
 ## 起動
 
-> **重要**: MermaidAssist と違い、HTML をダブルクリックしても動きません。PlantUML は Java 実行または plantuml.com への POST を必要とするため、Python バックエンド経由でアクセスしてください。
+> HTML をダブルクリックしても動きません。Python バックエンド経由でアクセスしてください。
 
 ```bash
-cd 06_PlantUMLAssist
 python server.py
 ```
 
 コンソールに `PlantUMLAssist server starting on http://127.0.0.1:8766` と表示されたら、ブラウザで **http://127.0.0.1:8766/** を開きます。
 
 Windows では `start.bat` をダブルクリックでも起動可能 (server.py を起動してブラウザを自動で開きます)。
+
+**自動停止**: ブラウザタブを閉じるとサーバーも自動で停止します (heartbeat 方式、タブ close 後 2〜6秒以内に終了)。F5 リロードは自動判定で継続。明示的に止めたい場合は `Ctrl+C`。
 
 ### Windows アプリ版 (exe / インストーラ)
 
@@ -317,57 +108,7 @@ iscc packaging\installer.iss           # Inno Setup 6 が要ります
 - **Java も同梱しません**。同じ画面に検出結果が出ます。無ければ
   [Temurin](https://adoptium.net/temurin/releases/) を入れてください (Java 11 以上)。
 - アプリ版の保存・書き出しはネイティブのファイルダイアログです
-  (Web 版は従来どおりブラウザのダウンロード)。
-
-**自動停止**: ブラウザタブを閉じるとサーバーも自動で停止します (heartbeat 方式、タブ close 後 2〜6秒以内に終了)。F5 リロードは自動判定で継続。明示的に止めたい場合は `Ctrl+C`。
-
-## HTTP API
-
-curl などから直接使う窓口。**仕様は `GET /render` が自分で返す**ので、覚えていなくても
-`curl http://127.0.0.1:8766/render` を叩けば以下と同じ内容が JSON で得られます。
-
-### `POST /render` — DSL を SVG にする
-
-リクエストは `application/json`。DSL を渡すフィールドの正式な名前は **`text`** ですが、
-**`dsl` / `source` / `uml` / `puml` / `diagram` も別名として受理します**。名前を思い出せなくても
-1 回目の POST が通り、`GET /render` を先に読まないと使えない窓口ではありません。
-
-| フィールド | 必須 | 内容 |
-|---|---|---|
-| `text` | 必須 | PlantUML の DSL 全文 (`@startuml` … `@enduml`)。別名: `dsl` / `source` / `uml` / `puml` / `diagram` |
-| `mode` | 任意 | `local` (既定・同梱 Java) / `online` (plantuml.com へ送信) |
-
-別名で送った場合も描画は成功 (`200`) し、レスポンスに
-`X-PlantUMLAssist-Warning` ヘッダ (URL エンコード) が付いて正式な名前が `text` であることを伝えます。
-別名を 2 つ以上同時に送ったときだけ、どれを描くか決められないので `400` になります。
-
-```bash
-curl -sS -X POST http://127.0.0.1:8766/render   -H "Content-Type: application/json"   -d '{"text": "@startuml
-A -> B
-@enduml", "mode": "local"}'
-```
-
-レスポンス:
-
-| ステータス | 内容 |
-|---|---|
-| `200` | `image/svg+xml` — 描画された SVG |
-| `400` | `{"error": ...}` — `text` (と別名) が 1 つも無い / 文字列でない / 空、または別名が複数 |
-| `422` | `{"error": "3 行目: Syntax Error?", "line": 3}` — DSL の文法エラー |
-| `500` | `{"error": ...}` — 描画そのものの失敗 |
-
-> PlantUML 自身は文法エラーでも「Syntax Error?」と描いた SVG を 200 で返します。
-> この server はそれを `422` に落とすので、`curl` の終了コードとステータスだけで
-> 成功と失敗を見分けられます。
-
-### その他
-
-| エンドポイント | 内容 |
-|---|---|
-| `GET /render` | 上の仕様そのものを JSON で返す |
-| `GET /env` | Java の検出結果など実行環境 |
-| `GET|POST /prefs` | 保存先 (`backend` / `fileDir`) をこのマシンに覚えさせる |
-| `GET|POST|DELETE /autosave` | 保存フォルダの読み書き |
+  (Web 版はブラウザのダウンロード)。
 
 ## 要件
 
@@ -378,7 +119,7 @@ A -> B
 - `lib/plantuml.jar` (**別途ダウンロード必要**、fetch スクリプト提供。推奨版は下の「推奨 PlantUML 版」、約 30 MB)
 - `lib/PlantUMLDaemon.java` (リポジトリ同梱、ビルド不要 — Java 11+ の single-file source-launcher が直接実行)
 
-Java がインストールされていない場合は、UI 右上の `render-mode` セレクトを `online (plantuml.com)` に切替えて使用可能。plantuml.com の公開サーバを利用するため、**業務データは外部送信される** ことに注意。
+Java がインストールされていない場合は、⚙ 設定の描画エンジンを `online (plantuml.com)` に切替えて使用可能。plantuml.com の公開サーバを利用するため、**業務データは外部送信される** ことに注意。
 
 ### 推奨 PlantUML 版
 
@@ -413,170 +154,24 @@ daemon モードでは **ネットワークソケットを一切開きません*
 
 ## テスト
 
-```bash
-npm install
-npm run test:unit   # Node runner — 308 unit tests
-npm run test:e2e    # Playwright — 80 E2E tests
-npm run test:all
-```
+Windows PowerShell から `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\<名前>.ps1` で呼ぶ。どれも exit 0 が緑。
 
-## 監査 CLI (`npm run audit`)
-
-GUI を開かずに、フォルダ内の `.puml` 一式へ監査 (名前突合・メソッド突合・整合チェック・
-系統突合) を掛けて JSON を返す。ブラウザは要らず、`window` のモックも自分で組む必要はない。
-
-```bash
-npm run audit -- <ファイル|フォルダ> [...] [オプション]
-
-node tools/audit.js E:\path\to\diagrams --summary          # 人が読む件数の要約
-node tools/audit.js E:\path\to\diagrams --out audit.json   # JSON をファイルへ
-node tools/audit.js a.puml b.puml --only name,method       # 監査を絞る
-```
-
-| オプション | 意味 |
+| 入口 | すること |
 |---|---|
-| `--summary` | JSON ではなく件数の要約を日本語で出す |
-| `--out FILE` | JSON を FILE に書き、標準出力にはパスだけ出す |
-| `--only a,b` | 回す監査を絞る (`name` / `method` / `consistency` / `family` / `trace` / `label` / `svg` / `density`) |
+| `scripts\build.ps1 [-Force]` | `node_modules` が無いときだけ `npm ci`。Java と python が PATH にあること、`lib\plantuml.jar` があることを確かめる (git worktree で jar が無ければ本体のチェックアウトの `lib\` から写す。ダウンロードはしない) |
+| `scripts\test.ps1` | unit (`node tests/run-tests.js`) |
+| `scripts\verify.ps1 -Scenarios <dir\|files> -Out <絶対パス>` | Playwright で台本の scenario (`tests/scenarios/{persona}-{手順}-{場面}.spec.js`) を回し、`<Out>\summary.json` に scenario ごとの passed / failed・操作から描画までの ms (`renderMs`)・1 操作で動いた本文の行数 (`diffLines`) を書く。フォルダを渡すと既存の e2e のうち `tests/e2e/scenarios` も回す (`-NoE2E` で外す。`tests/e2e/legacy` は `-E2EProject legacy\|all` のときだけ)。scenario のファイルだけ渡すとその scenario だけ、`tests/e2e/` の spec を渡すとその e2e だけ |
 
-`label` は遷移ラベルが「対応するシーケンスのメッセージの何番目 (先頭 / 中間 / 末尾)」を指しているかを
-系統横断で数え、多数派とズレた系統を名指しする。実在チェック (`trace`) は実在する名前なら一致と出すので、
-「dma だけ末尾の内部呼び出し名をラベルにしている」は `label` でしか出ない。判定は画面の
-「⇉ 系統チェック」と同じ `src/core/label-position.js` — GUI と CLI で答えが割れることはない。
-
-JSON の形:
-
-```jsonc
-{
-  "generatedAt": "...", "targets": ["..."], "docs": ["junior/UART.puml", ...],
-  "audits": {
-    // status は "ok" | "skipped" (モジュール無し) | "error" (監査が投げた)。
-    // 1 つ壊れても他の監査は結果を返す
-    "name":        { "status": "ok", "result": { "variants": [...], "undeclared": [...] } },
-    "method":      { "status": "ok", "result": { "issues": [...], "calls": [...] } },
-    "consistency": { "status": "ok", "result": { "naming": [], "unused": [], ... } },
-    "family":      { "status": "ok", "result": [ ... ] }
-  },
-  "summary": { "name": { "variants": 3, "undeclared": 0, "clean": false }, ... },
-  "totalIssues": 134
-}
-```
-
-終了コードは、監査が回れば指摘の有無に関わらず 0 (件数は JSON で読む)。
-引数不正・対象の `.puml` が 0 枚・監査モジュールの読み込み失敗だけが 1。
-読み込みに失敗したモジュールがあれば `loadErrors` に出る — 指摘 0 件が「問題なし」なのか
-「見ていない」なのかは、そこで区別する。
-
-`src/core/` は列挙して丸ごと読むので、本体が新しい依存を足しても呼び出し側の書き換えは要らない。
-
-### 自分のスクリプトから監査モジュールを呼ぶ
-
-`npm run audit` で足りない集計をしたいときは、`tools/audit-runtime.js` を使う。
-`window` のモックを自分で組んだり、`src/core/*.js` を依存順に手で `require` したりする
-必要はない (本体が新しい依存を足しても、このスクリプトは書き換えずに動く)。
-
-```js
-const { loadMA, docsFrom } = require('./tools/audit-runtime');
-
-const { MA, errors } = loadMA();          // errors が空でなければ「見ていない」監査がある
-const docs = docsFrom('E:\path\to\diagrams');  // [{ name, dsl, path }]
-
-const res = MA.nameAudit.audit(docs);     // MA.methodAudit / MA.consistency / MA.familyAudit も同様
-console.log(res.variants.length, res.undeclared.length);
-```
-
-図 1 枚は `{ name, dsl }` で渡す。手で組み立てるときは `dsl` でも `text` でも読めるので、
-綴りを取り違えて**指摘 0 件**が返ってくることはない。`name` は突合結果の中で図を指す名前に
-なるだけなので、ファイル名でなくても構わない。
-
-`src/core/*.js` を `require` で 1 本だけ読むのは避ける。監査モジュールは互いを `window.MA` 越しに
-呼ぶので、兄弟が居ないと**例外ではなく空の結果**が返る (「問題なし」と読み違える)。`loadMA()` は
-`src/core` を丸ごと読むので、この取り違えが起きない。
-
-入力が他のモジュールの出力になっているものもある。`labelPosition.rank()` は
-`traceCoverage.audit(docs)` の結果を取る:
-
-```js
-const { MA } = loadMA();
-const r = MA.labelPosition.rank(MA.traceCoverage.audit(docs));
-console.log(r.commonLabel, r.odd.map((x) => x.key));   // 先頭 [ 'dma' ]
-```
-
-## 指摘の着手状況 CLI (`npm run pins`)
-
-GUI の「📥 指摘箱」が 1 件ずつに付ける **未着手 / 着手 / 解消** を、ブラウザを開かずに読む。
-前回の依頼に手が付いたかを、`audit.js --since-files` で全図の指紋を突き合わせずに 1 コマンドで出せる。
-
-```bash
-npm run pins -- <ファイル|フォルダ> [...] [オプション]
-
-node tools/pins.js E:\path\to\diagrams                    # 未解消 (未着手 + 着手) を人が読む形で
-node tools/pins.js E:\path\to\diagrams --json             # 同じ結果を JSON で
-node tools/pins.js E:\path\to\diagrams --all              # 解消も出す (反映確認)
-node tools/pins.js E:\path\to\diagrams --author reviewer  # 自分が書いた指摘だけ
-```
-
-| 状況 | 意味 |
-|---|---|
-| 未着手 | 指摘のあと、その図はまだ 1 度も書き換わっていない |
-| 着手 | 図は書き換わったのに指摘した行はそのまま (または応答が返っている) |
-| 解消 | 指摘した行が図から無くなった / 対応済みの印が付いた |
-
-| オプション | 意味 |
-|---|---|
-| `--json` / `--out FILE` | JSON を標準出力 / ファイルへ |
-| `--all` | 解消も並べる (既定は未解消だけ) |
-| `--author 名前` | その名前が書いた指摘だけに絞る |
-| `--state FILE` / `--no-state` | 控えの置き場所を変える / 控えを使わない |
-
-「図が書き換わったか」は控え (図ごとの指紋) との突き合わせで見るので、**同じフォルダを続けて観測する**と
-見送り回数 (直す機会があったのに直っていない回数) が積まれる。控えは `.assist-pins-state.json` に
-対象フォルダごとに分けて残る (画面が保存フォルダごとに localStorage の鍵を分けているのと同じ)。
-仕分けの規則は画面と同じ `src/core/pin-progress.js` — GUI と CLI で答えが割れることはない。
-
-終了コードは、走れば未解消の有無に関わらず 0 (件数は要約か JSON で読む)。
-引数不正・対象の `.puml` が 0 枚だけが 1。
-
-## 依頼の台帳 CLI (`npm run requests`)
-
-`指摘.md` に書いた **primary への依頼** が、いつ初めて出て・何 tick 続いていて・手が付いたかを読む。
-1 回叩くごとに 1 tick を控えに足すので、`runs/` の過去ログを遡って数え直す必要がない。
-指摘ピン (`npm run pins`) が追うのは図の行に貼った指摘、こちらが追うのは文書に書いた依頼。
-
-```bash
-npm run requests -- <指摘.md> [オプション]
-
-node tools/requests.js E:\path	o\指摘.md                              # 未解消の依頼を人が読む形で
-node tools/requests.js E:\path	o\指摘.md --docs E:\path	o\diagrams  # 着手したかも見る
-node tools/requests.js E:\path	o\指摘.md --tick 20260914-1906 --json   # run を名前で控えて JSON で
-node tools/requests.js E:\path	o\指摘.md --all                         # 解消した依頼も並べる
-```
-
-| 状況 | 意味 |
-|---|---|
-| 新規 | この tick で初めて出た依頼 |
-| 未着手 | 依頼は残っていて、名指しされた図も前回 tick から動いていない |
-| 着手 | 依頼は残っているが、名指しされた図は前回 tick から書き換わっている |
-| 再発 | 一度 `指摘.md` から消えたのに、また書かれた (退行) |
-| 解消 | 今回の `指摘.md` にはもう無い |
-
-依頼は「依頼」と書かれた見出しの下の番号つき箇条書きから 1 件ずつ切り出す (その節が無い回は
-`## 【未解消】依頼1: …` の見出しそのものを読む)。`(最優先・継続)` のような**その回の扱いを表す括弧は
-指紋から外す**ので、扱いを書き換えただけで別の依頼になることはない。名指しされた `*.puml` は
-着手を見る先として憶える。控えは `.assist-requests-state.json` に `指摘.md` ごとに分けて残り、
-`--tick` を同じラベルで 2 度渡しても tick は増えない (数え直しで継続日数が伸びない)。
-
-終了コードは、走れば依頼の有無に関わらず 0。引数不正・`指摘.md` が読めないときだけ 1。
+試験のサーバは worker ごとに `PUA_DATA_ROOT` (`test-results\e2e-data\`) 付きで起こすので、利用者の本物の保存先と設定には触れない。ポートは `PUA_PORT` から空きを探す。
 
 ## 設計ドキュメント
 
+- **製品仕様書**: `docs/spec/product-spec.md`(残した機能の全部)/ 整理表 `docs/spec/feature-triage.md`
+- **最初の設計**: `docs/superpowers/specs/2026-04-17-plantuml-assist-design.md`
 - **Tier1 master spec**: `docs/superpowers/specs/2026-04-24-plantuml-tier1-complete-master.md`
-- **v0.3.0 (UseCase)**: `docs/superpowers/specs/2026-04-25-usecase-design.md` / `plans/2026-04-25-usecase-v0.3.0.md`
-- **v0.4.0 (Component + S1.5)**: `docs/superpowers/specs/2026-04-25-component-design.md` / `plans/2026-04-25-component-v0.4.0.md`
-- **v0.5.0 (Overlay-driven)**: `docs/superpowers/specs/2026-04-26-tier1-overlay-driven-design.md` / `plans/2026-04-26-tier1-overlay-driven-v0.5.0.md`
+- **Overlay-driven**: `docs/superpowers/specs/2026-04-26-tier1-overlay-driven-design.md`
 - **直接操作 UX チェックリスト**: `docs/direct-manipulation-ux-checklist.md`
-- ADR: `docs/adr/` (ADR-101+)
-- ECN: `docs/ecn/`
+- 用語: `CONTEXT.md`。ADR: `docs/adr/` (ADR-101+)。ECN: `docs/ecn/`
 
 ## ライセンス
 
