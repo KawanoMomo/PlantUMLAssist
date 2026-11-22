@@ -40,14 +40,11 @@ describe('FILES の節見出し (design 10a / 9a)', function() {
     } finally { restore(); }
   });
 
-  test('「読むだけ」の入口は線画で、絵文字を使わない', function() {
+  test('「読むだけ」節は絵文字を使わない', function() {
     try {
       boot([]);
-      var peek = W.document.getElementById('btn-tab-peek');
-      // BLK-owner-20260924-1836-prune: 入口は何をするかで呼ぶ (「覗く」ではなく「図を調べる」)。
-      expect(peek.getAttribute('aria-label')).toBe('読むだけのフォルダの図を調べる');
-      expect(peek.querySelector('svg')).not.toBeNull();
-      expect(EMOJI.test(peek.textContent + peek.getAttribute('aria-label'))).toBe(false);
+      // 目の印 (このフォルダの図を調べる…) は TICKET-owner-20261115-2141-prune で外した。
+      expect(W.document.getElementById('btn-tab-peek')).toBeNull();
       var ro = W.document.getElementById('files-body-readonly');
       expect(EMOJI.test(ro.textContent)).toBe(false);
     } finally { restore(); }

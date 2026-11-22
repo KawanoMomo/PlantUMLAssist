@@ -45,6 +45,33 @@ window.MA.dslUpdater = (function() {
     return lines.join('\n');
   }
 
+  // 行の塊 [startLine, endLine] (1 始まり・両端を含む) をまとめて 1 行上 / 下へ動かす
+  // (TICKET-junior-20261122-1001-wish。DSL エディタで複数行を選んで Alt+↑ / Alt+↓)。
+  // 塊の隣の 1 行が塊の反対側へ回るだけで、ほかの行と改行コード (CRLF / LF) は変えない。
+  // 端 (上なら 1 行目、下なら最終行に塊が掛かる) や範囲外では入力をそのまま返す。
+  function _splitKeepEol(text) {
+    var eol = text.indexOf('\r\n') >= 0 ? '\r\n' : '\n';
+    return { lines: text.split(eol), eol: eol };
+  }
+  function moveLinesUp(text, startLine, endLine) {
+    var sp = _splitKeepEol(text), lines = sp.lines;
+    var s = startLine - 1, e = endLine - 1;
+    if (s <= 0 || e < s || e >= lines.length) return text;
+    var above = lines[s - 1];
+    lines.splice(s - 1, 1);
+    lines.splice(e, 0, above);
+    return lines.join(sp.eol);
+  }
+  function moveLinesDown(text, startLine, endLine) {
+    var sp = _splitKeepEol(text), lines = sp.lines;
+    var s = startLine - 1, e = endLine - 1;
+    if (s < 0 || e < s || e >= lines.length - 1) return text;
+    var below = lines[e + 1];
+    lines.splice(e + 1, 1);
+    lines.splice(s, 0, below);
+    return lines.join(sp.eol);
+  }
+
   function renameWithRefs(text, oldId, newId) {
     if (!oldId || !newId || oldId === newId) return text;
     var escaped = DU.escapeForRegex(oldId);
@@ -97,6 +124,8 @@ window.MA.dslUpdater = (function() {
     insertBeforeEnd: insertBeforeEnd,
     moveLineUp: moveLineUp,
     moveLineDown: moveLineDown,
+    moveLinesUp: moveLinesUp,
+    moveLinesDown: moveLinesDown,
     renameWithRefs: renameWithRefs,
     applySkinparamPreset: applySkinparamPreset,
   };

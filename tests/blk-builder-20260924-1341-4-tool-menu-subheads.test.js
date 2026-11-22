@@ -1,6 +1,6 @@
 'use strict';
 // BLK-builder-20260924-1341-4 (design 9b): ツール ▾ の右列で小見出しが 2 度出ない。
-// 同じ小見出しの項目はまとまって並び、「確かめる」は 9b の右列と同じ順になる。
+// 同じ小見出しの項目はまとまって並ぶ。
 if (!global.window) {
   var jsdom = require('jsdom');
   var dom = new jsdom.JSDOM('<!DOCTYPE html><html><body></body></html>');
@@ -21,11 +21,11 @@ function subsIn(html) {
   return out;
 }
 
-function subsOf(key) {
+// TICKET-roadmap-20261115-2114-2: パネルは 1 段の一覧 (分類ごとの面は無い)。一覧の小見出しを拾う。
+function subsOfList() {
   var html = TM.buildMenuHtml({});
-  var start = html.indexOf('<div class="tool-menu-group" data-group="' + key + '"');
-  var end = html.indexOf('<div class="tool-menu-group"', start + 1);
-  if (end < 0) end = html.indexOf('<div class="tool-menu-hits"', start);
+  var start = html.indexOf('<div class="tool-menu-list">');
+  var end = html.indexOf('<div class="tool-menu-hits"', start);
   return subsIn(html.slice(start, end));
 }
 
@@ -35,40 +35,32 @@ function labelsOf(key) {
 }
 
 describe('右列の小見出しは各 1 回 (design 9b)', () => {
-  test('どの分類でも小見出しが 2 度出ない', () => {
-    TM.panelGroups().forEach(function(g) {
-      var subs = subsOf(g.key);
-      var uniq = subs.filter(function(s, i) { return subs.indexOf(s) === i; });
-      expect(subs).toEqual(uniq);
-    });
+  test('一覧で小見出しが 2 度出ない', () => {
+    var subs = subsOfList();
+    var uniq = subs.filter(function(s, i) { return subs.indexOf(s) === i; });
+    expect(subs).toEqual(uniq);
   });
 
-  test('確かめる は 名前と系統 → まとめて点検 → 渡す前に', () => {
-    expect(subsOf('check')).toEqual(['名前と系統', 'まとめて点検', '渡す前に']);
+  // 「渡す前に」(提出前チェック・引き継ぎチェックリスト) は TICKET-owner-20261115-1828-prune で外した。
+  // 「確かめる」分類 (系統チェック・系統マップ・トレース漏れ・突合ボード・観点一括) と
+  // 「表記を揃える」(🔤 表記統一) は TICKET-owner-20261115-1841-prune で外した。
+  test('確かめる の分類は無い', () => {
+    expect(TM.panelGroups().map(function(g) { return g.key; })).not.toContain('check');
   });
 
-  test('確かめる の項目は 9b の右列と同じ順', () => {
-    // BLK-owner-20260924-1332-prune: 「名前の表記揺れ」(🔍 名前突合) は ▦ 突合ボードの行に畳んだ。
-    expect(labelsOf('check')).toEqual([
-      '系統内の動作名のずれ', '系統マップの崩れ', '状態遷移のトレース漏れ',
-      '突合ボード (表記揺れ・宣言なし・メソッドも 1 画面で)', '1 つの観点で全図を棚卸し', '仕様 (design) と現在値の突合',
-      '提出前チェック', '引き継ぎチェックリスト', '監査履歴',
-    ]);
-  });
-
-  test('書き換える は まとめて直す → 表記を揃える (まとめて直す は 1 回)', () => {
-    expect(subsOf('edit')).toEqual(['まとめて直す', '表記を揃える']);
+  test('書き換える は まとめて直す だけ (1 回)', () => {
+    expect(subsOfList()).toEqual(['まとめて直す']);
   });
 
   test('小見出しを 1 行と数えた行数は 14 行以内のまま', () => {
-    TM.panelGroups().forEach(function(g) {
-      expect(TM.rowCount(g.key)).toBeLessThanOrEqual(14);
-    });
+    expect(TM.rowCount()).toBeLessThanOrEqual(14);
   });
 
   test('絞り込みの横断結果でも分類の見出しは各 1 回', () => {
-    var subs = subsIn(TM.buildHitsHtml('の', {}));
-    expect(subs.length).toBeGreaterThan(1);
+    // 「レビュー」分類は TICKET-owner-20261115-2141-prune、「図をつくる」は TICKET-owner-20261116-0321-prune で外した。
+    // 残る「書き換える」の 3 行 (同じ小見出し) に当たる語で、小見出しが 1 回だけ出ることを確かめる。
+    var subs = subsIn(TM.buildHitsHtml('す', {}));
+    expect(subs.length).toBeGreaterThan(0);
     var uniq = subs.filter(function(s, i) { return subs.indexOf(s) === i; });
     expect(subs).toEqual(uniq);
   });

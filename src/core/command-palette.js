@@ -24,12 +24,13 @@ window.MA.commandPalette = (function() {
   // 見出しの並び。開いた直後にまず「図に足せるもの」が見える順にする。
   // design「実装現況」7b: タブ列を畳むと、機能の存在に気付く手掛かりは Ctrl+K だけになる。
   // 道具を 1 つの「コマンド」見出しに 30 件積んだままでは、名前を先に知っている道具しか
-  // 引けない。7a のツールメニューと同じ 6 分類で見出しを分け、Tab の絞り込み先もそこにする。
+  // 引けない。7a のツールメニューと同じ分類で見出しを分け、Tab の絞り込み先もそこにする。
   // 分類の正本は tool-menu.js (メニューと同じ並び・同じ言葉)。ここでは写さない
   // — 2 か所に書くと、道具が増えたときにメニューにはあってパレットには無い、が起きる。
-  var TOOL_GROUPS = ['make', 'edit', 'find', 'check', 'review', 'give'];
-  // BLK-human-20260923-1701 (design 10b): 'file' は Ctrl+P で開く「ファイル名から開く」の見出し。
-  // ファイル単位の操作 (一時控え・この図の変遷) もここに入る (入口は FILES ツリーの右クリック)。
+  // 「渡す」(引き継ぎ・納品) は TICKET-owner-20261115-1828-prune で道具ごと外した。
+  var TOOL_GROUPS = ['make', 'edit', 'find', 'check', 'review'];
+  // 'file' は Ctrl+P で開く「ファイル名から開く」の見出し。
+  // ファイル単位の操作 (この図の変遷) もここに入る (入口は FILES ツリーの右クリック)。
   var GROUPS = ['add', 'jump', 'selected'].concat(TOOL_GROUPS).concat(['file', 'command']);
   var GROUP_LABELS = {
     add: '図に足す / Add',
@@ -40,7 +41,6 @@ window.MA.commandPalette = (function() {
     find: '探す / Find',
     check: '確かめる / Check',
     review: 'レビュー / Review',
-    give: '渡す / Deliver',
     file: 'ファイル / Files',
     command: 'コマンド / Command',
   };
@@ -48,7 +48,7 @@ window.MA.commandPalette = (function() {
   // 1 語で分かるようにする (design 7b のパレットは行ごとに分類を出している)。
   var GROUP_CHIPS = {
     make: '図をつくる', edit: '書き換える', find: '探す',
-    check: '確かめる', review: 'レビュー', give: '渡す', file: 'ファイル',
+    check: '確かめる', review: 'レビュー', file: 'ファイル',
   };
   // 見出しの下に 1 行だけ出す補足。何が起きるか読まずに分かるようにする。
   var GROUP_NOTES = {
@@ -80,7 +80,7 @@ window.MA.commandPalette = (function() {
   // 道具の題 (「名前突合を開く / Name audit」) から、右端に置く短い呼び名を作る。
   // 英語併記と「を開く」等の動詞は落とす — 分類チップと本文で何をするかは
   // もう言えているので、右端は「どの道具か」の 1 語でよい。
-  // BLK-owner-20260924-1212-prune: 言い換えがその呼び名を含むとき (「この図の履歴を見る」と
+  // 言い換えがその呼び名を含むとき (「この図の履歴を見る」と
   // 「この図の履歴」) も出さない。同じ画面の名前が 1 行に 2 度並ぶと別の行に見える。
   function _toolHint(title, label) {
     var short = toolShortName(title);
@@ -210,7 +210,7 @@ window.MA.commandPalette = (function() {
   // ここでボタンの文字を言い換えに引き当てる。表に無いボタンは、記号だけを
   // 落として文字をそのまま使う (モジュールがボタンを増やしても古びない)。
   var ACTION_PHRASES = [
-    { match: 'ライフライン推論', title: '呼び出しの開始・終了を自動で入れる', hint: 'activate' },
+    { match: '呼び出しの開始・終了', title: '呼び出しの開始・終了を自動で入れる', hint: 'activate' },
     { match: 'alt/loop',         title: '条件分岐・繰り返しの枠で囲む',       hint: 'alt / loop' },
     { match: 'この前に',         title: '選んだ行の前に足す',                 hint: 'insert before' },
     { match: 'この後に注釈',     title: '選んだ行に説明を書き添える',         hint: 'note' },
@@ -317,7 +317,7 @@ window.MA.commandPalette = (function() {
   // 頭文字だけ打った場合 (例: "ex" → Export) も拾えるように順序一致も許す。
   // 一致しなければ null。数字が小さいほど「近い」。
   //
-  // BLK-builder-20260908-0807-2-red: 部分一致の「見つかった位置」だけで順位を
+  // 部分一致の「見つかった位置」だけで順位を
   // 決めていたので、「保存」と打つと先頭一致の「保存フォルダの図を一覧」が 1 位、
   // 本命の「ファイルを保存」は 3 位だった。他の語にたまたま含まれているだけの
   // 候補が、その語で名指しされた候補を押しのけていた。
@@ -354,7 +354,7 @@ window.MA.commandPalette = (function() {
     return best;
   }
 
-  // BLK-builder-20260924-1337-4 (design 7b): 行の左に「確かめる」と出ているのに、
+  // 行の左に「確かめる」と出ているのに、
   // その語を打つと 0 件だった。7b は「確かめ」と打ってその分類の道具を並べる画面で、
   // 道具の名前を知らない人の入口は分類の語しか無い。分類の語 (チップと見出し) の
   // 部分一致でも拾う。名指し (題・呼び名・キーワード) で当たらなかった行だけに使い、
@@ -405,7 +405,7 @@ window.MA.commandPalette = (function() {
       if (s === null) return;
       scored.push({ item: item, s: s, i: i });
     });
-    // BLK-builder-20260908-0908-3: 見出しが 4 つから 9 つに増えたので、見出し順を
+    // 見出しが 4 つから 9 つに増えたので、見出し順を
     // 最優先にしたままだと、その語で名指しされた候補 (完全一致) が、たまたま同じ語を
     // 含むだけの候補に前の見出しから抜かれる (「保存」で「前回保存からの差分」が 1 位に
     // なった)。完全一致だけは見出しより先に出す。それ以外は従来どおり見出し順。
@@ -426,7 +426,7 @@ window.MA.commandPalette = (function() {
     return next;
   }
 
-  // パレットの行に「単独キー」を出す (BLK-primary-20260917-0223-friction)。
+  // パレットの行に「単独キー」を出す。
   // 畳まれたツールを Ctrl+K で名前を打って開いた人が、次から 1 打で開けると気付けるように。
   // 値は key-bindings の id。キーは差し替えられるので、ここには持たず keysFor に聞く。
   var SHORTCUT_OF = { 'tab-rename': 'bulk-rename', 'render': 'render', 'save': 'save' };

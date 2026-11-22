@@ -41,7 +41,7 @@ function svgOf(inner) {
   return div.querySelector('svg');
 }
 function rectsOf(out, type) {
-  return Array.prototype.slice.call(out.querySelectorAll('rect[data-type="' + type + '"]'));
+  return Array.prototype.slice.call(out.querySelectorAll('rect[data-type="' + type + '"]:not([data-hit-kind="framebelt"])'));
 }
 
 describe('ユースケースの略記だけの図もユースケース図と判定する', function() {

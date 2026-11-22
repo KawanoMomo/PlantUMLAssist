@@ -104,8 +104,9 @@ describe('この図の履歴と比較相手', function() {
     expect(GP.sidesLabel(COMMITS[0])).toBe('左: 作業中 右: a3f91c2');
   });
 
-  test('相手を選ぶタブは コミット / ブランチ・タグ / 読むだけのフォルダ', function() {
-    expect(GP.pickTabs().map(function(t) { return t.id; })).toEqual(['commits', 'refs', 'folder']);
+  // 読むだけのフォルダの図を相手にするタブは TICKET-owner-20261115-2141-prune で外した。
+  test('相手を選ぶタブは コミット / ブランチ・タグ (この図の過去の版だけ)', function() {
+    expect(GP.pickTabs().map(function(t) { return t.id; })).toEqual(['commits', 'refs']);
   });
 
   test('ブランチとタグを 1 本に並べて絞り込める', function() {

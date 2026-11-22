@@ -4,7 +4,7 @@ window.MA = window.MA || {};
 // note-block — `note left of X : ...` と `note left of X` … `end note` を
 // 読み書きする純関数。図種に依存しない。
 //
-// BLK-builder-20260907-1358-1 (design 5d): UseCase の「その他パレット」に
+// UseCase の「その他パレット」に
 // ノートが挙がっているのに、src/modules/usecase.js には note の語が 1 つも無く、
 // ユースケース図に注釈を付ける手段が GUI に無かった。
 // 注釈の書式は図種で変わらないので、図種ごとに書き分ける理由がない。

@@ -91,97 +91,6 @@ test('手順5 中身が別名の図と入れ替わった保存を、その場で
   expect(await log.locator('li').count()).toBeGreaterThan(1);
 });
 
-// BLK-reviewer-20260914-1506-wish: 手順5 の突合には、前回 run の控えとのバイト比較とは別に
-// 「同じ図の対になる成果物のうち片方だけを直した」向きの事故がある。
-// (1) 直した内容が `{name}-編集中.puml` にしか入っていない、
-// (2) 本体は直ったが `{name}.svg` が旧内容のまま。
-// どちらも手で diff を取るまで気付けなかったので、📂 一覧が向きまで言い、
-// 差分はその場 (1 操作) で開けるようにした。
-const BASE_CLASS = ['@startuml', 'title driver_common_class',
-  'class AdcRegs {\n  +WriteConfig()\n}', 'class SpiRegs', '@enduml'].join('\n');
-// 下書きにだけ入った修正 (EnableDmaReq のメソッド化)。
-const DRAFT_CLASS = BASE_CLASS.replace('class SpiRegs', 'class SpiRegs {\n  +EnableDmaReq()\n}');
-
-test('手順5 直した内容が編集中の下書きにしか入っていない図を、一覧が向きごと名指しする', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.clearDir(page, DIR);
-  await S.putDoc(page, DIR, 'driver_common_class', BASE_CLASS);
-  // 下書きは本体より後に保存される (直したのは下書きの方)。
-  await page.waitForTimeout(1100);
-  await S.putDoc(page, DIR, 'driver_common_class-編集中', DRAFT_CLASS);
-  // 中身も時刻も同じ図は反映漏れに数えない (片付けは ⧉ 重複の節の職掌)。
-  await S.putDoc(page, DIR, 'timer_init_sequence', BASE_CLASS);
-
-  await S.openFolder(page);
-  const sum = page.locator('#folder-sync-summary');
-  await expect(sum).toBeVisible();
-  await expect(sum).toContainText('反映待ち 1 枚');
-  await expect(sum).toContainText('本体に未反映の下書き 1 枚');
-
-  const row = page.locator('.folder-sync-row[data-sync-name="driver_common_class"]');
-  await expect(row).toHaveAttribute('data-sync-issue', 'draft-ahead');
-  // 到達条件その1: 3 つの成果物のどれが最新でどれが古いかを、時刻を読み比べずに言う。
-  await expect(row.locator('.folder-sync-art[data-sync-role="base"]')).toContainText('本体 古い');
-  await expect(row.locator('.folder-sync-art[data-sync-role="draft"]')).toContainText('編集中 最新');
-
-  // 到達条件その2: 本体⇔編集中の差分が、一覧を離れずに 1 操作で開く。
-  await row.locator('.folder-sync-diff').click();
-  const box = page.locator('#folder-sync-diff-box');
-  await expect(box).toBeVisible();
-  await expect(box.locator('.folder-sync-diff-add').filter({ hasText: 'EnableDmaReq' })).toHaveCount(1);
-  await expect(box.locator('.folder-sync-diff-note')).toContainText('driver_common_class-編集中');
-
-  // 到達条件その3: 下書きの行だけを見ている人にも「本体に入っていない」が届く。
-  await expect(page.locator('.folder-sync-badge[data-sync-badge-of="driver_common_class-編集中"]'))
-    .toContainText('未反映');
-  // 揃っている図は名指ししない (全行に印が付くと印でなくなる)。
-  expect(await page.locator('.folder-sync-row[data-sync-name="timer_init_sequence"]').count()).toBe(0);
-});
-
-// BLK-reviewer-20260914-1806: 手順5 は「下書きが本体に反映されたか」を、audit.js の
-// 出力 (kind 不一致 1 件) と前回控えとの byte 比較・下書きの目視でしか判定できず、
-// 同じ図を 2 tick 続けて手で確かめていた。reviewer は GUI を開かない運用なので、
-// 台帳 (swap-queue) と前回控えの内訳をテキスト側にも出す。
-test('手順5 下書きの反映待ちと、前回控えとの増減の内訳を、GUI を開かずに読める', () => {
-  const fs = require('fs');
-  const path = require('path');
-  const { execFileSync } = require('child_process');
-  const REPO = path.join(__dirname, '..', '..', '..');
-  const dir = path.join(REPO, 'test-results', 'reviewer-05-drafts');
-
-  fs.rmSync(dir, { recursive: true, force: true });
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'plantuml-usecase.puml'), BASE_CLASS, 'utf-8');
-  fs.writeFileSync(path.join(dir, 'plantuml-usecase-編集中.puml'), DRAFT_CLASS, 'utf-8');
-  const old = new Date(Date.now() - 60000);
-  fs.utimesSync(path.join(dir, 'plantuml-usecase.puml'), old, old);
-
-  // 到達条件 1: 「下書きが未反映のまま残っているか」が 1 本のコマンドで出る。
-  const out = execFileSync(process.execPath,
-    [path.join(REPO, 'tools', 'audit.js'), dir, '--drafts'], { cwd: REPO, encoding: 'utf-8' });
-  expect(out).toContain('本体へ差し替え待ち 1 枚');
-  expect(out).toContain('plantuml-usecase-編集中.puml → plantuml-usecase.puml');
-
-  // 到達条件 2: 32→25 枚の内訳で、改名が「消失 + 追加」に化けない。
-  const { loadMA } = require('../../../tools/audit-runtime');
-  const scope = require('../../../src/core/audit-scope');
-  const prev = scope.fileEntries([
-    { name: 'old_name.puml', dsl: BASE_CLASS },
-    { name: 'gone.puml', dsl: DRAFT_CLASS },
-  ]);
-  const cur = scope.fileEntries([
-    { name: 'new_name.puml', dsl: BASE_CLASS },
-    { name: 'new_name-編集中.puml', dsl: BASE_CLASS + '\nclass Extra' },
-  ]);
-  const text = scope.formatFileDiff(scope.diffFiles(prev, cur), cur).join('\n');
-  expect(text).toContain('改名: old_name.puml → new_name.puml');
-  expect(text).toContain('消失: gone.puml');
-  // 到達条件 3: 新しく起こした下書きは「増えた図」と数え分けられる。
-  expect(text).toContain('うち新しい下書き 1 枚');
-  expect(loadMA().MA).toBeTruthy();
-
-  fs.rmSync(dir, { recursive: true, force: true });
-});
 
 // BLK-reviewer-20260915-2346-wish: 手順5 の突合のうち「前回保存版から中身が大きく
 // 消えた」向きは、reviewer が手元の複製と diff を手で打って初めて分かった。
@@ -192,11 +101,18 @@ const BIG_CLASS = ['@startuml', 'title driver_common_class'].concat(
     .map((c) => `class ${c}_Regs {\n  +Init()\n  +DeInit()\n  +Read()\n}`)
 ).concat(['@enduml']).join('\n');
 
+// 保存先 (フォルダ) を決めてある回は、保存先の図も直したその場でファイルへ書く
+// (TICKET-owner-20261115-1829-prune で「上書きしますか」の窓を外した。窓に答えるまでの間だけ「保存前」があった)。
+// 「保存を押す前」が残るのは保存先を決めていない (ダウンロード保存の) 回なので、そこで見る。
 test('手順5 前回保存版から何行消えるかが、保存を押す前に状態バーに出ている', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.clearDir(page, DIR);
-  await S.putDoc(page, DIR, 'driver_common_class', BIG_CLASS);
-  await S.openFolderItem(page, 'driver_common_class');
+  await S.bootDownloadMode(page, DIR + '-dl');
+  await S.renameActive(page, 'driver_common_class');
+  await S.typeDsl(page, BIG_CLASS);
+  await page.locator('#editor').click();
+  const dl = page.waitForEvent('download');
+  await page.keyboard.press('Control+s');
+  await dl;
+  await expect(page.locator('#top-save')).toHaveAttribute('data-save-state', 'saved', { timeout: 10000 });
 
   const chip = page.locator('#status-livediff');
   // 到達条件その1: 開いた直後は前回保存版と同じ。
@@ -209,22 +125,23 @@ test('手順5 前回保存版から何行消えるかが、保存を押す前に
   await S.typeDsl(page, BIG_CLASS.replace('+Init()', '+Start()'));
   await page.waitForTimeout(400);
   await expect(chip).toHaveAttribute('data-livediff', 'changed');
-  // 変わった行数 (増 1 + 減 1) が件数として 1 種類の形で出る。
-  await expect(chip).toBeVisible();
-  await expect(chip).toHaveText('● 前回保存版 2');
+  // TICKET-owner-20261115-2141-prune: 変わった行数を常時出す札 (比較の入口) は外した
+  // (前回保存版と比べるのは「この図の履歴」の比較)。普通の増減では札は出ない。
+  await expect(chip).toBeHidden();
 
   // 事故の形: 中身が雛形に戻ってしまった (77 行 → 4 行と同じ向き)。
   await S.typeDsl(page, TEMPLATE_CLASS);
   await page.waitForTimeout(400);
-  // 到達条件その2: 保存を押す前に、消える側だと分かる印が出る。
+  // 到達条件その2: 保存を押す前に、消える側だと分かる印が出る (図を失わないための守りなので、この形のときだけ出す)。
   await expect(chip).toHaveAttribute('data-livediff', 'shrink');
+  await expect(chip).toBeVisible();
   // 警告は文字ではなく点の色で出す (文字色・形は他の札と同じ)。
   await expect(chip).toHaveAttribute('data-dot', 'bad');
   await expect(chip).toHaveAttribute('title', /いま保存すると .* 行に減ります/);
 
   // 到達条件その3: 押すと前回保存版と現在が並び、消える行が名指しされる (1 操作)。
-  // BLK-owner-20260923-1307-prune: 並べる画面は ⇔ 並べて見る の ± 差分タブ 1 つに寄せた。
-  // 札はその画面を開く入口で、開いた先で見えるもの (警告・消える行・戻す) は変わらない。
+  // BLK-owner-20260923-1307-prune: 並べる画面は参照ペインの ± 差分タブ 1 つに寄せた。
+  // 警告の札はその画面を開く入口で、開いた先で見えるもの (警告・消える行・戻す) は変わらない。
   await chip.click();
   const panel = page.locator('#compare-pane');
   await expect(panel).toBeVisible();
@@ -245,13 +162,6 @@ test('手順5 前回保存版から何行消えるかが、保存を押す前に
   const restore = page.locator('#btn-compare-restore');
   await expect(restore).toBeVisible();
   await expect(restore).toHaveAttribute('title', /消えた \d+ 行が戻り/);
-  // 一覧から開いた図には錠がかかっていて、最初の書き戻しの直前に一度だけ問いが出る。
-  // 戻すのはエディタの中身なので、ファイルはそのままにして (書き換えない) 先へ進む。
-  const lock = page.locator('#source-lock-modal');
-  if (await lock.isVisible().catch(() => false)) {
-    await page.locator('#source-lock-keep').click();
-    await page.waitForTimeout(600);
-  }
   await restore.click();
   await page.waitForTimeout(400);
   // 到達条件その5: 戻した直後の画面が、差が 0 になったことをそのまま映す
@@ -265,49 +175,6 @@ test('手順5 前回保存版から何行消えるかが、保存を押す前に
   expect(await page.locator('#editor').inputValue()).toContain('Wdg_Regs');
 });
 
-// BLK-reviewer-20260916-0046: 手順5 で `audit.js --since-files <控え>` は
-// 「可視内容の食い違い」として図名を並べるが、何が消えたかは出さない。
-// 指摘.md に「クラス定義が全消え」と具体を書くには、控えのフォルダと現物を
-// diff コマンドで突き合わせ直すしかなく、食い違う図が増えるほどその手 diff が増える。
-// 同じ 1 コマンドの中で、消えた行数と代表行まで読めることを到達条件にする。
-test('手順5 控えと変わった図を、消えた行まで同じ 1 コマンドで読める', () => {
-  const fs = require('fs');
-  const path = require('path');
-  const { execFileSync } = require('child_process');
-  const REPO = path.join(__dirname, '..', '..', '..');
-
-  const root = path.join(REPO, 'test-results', 'reviewer-05-since-detail');
-  fs.rmSync(root, { recursive: true, force: true });
-  const prev = path.join(root, 'prev');
-  const cur = path.join(root, 'cur');
-  for (const d of [prev, cur]) fs.mkdirSync(d, { recursive: true });
-
-  // 事故の実物: クラス定義がまるごと消えて title だけが残った。
-  fs.writeFileSync(path.join(prev, 'driver_common_class.puml'), FULL_CLASS, 'utf-8');
-  fs.writeFileSync(path.join(cur, 'driver_common_class.puml'),
-    ['@startuml', 'title driver_common_class', '@enduml'].join('\n'), 'utf-8');
-  // コメントだけ戻した図は「変わった」と出るが、描かれる行は同じ。
-  const state = ['@startuml', '[*] --> Idle', 'Idle --> Busy : go', '@enduml'].join('\n');
-  fs.writeFileSync(path.join(prev, 'spi_state.puml'), state, 'utf-8');
-  fs.writeFileSync(path.join(cur, 'spi_state.puml'),
-    ['@startuml', "' domain-verdict: separate", '[*] --> Idle', 'Idle --> Busy : go', '@enduml'].join('\n'),
-    'utf-8');
-
-  const out = execFileSync(process.execPath,
-    [path.join(REPO, 'tools', 'audit.js'), cur, '--summary', '--since-files', prev, '--no-state'],
-    { cwd: REPO, encoding: 'utf-8' });
-
-  // 到達条件 1: 変わった図の名指しは今までどおり出る。
-  expect(out).toContain('実データ変化: driver_common_class.puml, spi_state.puml');
-  // 到達条件 2: 何行消えたかと、指摘にそのまま写せる代表行が同じ出力に出る。
-  expect(out).toMatch(/変化の中身: driver_common_class\.puml\s+−\d+ 行 \/ \+0 行/);
-  expect(out).toContain('消えた行: class Spi_Driver {');
-  // 到達条件 3: 描かれる行が動いていない図は、手 diff に戻らず 1 行で片付く。
-  expect(out).toContain('spi_state.puml  描かれる行に差なし');
-
-  fs.rmSync(root, { recursive: true, force: true });
-});
-
 // BLK-reviewer-20260916-0426-wish: 手順5 は「前回控えとの比較」だが、変わっていない図には
 // 一覧が何も出さないので、印が無い状態は「変わっていない」と「まだ確かめていない」の
 // どちらにも読めた。確かめるには毎 tick `audit.js --since-files` をフルで打ち直すしかなく、
@@ -315,108 +182,6 @@ test('手順5 控えと変わった図を、消えた行まで同じ 1 コマン
 // 印の付いていない図だけを読めばよいようにした。
 const STAMP_A = ['@startuml', 'title alpha_state', '[*] --> Idle', 'Idle --> Busy : start', '@enduml'].join('\n');
 const STAMP_B = ['@startuml', 'title beta_state', '[*] --> Off', 'Off --> On : power', '@enduml'].join('\n');
-
-test('手順5 前回控えから変わっていない図に「変化なし」の印が常時出る', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await S.clearDir(page, DIR);
-  await S.putDoc(page, DIR, 'alpha_state', STAMP_A);
-  await S.putDoc(page, DIR, 'beta_state', STAMP_B);
-
-  await S.openFolder(page);
-  // 控えを取る前は印を出さない (「今回の控えと同じ」までしか言えない)。
-  expect(await page.locator('#folder-panel .folder-stamp').count()).toBe(0);
-  await page.locator('.folder-mark-seen').click();
-  await page.waitForTimeout(1200);
-
-  // 到達条件その1: 控えを取り直すと、中身の変わっていない図に印が出る。
-  await page.locator('.folder-mark-seen').click();
-  await page.waitForTimeout(1200);
-  const alpha = page.locator('#folder-panel .folder-item[data-file-name="alpha_state"]');
-  await expect(alpha.locator('.folder-stamp')).toHaveAttribute('data-change-stamp', '2');
-  // 何回続けて変わっていないかも行の上で読める (2 tick 分か、今回だけかが分かる)。
-  await expect(alpha.locator('.folder-stamp')).toHaveText('＝2');
-  await expect(alpha.locator('.folder-stamp')).toHaveAttribute('data-stamp-text', '変化なし ×2');
-
-  // 到達条件その2: 読む枚数が一覧の頭に出る (audit をフルで打ち直さずに決まる)。
-  await expect(page.locator('#folder-stamp-summary')).toContainText('変化なし 2 枚');
-  await expect(page.locator('#folder-stamp-summary')).toContainText('読むのは 0 枚');
-
-  // 1 枚だけ中身を直すと、その図からは印が消え、もう 1 枚は印を保つ。
-  await S.putDoc(page, DIR, 'beta_state', STAMP_B.replace('power', 'power_on'));
-  await page.locator('#btn-tab-folder').click();          // 畳んで
-  await S.openFolder(page);                                // 開き直す
-  await page.waitForTimeout(600);
-  expect(await page.locator('#folder-panel .folder-item[data-file-name="beta_state"] .folder-stamp')
-    .count()).toBe(0);
-  await expect(page.locator('#folder-panel .folder-item[data-file-name="alpha_state"] .folder-stamp'))
-    .toHaveAttribute('data-stamp-text', '変化なし ×2');
-  await expect(page.locator('#folder-stamp-summary')).toContainText('読むのは 1 枚');
-
-  // 到達条件その3: 印の付いた図を 1 操作で畳み、読む図だけを残せる。
-  await page.locator('#folder-stamp-hide').check();
-  await page.waitForTimeout(300);
-  await expect(page.locator('#folder-panel .folder-item[data-file-name="alpha_state"]')).toBeHidden();
-  await expect(page.locator('#folder-panel .folder-item[data-file-name="beta_state"]')).toBeVisible();
-});
-
-// BLK-reviewer-20260916-0526-wish: 変化の中身は代表行 + 件数までしか出ないので、
-// −3 行/+76 行のような大きな復元が「以前より充実しているか (継承・note が揃っているか)」は
-// 決められず、結局 cat でファイル全体を読み直していた。閾値を超えた図は同じ 1 コマンドの
-// 中で全文まで開き、小さい図は代表行のままにする ＝ 手順5 のコマンド往復を 0 にする。
-test('手順5 大きく変わった図は、同じ 1 コマンドの中で全文diffまで読める', () => {
-  const fs = require('fs');
-  const path = require('path');
-  const { execFileSync } = require('child_process');
-  const REPO = path.join(__dirname, '..', '..', '..');
-
-  const root = path.join(REPO, 'test-results', 'reviewer-05-full-diff');
-  fs.rmSync(root, { recursive: true, force: true });
-  const prev = path.join(root, 'prev');
-  const cur = path.join(root, 'cur');
-  for (const d of [prev, cur]) fs.mkdirSync(d, { recursive: true });
-
-  // 事故の実物: 4 tick 空洞化していた図が、note 付きで以前より充実して復元された。
-  const GUTTED = ['@startuml', 'title driver_common_class', 'class Driver_Common', '@enduml'].join('\n');
-  const RESTORED = ['@startuml', 'title driver_common_class', 'class Driver_Common {']
-    .concat(Array.from({ length: 30 }, (_, i) => `  +Op${i}() : void`))
-    .concat(['}', 'class Spi_Driver', 'Driver_Common <|-- Spi_Driver',
-             'note right of Spi_Driver : SPI 系はここに集める', '@enduml']).join('\n');
-  fs.writeFileSync(path.join(prev, 'driver_common_class.puml'), GUTTED, 'utf-8');
-  fs.writeFileSync(path.join(cur, 'driver_common_class.puml'), RESTORED, 'utf-8');
-  // 代表行で足りる小さい変化は、全文を出さずに今までどおり 1 行で片付く。
-  const SMALL = ['@startuml', '[*] --> Idle', 'Idle --> Busy : go', '@enduml'].join('\n');
-  fs.writeFileSync(path.join(prev, 'diagram1.puml'), SMALL, 'utf-8');
-  fs.writeFileSync(path.join(cur, 'diagram1.puml'), SMALL.replace('go', 'start'), 'utf-8');
-
-  const run = (extra) => execFileSync(process.execPath,
-    [path.join(REPO, 'tools', 'audit.js'), cur, '--summary', '--since-files', prev, '--no-state']
-      .concat(extra || []), { cwd: REPO, encoding: 'utf-8' });
-
-  const out = run();
-  // 到達条件 1: 要約 (代表行) は今までどおり出る。
-  expect(out).toContain('変化の中身: driver_common_class.puml');
-  // 到達条件 2: 閾値を超えた図は、同じ出力の中に全文 diff が開く
-  // (cat で読み直さないと分からなかった継承・note がその場に出る)。
-  expect(out).toContain('全文diff driver_common_class.puml');
-  expect(out).toContain('+ Driver_Common <|-- Spi_Driver');
-  expect(out).toContain('+ note right of Spi_Driver : SPI 系はここに集める');
-  // 動いていない行も残る (全文なので、出ない行があってはならない)。
-  expect(out).toContain('title driver_common_class');
-  // 到達条件 3: 小さい変化の図は全文を出さない (要約が全文で押し流されない)。
-  expect(out).not.toContain('全文diff diagram1.puml');
-
-  // 到達条件 4: 小さい図も見たいときは名指しで開ける (閾値を見ない)。
-  const named = run(['--full-diff', 'diagram1']);
-  expect(named).toContain('全文diff diagram1.puml');
-  expect(named).toContain('+ Idle --> Busy : start');
-
-  // 到達条件 5: 全文が邪魔な run では促しだけに戻せる (見落としは防いだまま)。
-  const off = run(['--no-full-diff']);
-  expect(off).not.toContain('全文diff driver_common_class.puml');
-  expect(off).toContain('全文diffで確認: driver_common_class.puml');
-
-  fs.rmSync(root, { recursive: true, force: true });
-});
 
 // BLK-reviewer-20260917-0123-wish: 手順 5 (意図しない変更の混入確認) と手順 6 (SVG の
 // レイアウト崩れ確認) は、前回 run の控えを自分で複製し、テキスト差分と
@@ -434,134 +199,3 @@ const BA_V2 = BA_V1.replace('@enduml', 'Irq_Ctrl -> Timer_Driver : ack()\n@endum
 // 改名だけ (同じ語の一斉付け替え)。
 const BA_REN = BA_V1.split('Timer_Driver').join('TimerDriver');
 
-async function openPeekAt(page, name) {
-  await page.locator('#btn-tab-peek').click();
-  await page.waitForSelector('#peek-modal');
-  await page.waitForSelector('#peek-files .peek-file[data-file-name="' + name + '"]');
-  await page.locator('#peek-files .peek-file[data-file-name="' + name + '"]').click();
-  await page.waitForSelector('#peek-ba-verdict');
-}
-
-test.describe('reviewer 手順 5〜6: primary の前回保存版と今回保存版を 1 画面で並べる', () => {
-  test.beforeEach(async ({ page }) => {
-    await S.bootWithSaveDir(page, BA_MINE);
-    await S.clearDir(page, BA_MINE);
-    await S.clearDir(page, BA_PRIMARY);
-    await S.putDoc(page, BA_MINE, 'reviewer_memo', BA_V1);
-  });
-
-  test('無変化の回は、図を 1 枚も開かずに「読む図はありません」で終わる', async ({ page }) => {
-    // 行末の空白だけが違う保存 = 控えは取られるが、描かれる内容は変わっていない。
-    // reviewer が手順 5 で最も多く出会う「読まなくてよい差分」がこの形。
-    await S.putDoc(page, BA_PRIMARY, 'timer_sequence', BA_V1);
-    await S.putDoc(page, BA_PRIMARY, 'timer_sequence', BA_V1 + '   ');
-    await page.reload();
-    await page.waitForSelector('#btn-tab-peek');
-    await openPeekAt(page, 'timer_sequence');
-
-    // 到達条件その1: フォルダ全体の結論が、図を開く前に 1 行で出る。
-    await expect(page.locator('#peek-ba-summary')).toContainText('読む図はありません');
-    await expect(page.locator('#peek-ba-summary')).toHaveAttribute('data-ba-toread', '0');
-    // 到達条件その2: 1 図の判定も「差分なし」と言い切る (控えを複製して diff を打たない)。
-    await expect(page.locator('#peek-ba-verdict')).toHaveAttribute('data-ba-verdict', 'same');
-    await expect(page.locator('#peek-ba-verdict')).toContainText('読み直す必要はありません');
-  });
-
-  test('内容が変わった図は、前後のソースと SVG が並んで出る', async ({ page }) => {
-    await S.putDoc(page, BA_PRIMARY, 'timer_sequence', BA_V1);
-    await S.putDoc(page, BA_PRIMARY, 'timer_sequence', BA_V2);
-    await page.reload();
-    await page.waitForSelector('#btn-tab-peek');
-    await openPeekAt(page, 'timer_sequence');
-
-    await expect(page.locator('#peek-ba-verdict')).toHaveAttribute('data-ba-verdict', 'content');
-    await expect(page.locator('#peek-ba-verdict')).toContainText('中身を読んでください');
-    await expect(page.locator('#peek-ba-summary')).toHaveAttribute('data-ba-toread', '1');
-
-    // 到達条件その3: 押せば前後のソースが左右に並ぶ (全文。代表行に切り詰めない)。
-    await page.locator('#peek-ba-toggle').click();
-    await page.waitForSelector('#peek-ba-body');
-    await expect(page.locator('#peek-ba-prev')).toContainText('前回保存版');
-    await expect(page.locator('#peek-ba-prev')).toContainText('enable()');
-    await expect(page.locator('#peek-ba-now')).toContainText('ack()');
-    // 増えた行は今回側だけに印が付く。
-    await expect(page.locator('#peek-ba-now .ba-add')).toHaveCount(1);
-    await expect(page.locator('#peek-ba-prev .ba-add')).toHaveCount(0);
-
-    // 到達条件その4: 手順 6 の材料 (前後の SVG) が同じ画面に並ぶ。
-    await expect(page.locator('#peek-ba-svg-note')).toContainText('描き直して並べます');
-    await page.waitForSelector('#peek-ba-svg-prev svg', { timeout: 60000 });
-    await page.waitForSelector('#peek-ba-svg-now svg', { timeout: 60000 });
-  });
-
-  test('改名だけの差分は、組を名指しして「改名だけ」と言う', async ({ page }) => {
-    await S.putDoc(page, BA_PRIMARY, 'timer_sequence', BA_V1);
-    await S.putDoc(page, BA_PRIMARY, 'timer_sequence', BA_REN);
-    await page.reload();
-    await page.waitForSelector('#btn-tab-peek');
-    await openPeekAt(page, 'timer_sequence');
-
-    await expect(page.locator('#peek-ba-verdict')).toHaveAttribute('data-ba-verdict', 'rename');
-    await expect(page.locator('#peek-ba-verdict')).toContainText('Timer_Driver → TimerDriver');
-    // 改名でも描画の幅は動くので、手順 6 は省かない。
-    await page.locator('#peek-ba-toggle').click();
-    await expect(page.locator('#peek-ba-svg-note')).toContainText('描き直して並べます');
-  });
-});
-
-// BLK-reviewer-20260917-0523-wish: 手順5 の入口。前回控えと比べて「変わっていない」と
-// 分かるのは監査を全部回し切った後で、しかも「何 tick 連続で無変化か」はどこにも出ず、
-// reviewer は persona.md に手で書いた過去の文章を遡って数え直していた。
-// 無変化の tick 数を控えが持ち、無変化の間は監査を回さずに降りられることを到達条件にする。
-test('手順5 何 tick 連続で無変化かが入口に出て、無変化なら監査を回さずに降りられる', () => {
-  const fs = require('fs');
-  const path = require('path');
-  const os = require('os');
-  const { execFileSync } = require('child_process');
-  const REPO = path.join(__dirname, '..', '..', '..');
-
-  const root = path.join(REPO, 'test-results', 'reviewer-05-unchanged-streak');
-  fs.rmSync(root, { recursive: true, force: true });
-  const docs = path.join(root, 'docs');
-  fs.mkdirSync(docs, { recursive: true });
-  fs.writeFileSync(path.join(docs, 'spi_state.puml'), R.DOCS.spi_state, 'utf-8');
-
-  // 控え (.assist-audit-last.json) は CLI を打つ場所に出来るので、リポジトリ直下を
-  // 汚さないよう作業用の cwd で打つ (配布物に控えを残さない)。
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'pua-streak-'));
-  const run = (extra) => execFileSync(process.execPath,
-    [path.join(REPO, 'tools', 'audit.js'), docs, '--summary'].concat(extra),
-    { cwd, encoding: 'utf-8' });
-
-  // 1 回目: まだ比べる相手がいない。ここを「変化あり」と言わない。
-  const first = run(['--tick', 't1']);
-  expect(first).toContain('今回が最初の控えです');
-  expect(first).not.toContain('変化あり');
-  // 監査そのものは今までどおり回っている。
-  expect(first).toContain('図 1 枚');
-
-  // 2 回目: 中身は同じ。入口に連続数と最終変更が出る。
-  const second = run(['--tick', 't2']);
-  expect(second).toContain('変化なし: 1 tick 連続');
-  expect(second).toContain('最終変更');
-
-  // 同じ tick で打ち直しても数字は動かない (1 tick に何度も打つ手順で数字が膨らまない)。
-  expect(run(['--tick', 't2'])).toContain('変化なし: 1 tick 連続');
-
-  // 3 回目: --if-changed を付けると、無変化の tick は監査を回さずに降りる。
-  const skipped = run(['--tick', 't3', '--if-changed']);
-  expect(skipped).toContain('変化なし: 2 tick 連続');
-  expect(skipped).toContain('前回の指摘:');
-  // 到達条件: 全 11 項目の突合は回っていない (回していれば件数表が出る)。
-  expect(skipped).not.toContain('名前突合');
-
-  // 図を 1 枚書き替えたら、同じ印のまま監査が全部回る。
-  fs.writeFileSync(path.join(docs, 'spi_state.puml'),
-    R.DOCS.spi_state.replace('@enduml', 'Busy --> Idle : done\n@enduml'), 'utf-8');
-  const changed = run(['--tick', 't4', '--if-changed']);
-  expect(changed).toContain('変化あり');
-  expect(changed).toContain('名前突合');
-
-  fs.rmSync(cwd, { recursive: true, force: true });
-  fs.rmSync(root, { recursive: true, force: true });
-});

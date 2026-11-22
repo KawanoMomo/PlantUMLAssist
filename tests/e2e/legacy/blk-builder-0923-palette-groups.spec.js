@@ -70,7 +70,7 @@ test.describe('BLK-builder-0923 コマンドパレットの見出しと Tab 絞�
     await page.keyboard.press('Enter');
     await expect(page.locator('#cp-modal')).toBeHidden();
     // 右ペインが「そのメッセージの編集」になっている (design 2a の狙い)。
-    await expect(page.locator('#props-content')).toContainText('Message · L7');
+    await expect(page.locator('#props-content')).toContainText('Message · 7 行目');
   });
 
   test('「図に足す」を実行すると右ペインの追加フォームがその種類で開く', async ({ page }) => {
@@ -90,12 +90,12 @@ test.describe('BLK-builder-0923 コマンドパレットの見出しと Tab 絞�
     await page.keyboard.press('Control+k');
     await page.locator('#cp-input').fill('Request');
     await page.keyboard.press('Enter');
-    await expect(page.locator('#props-content')).toContainText('Message · L6');
+    await expect(page.locator('#props-content')).toContainText('Message · 6 行目');
     // 選択中に開き直すと selected 見出しが増える。
     await page.keyboard.press('Control+k');
     await expect(page.locator('#cp-list .cp-group[data-cp-group="selected"]'))
       .toHaveText('選択中の要素に対して / Selected');
-    await page.locator('#cp-input').fill('ライフライン推論');
+    await page.locator('#cp-input').fill('呼び出しの開始・終了');
     const items = page.locator('#cp-list .cp-item');
     await expect(items).toHaveCount(1);
     await page.keyboard.press('Enter');

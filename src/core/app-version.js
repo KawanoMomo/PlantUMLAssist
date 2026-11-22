@@ -1,7 +1,7 @@
 'use strict';
 window.MA = window.MA || {};
 
-// app-version — 設定 → 情報 に出す版の 1 行 (BLK-human-20260916-0902)。
+// app-version — 設定 → 情報 に出す版の 1 行。
 //
 // 不具合を報告するとき「どの版で起きたか」を貼れるようにする。版の正本は git tag で、
 // server.py の GET /version がブラウザ起動では git から、exe ではビルド時に焼いた

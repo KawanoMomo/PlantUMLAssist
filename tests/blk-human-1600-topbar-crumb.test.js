@@ -85,41 +85,33 @@ describe('保存の状態 (design 9a)', function() {
   });
 });
 
-// design 9a: 「⇔ 先輩」は「並べて比較」1 つの入口になる。実体は据え置きの枠で、
-// 「据え置く / 1 回だけ」を枠の中で切り替える (別画面を増やさない)。
+// TICKET-owner-20261115-2141-prune: 右の枠は「読むだけ」節で押した図 1 枚と、この図の履歴の版だけを出す。
+// 据え置く / 1 回だけ・相手の選び直し・仮の手本の口は外した。
 try { delete require.cache[require.resolve('../src/core/senior-pane.js')]; } catch (e) {}
 var SP = require('../src/core/senior-pane.js');
 
-describe('並べて比較の枠 (design 9a)', function() {
+describe('右の枠 (読むだけ)', function() {
 
-  test('既定は据え置き (図を切り替えると相手も入れ替わる)', function() {
-    expect(SP.normalize(null).mode).toBe('keep');
-    expect(SP.normalize({ mode: 'nonsense' }).mode).toBe('keep');
+  test('据え置く / 1 回だけ を覚えない (前の版の値は読み捨てる)', function() {
+    expect('mode' in SP.normalize(null)).toBe(false);
+    expect('mode' in SP.normalize({ mode: 'once' })).toBe(false);
+    expect(SP.MODE_LABELS).toBe(undefined);
   });
 
-  test('1 回だけに切り替えた状態は覚える', function() {
-    expect(SP.normalize({ mode: 'once' }).mode).toBe('once');
+  test('枠の上の 1 行は、どのフォルダのどの図を書かずに出しているかを言い、絵文字・「先輩」を出さない', function() {
+    var t = SP.noticeText('D:/pd/senior', 'spi_state.puml');
+    expect(t).toBe('senior の spi_state（読むだけ・書き換えません）');
+    expect(t.indexOf('\u{1F440}')).toBe(-1);
+    expect(t.indexOf('先輩')).toBe(-1);
+    expect(SP.noticeText('D:/pd/senior', '')).toContain('読むだけ');
   });
 
-  test('枠の中の 2 択は「据え置く」「1 回だけ」と名乗る', function() {
-    expect(SP.MODE_LABELS.keep).toBe('据え置く');
-    expect(SP.MODE_LABELS.once).toBe('1 回だけ');
-  });
-
-  test('下端の札は「先輩」ではなく「並べて比較」と名乗り、絵文字を出さない', function() {
-    var t = SP.statusText(null, { ready: false });
-    expect(t.label).toBe('並べて比較 −');
-    expect(t.label.indexOf('\u{1F440}')).toBe(-1);
-    expect(t.label.indexOf('先輩')).toBe(-1);
-  });
-
-  test('画面側も「比較相手」と名乗り、仮の手本の口は図種で言う', function() {
+  test('画面は「読むだけ」と名乗り、相手を選び直す口と仮の手本の口は無い', function() {
     var html = require('fs').readFileSync(require('path').join(__dirname, '..', 'plantuml-assist.html'), 'utf8');
-    expect(html).toContain('<strong>比較相手</strong>');
-    expect(html).toContain('id="senior-mode-keep"');
-    expect(html).toContain('id="senior-mode-once"');
-    expect(html).toContain('相手に無い図種を仮に組む');
-    // BLK-builder-20260924-1716-4 (design 9c / 10a): 下端の札は相手が決まるまで出ないので、名乗りは FILES の入口で見る。
-    expect(html).toContain('aria-label="並べて比較"');
+    expect(html).toContain('<strong id="senior-title">読むだけ</strong>');
+    expect(html).not.toContain('id="senior-mode-keep"');
+    expect(html).not.toContain('id="senior-mode-once"');
+    expect(html).not.toContain('相手に無い図種を仮に組む');
+    expect(html).not.toContain('aria-label="並べて比較"');
   });
 });

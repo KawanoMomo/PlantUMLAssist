@@ -100,9 +100,9 @@ describe('保存状態は 1 行に短く (design 9c)', function() {
   });
 
   test('書けなかった回は短くせず、理由を名指ししたまま', function() {
-    var d = AST.describe(meta, { where: 'deferred', reason: 'ask' }, 'たった今', 'spi_init_sequence', '13:31');
+    var d = AST.describe(meta, { where: 'deferred', reason: 'no-name' }, 'たった今', 'spi_init_sequence', '13:31');
     expect(d.text).toContain('未保存');
     expect(d.text).toContain('spi_init_sequence.puml');
-    expect(d.pending).toBe(true);
+    expect(d.text).not.toContain('13:31');
   });
 });

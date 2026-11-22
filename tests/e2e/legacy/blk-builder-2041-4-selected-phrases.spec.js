@@ -59,7 +59,7 @@ test.describe('BLK-builder-2041-4 選択中の操作を「何が起きるか」�
   test('元のボタンの文字でも同じ候補に当たる', async ({ page }) => {
     await setup(page);
     await page.keyboard.press('Control+k');
-    await page.locator('#cp-input').fill('ライフライン推論');
+    await page.locator('#cp-input').fill('呼び出しの開始・終了');
     await expect(page.locator('#cp-list .cp-item').first())
       .toContainText('呼び出しの開始・終了を自動で入れる');
   });

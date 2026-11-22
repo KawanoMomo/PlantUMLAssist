@@ -1,7 +1,9 @@
 'use strict';
 // BLK-primary-20260914-1306-friction: 置換の組 (SpiDrv → Spi_Driver) を保存フォルダ側に
-// 残す。localStorage の改名履歴は「当たった置換」しか増えないので、ヒット 0 件を
+// 残す。「当たった置換」しか残さない記録では、ヒット 0 件を
 // 確かめるためだけの空打ちは何度打っても組が残らず、毎回打ち直しになっていた。
+// TICKET-owner-20261116-0621-prune: 保存フォルダを使わない運用でも、組はこのブラウザに保存先ごとに残す
+// (改名の時系列を外し、過去の置換の組 1 つに寄せた)。
 if (!global.window) {
   var jsdom = require('jsdom');
   var dom = new jsdom.JSDOM('<!DOCTYPE html><html><body></body></html>');
@@ -94,5 +96,60 @@ describe('rename-pairs: 置換の組はフォルダの持ち物', function() {
     expect(rows[0].at).toBe('2026-09-29T12:00:00Z');
     expect(rows[0].appliedAt).toBe('2026-09-29T11:00:00Z');
     expect(RP.normalize([{ from: 'A', to: 'B' }])[0].appliedAt).toBe('');
+  });
+});
+
+describe('rename-pairs: 保存フォルダを使わない運用の組 (このブラウザに残す)', function() {
+  function memStore(init) {
+    var m = Object.assign({}, init || {});
+    return {
+      getItem: function(k) { return Object.prototype.hasOwnProperty.call(m, k) ? m[k] : null; },
+      setItem: function(k, v) { m[k] = String(v); },
+      raw: m,
+    };
+  }
+
+  test('当てた組を覚え、開き直して読むと同じ組が出る。保存先ごとに分かれる', function() {
+    var s = memStore();
+    RP.rememberLocal(s, './autosave', { from: 'SpiDrv', to: 'Spi_Driver', at: '2026-11-16T12:00:00Z',
+      appliedAt: '2026-11-16T12:00:00Z' });
+    var rows = RP.loadLocal(s, './autosave');
+    expect(rows.length).toBe(1);
+    expect(rows[0].from + '>' + rows[0].to).toBe('SpiDrv>Spi_Driver');
+    expect(rows[0].appliedAt).toBe('2026-11-16T12:00:00Z');
+    expect(RP.loadLocal(s, './other')).toEqual([]);
+  });
+
+  test('同じ組は 1 行のまま日時だけ進み、新しい組が先頭に来る', function() {
+    var s = memStore();
+    RP.rememberLocal(s, 'd', { from: 'A', to: 'B', at: '2026-11-16T10:00:00Z' });
+    RP.rememberLocal(s, 'd', { from: 'C', to: 'D', at: '2026-11-16T11:00:00Z' });
+    RP.rememberLocal(s, 'd', { from: 'A', to: 'B', at: '2026-11-16T12:00:00Z' });
+    var rows = RP.loadLocal(s, 'd');
+    expect(rows.map(function(r) { return r.from; })).toEqual(['A', 'C']);
+    expect(rows[0].at).toBe('2026-11-16T12:00:00Z');
+  });
+
+  test('組でないもの (同名・空) は覚えない', function() {
+    var s = memStore();
+    RP.rememberLocal(s, 'd', { from: 'A', to: 'A', at: '2026-11-16T10:00:00Z' });
+    RP.rememberLocal(s, 'd', { from: '', to: 'B' });
+    expect(RP.loadLocal(s, 'd')).toEqual([]);
+  });
+
+  test('壊れた値・読めない入れ物・外した道具の控えが残っていても、空として扱い止まらない', function() {
+    expect(RP.loadLocal(memStore({ 'plantuml-rename-pairs': '{broken' }), 'd')).toEqual([]);
+    expect(RP.loadLocal(memStore({ 'plantuml-rename-pairs': '[1,2]' }), 'd')).toEqual([]);
+    expect(RP.loadLocal(null, 'd')).toEqual([]);
+    var throwing = { getItem: function() { throw new Error('denied'); }, setItem: function() { throw new Error('denied'); } };
+    expect(RP.loadLocal(throwing, 'd')).toEqual([]);
+    expect(RP.rememberLocal(throwing, 'd', { from: 'A', to: 'B', at: 'x' }).length).toBe(1);
+    // 外した改名の時系列が残した控え (別の鍵) は読まない・書かない。
+    var old = '{"./autosave":[{"from":"CanDrv","to":"Can_Driver","docs":[]}]}';
+    var s = memStore({ 'plantuml-rename-history': old });
+    expect(RP.loadLocal(s, './autosave')).toEqual([]);
+    RP.rememberLocal(s, './autosave', { from: 'A', to: 'B', at: '2026-11-16T10:00:00Z' });
+    expect(s.raw['plantuml-rename-history']).toBe(old);
+    expect(RP.LOCAL_KEY).toBe('plantuml-rename-pairs');
   });
 });

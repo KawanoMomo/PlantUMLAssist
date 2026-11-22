@@ -20,11 +20,13 @@ function noop() {}
 
 // 道具のコマンド (button 付き) と、道具でないコマンド (button 無し) を混ぜる。
 var COMMANDS = [
-  // BLK-owner-20260924-1332-prune: 🔍 名前突合の行は ▦ 突合ボードの行に畳んだので、確かめるの代表はボード。
-  { id: 'tab-cross', title: '突合ボード / Cross-check board', hint: 'Tabs', keywords: ['名前突合', 'name audit'], button: 'btn-tab-cross', run: noop },
-  { id: 'tab-board', title: '変更サマリを開く / Change board', hint: 'Tabs', button: 'btn-tab-board', run: noop },
-  { id: 'tab-handoff', title: '引き継ぎパッケージを作る / Handoff package', hint: 'Tabs', button: 'btn-tab-handoff', run: noop },
-  { id: 'tab-template', title: 'テンプレートから新しい図を作る / Template', hint: 'Tabs', button: 'btn-tab-template', run: noop },
+  // TICKET-owner-20261115-1841-prune: 「確かめる」分類 (突合ボードほか) は外した。書き換えるの代表は ⇄ 一括置換。
+  { id: 'tab-rename', title: '部品名の一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'ちかん'], button: 'btn-tab-rename', run: noop },
+  // 変更サマリ・引き継ぎ (渡す) は TICKET-owner-20261115-1828-prune で、
+  // 「レビュー」分類 (± 差分ほか) は TICKET-owner-20261115-2141-prune で外した。書き換えるの 2 つ目は ✎ 行編集。
+  { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', button: 'btn-tab-lines', run: noop },
+  // 「図をつくる」分類 (⧉ 既存の図や雛形から新しい図を起こす) は TICKET-owner-20261116-0321-prune で外した。
+  { id: 'tab-apply', title: '複数クラスに一括適用 / Bulk apply', hint: 'Tabs', button: 'btn-tab-apply', run: noop },
   { id: 'save', title: 'ファイルを保存 / Save', hint: 'File', run: noop },
   // タブ列に残るもの (＋ / 一覧) はツールメニューに載っていないので分類しない。
   { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', hint: 'Tabs', button: 'btn-tab-folder', run: noop },
@@ -38,10 +40,9 @@ function byId(items, id) {
 describe('道具のコマンドは 6 分類に入る', () => {
   test('分類はツールメニューと同じ key になる', () => {
     var items = itemsOf();
-    expect(byId(items, 'tab-cross').group).toBe('check');
-    expect(byId(items, 'tab-board').group).toBe('review');
-    expect(byId(items, 'tab-handoff').group).toBe('give');
-    expect(byId(items, 'tab-template').group).toBe('make');
+    expect(byId(items, 'tab-rename').group).toBe('edit');
+    expect(byId(items, 'tab-lines').group).toBe('edit');
+    expect(byId(items, 'tab-apply').group).toBe('edit');
   });
 
   test('ツールメニューに載っていないコマンドは従来どおり「コマンド」', () => {
@@ -51,54 +52,50 @@ describe('道具のコマンドは 6 分類に入る', () => {
   });
 
   test('行のチップは分類名になる', () => {
-    expect(byId(itemsOf(), 'tab-cross').badge).toBe('確かめる');
-    expect(byId(itemsOf(), 'tab-handoff').badge).toBe('渡す');
+    expect(byId(itemsOf(), 'tab-rename').badge).toBe('書き換える');
+    expect(byId(itemsOf(), 'tab-apply').badge).toBe('書き換える');
     expect(byId(itemsOf(), 'command:save').badge).toBe('コマンド');
   });
 
   test('題はツールメニューと同じ言い換えになる (メニューで覚えた語で引ける)', () => {
-    expect(byId(itemsOf(), 'tab-cross').title).toBe('突合ボード (表記揺れ・宣言なし・メソッドも 1 画面で)');
-    expect(byId(itemsOf(), 'tab-cross').title).toBe(TM.labelOf('btn-tab-cross'));
+    expect(byId(itemsOf(), 'tab-rename').title).toBe('部品名を一括置換する');
+    expect(byId(itemsOf(), 'tab-rename').title).toBe(TM.labelOf('btn-tab-rename'));
   });
 
   test('右端には道具の短い呼び名が残る (どの道具かが消えない)', () => {
-    expect(byId(itemsOf(), 'tab-template').hint).toBe('テンプレートから新しい図');
-    expect(byId(itemsOf(), 'tab-handoff').hint).toBe('引き継ぎパッケージ');
+    expect(byId(itemsOf(), 'tab-lines').hint).toBe('行編集');
   });
 
   test('元の題でもメニューの言い換えでも引ける', () => {
     var items = itemsOf();
-    expect(CP.filter(items, 'Cross-check').map(function(i) { return i.id; }))
-      .toContain('check:tab-cross');
-    // 旧 🔍 名前突合の語でもボードの行に当たる (Ctrl+K は 1 画面 1 行)。
-    expect(CP.filter(items, 'Name audit').map(function(i) { return i.id; }))
-      .toContain('check:tab-cross');
-    expect(CP.filter(items, '表記揺れ').map(function(i) { return i.id; }))
-      .toContain('check:tab-cross');
+    expect(CP.filter(items, 'Bulk rename').map(function(i) { return i.id; }))
+      .toContain('edit:tab-rename');
+    expect(CP.filter(items, '一括置換').map(function(i) { return i.id; }))
+      .toContain('edit:tab-rename');
   });
 });
 
 describe('見出しと Tab の絞り込み', () => {
   test('見出しの並びは 図に足す → 移動 → 選択中 → 6 分類 → コマンド', () => {
     var groups = CP.groupsOf(itemsOf());
-    expect(groups).toEqual(['make', 'check', 'review', 'give', 'command']);
+    expect(groups).toEqual(['edit', 'command']);
   });
 
   test('6 分類の見出しに日本語の名前が付く', () => {
     expect(CP.groupLabel('check')).toBe('確かめる / Check');
-    expect(CP.groupLabel('give')).toBe('渡す / Deliver');
+    expect(CP.groupLabel('review')).toBe('レビュー / Review');
   });
 
   test('Tab は 6 分類も巡回先にする', () => {
     var present = CP.groupsOf(itemsOf());
-    expect(CP.cycleGroup(null, present, 1)).toBe('make');
-    expect(CP.cycleGroup('make', present, 1)).toBe('check');
+    expect(CP.cycleGroup(null, present, 1)).toBe('edit');
+    expect(CP.cycleGroup('edit', present, 1)).toBe('command');
     expect(CP.cycleGroup('command', present, 1)).toBe(null);
   });
 
   test('分類で絞り込むとその分類の道具だけになる', () => {
-    var only = CP.filterByGroup(itemsOf(), 'review');
-    expect(only.map(function(i) { return i.id; })).toEqual(['review:tab-board']);
+    var only = CP.filterByGroup(itemsOf(), 'edit');
+    expect(only.map(function(i) { return i.id; })).toEqual(['edit:tab-rename', 'edit:tab-lines', 'edit:tab-apply']);
   });
 });
 
@@ -118,9 +115,9 @@ describe('ツールメニューの道具はすべてパレットから引ける 
   // その道具へ行く経路が 1 本も無くなる。
   var appJs = require('fs').readFileSync(require('path').join(__dirname, '../src/app.js'), 'utf-8');
 
-  // BLK-owner-20260924-1212-prune: ツール ▾ の案内行 (→ ▤ 影響を見る) は Ctrl+K に写さない。
-  // その行き先は別名のコマンド 1 行が持つので、そのコマンドが在ることで経路があると数える。
-  var GUIDE_ROWS = { 'btn-tab-xref': "{ id: 'name-search'" };
+  // ツール ▾ の案内行 (Ctrl+K に写さず、別名のコマンドが経路を持つ行)。
+  // 唯一の案内行だった「部品名で図をまたいで辿る」は TICKET-owner-20261115-2140-prune で外した。
+  var GUIDE_ROWS = {};
 
   test('menuIds の全部が app.js のコマンドに button として現れる', () => {
     var missing = TM.menuIds().filter(function(id) {
@@ -133,10 +130,11 @@ describe('ツールメニューの道具はすべてパレットから引ける 
 
 describe('名指しされた道具は見出し順より前に出る', () => {
   // 見出しが 9 つに増えると、たまたま同じ語を含むだけの候補が前の見出しから
-  // 名指しの候補を抜く。「保存」で「前回保存からの差分」が 1 位になった。
+  // 名指しの候補を抜く。「保存」で「前回保存からの差分」が 1 位になった
+  // (その行は TICKET-owner-20261115-2141-prune で外したので、同じ形を 一括適用 で確かめる)。
   var CMDS = [
     { id: 'save', title: 'ファイルを保存 / Save', keywords: ['保存', 'save'], run: noop },
-    { id: 'tab-diff', title: '前回保存からの差分 / Diff', button: 'btn-tab-diff', run: noop },
+    { id: 'tab-apply', title: '保存した図に一括適用 / Bulk apply', button: 'btn-tab-apply', run: noop },
     { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', run: noop },
   ];
 
@@ -146,8 +144,8 @@ describe('名指しされた道具は見出し順より前に出る', () => {
   });
 
   test('完全一致が無ければ従来どおり見出し順', () => {
-    var r = CP.filter(CP.buildItems(CMDS, ''), '差分');
-    expect(r[0].id).toBe('review:tab-diff');
+    var r = CP.filter(CP.buildItems(CMDS, ''), '適用');
+    expect(r[0].id).toBe('edit:tab-apply');
   });
 
   test('図の中身 (足す / 移動) は見出し順のまま', () => {
@@ -165,9 +163,9 @@ describe('名指しされた道具は見出し順より前に出る', () => {
 describe('右端の呼び名', () => {
   test('言い換えと同じ文字なら出さない (同じ語が 2 度並ばない)', () => {
     var items = CP.buildItems([
-      { id: 'tab-symptom', title: '症状から関連図を探す / Symptom search', button: 'btn-tab-symptom', run: noop },
+      { id: 'tab-lines', title: '行を書き換える / Line edit', button: 'btn-tab-lines', run: noop },
     ], '');
-    expect(items[0].title).toBe('症状から関連図を探す');
+    expect(items[0].title).toBe('行を書き換える');
     expect(items[0].hint).toBe('');
   });
 });

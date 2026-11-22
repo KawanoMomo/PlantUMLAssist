@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // preproc-expand — 当てる前の本文を PlantUML 自身のプリプロセッサに展開させ、全図種のパーサに展開後の行を読ませる。
 //
-// BLK-migrator-20260929-1351: マクロ (!procedure / !definelong / 引数つき !define / !include した手続き / 変数・%関数)
+// マクロ (!procedure / !definelong / 引数つき !define / !include した手続き / 変数・%関数)
 // が描く要素に選択枠が出なかった。マクロの種類ごとに DSL の読み方を足すのをやめ、同梱 jar の
 // プリプロセッサ (server の POST /preproc。ローカルで完結し外へ送らない) が返す行を読む。
 //
@@ -271,7 +271,7 @@ window.MA.preprocExpand = (function() {
   }
 
   function has(text) { return !!(_cache[text] && _cache[text].mapped); }
-  // 展開で字面が変わる行 ({L: true})。展開が手元に無ければ null (BLK-owner-20260929-2131-1: 読むだけにする部品の見分け)。
+  // 展開で字面が変わる行 ({L: true})。展開が手元に無ければ null (読むだけにする部品の見分け)。
   function changedLines(text) {
     var c = _cache[text];
     if (!c || !c.mapped) return null;
@@ -283,7 +283,7 @@ window.MA.preprocExpand = (function() {
   function splicedText(text) { return _spliced[text] || null; }
 
   // 展開を server に頼み、手元に憶える。展開が要らない・憶え済みならすぐ解決。失敗しても reject しない。
-  // dir: 相対の !include を探すフォルダ (その図の .puml のあるフォルダ。BLK-primary-20260929-1108)。
+  // dir: 相対の !include を探すフォルダ (その図の .puml のあるフォルダ。)。
   function ensure(text, fetchFn, dir) {
     if (!needs(text) || _cache[text]) return Promise.resolve(has(text));
     if (_pending[text]) return _pending[text];

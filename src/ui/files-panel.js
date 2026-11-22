@@ -3,13 +3,13 @@ window.MA = window.MA || {};
 
 // files-panel — レール右の FILES ツリーを結線する (design 10a)。
 //
-// BLK-human-20260923-1700: 「保存先チップ」「📂 一覧」「📄 開く」「⇔ 先輩」の 4 つが
+// 「保存先チップ」「📂 一覧」「📄 開く」「⇔ 先輩」の 4 つが
 // 別々の入口になっていて、どこに何があるかを入口ごとに覚え直していた。
 // ここはその 4 つを 1 本のツリーに畳んだ後の、節の開閉・絞り込み・件数・
 // 「開いている図」の行を受け持つ。
 //
-// 引っ越してきた入口 (#btn-tab-folder / #top-save-target / #btn-tab-peek /
-// #btn-tab-senior) の中身そのものは app.js に残っていて、ここでは触らない。
+// 引っ越してきた入口 (#btn-tab-folder / #top-save-target) の中身そのものは
+// app.js に残っていて、ここでは触らない (⇔ の入口は TICKET-owner-20261115-2141-prune で外した)。
 // 置き場所だけがツリーの中に変わる (呼び出し側と台本が同じ id で同じ操作を指せる)。
 window.MA.filesPanel = (function() {
   var KEY_OPEN = 'pua.files.open';        // パネルそのものの開閉
@@ -62,12 +62,14 @@ window.MA.filesPanel = (function() {
     _set(KEY_SEC + id, on ? '1' : '0');
   }
 
-  // design 10a (BLK-builder-20260924-1923-4): 保存先のフォルダの行の ▾ / ▸。
-  // その下の部品のフォルダ・直下の図をまとめて畳む / 開く。開閉は次回も覚える。
+  // design 10a: 保存先のフォルダの行の ▾ / ▸。
+  // その下の図をまとめて畳む / 開く。開閉は次回も覚える。
   function setTargetParts(on) {
     var host = $('files-parts');
     var btn = $('files-target-caret');
     if (host) host.hidden = !on;
+    var sub = $('files-subtree');
+    if (sub) sub.hidden = !on;
     if (btn) {
       btn.setAttribute('aria-expanded', on ? 'true' : 'false');
       var c = btn.querySelector('.files-caret');
@@ -79,6 +81,172 @@ window.MA.filesPanel = (function() {
   function targetPartsOpen() {
     var host = $('files-parts');
     return !!host && !host.hidden;
+  }
+
+  // ── 保存先の下のサブフォルダ (TICKET-roadmap-20261122-0855-2) ─────────
+  // 実在のフォルダを実在の階層のまま、直下の図の行の下に出す。フォルダの行は押すと開く・畳む
+  // (開閉は次回も覚える)。図の行を押すとそのファイルを開き (仮のタブ)、ダブルクリックで固定にする。
+  // 開く・畳む・絞るだけでは何も書かない (読むのは server の /tree-dir だけ)。
+  var KEY_SUB = 'pua.files.sub.';
+  var _subTree = { dir: '', dirs: [], at: 0, busy: false };
+
+  function _subHost() {
+    var host = $('files-subtree');
+    if (host) return host;
+    var parts = $('files-parts');
+    if (!parts || !parts.parentNode) return null;
+    host = document.createElement('div');
+    host.id = 'files-subtree';
+    host.setAttribute('role', 'group');
+    host.setAttribute('aria-label', '保存先の下のフォルダ');
+    parts.parentNode.insertBefore(host, parts.nextSibling);
+    host.hidden = parts.hidden;
+    return host;
+  }
+
+  function _targetDir() {
+    try {
+      var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+      if (!cfg || cfg.backend !== 'file') return '';
+      return (typeof window._wsFileDir === 'function') ? String(window._wsFileDir() || '') : String(cfg.fileDir || '');
+    } catch (e) { return ''; }
+  }
+
+  function _subOpenSet() {
+    var out = {};
+    (_subTree.dirs || []).forEach(function(d) {
+      if (d && d.rel && _get(KEY_SUB + d.rel, '0') === '1') out[d.rel] = true;
+    });
+    return out;
+  }
+
+  // ディスクから読み直す。force でなければ、同じ保存先を直前に読んだばかりなら読み直さない。
+  function reloadSubTree(force) {
+    var dir = _targetDir();
+    var WS = window.MA.workspace;
+    if (!dir || !WS || !WS.listTree) {
+      _subTree = { dir: '', dirs: [], at: 0, busy: false };
+      renderSubTree();
+      return Promise.resolve(false);
+    }
+    if (!force && _subTree.dir === dir && Date.now() - _subTree.at < 1500) return Promise.resolve(false);
+    if (_subTree.busy) { _subTree.again = true; return Promise.resolve(false); }
+    _subTree.busy = true;
+    return WS.listTree(dir).then(function(res) {
+      _subTree.busy = false;
+      if (_targetDir() !== dir) return false;
+      _subTree.dir = dir;
+      _subTree.root = (res && res.root) || dir;
+      _subTree.dirs = (res && res.ok && Array.isArray(res.dirs)) ? res.dirs : [];
+      _subTree.at = Date.now();
+      renderSubTree();
+      // パンくずの「保存先からの道」は、server が解いた root と比べて決まる。読めた後に引き直す。
+      try { if (typeof window.updateTopSaveTarget === 'function') window.updateTopSaveTarget(); } catch (e) {}
+      if (_subTree.again) { _subTree.again = false; reloadSubTree(true); }
+      return true;
+    }, function() { _subTree.busy = false; return false; });
+  }
+
+  // 今読んでいるサブフォルダの図 ({ name, dir, rel })。Ctrl+P が同じ顔ぶれを引く。
+  function subFiles() {
+    var out = [];
+    (_subTree.dirs || []).forEach(function(d) {
+      (d.files || []).forEach(function(n) { out.push({ name: String(n), dir: String(d.path || ''), rel: String(d.rel || '') }); });
+    });
+    return out;
+  }
+
+  function _activeSubKey() {
+    var ws = window.MA.workspace;
+    var a = ws && ws.getActive ? ws.getActive() : null;
+    if (!a || !a.sub || !a.dir) return '';
+    return String(a.dir).split(String.fromCharCode(92)).join('/').toLowerCase() + '|' + a.name;
+  }
+
+  function _subFileButton(r, withPath, activeKey) {
+    var FT = window.MA.fileTree;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'files-sub-file';
+    b.setAttribute('data-file-name', r.name);
+    b.setAttribute('data-sub-rel', r.rel);
+    b.setAttribute('data-sub-dir', r.dir);
+    b.style.paddingLeft = (30 + 12 * (withPath ? 0 : Math.max(0, r.depth - 2))) + 'px';
+    var key = String(r.dir).split(String.fromCharCode(92)).join('/').toLowerCase() + '|' + r.name;
+    if (activeKey && key === activeKey) b.classList.add('is-active');
+    b.title = r.rel + '/' + r.name + '.puml';
+    b.appendChild(_glyphEl(FT && FT.fileKind ? FT.fileKind(r.name, '') : ''));
+    var nm = document.createElement('span');
+    nm.className = 'files-row-name';
+    nm.textContent = r.name;
+    b.appendChild(nm);
+    if (withPath) {
+      // 絞り込みの間は、同じ名前の図をフォルダで見分けられるように道を添える。
+      var p = document.createElement('span');
+      p.className = 'files-row-path';
+      p.textContent = r.rel + '/';
+      b.appendChild(p);
+    }
+    b.addEventListener('click', function() {
+      if (typeof window.openFromSubFolder === 'function') window.openFromSubFolder(r.name, r.dir, { preview: true });
+    });
+    b.addEventListener('dblclick', function() {
+      if (typeof window.openFromSubFolder === 'function') window.openFromSubFolder(r.name, r.dir, { pin: true });
+    });
+    return b;
+  }
+
+  function _subDirButton(r) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'files-sub-dir';
+    b.setAttribute('data-sub-rel', r.rel);
+    b.setAttribute('data-sub-dir', r.path);
+    b.setAttribute('aria-expanded', r.open ? 'true' : 'false');
+    b.style.paddingLeft = (18 + 12 * Math.max(0, r.depth - 1)) + 'px';
+    b.title = r.rel + ' (保存先の下のフォルダ)';
+    var caret = document.createElement('span');
+    caret.className = 'files-caret';
+    caret.setAttribute('aria-hidden', 'true');
+    caret.textContent = r.open ? '▾' : '▸';
+    b.appendChild(caret);
+    var lab = document.createElement('span');
+    lab.className = 'files-part-label';
+    lab.textContent = r.name;
+    b.appendChild(lab);
+    if (r.count) {
+      var cnt = document.createElement('span');
+      cnt.className = 'files-sec-count';
+      cnt.textContent = String(r.count);
+      b.appendChild(cnt);
+    }
+    b.addEventListener('click', function() {
+      _set(KEY_SUB + r.rel, r.open ? '0' : '1');
+      renderSubTree();
+    });
+    return b;
+  }
+
+  function renderSubTree() {
+    var host = _subHost();
+    if (!host) return;
+    // 行の欄 (名前を変更・新しいフォルダ) を打っている間は組み直さない (欄ごと消える)。閉じた後の読み直しで描く。
+    if (host.querySelector('#files-rename-box, #files-newfolder-box')) return;
+    var FT = window.MA.fileTree;
+    var keep = _focusKeep(host);
+    host.textContent = '';
+    if (!FT || !FT.subTreeRows || !_targetDir() || !_subTree.dirs.length) {
+      host.setAttribute('data-count', '0');
+      return;
+    }
+    var q = _query();
+    var rows = FT.subTreeRows(_subTree.dirs, _subOpenSet(), q);
+    var activeKey = _activeSubKey();
+    rows.forEach(function(r) {
+      host.appendChild(r.type === 'dir' ? _subDirButton(r) : _subFileButton(r, !!String(q).trim(), activeKey));
+    });
+    host.setAttribute('data-count', String(_subTree.dirs.length));
+    _focusBack(host, keep);
   }
 
   function secOpen(id) {
@@ -107,8 +275,8 @@ window.MA.filesPanel = (function() {
     return f ? f.value : '';
   }
 
-  // 未保存 ● / 指摘が未反映 / 一時控え。印の内容は 📂 一覧のバッジと同じものを読む。
-  // BLK-builder-20260924-1741-2 (design 9a / 10a): 未保存の印はタブと同じ判定 (app.js の docSaveStatus) を読む。
+  // 未保存 ● / 指摘が未反映。印の内容は 📂 一覧のバッジと同じものを読む。
+  // 未保存の印はタブと同じ判定 (app.js の docSaveStatus) を読む。
   // 以前は doc.dirty を読んでいたが、この値はどこでも立たず、ツリーに ● が出たことが無かった。
   function _saveMark(doc) {
     var f = window.MA.docSaveStatus;
@@ -121,7 +289,6 @@ window.MA.filesPanel = (function() {
     var sm = _saveMark(doc);
     if (sm) out.push(sm);
     if (doc.reviewPending) out.push('未反映');
-    if (doc.draft) out.push('控え');
     return out.join(' ');
   }
 
@@ -147,7 +314,7 @@ window.MA.filesPanel = (function() {
     else renderOpen();
   }
 
-  // BLK-builder-20260924-2316-3 (design 10b): 描き直しで、フォーカスのあった行が作り直されても
+  // 描き直しで、フォーカスのあった行が作り直されても
   // 同じ行へフォーカスを戻す (図を Enter / クリックで開いた後も、続けて ↑↓ → ← Enter F2 が効く)。
   // 描き直す前にフォーカスが host の中の行に無ければ何もしない (利用者が他所を押した後に奪わない)。
   function _focusKeep(host) {
@@ -194,12 +361,12 @@ window.MA.filesPanel = (function() {
       b.className = 'files-row' + (doc.id === activeId ? ' is-active' : '');
       b.setAttribute('data-doc-id', String(doc.id));
       b.setAttribute('data-file-name', String(doc.name || ''));
-      // design 10a (BLK-builder-20260924-1701-1): 仮のタブの図は、行の名前もタブと同じく斜体で出す。
+      // design 10a: 仮のタブの図は、行の名前もタブと同じく斜体で出す。
       if (doc.preview) b.setAttribute('data-preview', '1');
       b.appendChild(_glyphEl(doc.diagramType));
       var name = document.createElement('span');
       name.className = 'files-row-name';
-      // design 10a (BLK-builder-20260924-1636-1): 開いている図はタブ・上部バーと同じファイル名 ({name}.puml) で出す。
+      // design 10a: 開いている図はタブ・上部バーと同じファイル名 ({name}.puml) で出す。
       var TS = window.MA.topStatus;
       name.textContent = doc.name && TS && TS.fileName ? TS.fileName(String(doc.name)) : String(doc.name || '(無題)');
       b.appendChild(name);
@@ -218,7 +385,7 @@ window.MA.filesPanel = (function() {
     });
     var c = $('files-count-open');
     if (c) c.textContent = docs.length ? String(docs.length) : '';
-    // design 10a (BLK-builder-20260924-1350-3): 見出しは「開いている図」+ 右端の件数の 1 回だけ。
+    // design 10a: 見出しは「開いている図」+ 右端の件数の 1 回だけ。
     // 名前に括弧で同じ数を足さない (「開いている図（1）  1」と 2 回出ていた)。
   }
 
@@ -230,19 +397,17 @@ window.MA.filesPanel = (function() {
     if (ws && ws.setActive) ws.setActive(id);
   }
 
-  // ── 保存先の下の「部品ごとのフォルダ」(design 10a) ───────────────────
-  // 一覧の実体は #folder-panel が持っているので、束ねるのもそこから読む
+  // ── 保存先の下の図 (design 10a) ──────────────────────────────────────
+  // 一覧の実体は #folder-panel が持っているので、並べるのもそこから読む
   // (同じ図を 2 か所から数えると、片方だけが古くなる)。
-  // 6 図種の済/未の表そのものは 🧩 部品ビューの職掌なので
-  // (BLK-owner-20260918-0049-prune)、ここは `SPI 4 / 6` と未作成の件数まで。
-  var KEY_PART = 'pua.files.part.';
-
+  // 実在のファイルを名前の順にそのまま並べる。ファイル名から部品を読んで仮のフォルダに束ねる・
+  // 未作成の図種を出すことは TICKET-owner-20261116-0321-prune で外した。
   function _folderNames() {
     var out = [];
     var items = document.querySelectorAll('#folder-panel .folder-item[data-file-name]');
     Array.prototype.forEach.call(items, function(el) {
       var n = el.getAttribute('data-file-name');
-      // 本文から読んだ図種 (保存先の一覧が判定済みなら)。名前に図種が無い図を部品の側で数えるのに使う。
+      // 本文から読んだ図種 (保存先の一覧が判定済みなら)。行頭の図種の線画に使う。
       if (n) out.push({ name: n, kind: el.getAttribute('data-content-kind') || '' });
     });
     return out;
@@ -254,85 +419,26 @@ window.MA.filesPanel = (function() {
     return '#folder-panel .folder-item[data-file-name="' + q + '"]';
   }
 
-  // BLK-owner-20260924-0637-1: ツリーのファイル行の札。保存先の一覧の行のバッジと同じ事実を読む
+  // ツリーのファイル行の札。保存先の一覧の行のバッジと同じ事実を読む
   // (数える所を 2 つにしない)。開いている図の未保存 ● は作業中のタブから読む。
   function _fileState(name) {
-    var st = { dirty: false, unapplied: false, draft: false, svgStale: false };
+    var st = { dirty: false, unapplied: false };
     // 保存先の行: その名前の図が開いていて、前回保存から変わっていれば ● (タブと同じ判定)。
     var byName = window.MA.docSaveStatusByName;
     if (typeof byName === 'function' && byName(name) === 'changed') st.dirty = true;
     _docs().forEach(function(d) {
       if (String(d.name || '') !== name) return;
       if (d.reviewPending) st.unapplied = true;
-      if (d.draft) st.draft = true;
     });
-    var it = document.querySelector(_itemSel(name));
-    if (it) {
-      var row = (it.closest && it.closest('.folder-row')) || it;
-      var rb = it.querySelector('.folder-review-badge');
-      if (rb && rb.getAttribute('data-review-state') !== 'applied') st.unapplied = true;
-      if (row.classList && row.classList.contains('folder-row-draft')) st.draft = true;
-      if (it.querySelector('[data-svg-status="stale"], .folder-svg-content-badge[data-svg-content="differ"]')) st.svgStale = true;
-      // BLK-junior-20260924-1632-wish: 指摘.md の反映状況の札。確かめられない指摘がある図だけ
-      // (対象外・反映済みの図には札を出さない)。語・見出しは保存先の一覧の行のものをそのまま読む。
-      var nb = row.querySelector ? row.querySelector('.folder-note-badge[data-note-status="todo"]') : null;
-      if (nb) {
-        st.note = {
-          mark: nb.textContent || '',
-          head: nb.getAttribute('data-note-head') || '',
-          term: nb.getAttribute('data-note-term') || '',
-          open: Number(nb.getAttribute('data-note-open')) || 1,
-        };
-      }
-    }
     return st;
   }
 
-  // 札の title: 指摘の 1 行目 (見出し) を出す。何件あるかと、押すと何が起きるかを添える。
-  function _noteTitle(note) {
-    var t = '指摘: ' + (note.head || '(見出しなし)');
-    if (note.open > 1) t += ' ほか ' + (note.open - 1) + ' 件';
-    t += note.term ? '（押すと図を開いて「' + note.term + '」を選びます）' : '（押すと図を開きます）';
-    return t;
-  }
-
-  function _noteEl(name, note) {
-    var n = document.createElement('span');
-    n.className = 'files-row-note';
-    n.setAttribute('role', 'button');
-    n.setAttribute('data-note-of', name);
-    n.setAttribute('data-note-status', 'todo');
-    if (note.term) n.setAttribute('data-note-term', note.term);
-    n.textContent = note.mark;
-    n.title = _noteTitle(note);
-    n.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      if (typeof window.MA.openNoteFinding === 'function') window.MA.openNoteFinding(name, note.term);
-      else _clickFolderItem(name);
-    });
-    return n;
-  }
-
-  // 部品のフォルダの見出しに出す札の数。図 1 枚は 1 回だけ数える
-  // (指摘の札が付いた図は ⚠ の側で数え、同じ図を 未反映 でもう 1 回数えない)。
-  function _partNotes(files) {
-    var note = 0, unapplied = 0, mark = '';
-    files.forEach(function(f) {
-      var st = _fileState(f.name);
-      if (st.note) { note++; if (!mark) mark = st.note.mark; }
-      else if (st.unapplied) unapplied++;
-    });
-    var parts = [];
-    if (note) parts.push(mark + ' ' + note);
-    if (unapplied) parts.push('未反映 ' + unapplied);
-    return parts.join(' · ');
-  }
-
-  function _fileButton(f, loose) {
+  // 行の class は保存先の図の行を指す名前として残す (files-part-file。右クリック・Git の印・F2 が読む)。
+  function _fileButton(f) {
     var FT = window.MA.fileTree;
     var b = document.createElement('button');
     b.type = 'button';
-    b.className = 'files-part-file' + (loose ? ' files-loose-file' : '');
+    b.className = 'files-part-file files-loose-file';
     b.setAttribute('data-file-name', f.name);
     b.appendChild(_glyphEl(FT && FT.fileKind ? FT.fileKind(f.name, f.kind) : f.kind));
     var nm = document.createElement('span');
@@ -348,9 +454,8 @@ window.MA.filesPanel = (function() {
       b.appendChild(m);
       b.setAttribute('data-marks', mk);
     }
-    if (st.note) b.appendChild(_noteEl(f.name, st.note));
     b.addEventListener('click', function() { _clickFolderItem(f.name); });
-    // design 10a (BLK-builder-20260924-1743-1): ダブルクリックでタブとして固定する。1 回押しは仮のタブのまま。
+    // design 10a: ダブルクリックでタブとして固定する。1 回押しは仮のタブのまま。
     // 固定の道は保存先の一覧の行のダブルクリックと同じ 1 本 (その行へ渡す)。
     b.addEventListener('dblclick', function() { _dblclickFolderItem(f.name); });
     return b;
@@ -359,55 +464,6 @@ window.MA.filesPanel = (function() {
   function _clickFolderItem(name) {
     var it = document.querySelector(_itemSel(name));
     if (it) it.click();
-  }
-
-  // design 10a (BLK-builder-20260924-1735-3): 「＋ 未作成 2 図種（UC・ACT）」。
-  // 「展開すると、まだ作っていない図種が薄い文字で出て、押すとその場で作れます」。
-  // 前は行を押すと 🧩 部品ビュー (読むだけの他フォルダの比較枠) が開くだけで、作るには
-  // ➕ 部品を起こす で部品名を打ち直していた。略号を押せばその図種を、＋ で未作成をまとめて作る。
-  function _missingRow(g) {
-    var FT = window.MA.fileTree;
-    var mp = FT && FT.missingParts ? FT.missingParts(g) : null;
-    var row = document.createElement('div');
-    row.className = 'files-part-missing';
-    row.setAttribute('data-part', g.part);
-    if (!mp) { row.textContent = g.missingLabel; return row; }
-    var all = document.createElement('button');
-    all.type = 'button';
-    all.className = 'files-part-missing-all';
-    all.setAttribute('data-part', g.part);
-    all.textContent = '＋';
-    all.title = mp.allTitle;
-    all.setAttribute('aria-label', mp.allTitle);
-    all.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      _createKinds(g.part, g.missing);
-    });
-    row.appendChild(all);
-    row.appendChild(document.createTextNode(mp.head));
-    mp.kinds.forEach(function(k, i) {
-      if (i) row.appendChild(document.createTextNode('・'));
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'files-part-missing-kind';
-      b.setAttribute('data-part', g.part);
-      b.setAttribute('data-kind', k.kind);
-      b.textContent = k.abbr;
-      b.title = k.title;
-      b.addEventListener('click', function(ev) {
-        ev.stopPropagation();
-        _createKinds(g.part, [k.kind]);
-      });
-      row.appendChild(b);
-    });
-    row.appendChild(document.createTextNode(mp.tail));
-    return row;
-  }
-
-  function _createKinds(part, kinds) {
-    if (typeof window.createPartKinds !== 'function') return;
-    var names = _folderNames().map(function(e) { return e.name; });
-    window.createPartKinds(part, kinds, names);
   }
 
   function _dblclickFolderItem(name) {
@@ -419,7 +475,7 @@ window.MA.filesPanel = (function() {
     it.dispatchEvent(ev);
   }
 
-  // 部品のフォルダも直下の図も無い (ダウンロード保存・空のフォルダ) ときは、畳む印を出さない。
+  // 直下の図が無い (ダウンロード保存・空のフォルダ) ときは、畳む印を出さない。
   function _syncTargetRow() {
     var host = $('files-parts');
     var btn = $('files-target-caret');
@@ -433,6 +489,9 @@ window.MA.filesPanel = (function() {
     var keep = _focusKeep(host);
     _renderParts(host);
     _focusBack(host, keep);
+    // 保存先の一覧を読み直した機会に、サブフォルダも (間を置いて) 読み直す。
+    if (_subTree.dir !== _targetDir()) renderSubTree();
+    reloadSubTree(false);
   }
 
   function _renderParts(host) {
@@ -440,79 +499,27 @@ window.MA.filesPanel = (function() {
     var entries = _folderNames();
     if (!FT || !entries.length) {
       host.textContent = '';
-      // BLK-owner-20260926-0550-3: 最後の 1 枚が消えた後も前の件数が見出しに残らないように消す。
+      // 最後の 1 枚が消えた後も前の件数が見出しに残らないように消す。
       var c0 = $('files-count-target');
       if (c0) c0.textContent = '';
       _syncTargetRow();
       refreshSummary();
-      if (typeof window.MA.refreshTopCrumbs === 'function') window.MA.refreshTopCrumbs();
       return;
     }
     var shown = FT.filter(entries, _query());
-    var lay = FT.layout ? FT.layout(shown) : { groups: FT.groups(shown), loose: [] };
-    var groups = lay.groups;
     host.textContent = '';
-    groups.forEach(function(g) {
-      var stored = _get(KEY_PART + g.part, '0') === '1';
-      var open = FT.partOpen ? FT.partOpen(stored, _query()) : stored;
-      var head = document.createElement('button');
-      head.type = 'button';
-      head.className = 'files-part-head';
-      head.setAttribute('data-part', g.part);
-      head.setAttribute('aria-expanded', open ? 'true' : 'false');
-      var caret = document.createElement('span');
-      caret.className = 'files-caret';
-      caret.setAttribute('aria-hidden', 'true');
-      caret.textContent = open ? '▾' : '▸';
-      head.appendChild(caret);
-      var lab = document.createElement('span');
-      lab.className = 'files-part-label';
-      lab.textContent = g.countLabel;
-      head.appendChild(lab);
-      // BLK-junior-20260924-1632-wish: 部品のフォルダにも、札の付いた図の数を同じ語で出す
-      // (畳んだままでも、どの部品に開く図があるかが読める)。
-      var pn = _partNotes(g.files);
-      if (pn) {
-        var pm = document.createElement('span');
-        pm.className = 'files-part-note';
-        pm.textContent = pn;
-        head.appendChild(pm);
-        head.setAttribute('data-part-notes', pn);
-      }
-      host.appendChild(head);
-
-      var body = document.createElement('div');
-      body.className = 'files-part-body';
-      body.setAttribute('data-part-body', g.part);
-      body.hidden = !open;
-      g.files.forEach(function(f) { body.appendChild(_fileButton(f, false)); });
-      if (g.missingLabel) body.appendChild(_missingRow(g));
-      host.appendChild(body);
-
-      head.addEventListener('click', function() {
-        var on = head.getAttribute('aria-expanded') !== 'true';
-        head.setAttribute('aria-expanded', on ? 'true' : 'false');
-        caret.textContent = on ? '▾' : '▸';
-        body.hidden = !on;
-        // 絞り込み中に開閉しても、覚えている開閉は書き換えない (絞り込みを消すと元に戻る)。
-        if (!String(_query() || '').trim()) _set(KEY_PART + g.part, on ? '1' : '0');
-      });
-    });
-    // 図種を読めない図は部品のフォルダに分けず、保存先の直下にファイル行で並べる。
-    lay.loose.forEach(function(f) { host.appendChild(_fileButton(f, true)); });
+    // 実在のファイルを名前の順にそのまま並べる (名前から部品を読んで束ねない)。
+    FT.targetRows(shown).forEach(function(f) { host.appendChild(_fileButton(f)); });
     _syncTargetRow();
     var c = $('files-count-target');
     if (c) c.textContent = entries.length ? String(entries.length) : '';
     refreshSummary();
     _gitMarks();
-    // 上部バーのパンくずの部品の段は、このツリーの束ね方を読む (BLK-builder-20260924-1715-1)。
-    if (typeof window.MA.refreshTopCrumbs === 'function') window.MA.refreshTopCrumbs();
   }
 
-  // ── パンくずから見せる (design 10a、BLK-builder-20260924-1715-1) ──────────
-  // kind: 'target' = 保存先のフォルダの行 / 'part' = 部品のフォルダの見出し。
-  // パネルと保存先の節が畳まれていれば開き、部品のフォルダは中身まで開いて、行へ移して縁取る。
-  function reveal(kind, part, _retried) {
+  // ── パンくずから見せる (design 10a) ──────────
+  // パネルと保存先の節が畳まれていれば開き、保存先のフォルダの行へ移して縁取る。
+  function reveal() {
     if (!panel) return false;
     if (!isOpen()) setOpen(true);
     var fp = $('folder-panel');
@@ -520,19 +527,7 @@ window.MA.filesPanel = (function() {
       var head = $('btn-tab-folder');
       if (head) head.click();
     }
-    var el = null;
-    if (kind === 'part' && part) {
-      if (!targetPartsOpen()) setTargetParts(true);
-      var q = (window.CSS && window.CSS.escape) ? window.CSS.escape(String(part)) : String(part);
-      el = document.querySelector('#files-parts .files-part-head[data-part="' + q + '"]');
-      if (el && el.getAttribute('aria-expanded') !== 'true') el.click();
-      // 節を開いた直後は一覧を読み直している最中で、部品の見出しがまだ無いことがある。1 度だけ待つ。
-      if (!el && !_retried) {
-        window.setTimeout(function() { reveal(kind, part, true); }, 400);
-        return true;
-      }
-    }
-    if (!el) el = $('top-save-target');
+    var el = $('top-save-target');
     if (!el) return false;
     if (el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
     try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
@@ -542,18 +537,18 @@ window.MA.filesPanel = (function() {
   }
 
   // ── 件数 (畳んだままでも読める) ───────────────────────────────────────
-  function setReadonlyCount(comparing, total) {
+  function setReadonlyCount(total) {
     var FT = window.MA.fileTree;
     var c = $('files-count-readonly');
-    if (c && FT) c.textContent = FT.readonlyCountLabel(comparing, total);
+    if (c && FT) c.textContent = FT.readonlyCountLabel(total);
   }
 
-  // ── 読むだけのフォルダ (design 10a、BLK-builder-20260924-1749-3) ─────────
-  // 「読むだけのフォルダ（先輩・過去の版）は下に分けて置き、右クリックから「並べて比較」できます」
-  // 「右の枠に並べている間は「比較中」と出ます。編集はできません」。
+  // ── 読むだけのフォルダ (design 10a) ─────────
+  // 隣の保存フォルダを書かずに開く骨格。編集はできない。
   // 前は節を開いても説明の 1 行だけで、隣の保存フォルダが 1 行も並ばず、見出しに件数も出なかった。
-  // dirs は /peek-dirs の選択肢 (peek-folder.choices)、comparingDir は右の枠に並べている相手。
-  // 行を押すと開閉し、そのフォルダの図が並ぶ。図を押すとその 1 枚を右の枠に並べる (読むだけ)。
+  // dirs は /peek-dirs の選択肢 (peek-folder.choices)。
+  // 行を押すと開閉し、そのフォルダの図が並ぶ。図を押すとその 1 枚を右の枠に出す (読むだけ)。
+  // 右クリックの比較の行と、右の枠に出している相手の札は TICKET-owner-20261115-2141-prune で外した。
   var KEY_RO_DIR = 'pua.files.ro.';
 
   function _roFill(box, path) {
@@ -586,14 +581,14 @@ window.MA.filesPanel = (function() {
           b.className = 'files-ro-file';
           b.setAttribute('data-ro-dir', path);
           b.setAttribute('data-file-name', f.name);
-          b.title = f.name + ' を右の枠に並べる (読むだけ)';
+          b.title = f.name + ' を右の枠に出す (読むだけ)';
           b.appendChild(_glyphEl(FT && FT.fileKind ? FT.fileKind(f.name, f.kind) : f.kind));
           var nm = document.createElement('span');
           nm.className = 'files-row-name';
           nm.textContent = f.name;
           b.appendChild(nm);
           b.addEventListener('click', function() {
-            if (typeof window.compareReadonlyFolder === 'function') window.compareReadonlyFolder(path, f.name);
+            if (typeof window.showReadonlyFile === 'function') window.showReadonlyFile(path, f.name);
           });
           box.appendChild(b);
         });
@@ -613,12 +608,12 @@ window.MA.filesPanel = (function() {
     });
   }
 
-  function renderReadonly(dirs, comparingDir) {
+  function renderReadonly(dirs) {
     var body = $('files-body-readonly');
     var FT = window.MA.fileTree;
     if (!body || !FT || !FT.readonlyRows) return;
-    var rows = FT.readonlyRows(dirs, comparingDir);
-    setReadonlyCount(rows.filter(function(r) { return r.comparing; }).length, rows.length);
+    var rows = FT.readonlyRows(dirs);
+    setReadonlyCount(rows.length);
     var host = $('files-ro-list');
     if (!host) {
       host = document.createElement('div');
@@ -627,7 +622,7 @@ window.MA.filesPanel = (function() {
     }
     var hint = $('files-ro-hint');
     if (hint) hint.hidden = rows.length > 0;
-    // 並べて比較の枠は図を切り替えるたびに状態を描き直す。行が同じなら作り直さない
+    // 保存先を替えるたびに描き直す。行が同じなら作り直さない
     // (開いているフォルダの中身を毎回読み直さない)。
     var sig = JSON.stringify(rows);
     if (host.getAttribute('data-sig') === sig && host.childNodes.length === rows.length * 2) return;
@@ -642,8 +637,7 @@ window.MA.filesPanel = (function() {
       head.setAttribute('data-ro-dir', r.path);
       head.setAttribute('data-ro-name', r.name);
       head.setAttribute('aria-expanded', open ? 'true' : 'false');
-      if (r.comparing) head.setAttribute('data-comparing', '1');
-      head.title = r.path + ' (読むだけ。右クリックで並べて比較)';
+      head.title = r.path + ' (読むだけ。開いて図を押すと右の枠に出ます)';
       var caret = document.createElement('span');
       caret.className = 'files-caret';
       caret.setAttribute('aria-hidden', 'true');
@@ -653,12 +647,6 @@ window.MA.filesPanel = (function() {
       lab.className = 'files-part-label';
       lab.textContent = r.name;
       head.appendChild(lab);
-      if (r.comparing) {
-        var tag = document.createElement('span');
-        tag.className = 'files-ro-tag';
-        tag.textContent = '比較中';
-        head.appendChild(tag);
-      }
       var cnt = document.createElement('span');
       cnt.className = 'files-sec-count';
       cnt.textContent = String(r.files);
@@ -707,7 +695,7 @@ window.MA.filesPanel = (function() {
       return;
     }
     setSummary(FT.summaryOf(_docs().map(function(d) {
-      return { unapplied: !!d.reviewPending, draft: !!d.draft };
+      return { unapplied: !!d.reviewPending };
     })));
   }
 
@@ -750,6 +738,7 @@ window.MA.filesPanel = (function() {
     if (!panel) return;
     renderOpen();
     renderParts();
+    renderSubTree();
     refreshSummary();
     syncTargetCaret();
     _gitMarks();
@@ -816,30 +805,14 @@ window.MA.filesPanel = (function() {
       });
     }
 
-    var newDoc = $('files-new-doc');
-    if (newDoc) {
-      newDoc.addEventListener('click', function() {
-        var b = $('btn-tab-new');
-        if (b) b.click();
-      });
-    }
-    // 「新しいフォルダ」は保存先を選び直す入口と同じ道を通る
-    // (保存先を作る / 変えるの 2 本を画面に並べない)。
-    var newFolder = $('files-new-folder');
-    if (newFolder) {
-      newFolder.addEventListener('click', function() {
-        var b = $('top-save-target');
-        if (b) b.click();
-      });
-    }
-
     var filter = $('files-filter');
     if (filter) {
       filter.addEventListener('input', function() {
-        // 絞り込んだ図が畳んだ部品のフォルダの奥に隠れないよう、保存先の下を開く。
+        // 絞り込んだ図が畳んだ保存先の奥に隠れないよう、保存先の下を開く。
         if (filter.value && !targetPartsOpen()) setTargetParts(true);
         renderOpen();
         renderParts();
+        renderSubTree();
         // 保存先の絞り込みは #folder-panel 側の入力に渡す (数える所を 2 つにしない)。
         var ff = document.querySelector('#folder-panel input.folder-filter');
         if (ff) {
@@ -855,7 +828,7 @@ window.MA.filesPanel = (function() {
       target.addEventListener('click', function() { window.setTimeout(syncTargetCaret, 0); });
     }
 
-    // 一覧は非同期に描き直る (listFolder)。描き直るたびに部品の束ねも追う。
+    // 一覧は非同期に描き直る (listFolder)。描き直るたびに保存先の下の行も追う。
     var fp = $('folder-panel');
     if (fp && window.MutationObserver) {
       var mo = new window.MutationObserver(function() { renderParts(); });
@@ -865,6 +838,17 @@ window.MA.filesPanel = (function() {
       var moOpen = new window.MutationObserver(function() { syncTargetCaret(); });
       moOpen.observe(fp, { attributes: true, attributeFilter: ['class'] });
     }
+
+    // サブフォルダに図を書いた・消した知らせ (workspace の pua:folder-changed) で、そのフォルダの行を読み直す。
+    window.addEventListener('pua:folder-changed', function(ev) {
+      var d = (ev && ev.detail) || {};
+      var FT = window.MA.fileTree;
+      var root = _targetDir();
+      if (!root || !FT || !FT.relSegments) return;
+      var seg = FT.relSegments(_subTree.root || root, String(d.dir || ''));
+      if (seg && seg.length) reloadSubTree(true);
+    });
+    window.addEventListener('focus', function() { reloadSubTree(false); });
 
     refresh();
   }
@@ -883,6 +867,23 @@ window.MA.filesPanel = (function() {
     setGitCount: setGitCount,
     setSummary: setSummary,
     renderParts: renderParts,
+    renderSubTree: renderSubTree,
+    reloadSubTree: reloadSubTree,
+    subFiles: subFiles,
+    // TICKET-roadmap-20261122-0855-3: 移動の行き先 (保存先の下のフォルダ) と、作ったフォルダを見せるための開閉。
+    subDirs: function() {
+      return (_subTree.dirs || []).map(function(d) { return { rel: String(d.rel || ''), path: String(d.path || '') }; });
+    },
+    targetLabel: function() {
+      var el = $('top-save-target');
+      return el ? String(el.textContent || '').trim() : '';
+    },
+    openSubDir: function(rel) {
+      var parts = String(rel || '').split('/').filter(Boolean);
+      for (var i = 1; i <= parts.length; i++) _set(KEY_SUB + parts.slice(0, i).join('/'), '1');
+      renderSubTree();
+    },
+    subRoot: function() { return (_subTree.dir && _subTree.dir === _targetDir()) ? String(_subTree.root || '') : ''; },
     folderEntries: _folderNames,
     reveal: reveal,
     setTargetParts: setTargetParts,

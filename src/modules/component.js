@@ -25,7 +25,7 @@ window.MA.modules.plantumlComponent = (function() {
   // interface: () X / () X as I
   var INTERFACE_SHORT_RE = /^\(\)\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?(?:\s+<<\s*([^>]+?)\s*>>)?\s*$/;
 
-  // BLK-migrator-20260923-1409: 波括弧を伴わない要素宣言 (`agent "Published Event" as event`)。
+  // 波括弧を伴わない要素宣言 (`agent "Published Event" as event`)。
   // PlantUML の component 図は component / [X] 以外にもこれらの語で部品を宣言できる。
   // 読めないと部品が要素の一覧から落ち、ホバーの選択枠が 1 つも出なかった
   // (aws-icons-for-plantuml の `examples__Basic Usage.puml`)。
@@ -35,7 +35,7 @@ window.MA.modules.plantumlComponent = (function() {
     '^(?:' + ELEM_KW + ')\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)' + STEREO_OPT + '\\s*$'
   );
 
-  // BLK-migrator-20260923-1409: ライブラリの手続きで部品を宣言する行
+  // ライブラリの手続きで部品を宣言する行
   // (`IoTRule(iotRule, "Action Error Rule", "error if Kinesis fails")`)。1 番目の引数が
   // 部品の名前で、PlantUML はその名前を SVG に残す。読めないと枠が出ない。
   // 関係・配置・表示切替の手続き (Rel / Lay / Show ...) は部品ではないので除く。
@@ -53,7 +53,7 @@ window.MA.modules.plantumlComponent = (function() {
     '^port\\s+(?:"([^"]+)"\\s+as\\s+(' + ID + ')|(' + ID + ')(?:\\s+as\\s+"([^"]+)")?)\\s*$'
   );
 
-  // BLK-migrator-20260918-0249: 関係行の両端は `[X]` の角括弧でも書ける
+  // 関係行の両端は `[X]` の角括弧でも書ける
   // (component-04 のように `[X]` 単独の宣言が 1 行も無く、関係行だけで図が成り立つ)。
   // 矢印には置き方の指示 (-up-> / -right->) と双方向 (<-->) も入る。
   // どちらも読めないと行が関係として拾えず、その行にしか出てこない部品が
@@ -239,7 +239,7 @@ window.MA.modules.plantumlComponent = (function() {
       var label2 = '';
       var ci2 = body.indexOf(':');
       if (ci2 >= 0) { label2 = body.slice(ci2 + 1).trim(); body = body.slice(0, ci2); }
-      // BLK-junior-20260907-0943: `"表示名" as Alias` / `Alias as "表示名"` は
+      // `"表示名" as Alias` / `Alias as "表示名"` は
       // PlantUML の宣言そのもので、他の図から取り込んだ行にはこの形が普通に入る。
       // 名前と表示名に分けずに丸ごと名前として扱うと、`interface ""表示名" as I" as C1`
       // という壊れた行が書き出されてしまう。
@@ -366,8 +366,13 @@ window.MA.modules.plantumlComponent = (function() {
     else if (field === 'label') lbl = value;
 
     // 多重度・線の色は種別やラベルの書き換えでは失われない (design 3c)。
-    lines[idx] = window.MA.relationOptions.applyDecorations(
-      indent + fmtRelation(kind, from, to, lbl), deco);
+    var relCore = fmtRelation(kind, from, to, lbl);
+    if (field === 'label') {
+      relCore = window.MA.dslUtils.keepRelationArrow(window.MA.relationOptions.plainLine(trimmed), relCore, RELATION_RE);
+    }
+    var relLine = window.MA.relationOptions.applyDecorations(indent + relCore, deco);
+    // 直した値以外の空白 (手で揃えた桁) は元の行の字のまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = window.MA.dslUtils.keepLineSpacing(lines[idx], relLine, [value]);
     return lines.join('\n');
   }
 
@@ -375,32 +380,6 @@ window.MA.modules.plantumlComponent = (function() {
   var moveLineUp = window.MA.dslUpdater.moveLineUp;
   var moveLineDown = window.MA.dslUpdater.moveLineDown;
   var renameWithRefs = window.MA.dslUpdater.renameWithRefs;
-
-  // BLK-junior-20260909-0303: 新規タブのサンプル (WebApp / IAuth) を自分の部品名へ
-  // 付け替えるのに、要素ごとに「選択 → Alias/Label を打ち直す → 変更を反映 →
-  // Alias 変更を関連 Relation にも追従」を繰り返していた。edits をまとめて当て、
-  // 関連への追従も同時に済ませる。
-  // edits: [{ line, id, label }]。空欄と同値は無視する。id は関連にも追従する。
-  function renameElements(text, edits) {
-    var out = String(text == null ? '' : text);
-    if (!Array.isArray(edits) || !edits.length) return out;
-    var byLine = {};
-    parse(out).elements.forEach(function(e) { byLine[e.line] = e; });
-    edits.forEach(function(ed) {
-      if (!ed) return;
-      var el = byLine[Number(ed.line)];
-      if (!el || (el.kind !== 'component' && el.kind !== 'interface')) return;
-      var newId = ed.id == null ? '' : String(ed.id).trim();
-      var newLabel = ed.label == null ? '' : String(ed.label).trim();
-      // Alias を先に当てる。宣言行の行番号は置換で動かないので Label は後から効く。
-      if (newId && newId !== el.id) out = renameWithRefs(out, el.id, newId);
-      if (newLabel && newLabel !== el.label) {
-        var fn = el.kind === 'component' ? updateComponent : updateInterface;
-        out = fn(out, el.line, 'label', newLabel);
-      }
-    });
-    return out;
-  }
 
   function setTitle(text, newTitle) {
     var lines = text.split('\n');
@@ -595,179 +574,6 @@ window.MA.modules.plantumlComponent = (function() {
     });
   }
 
-  // BLK-junior-20260908-0203-wish: 定石の依存チェック。
-  // 判断は core/component-deps.js に置き、ここは並べて選ばせるだけ。
-  // 候補は「この図に無いもの」しか来ないので、押した数だけ図が埋まる。
-  // 候補の出所。実績 (usage) は自分の他の図、定石 (catalog) は一般論、
-  // 他の図 (peer) は別部品の実績。どれを信じて押すかが分かれるので必ず出す。
-  var SOURCE_TAG = { usage: '実際の呼び出し', catalog: '定石', peer: '他の図' };
-
-  function _renderDepsCheck(parsedData, ctx) {
-    var CD = window.MA.componentDeps;
-    var P = window.MA.properties;
-    var esc = window.MA.htmlUtils.escHtml;
-    var sumEl = document.getElementById('co-deps-summary');
-    var bodyEl = document.getElementById('co-deps-body');
-    if (!CD || !sumEl || !bodyEl) return;
-
-    var ws = window.MA.workspace;
-    var docs = (ws && ws.list) ? ws.list() : [];
-    var activeId = (ws && ws.getActiveId) ? ws.getActiveId() : null;
-    var dsl = ctx.getMmdText();
-    // BLK-junior-20260909-0303-wish: 実績は「依存の起点」ごとに変わるので、
-    // 選び直したらチェックリストも引き直す。
-    var subjEl0 = document.getElementById('co-deps-subject');
-    var subject = (subjEl0 && subjEl0.value) || CD.defaultSubject(dsl);
-    var res = CD.check(dsl, docs, activeId, subject);
-
-    sumEl.textContent = CD.summaryText(res);
-    sumEl.setAttribute('data-missing', String(res.rows.length));
-    sumEl.setAttribute('data-usage-missing', String(res.usageMissing));
-    sumEl.setAttribute('data-catalog-missing', String(res.catalogMissing));
-    sumEl.setAttribute('data-peer-missing', String(res.peerMissing));
-
-    if (!res.rows.length) { bodyEl.innerHTML = ''; return; }
-
-    var subjOpts = CD.subjects(dsl).map(function(s) {
-      return { value: s.id, label: s.label, selected: s.id === subject };
-    });
-    if (!subjOpts.length) {
-      bodyEl.innerHTML = '<div id="co-deps-nosubject" style="font-size:10px;color:var(--text-secondary);">'
-        + '依存の起点になる component がまだありません（先に上の「末尾に追加」で 1 つ作ってください）</div>';
-      return;
-    }
-
-    var rows = res.rows.map(function(r, i) {
-      return '<label class="co-dep-row" data-dep-key="' + esc(r.key) + '" data-dep-source="' + esc(r.source) + '"'
-        + ' style="display:flex;align-items:flex-start;gap:6px;padding:3px 4px;border-radius:3px;cursor:pointer;">'
-        + '<input type="checkbox" class="co-dep-check" data-i="' + i + '" style="margin-top:2px;">'
-        + '<span style="flex:1;">'
-          + '<span style="font-size:12px;color:var(--text-primary);">' + esc(r.name) + '</span>'
-          + (r.label ? ' <span style="font-size:10px;color:var(--accent);">' + esc(r.label) + '</span>' : '')
-          + '<span style="display:block;font-size:10px;color:var(--text-secondary);line-height:1.4;">' + esc(r.why) + '</span>'
-        + '</span>'
-        + '<span style="font-size:9px;color:var(--text-secondary);white-space:nowrap;">'
-          + esc(SOURCE_TAG[r.source] || r.source) + '</span>'
-      + '</label>';
-    }).join('');
-
-    bodyEl.innerHTML =
-      P.selectFieldHtml('依存の起点', 'co-deps-subject', subjOpts) +
-      '<div id="co-deps-list" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:3px;padding:4px;margin-top:6px;">'
-        + rows + '</div>' +
-      P.primaryButtonHtml('co-deps-add', '+ 選んだ依存を追加');
-
-    // 起点を替えたら実績も替わる。押す前に候補が起点に追随しないと、
-    // 他の部品の呼び出しを自分の依存として足してしまう。
-    P.bindEvent('co-deps-subject', 'change', function() {
-      _renderDepsCheck(parsedData, ctx);
-    });
-
-    P.bindEvent('co-deps-add', 'click', function() {
-      var picks = [];
-      var checks = document.querySelectorAll('#co-deps-list .co-dep-check');
-      for (var i = 0; i < checks.length; i++) {
-        if (checks[i].checked) picks.push(res.rows[Number(checks[i].getAttribute('data-i'))]);
-      }
-      if (!picks.length) { alert('追加する依存先を選んでください'); return; }
-      var subjEl = document.getElementById('co-deps-subject');
-      var block = CD.blockFor(subjEl ? subjEl.value : '', picks);
-      if (!block) { alert('依存の起点を選んでください'); return; }
-      var t = ctx.getMmdText();
-      var out = addBulk(t, block, parsedData);
-      if (out === t) { alert('追加できる行がありません'); return; }
-      window.MA.history.pushHistory();
-      ctx.setMmdText(out);
-      ctx.onUpdate();
-    });
-  }
-
-  // BLK-junior-20260912-2206-wish: 手本になるコンポーネント図が 1 枚も無い部品を、
-  // 部品名 1 語から起こす。判断は core/component-starter.js に置き、ここは
-  // 「この部品の図はまだ無い」の確認と、押したときの引き渡しだけをする。
-  function _bindStarter() {
-    var CS = window.MA.componentStarter;
-    var P = window.MA.properties;
-    var inputEl = document.getElementById('co-starter-subject');
-    var hintEl = document.getElementById('co-starter-hint');
-    var haveEl = document.getElementById('co-starter-have');
-    if (!CS || !inputEl || !hintEl || !haveEl) return;
-
-    var refresh = function() {
-      var ws = window.MA.workspace;
-      var docs = (ws && ws.list) ? ws.list() : [];
-      var plan = CS.plan(inputEl.value, docs);
-      hintEl.textContent = CS.summary(plan);
-      hintEl.setAttribute('data-deps', String(plan ? plan.rows.length : 0));
-      hintEl.setAttribute('data-usage', String(plan ? plan.usageCount : 0));
-      // 既にこの部品の図があるなら、下書きより先にそれを開く方が早い。
-      var have = plan ? CS.existingDocs(inputEl.value, docs) : [];
-      haveEl.setAttribute('data-have', String(have.length));
-      haveEl.textContent = !plan ? ''
-        : (have.length
-          ? 'この部品のコンポーネント図は既にあります: ' + have.map(function(d) { return d.name; }).join(' / ')
-          : 'この部品のコンポーネント図はまだありません');
-    };
-    inputEl.addEventListener('input', refresh);
-    refresh();
-
-    P.bindEvent('co-starter-add', 'click', function() {
-      if (!window.MA.makeComponentDraft) { alert('下書きを作れませんでした'); return; }
-      if (!CS.normalizeSubject(inputEl.value)) { alert('部品名を入れてください (例: TIMER)'); return; }
-      window.MA.makeComponentDraft(inputEl.value);
-    });
-  }
-
-  // BLK-junior-20260909-0303: 図の全要素の Alias / Label を 1 枚の表で書き換える。
-  // 要素を 1 個ずつ選び直す往復と「関連にも追従」の押下を無くすため、反映は
-  // 常に関連 Relation まで追従する。
-  function _renameTableHtml(elements) {
-    var esc = window.MA.htmlUtils.escHtml;
-    var targets = elements.filter(function(e) {
-      return e.kind === 'component' || e.kind === 'interface';
-    });
-    if (!targets.length) return '';
-    var rows = targets.map(function(e) {
-      return '<div class="co-rename-row" data-line="' + e.line + '"'
-        + ' style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">'
-        + '<span style="flex:0 0 34px;font-size:9px;color:var(--text-secondary);">'
-          + (e.kind === 'interface' ? 'I/F' : 'Cmp') + '</span>'
-        + '<input class="co-rename-id" type="text" value="' + esc(e.id) + '" placeholder="Alias"'
-          + ' style="flex:1;min-width:0;font-size:11px;padding:3px;">'
-        + '<input class="co-rename-label" type="text" value="' + esc(e.label) + '" placeholder="Label"'
-          + ' style="flex:1;min-width:0;font-size:11px;padding:3px;">'
-        + '</div>';
-    }).join('');
-    return '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">'
-      + '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">'
-        + '要素名をまとめて付け替え</label>'
-      + '<div id="co-rename-list">' + rows + '</div>'
-      + window.MA.properties.primaryButtonHtml('co-rename-apply', 'まとめて反映 (関連にも追従)')
-      + '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">'
-        + 'Tab で次の欄へ移れます。Alias の変更は関連 Relation にも自動で追従します</div>'
-      + '</div>';
-  }
-
-  function _bindRenameTable(ctx) {
-    window.MA.properties.bindEvent('co-rename-apply', 'click', function() {
-      var rows = document.querySelectorAll('#co-rename-list .co-rename-row');
-      var edits = [];
-      for (var i = 0; i < rows.length; i++) {
-        edits.push({
-          line: Number(rows[i].getAttribute('data-line')),
-          id: rows[i].querySelector('.co-rename-id').value,
-          label: rows[i].querySelector('.co-rename-label').value,
-        });
-      }
-      var t = ctx.getMmdText();
-      var out = renameElements(t, edits);
-      if (out === t) { alert('付け替える名前がありません'); return; }
-      window.MA.history.pushHistory();
-      ctx.setMmdText(out);
-      ctx.onUpdate();
-    });
-  }
-
   function _renderNoSelection(parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var GP = window.MA.groupPlace;
@@ -775,7 +581,7 @@ window.MA.modules.plantumlComponent = (function() {
     var components = elements.filter(function(e) { return e.kind === 'component'; });
     var interfaces = elements.filter(function(e) { return e.kind === 'interface'; });
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'co-tail-kind', [
@@ -787,35 +593,8 @@ window.MA.modules.plantumlComponent = (function() {
           { value: 'bulk',      label: 'まとめて (複数行)' },
         ]) +
         '<div id="co-tail-detail" style="margin-top:6px;"></div>' +
-      '</div>' +
-      _renameTableHtml(elements) +
-      // BLK-junior-20260912-2206-wish: 手本が 1 枚も無い部品は、本体を末尾に追加して
-      // から依存チェックの起点を選び直す、という組み立てを毎回手でやることになる。
-      // 部品名 1 語で「本体 + 依存」の下書きを別タブに起こす。
-      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
-          '白紙から: 定石構成の下書き</label>' +
-        P.fieldHtml('部品名', 'co-starter-subject', '', '例: TIMER / GPIO / CAN') +
-        '<div id="co-starter-have" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 2px;line-height:1.5;"></div>' +
-        '<div id="co-starter-hint" style="font-size:10px;color:var(--text-secondary);margin:0 0 6px;line-height:1.5;"></div>' +
-        P.primaryButtonHtml('co-starter-add', '＋ 定石構成から下書き') +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
-          '本体 1 つと、この部品のシーケンス図・状態遷移図に出てくる相手・定石の依存先を入れた' +
-          '下書きを別タブで開きます。要らない依存はそのまま消して使えます</div>' +
-      '</div>' +
-      // BLK-junior-20260908-0203-wish: ドライバの図で「定石の依存先のうち今の図に
-      // 無いもの」を出す。先輩の他部品の図を 1 枚ずつ開いて見比べる代わり。
-      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">依存チェック</label>' +
-        '<div id="co-deps-summary" style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;"></div>' +
-        '<div id="co-deps-body"></div>' +
       '</div>';
     propsEl.innerHTML = html;
-
-    _renderDepsCheck(parsedData, ctx);
-    _bindStarter();
-    _bindRenameTable(ctx);
-
 
     var renderTailDetail = function() {
       var kind = document.getElementById('co-tail-kind').value;
@@ -864,13 +643,15 @@ window.MA.modules.plantumlComponent = (function() {
             { value: 'requires',    label: 'Requires (lollipop )-)' },
           ]) +
           P.selectFieldHtml('始点 (From)', 'co-tail-from', allOpts) +
-          P.selectFieldHtml('終点 (To)', 'co-tail-to', allOpts) +
+          // To は From と同じ要素を既定にしない (一覧で選ぶ。自分への線は選んだときだけ)。
+          P.selectFieldHtml('終点 (To)', 'co-tail-to',
+            [{ value: '', label: '（一覧で相手を選ぶ）', selected: true }].concat(allOpts)) +
+          '<div id="co-tail-rhint" role="status" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px 0;"></div>' +
           P.fieldHtml('ラベル', 'co-tail-rlabel', '', 'association/dependency のみ任意') +
           P.primaryButtonHtml('co-tail-add', '+ 追加');
       } else if (kind === 'bulk') {
         html =
           '<label style="display:block;font-size:10px;color:var(--text-secondary);">要素と関係を 1 行 1 件で</label>' +
-          window.MA.reuseModal.buttonHtml('co-tail-reuse') +
           '<textarea id="co-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
           P.primaryButtonHtml('co-tail-add', '+ まとめて追加') +
           '<div id="co-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
@@ -878,10 +659,14 @@ window.MA.modules.plantumlComponent = (function() {
             'A ..&gt; B(dependency) / A -() B(provides) / A )- B(requires)。空行は無視されます</div>';
       }
       detailEl.innerHTML = html;
-      if (kind === 'relation') window.MA.relationKindCards.mountForSelect('co-tail-rkind', 'component');
-      // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
-      window.MA.reuseModal.bindButton('co-tail-reuse', 'plantuml-component', 'co-tail-bulk');
-
+      if (kind === 'relation') {
+        // 確定後も関係の種類 (要求 / requires など) と From を保つ。
+        if (window.MA.tailMemory) {
+          window.MA.tailMemory.bindSelect('co-tail-rkind');
+          window.MA.tailMemory.bindSelect('co-tail-from');
+        }
+        window.MA.relationKindCards.mountForSelect('co-tail-rkind', 'component');
+      }
       P.bindEvent('co-tail-add', 'click', function() {
         var t = ctx.getMmdText();
         var out = t;
@@ -924,8 +709,19 @@ window.MA.modules.plantumlComponent = (function() {
         } else if (kind === 'relation') {
           var fr = document.getElementById('co-tail-from').value;
           var to = document.getElementById('co-tail-to').value;
-          if (!fr || !to) { alert('From/To 必須'); return; }
+          if (!fr) { alert('From/To 必須'); return; }
+          if (!to) {
+            var coHint = document.getElementById('co-tail-rhint');
+            if (coHint) coHint.textContent = 'To を選んでください (一覧で相手を選ぶ)';
+            var coTo = document.getElementById('co-tail-to');
+            if (coTo && coTo.focus) coTo.focus();
+            return;
+          }
           var rkind = document.getElementById('co-tail-rkind').value;
+          if (window.MA.tailMemory) {
+            window.MA.tailMemory.setField('co-tail-rkind', rkind);
+            window.MA.tailMemory.setField('co-tail-from', fr);
+          }
           window.MA.history.pushHistory();
           out = addRelation(t, rkind, fr, to, document.getElementById('co-tail-rlabel').value.trim());
         } else if (kind === 'bulk') {
@@ -951,31 +747,31 @@ window.MA.modules.plantumlComponent = (function() {
     if (element.kind !== 'component' && element.kind !== 'interface') {
       // port / unknown: read-only display
       propsEl.innerHTML =
-        // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+        // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
         '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-          '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
+          '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
           '<div style="font-size:11px;color:var(--text-secondary);">id: ' + element.id + '</div>' +
         '</div>';
       return;
     }
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
-        P.fieldHtml('Alias (id)', 'co-edit-id', element.id) +
-        P.fieldHtml('Label', 'co-edit-label', element.label) +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
+        P.fieldHtml(window.MA.terms.id, 'co-edit-id', element.id) +
+        P.fieldHtml(window.MA.terms.label, 'co-edit-label', element.label) +
         // design 5d: ステレオタイプ (<<service>> など)。空にすれば外れる
-        P.fieldHtml('Stereotype', 'co-edit-stereo', element.stereotype || '', '例: service (空で外す)') +
-        P.primaryButtonHtml('co-edit-apply', '変更を反映') +
+        P.fieldHtml(window.MA.terms.stereotype, 'co-edit-stereo', element.stereotype || '', '例: service (空で外す)') +
+        P.primaryButtonHtml('co-edit-apply', window.MA.terms.apply) +
         '<div style="margin-top:6px;">' +
-          P.primaryButtonHtml('co-rename-refs', 'Alias 変更を関連 Relation にも追従') +
+          P.primaryButtonHtml('co-rename-refs', window.MA.terms.renameRefs) +
         '</div>' +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
           '<button id="co-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
           '<button id="co-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
           '<button id="co-delete" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         '</div>' +
-        // BLK-owner-20260923-2332-2: 選んだ部品を境界の中へ移す / 外へ出す。
+        // 選んだ部品を境界の中へ移す / 外へ出す。
         GP.editFieldHtml('co-edit', parsedData.groups, element.line) +
       '</div>';
     propsEl.innerHTML = html;
@@ -1034,7 +830,7 @@ window.MA.modules.plantumlComponent = (function() {
     var P = window.MA.properties;
     var RC = window.MA.relationKindCards;
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         RC.headerHtml(relation.line, relation.from, relation.to) +
         RC.cardsHtml('co-rel-card', RC.kindsOf('component'), relation.kind) +
@@ -1044,9 +840,9 @@ window.MA.modules.plantumlComponent = (function() {
         P.fieldHtml('To', 'co-rel-to', relation.to) +
         P.fieldHtml('ラベル / Label（任意）', 'co-rel-label', relation.label) +
         P.relationOptionsFor('co-rel-more', ctx.getMmdText(), relation.line) +
-        P.primaryButtonHtml('co-rel-apply', '変更を反映') +
+        P.primaryButtonHtml('co-rel-apply', window.MA.terms.apply) +
         '<div style="margin-top:8px;">' +
-          '<button id="co-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除 / Delete</button>' +
+          '<button id="co-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">' + window.MA.terms.del + '</button>' +
         '</div>' +
       '</div>';
     propsEl.innerHTML = html;
@@ -1132,7 +928,7 @@ window.MA.modules.plantumlComponent = (function() {
           { value: 'provides',    label: 'Provides (lollipop -())' },
           { value: 'requires',    label: 'Requires (lollipop )-)' },
         ]) +
-        P.fieldHtml('Label', 'co-conn-label', '', '任意') +
+        P.fieldHtml(window.MA.terms.edgeLabel, 'co-conn-label', '', '任意') +
         P.primaryButtonHtml('co-conn-create', '+ Connect') +
       '</div>';
 
@@ -1181,17 +977,18 @@ window.MA.modules.plantumlComponent = (function() {
 
   function _renderGroupReadOnly(group, parsedData, propsEl, ctx) {
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PACKAGE (L' + group.startLine + '-' + group.endLine + ')</label>' +
-        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Label: ' + window.MA.htmlUtils.escHtml(group.label || '') + '</div>' +
+        // 見出しは「境界 · 2–5 行目」、欄名は日本語。
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead('境界', group.startLine, group.endLine)) + '</label>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">名前: ' + window.MA.htmlUtils.escHtml(group.label || '') + '</div>' +
         // design 5d: 表記を後から差し替える (中身と閉じ括弧はそのまま)
         window.MA.properties.selectFieldHtml('表記', 'co-grp-notation',
           window.MA.groupNotation.notationsFor('plantuml-component').map(function(n) {
             return { value: n.id, label: n.label + ' — ' + n.hint, selected: n.id === (group.notation || 'package') };
           })) +
         window.MA.properties.primaryButtonHtml('co-grp-notation-apply', '表記を変更') +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;">v0.4.0: ラベル変更 / 範囲指定 wrap は v0.5.0 で対応</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;">名前を変えるときは、テキストの ' + group.startLine + ' 行目を直す。</div>' +
       '</div>';
     propsEl.innerHTML = html;
     window.MA.properties.bindEvent('co-grp-notation-apply', 'click', function() {
@@ -1242,7 +1039,6 @@ window.MA.modules.plantumlComponent = (function() {
     moveLineDown: moveLineDown,
     setTitle: setTitle,
     renameWithRefs: renameWithRefs,
-    renameElements: renameElements,
     renderProps: renderProps,
     capabilities: {
       overlaySelection: true,
@@ -1261,7 +1057,7 @@ window.MA.modules.plantumlComponent = (function() {
 
       // PlantUML emits component/interface as <g class="entity" data-qualified-name="X">
       // (実機 SVG)。test fixture は g.component / g.interface の旧形式も受理する fallback。
-      // BLK-migrator-20260923-1909: package / node / cloud の中の部品は `My Package.First Component`
+      // package / node / cloud の中の部品は `My Package.First Component`
       // の修飾名で描かれる。完全一致しか見ていなかったので、入れ物の中の部品に枠が出なかった。
       var claimed = [];
       function _matchEntity(item) {
@@ -1344,7 +1140,7 @@ window.MA.modules.plantumlComponent = (function() {
       _push(1);
 
       var packages = (parsedData.groups || []).filter(function(g) { return g.kind === 'package'; });
-      // BLK-migrator-20260923-1909: 並び順で当てると、パーサが読めない入れ物 (cloud / database { })
+      // 並び順で当てると、パーサが読めない入れ物 (cloud / database { })
       // が 1 つあるだけで以後の入れ物の枠が隣へずれた。開始行・表示名で当てる。
       var pkgGroups = OB.matchClusters(svgEl, packages);
       var pkgN = 0;
@@ -1356,12 +1152,12 @@ window.MA.modules.plantumlComponent = (function() {
         var pkgRect = pg.querySelector('rect');
         if (!pkgRect) {
           var pbb = OB.extractUnionBBox(pg, 'text, line, polygon, polyline, path, rect, ellipse');
-          if (pbb) OB.addRect(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
+          if (pbb) OB.addContainer(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
             'data-type': 'package', 'data-id': packages[pi].id, 'data-line': packages[pi].startLine,
-          });
+          }, pg);
           continue;
         }
-        OB.addRect(overlayEl,
+        OB.addContainer(overlayEl,
           (parseFloat(pkgRect.getAttribute('x')) || 0) - 2,
           (parseFloat(pkgRect.getAttribute('y')) || 0) - 2,
           (parseFloat(pkgRect.getAttribute('width')) || 0) + 4,
@@ -1369,7 +1165,7 @@ window.MA.modules.plantumlComponent = (function() {
             'data-type': 'package',
             'data-id': packages[pi].id,
             'data-line': packages[pi].startLine,
-          });
+          }, pg);
       }
 
       var ports = (parsedData.elements || []).filter(function(e) { return e.kind === 'port'; });
@@ -1391,7 +1187,7 @@ window.MA.modules.plantumlComponent = (function() {
       });
 
       var relations = parsedData.relations || [];
-      // BLK-migrator-20260923-1909: 線は書かれた行で当てる (読めない線があっても以後がずれない)。
+      // 線は書かれた行で当てる (読めない線があっても以後がずれない)。
       var linkGroups = OB.matchLinksByLine(svgEl, relations);
       var relN = 0;
       for (var ri = 0; ri < relations.length; ri++) {
@@ -1402,7 +1198,7 @@ window.MA.modules.plantumlComponent = (function() {
         var lineEl = lg.querySelector('line, path');
         if (!lineEl) continue;
         var bb = null;
-        // BLK-junior-20260908-1703: 同じ部品から出る線は色も太さも同じで、
+        // 同じ部品から出る線は色も太さも同じで、
         // クリックして右パネルの From/To を読むまで相手が分からなかった。
         // 乗せた時点で相手が読めるよう、rect に相手を持たせる。
         var EH = window.MA.edgeHint;
@@ -1416,8 +1212,8 @@ window.MA.modules.plantumlComponent = (function() {
           var hintAttrs = EH.hintAttrs(relations[ri]);
           Object.keys(hintAttrs).forEach(function(k) { relAttrs[k] = hintAttrs[k]; });
         }
-        // BLK-human-20260912-2130: 線・矢じり・ラベルをまとめて 1 つの当たり判定にする
-        // BLK-builder-20260925-0305-1: 中継点で割れた残りの線も同じ関係の 1 つの枠にする。
+        // 線・矢じり・ラベルをまとめて 1 つの当たり判定にする
+        // 中継点で割れた残りの線も同じ関係の 1 つの枠にする。
         var lgParts = (linkGroups.parts && linkGroups.parts[ri]) || [];
         lgParts.forEach(function(pg) { claimed.push(pg); });
         if (!OB.addLinkRects(overlayEl, lgParts.length ? [lg].concat(lgParts) : lg, relAttrs, 8)) {
@@ -1427,10 +1223,10 @@ window.MA.modules.plantumlComponent = (function() {
         }
       }
 
-      // BLK-migrator-20260923-1909: フォームが読めない記法 (artifact / cloud { } / 題 …) にも行を指す枠を置く
+      // フォームが読めない記法 (artifact / cloud { } / 題 …) にも行を指す枠を置く
       OB.addUnclaimed(svgEl, overlayEl, claimed, null, dslText);
 
-      // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
+      // 小さい当たり判定を手前に。共通実装 (src/core)
       OB.raiseSmallestLast(overlayEl);
 
       return {

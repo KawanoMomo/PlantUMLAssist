@@ -1,0 +1,8 @@
+@startuml
+state "待機" as S1
+state "初期化中" as S2
+state "完了" as S3
+[*] --> S1
+S1 --> S2 : init
+S2 --> S3 : done
+@enduml

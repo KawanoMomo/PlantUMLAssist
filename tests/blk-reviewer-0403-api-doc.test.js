@@ -44,46 +44,17 @@ describe('server API の窓口が自分で仕様を返す (BLK-reviewer-20260909
     });
   });
 
-  test('GET /api と GET /verify-svg が仕様を返す分岐を持つ', function() {
+  test('GET /api が索引を返す分岐を持つ', function() {
     expect(SERVER).toContain("if self.path.split('?')[0] == '/api':");
     expect(SERVER).toContain('return self._send_json(200, API_INDEX)');
-    expect(SERVER).toContain("if self.path.split('?')[0] == '/verify-svg':");
-    expect(SERVER).toContain('return self._send_json(200, VERIFY_SVG_API_DOC)');
   });
 
-  test('/verify-svg の仕様が dir / types / mode を名指しし、puml と svg は渡さないと言う', function() {
-    var at = SERVER.indexOf('VERIFY_SVG_API_DOC = {');
-    var doc = SERVER.slice(at, SERVER.indexOf('\n}\n', at));
-    expect(doc).toContain("'types'");
-    expect(doc).toContain("'dir'");
-    expect(doc).toContain("'mode'");
-    expect(doc).toContain('puml / svg そのものは受け取らない');
-    expect(doc).toContain('/verify-svg ');   // curl の例が窓口を名指しする
-    expect(doc).toContain('curl -sS -X POST');
-  });
-
-  test('/verify-svg の 400 は必ず expected と example を添える (1 回目の失敗で形が分かる)', function() {
-    var at = SERVER.indexOf('def _handle_verify_svg_post');
-    var body = SERVER.slice(at, SERVER.indexOf('\n    def _handle_file_roles_post', at));
-    // 400 を返す箇所は複数行の dict で書かれるので、各 _send_json(400 の直後 400 字に
-    // expected が居ることで見る (「1 つでも素の 400 を返していない」ことの検査)。
-    var at = 0;
-    var found = 0;
-    while ((at = body.indexOf('_send_json(400', at + 1)) !== -1) {
-      found++;
-      expect(body.slice(at, at + 400)).toContain('VERIFY_SVG_EXPECTED');
-    }
-    expect(found).toBeGreaterThan(0);
-    var exp = SERVER.slice(SERVER.indexOf('VERIFY_SVG_EXPECTED = {'));
-    expect(exp).toContain("'doc': 'GET /verify-svg'");
-    expect(exp).toContain("'example'");
-  });
-
-  test('docs/api.md は /verify-svg の要求の形と status の意味を書く', function() {
-    expect(API_MD).toContain('{dir, types: [名前...], mode}');
-    expect(API_MD).toContain('puml と svg は本文に渡さない');
-    ['match', 'differ-format', 'differ-content', 'missing', 'error'].forEach(function(s) {
-      expect(API_MD).toContain('`' + s + '`');
-    });
+  // 保存中の svg を描き直して比べる窓口 (/verify-svg) は TICKET-owner-20261116-0241-prune で外した。
+  // 窓口・仕様・索引のどこにも残さない (隠して残さない)。
+  test('/verify-svg の窓口・仕様・索引が残っていない', function() {
+    expect(routes().indexOf('/verify-svg')).toBe(-1);
+    expect(SERVER).not.toContain('VERIFY_SVG_API_DOC');
+    expect(SERVER).not.toContain('_handle_verify_svg_post');
+    expect(indexBlock()).not.toContain('/verify-svg');
   });
 });

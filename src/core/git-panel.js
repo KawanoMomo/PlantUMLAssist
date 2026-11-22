@@ -3,9 +3,9 @@ window.MA = window.MA || {};
 
 // git-panel — FILES ツリー下端の GIT 欄と「比較する相手を選ぶ」の判断 (design 10c)。
 //
-// BLK-human-20260923-1702: 保存先が Git リポジトリのとき、ブランチ・変更・コミットと
-// 「この図の履歴」をツリーの下端に出し、過去のコミットを並べて比較の相手に選べるようにする。
-// 相手の枠は読むだけのフォルダを比べるときと同じ #senior-pane (操作を覚え直させない)。
+// 保存先が Git リポジトリのとき、ブランチ・変更・コミットと
+// 「この図の履歴」をツリーの下端に出し、過去のコミットを比較の相手に選べるようにする。
+// 相手の枠は読むだけのフォルダの図を出すときと同じ #senior-pane (操作を覚え直させない)。
 //
 // DOM も通信も触らない。server.py の /git-status・/git-log・/git-refs の返り値を
 // 画面の文字と並びに直すだけ。
@@ -52,7 +52,7 @@ window.MA.gitPanel = (function() {
   // ツリーのファイル名の右に出す M / A / D (未保存 ● とは別)。キーは拡張子を外した図の名前。
   function _stem(name) { return _s(name).replace(/\.puml$/i, ''); }
 
-  // BLK-builder-20260924-1808-1 (design 10c): 変更の行に出す名前。すぐ上のツリーの行と同じ
+  // 変更の行に出す名前。すぐ上のツリーの行と同じ
   // 拡張子なしの図の名前にする (「spi_transfer_sequence  M」)。保存先の下のフォルダにある図は
   // そのフォルダ名を残す (10c の「SPI/spi_init_sequence」)。
   function changeName(c) {
@@ -75,7 +75,7 @@ window.MA.gitPanel = (function() {
     return out;
   }
 
-  // BLK-builder-20260924-2344-3 (design 10c「変更ファイル (M / A / D)…はここで済みます」): 変更の行を押して開く図の名前。
+  // 変更の行を押して開く図の名前。
   // 保存先の図 (ツリーに出る名前) だけを開く。消した図 (D) と保存先の外のファイルは開けないので ''。
   // compare: M の図は開いた上で最後のコミットを右の枠に並べる (何を変えたかをコミットの前に確かめる)。
   function changeOpen(c) {
@@ -108,7 +108,7 @@ window.MA.gitPanel = (function() {
   }
 
   // コミット 1 行の副題 `a3f91c2 · junior · 09-23 06:30 · HEAD`。
-  // BLK-builder-20260924-2246-1 (design 10c): タグは副題に足さず、メッセージの横の札に置く
+  // タグは副題に足さず、メッセージの横の札に置く
   // (「初版 [v1.2]」。GIT 欄の「この図の履歴」の行と同じ形。札は commitTags)。
   function commitMeta(c) {
     if (!c) return '';
@@ -134,7 +134,7 @@ window.MA.gitPanel = (function() {
     return '+' + a + (r ? ' −' + r : ' −0');
   }
 
-  // BLK-builder-20260924-1835-1 (design 10c): 「この図の履歴」の行は 1 行 1 コミット
+  // 「この図の履歴」の行は 1 行 1 コミット
   // (「CR1 書き込みを追加  09-21」「初版 [v1.2]  09-10」)。右端は日付 `MM-DD` だけで、
   // ハッシュ・作成者・時刻・HEAD は行の title で読む (以前は 2 行目に詰めて幅 190px で切れていた)。
   function dayLabel(iso) {
@@ -162,7 +162,7 @@ window.MA.gitPanel = (function() {
     };
   }
 
-  // ── コミットと控えを 1 本の「この図の履歴」に (BLK-owner-20260924-2157-prune) ─────
+  // ── コミットと控えを 1 本の「この図の履歴」に ─────
   // 保存先が Git のとき、server が上書きの手前に取る控え (`_versions/`) も GIT 節の同じ一覧に
   // 時刻順で混ぜ、行に「控え」の札を付ける (VS Code の Timeline と同じ形)。同じ名前の一覧を 2 つ持たない。
   //   commits  … /git-log のコミット (新しい順)
@@ -261,11 +261,11 @@ window.MA.gitPanel = (function() {
     return '左: 作業中 右: ' + (c ? _s(c.short || _s(c.hash).slice(0, 7)) : '—');
   }
 
-  // 「比較する相手を選ぶ」のタブ。読むだけのフォルダは今までの相手 (別のフォルダの図)。
+  // 「比較する相手を選ぶ」のタブ。相手はこの図の過去の版だけ
+  // (読むだけのフォルダの図を相手にするタブは TICKET-owner-20261115-2141-prune で外した)。
   var PICK_TABS = [
     { id: 'commits', label: 'コミット' },
     { id: 'refs', label: 'ブランチ / タグ' },
-    { id: 'folder', label: '読むだけのフォルダ' },
   ];
   function pickTabs() { return PICK_TABS.map(function(t) { return { id: t.id, label: t.label }; }); }
 
@@ -289,7 +289,7 @@ window.MA.gitPanel = (function() {
   var SCOPE_NOTE = 'コミット・取得・送信・ブランチ切替まで。マージと衝突の解消は外部の Git ツールで行ってください。'
     + '取得・送信は押したときだけ通信します (認証は OS の git の設定)。';
 
-  // BLK-builder-20260924-1818-1 (design 10c): 「比較する相手を選ぶ」の窓の置き場所。
+  // 「比較する相手を選ぶ」の窓の置き場所。
   // FILES 下端の「相手を選ぶ…」から下へ開くと窓の下半分が画面の外に出ていた。
   // 下に余裕 (320px か 60vh の小さい方) があれば今までどおりボタンの下、無ければ上と下の広い側へ開き、
   // 入る高さ (上限 60vh) まで縮める。上へ開くときは窓の下端をボタンの 4px 上に置く (bottom で指す)。

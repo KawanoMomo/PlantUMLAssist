@@ -2,7 +2,6 @@
 window.MA = window.MA || {};
 
 // state-svg-map — 状態遷移図の選択枠を、PlantUML が SVG に残した要素情報から当てる
-// (BLK-migrator-20260923-2312)。
 //
 // 以前は DSL を読み直した結果 (状態の宣言・遷移の数) と SVG の図形の数・順番を突き合わせていたので、
 // 宣言の無い状態 (`[*] --> State1` だけの図)、並行領域の子、`<<choice>>` / fork / join / 入口・出口、
@@ -163,7 +162,7 @@ window.MA.stateSvgMap = (function() {
 
   function _classOf(g) { return _s(g.getAttribute('class')); }
 
-  // BLK-migrator-20260929-1155: PlantUML 1.2026.8 は修飾名の ASCII 以外の文字を `.` に置き換えて書く
+  // PlantUML 1.2026.8 は修飾名の ASCII 以外の文字を `.` に置き換えて書く
   // (`待機` → `..`、`Run.待機` → `Run...`、`親` の中の開始 → `...start..`)。修飾名が壊れていれば、
   // 名前は描いた文字 (その <g> の最初の <text>) から、入れ物はその <g> を包む複合状態の <g> から読む。
   function _brokenQn(qn) {
@@ -196,7 +195,7 @@ window.MA.stateSvgMap = (function() {
     return null;
   }
 
-  // BLK-human-20260925-1500: PlantUML 1.2026.7 からは複合状態も <g class="entity" data-qualified-name> になり、
+  // PlantUML 1.2026.7 からは複合状態も <g class="entity" data-qualified-name> になり、
   // 中の状態・遷移・fork の棒をその <g> の中に入れて描く (1.2026.6 までは名前の無い <g> と外枠の rect)。
   // 中に名前の付いた <g> を持つ entity を複合状態と見る。
   function _isComposite(g) {
@@ -323,7 +322,7 @@ window.MA.stateSvgMap = (function() {
     });
   }
 
-  // fork / join の棒のうち、遷移の端からも名前が引けなかったもの (BLK-migrator-20260925-1932)。
+  // fork / join の棒のうち、遷移の端からも名前が引けなかったもの。
   function _frameUnnamedBars(orphanShapes, byName, frames, seenState, links, texts, parsed) {
     var named = [];
     Object.keys(byName).forEach(function(k) { named = named.concat(byName[k]); });
@@ -358,7 +357,7 @@ window.MA.stateSvgMap = (function() {
     return { kind: m[1] ? 'historyDeep' : 'history', scope: scope };
   }
 
-  // BLK-migrator-20260926-0550: 履歴の丸と「H」/「H*」は、宣言の有無・遷移の有無・入れ物に依らずここ 1 か所で当てる。
+  // 履歴の丸と「H」/「H*」は、宣言の有無・遷移の有無・入れ物に依らずここ 1 か所で当てる。
   // PlantUML は履歴を名前の付いた <g> も名前の文字も無しに「H」/「H*」の丸で描く。丸ごとに次の順で持ち主を決める:
   //   (1) 丸に遷移の端 (線の端か矢じり) が触れていれば、その側の端の DSL の書き方で決める。
   //       `[H]` / `Comp[H*]` と書いた端 → 開始・終了と同じ 'pseudo' の枠 (id `history@Comp` / `historyDeep@`、行は最初に使う遷移)。
@@ -439,7 +438,7 @@ window.MA.stateSvgMap = (function() {
       var isCluster = /(^|\s)cluster(\s|$)/.test(cls) || _isComposite(g);
       if (!isCluster && !/(^|\s)(entity|start_entity|end_entity)(\s|$)/.test(cls)) return;
       if (/^GMN/.test(qn)) return;   // 注記は呼び手が別に当てる
-      // BLK-migrator-20260930-0157: 浮いた note (`note "…" as N1`) は名前が付くが状態ではない。紙を持つ <g> は注記として呼び手に任せる。
+      // 浮いた note (`note "…" as N1`) は名前が付くが状態ではない。紙を持つ <g> は注記として呼び手に任せる。
       var OBn = window.MA.overlayBuilder;
       if (!isCluster && OBn && OBn.notePapers && OBn.notePapers(g).length) return;
       var ps = isCluster ? null : pseudoOf(qn, cls);
@@ -492,7 +491,7 @@ window.MA.stateSvgMap = (function() {
         trOf[links.indexOf(g)] = tr;
         frames.push({ type: 'transition', id: tr.id, line: line, link: g });
       });
-      // BLK-migrator-20260930-0323: 行で組にならない線 (手続き !procedure の本文の行を指す線など。パーサは展開した遷移を
+      // 行で組にならない線 (手続き !procedure の本文の行を指す線など。パーサは展開した遷移を
       // 呼んだ行で読む) は、線の両端 (data-entity-1 / -2 → 名前) で、まだどの線とも組になっていない遷移に当てる。
       // それでも組にならない線は、PlantUML が残した行 (data-source-line) の枠にする (黙って捨てない。押すと描いた行)。
       // note と結ぶ点線は注記の当て方 (overlay-builder の addNoteFrames) に任せる。
@@ -600,7 +599,7 @@ window.MA.stateSvgMap = (function() {
       frames.push({ type: 'state', id: r.id, line: r.line, box: pad(union(boxes), 2), composite: false, declared: r.declared });
     });
 
-    // 4. BLK-migrator-20260925-1932: 名前の付かなかった fork / join の棒 (どの遷移にもつながらない)。
+    // 4. 名前の付かなかった fork / join の棒 (どの遷移にもつながらない)。
     // PlantUML は fork / join を名前の無い棒で描き、名前の文字を添えない。遷移の端からも脇の文字からも名前が引けないので、
     // 棒と入れ物 (どの複合状態の中か) の組で、同じ組の「まだ枠の無い宣言」に描いた順 = 宣言順で当てる。数が合わない組は当てない。
     _frameUnnamedBars(orphanShapes, byName, frames, seenState, links, glyphTexts, parsed);

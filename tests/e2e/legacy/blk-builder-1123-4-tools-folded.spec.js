@@ -11,7 +11,7 @@ const { gotoApp } = require('../helpers');
 async function openToolMenu(page) {
   await page.keyboard.press('Control+k');
   await expect(page.locator('#cp-input')).toBeVisible();
-  await page.locator('#cp-input').fill('ツールを分類から選ぶ');
+  await page.locator('#cp-input').fill('ツールの一覧を開く');
   await page.keyboard.press('Enter');
   await expect(page.locator('#tool-menu')).toBeVisible();
 }
@@ -23,8 +23,8 @@ test('既定ではタブ列に機能ボタンが出ない', async ({ page }) => 
   await gotoApp(page, { foldedTools: true });
   await expect(page.locator('#tab-bar')).toHaveClass(/tools-folded/);
   await expect(page.locator('#btn-tab-compare')).toBeHidden();
-  await expect(page.locator('#btn-tab-board')).toBeHidden();
-  await expect(page.locator('#btn-tab-handoff')).toBeHidden();
+  await expect(page.locator('#btn-tab-lines')).toBeHidden();
+  await expect(page.locator('#btn-tab-rename')).toBeHidden();
   // 図の出し入れだけが残る (7b: ツール ▾ も置かない)。
   await expect(page.locator('#btn-tab-new')).toBeVisible();
   await expect(page.locator('#btn-tab-folder')).toBeVisible();
