@@ -3063,6 +3063,9 @@ class Handler(BaseHTTPRequestHandler):
         if not path.exists():
             self._send_json(404, {'error': 'その名前の図が保存フォルダにありません'})
             return
+        # TICKET-roadmap-20261122-0855-3: 消す直前の中身も版として控える (控えは設定の置き場。保存先には置かない)。
+        # 上書きされたことの無い図を消すと版が 1 つも残らず、「この図の履歴」から戻せなかった。
+        self._stash_version(save_dir, dt, None)
         for target in (path, path.with_suffix('.svg')):
             try:
                 target.unlink()
@@ -3089,6 +3092,27 @@ class Handler(BaseHTTPRequestHandler):
                               'versions': self._version_counts(save_dir).get(dt, 0)})
 
 
+    def _file_op_mkdir(self, data):
+        """TICKET-roadmap-20261122-0855-3: FILES の右クリック「新しいフォルダ」。dir の下に to のフォルダを 1 つ作る。
+
+        作るのはそのフォルダ 1 つだけ (中に控え・印・設定を置かない)。同じ名前のフォルダ・ファイルがあれば 409 で断る。
+        名前は図の名前と同じ規則 (パス区切り・Windows の禁止文字・先頭と末尾の空白とドット・予約名は使えない)。
+        """
+        to_name = str(data.get('to') or '').strip()
+        if not is_safe_autosave_name(to_name) or to_name.startswith('.') or to_name == self.VERSIONS_DIRNAME:
+            return self._send_json(400, {'error': 'フォルダの名前にパス区切り・制御文字・Windows の禁止文字・先頭のドットは使えません'})
+        parent = self._autosave_resolve_dir(data.get('dir'))
+        if not (parent.exists() and parent.is_dir()):
+            return self._send_json(404, {'error': '作る場所のフォルダがありません'})
+        dst = parent / to_name
+        if dst.exists():
+            return self._send_json(409, {'error': '同じ名前のフォルダかファイルがあります: ' + to_name})
+        try:
+            dst.mkdir()
+        except OSError as e:
+            return self._send_json(500, {'error': 'フォルダを作れませんでした: ' + str(e)})
+        return self._send_json(200, {'ok': True, 'op': 'mkdir', 'name': to_name, 'dir': str(dst)})
+
     def _handle_file_op_post(self):
         """FILES ツリーのファイル単位の操作 (BLK-human-20260923-1701 / design 10b)。
 
@@ -3104,8 +3128,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         op = str(data.get('op') or '')
         name = str(data.get('name') or '')
+        if op == 'mkdir':
+            return self._file_op_mkdir(data)
         if op not in ('rename', 'copy', 'move', 'reveal'):
-            return self._send_json(400, {'error': 'op は rename / copy / move / reveal のどれか'})
+            return self._send_json(400, {'error': 'op は rename / copy / move / reveal / mkdir のどれか'})
         if not self._autosave_validate_type(name):
             return self._send_json(400, {'error': '名前にパス区切り・制御文字・Windows の禁止文字は使えません'})
         save_dir = self._autosave_resolve_dir(data.get('dir'))

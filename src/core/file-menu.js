@@ -39,8 +39,11 @@ window.MA.fileMenu = (function() {
   // 読むだけのフォルダの図は、行を開いて図を押すと右の枠に 1 枚で出る (右クリックの操作は無い)。
   // フォルダの右クリックの比較の行と、フォルダの図を覗く窓は
   // TICKET-owner-20261115-2141-prune で外した。
+  // TICKET-roadmap-20261122-0855-3: 保存先とその下のフォルダ (kind 'sub') には「新しいフォルダ」(実際にフォルダを作る)。
+  // サブフォルダの右クリックは、そこに作る 2 つだけ (保存先・読むだけの切り替えは保存先の行で)。
   var FOLDER_ITEMS = [
     { id: 'new-doc', label: '新しい図', writable: true },
+    { id: 'new-folder', label: '新しいフォルダ', writable: true },
     { sep: true },
     { id: 'set-target', label: '保存先にする' },
     { id: 'set-readonly', label: '読むだけにする' },
@@ -75,6 +78,9 @@ window.MA.fileMenu = (function() {
   // ctx: { kind: 'target' | 'readonly' }
   function folderItems(ctx) {
     var kind = _s((ctx || {}).kind) || 'target';
+    if (kind === 'sub') {
+      return FOLDER_ITEMS.filter(function(it) { return it.writable; }).map(_copy);
+    }
     var items = FOLDER_ITEMS.filter(function(it) {
       if (it.targetOnly) return kind === 'target';
       if (it.writable && kind === 'readonly') return false;
@@ -233,7 +239,8 @@ window.MA.fileMenu = (function() {
       if (!path || seen[path]) return;
       seen[path] = true;
       var label = _s(d.name) || path.split(/[\\/]/).filter(Boolean).pop() || path;
-      out.push({ id: 'move-dir', dir: path, label: label, tag: 'フォルダ',
+      // 保存先とその下のフォルダ (inTarget) は「保存先の下」、隣の保存フォルダは「フォルダ」の札。
+      out.push({ id: 'move-dir', dir: path, label: label, tag: d.inTarget ? '保存先の下' : 'フォルダ',
         title: path + ' へ移す (名前はそのまま)' });
     });
     if (out.length) out.push({ sep: true });

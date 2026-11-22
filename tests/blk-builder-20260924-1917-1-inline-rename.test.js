@@ -31,9 +31,14 @@ describe('ツリーの行の上で名前を直す (src/ui/file-menu.js)', functi
   test('開いていない図で行が見えていれば、入力窓ではなく行の上の入力欄', function() {
     var i = body.indexOf('var row = treeFileRow(name);');
     expect(i).toBeGreaterThan(0);
-    expect(body.indexOf('return renameInline(row, name)')).toBeGreaterThan(i);
+    var tail = body.slice(i);
+    expect(tail.indexOf('return renameInline(row, name)')).toBeGreaterThan(0);
     // 入力窓は行が見えないとき (旧 📂 一覧など) だけの退避路
-    expect(body.indexOf('window.prompt(')).toBeGreaterThan(body.indexOf('return renameInline(row, name)'));
+    expect(tail.indexOf('window.prompt(')).toBeGreaterThan(tail.indexOf('return renameInline(row, name)'));
+    // サブフォルダの図 (TICKET-roadmap-20261122-0855-3) も、行が見えていれば行の上の入力欄。入力窓は退避路
+    var sub = body.slice(0, i);
+    expect(sub.indexOf('return renameInline(srow, name, where)')).toBeGreaterThan(sub.indexOf('treeFileRow(name, where)'));
+    expect(sub.indexOf('window.prompt(')).toBeGreaterThan(sub.indexOf('return renameInline(srow, name, where)'));
   });
   test('Enter で確定・Esc で取り消し・外を押すと確定、理由を出している間は開いたまま', function() {
     var r = ui.slice(ui.indexOf('function renameInline'), ui.indexOf('function copyFile'));

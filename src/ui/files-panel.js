@@ -230,6 +230,8 @@ window.MA.filesPanel = (function() {
   function renderSubTree() {
     var host = _subHost();
     if (!host) return;
+    // 行の欄 (名前を変更・新しいフォルダ) を打っている間は組み直さない (欄ごと消える)。閉じた後の読み直しで描く。
+    if (host.querySelector('#files-rename-box, #files-newfolder-box')) return;
     var FT = window.MA.fileTree;
     var keep = _focusKeep(host);
     host.textContent = '';
@@ -868,6 +870,19 @@ window.MA.filesPanel = (function() {
     renderSubTree: renderSubTree,
     reloadSubTree: reloadSubTree,
     subFiles: subFiles,
+    // TICKET-roadmap-20261122-0855-3: 移動の行き先 (保存先の下のフォルダ) と、作ったフォルダを見せるための開閉。
+    subDirs: function() {
+      return (_subTree.dirs || []).map(function(d) { return { rel: String(d.rel || ''), path: String(d.path || '') }; });
+    },
+    targetLabel: function() {
+      var el = $('top-save-target');
+      return el ? String(el.textContent || '').trim() : '';
+    },
+    openSubDir: function(rel) {
+      var parts = String(rel || '').split('/').filter(Boolean);
+      for (var i = 1; i <= parts.length; i++) _set(KEY_SUB + parts.slice(0, i).join('/'), '1');
+      renderSubTree();
+    },
     subRoot: function() { return (_subTree.dir && _subTree.dir === _targetDir()) ? String(_subTree.root || '') : ''; },
     folderEntries: _folderNames,
     reveal: reveal,
