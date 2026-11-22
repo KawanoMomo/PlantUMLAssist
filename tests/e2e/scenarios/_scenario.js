@@ -25,10 +25,13 @@ async function reopenApp(page) {
   await page.evaluate((k) => { try { window.localStorage.removeItem(k); } catch (e) {} }, KEEP_KEY);
 }
 
+// 台本の場面は利用者の初回と同じタブ列 (製品の既定 = 機能ボタンをツール ▾ に畳んだ状態) で開く
+// (TICKET-owner-20261116-0340-1)。gotoApp の既定は legacy e2e のための「畳まない」なので、
+// ここの起動は必ず { foldedTools: true } を渡し、helper に畳み方の設定を書かせない。
+const DEFAULT_TAB_BAR = { foldedTools: true };
+
 // 保存先を設定済みにして開く (junior 手順 3・primary が毎回している状態)。
-// opts はそのまま gotoApp へ渡す。`{ foldedTools: true }` を渡すと helper が
-// 畳み方の設定に触らないので、アプリ自身の既定 (design 7a/7b) がそのまま出る
-// (仕様と現在値を突き合わせる手順 11 は、helper の都合を既定と読み違えてはいけない)。
+// opts は既定のタブ列の上に重ねて gotoApp へ渡す。
 async function bootWithSaveDir(page, dir, opts) {
   await page.addInitScript((d) => {
     try {
@@ -39,13 +42,13 @@ async function bootWithSaveDir(page, dir, opts) {
       }));
     } catch (e) {}
   }, dir);
-  await gotoApp(page, opts);
+  await gotoApp(page, Object.assign({}, DEFAULT_TAB_BAR, opts || {}));
 }
 
 // 保存先を未設定 (ダウンロード) のまま開く。
 async function bootPlain(page) {
   await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
-  await gotoApp(page);
+  await gotoApp(page, DEFAULT_TAB_BAR);
 }
 
 // 保存先をまだ決めていない状態 (= 保存するとダウンロードになる)。
@@ -60,7 +63,7 @@ async function bootDownloadMode(page, prevDir) {
       }));
     } catch (e) {}
   }, prevDir || './autosave');
-  await gotoApp(page);
+  await gotoApp(page, DEFAULT_TAB_BAR);
 }
 
 // 保存フォルダに図を置く / 読む / 消す (ペルソナの前周までの成果物に相当)。

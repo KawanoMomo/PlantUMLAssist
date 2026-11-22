@@ -124,7 +124,7 @@ test('primary 手順3 (場面4) 書き出した SVG・PNG の中身が本文の�
     fs.writeFileSync(path.join(dir, n + '.puml'), orig[n]);
   }
 
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   let ops = 0;
 
   for (const d of DOCS) {

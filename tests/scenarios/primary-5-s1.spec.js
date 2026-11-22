@@ -33,7 +33,7 @@ test('primary 手順5 CRLF の図を直して保存しても CRLF・字下げ・
   const file = path.join(dir, NAME + '.puml');
   fs.writeFileSync(file, originalBytes);
 
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   await S.openFolderItem(page, NAME);
   await expect(page.locator('#editor')).toHaveValue(/Spi_Write\(\)/, { timeout: 20000 });
   // 中央に開いた保存先の一覧を閉じて、図とフォームに戻る。

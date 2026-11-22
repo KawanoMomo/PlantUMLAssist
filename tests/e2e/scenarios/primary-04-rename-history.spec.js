@@ -13,12 +13,12 @@ async function boot(page) {
   await page.addInitScript((d) => {
     try {
       window.localStorage.clear();
-      window.localStorage.setItem('plantuml-tools-folded', '0');
       window.localStorage.setItem('plantuml-autosave-config',
         JSON.stringify({ enabled: true, debounceMs: 200, restoreMode: 'auto', backend: 'file', fileDir: d }));
     } catch (e) {}
   }, DIR);
-  await gotoApp(page);
+  // 利用者の初回と同じタブ列 (製品の既定) で開く (TICKET-owner-20261116-0340-1)。
+  await gotoApp(page, { foldedTools: true });
 }
 
 async function putFile(page, name, dsl) {

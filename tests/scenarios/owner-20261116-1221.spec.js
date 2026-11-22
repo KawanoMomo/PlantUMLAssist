@@ -28,7 +28,7 @@ test('owner 1221 FILES の見出しは ◍ と ‹ だけで、新しい図は�
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
 
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   const target = await page.locator('#top-save-target').innerText().catch(() => '');
 
   // (1) 見出しのボタンは 2 つだけ。

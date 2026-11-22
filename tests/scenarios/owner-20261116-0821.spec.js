@@ -30,7 +30,7 @@ test('owner 0821 この図の履歴の「比較」で前の版が右に並び、
   const settledText = JSON.stringify({ entries: [{ peer: 'primary', kind: 'usecase', count: 0, at: '2026-11-01T09:00:00Z' }] });
   fs.writeFileSync(settled, settledText, 'utf8');
 
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   // 外した書き込み履歴の控えが localStorage に残っている。
   await page.evaluate((v) => { localStorage.setItem('plantuml-write-history', v); }, OLD_WRITES);
   await S.putDoc(page, S.dirFor(__filename), 'gpio_state', STATE);

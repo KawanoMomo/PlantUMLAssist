@@ -37,7 +37,7 @@ test('primary 手順1 (場面2) 手書きの 3 図と common.puml の写しを�
     expect(s, n + ' のコメント').toMatch(/^\s*' /m);
   }
 
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   await H.expectRendered(page);
 
   let ops = 0;

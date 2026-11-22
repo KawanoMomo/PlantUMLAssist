@@ -7,6 +7,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
+const H = require('./_helpers');
 const S = require('../e2e/scenarios/_scenario');
 
 const SEQ = ['@startuml', 'participant SpiDrv', 'participant Reg', 'SpiDrv -> Reg : write(CR1)', '@enduml', ''].join('\n');
@@ -25,7 +26,7 @@ test('owner 0140 Export ▾ は 1 枚の図の 4 項目で、資料化の控え�
   const setsText = JSON.stringify({ sets: [{ name: '設計書', docs: ['spi_seq'], items: [] }] });
   fs.writeFileSync(sets, setsText, 'utf8');
 
-  await S.bootWithSaveDir(page, S.dirFor(__filename));
+  await H.bootWithSaveDir(page, S.dirFor(__filename));
   await S.openFolderItem(page, 'spi_seq');
   await S.closeFolderList(page);
   await expect(page.locator('#preview-svg svg')).toHaveCount(1, { timeout: 20000 });
