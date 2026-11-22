@@ -76,8 +76,9 @@ window.MA.modules.plantumlUsecase = (function() {
     return set;
   }
 
-  function normalizeIdInput(rawInput, parsed, prefix) {
-    return window.MA.idNormalizer.normalize(rawInput, _existingUsecaseIdSet(parsed), prefix || 'U');
+  // text = 今の本文 (描き直し前の古い parsed で別名を重ねない)。
+  function normalizeIdInput(rawInput, parsed, prefix, text) {
+    return window.MA.idNormalizer.normalize(rawInput, _existingUsecaseIdSet(parsed), prefix || 'U', text);
   }
 
   function addActor(text, id, label) { return insertBeforeEnd(text, fmtActor(id, label || id)); }
@@ -615,7 +616,7 @@ window.MA.modules.plantumlUsecase = (function() {
         var out = t;
         if (kind === 'actor') {
           var rawAl = document.getElementById('uc-tail-alias').value;
-          var normAc = normalizeIdInput(rawAl, parsedData, 'A');
+          var normAc = normalizeIdInput(rawAl, parsedData, 'A', ctx.getMmdText());
           if (!normAc.valid) { alert('Alias 必須'); return; }
           var rawLbl = document.getElementById('uc-tail-label').value.trim();
           window.MA.history.pushHistory();
@@ -623,7 +624,7 @@ window.MA.modules.plantumlUsecase = (function() {
           out = GP.applyAdd('usecase', 'uc-tail', parsedData.groups, t, out);
         } else if (kind === 'usecase') {
           var rawAl2 = document.getElementById('uc-tail-alias').value;
-          var normUc = normalizeIdInput(rawAl2, parsedData, 'U');
+          var normUc = normalizeIdInput(rawAl2, parsedData, 'U', ctx.getMmdText());
           if (!normUc.valid) { alert('Alias 必須'); return; }
           var rawLbl2 = document.getElementById('uc-tail-label').value.trim();
           window.MA.history.pushHistory();
