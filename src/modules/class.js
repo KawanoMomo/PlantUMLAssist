@@ -716,14 +716,30 @@ window.MA.modules.plantumlClass = (function() {
     return lines.join('\n');
   }
 
+  // 属性は手書きで並べた属性の塊に入れる (TICKET-primary-20261116-0420-wish)。
+  // 本体に属性があれば最後の属性の直後、属性が無くメソッドがあれば最初のメソッドの直前、
+  // どちらも無ければ閉じ `}` の直前。字下げは隣になる行 (属性・メソッド) に合わせる。
+  function _attributeInsertAt(lines, classIdx, closeIdx) {
+    var lastAttr = -1, firstMethod = -1;
+    for (var i = classIdx + 1; i < closeIdx; i++) {
+      var t = lines[i].trim();
+      if (!t || t.charAt(0) === "'" || SEPARATOR_RE.test(t)) continue;
+      if (_matchMethod(t)) { if (firstMethod < 0) firstMethod = i; continue; }
+      if (t.indexOf('(') < 0 && _matchAttribute(t)) lastAttr = i;
+    }
+    if (lastAttr >= 0) return { idx: lastAttr + 1, indent: lines[lastAttr].match(/^(\s*)/)[1] };
+    if (firstMethod >= 0) return { idx: firstMethod, indent: lines[firstMethod].match(/^(\s*)/)[1] };
+    return { idx: closeIdx, indent: lines[classIdx].match(/^(\s*)/)[1] + '  ' };
+  }
+
   function addAttribute(text, classLineNum, visibility, name, type, isStatic) {
     text = ensureBlock(text, classLineNum);
     var lines = text.split('\n');
     var classIdx = classLineNum - 1;
     var closeIdx = _findClassEndLine(lines, classIdx);
     if (closeIdx < 0) return text;
-    var indent = lines[classIdx].match(/^(\s*)/)[1] + '  ';
-    lines.splice(closeIdx, 0, indent + fmtAttribute(visibility, name, type, isStatic));
+    var at = _attributeInsertAt(lines, classIdx, closeIdx);
+    lines.splice(at.idx, 0, at.indent + fmtAttribute(visibility, name, type, isStatic));
     return lines.join('\n');
   }
 
