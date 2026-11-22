@@ -1140,16 +1140,27 @@ window.MA.modules.plantumlSequence = (function() {
     return '';
   }
 
-  function insertBefore(text, lineNum, kind, props) {
+  // lineNum (1 始まり) の行頭の空白をスペース・タブの字のまま返す。
+  // 無い行・空白だけの行は '' (字下げの無い図では足す行も今と同じ字になる)。
+  function _lineIndent(text, lineNum) {
+    var s = String(text == null ? '' : text).split('\n')[lineNum - 1];
+    if (typeof s !== 'string' || !s.trim()) return '';
+    return /^[ \t]*/.exec(s)[0];
+  }
+
+  // 前・後に足す 1 行は、押した行と同じ字下げで書く (alt / loop の中身を手で字下げした図で
+  // 足した行だけ段がずれない)。indent を渡すとその字下げを使う (帯の外へ出すときなど)。
+  function insertBefore(text, lineNum, kind, props, indent) {
     var line = _formatLine(kind, props);
     if (!line) return text;
-    return window.MA.textUpdater.insertAtLine(text, lineNum, line);
+    var ind = typeof indent === 'string' ? indent : _lineIndent(text, lineNum);
+    return window.MA.textUpdater.insertAtLine(text, lineNum, ind + line);
   }
 
   function insertAfter(text, lineNum, kind, props) {
     var line = _formatLine(kind, props);
     if (!line) return text;
-    return window.MA.textUpdater.insertAfterLine(text, lineNum, line);
+    return window.MA.textUpdater.insertAfterLine(text, lineNum, _lineIndent(text, lineNum) + line);
   }
 
   // 挿入の確定で使う関数を、帯を見て決める。
@@ -1163,12 +1174,14 @@ window.MA.modules.plantumlSequence = (function() {
     // 閉じ忘れの帯 (deactivate が無い) の外側に足すときは、
     // 帯が新しい矢印まで伸びないよう `deactivate {part}` を先に 1 行入れて閉じる。
     var closeWith = res.needsClose && res.part ? 'deactivate ' + res.part : null;
+    // 字下げ: 素朴な位置のままなら押した行に、帯を避けて動いたら入る位置の直前の行に揃える。
+    var ind = (!res.moved && !closeWith) ? _lineIndent(text, line) : _lineIndent(text, target - 1);
     return function(t, _line, k, props) {
       if (closeWith) {
-        t = window.MA.textUpdater.insertAtLine(t, target, closeWith);
-        return insertBefore(t, target + 1, k, props);
+        t = window.MA.textUpdater.insertAtLine(t, target, ind + closeWith);
+        return insertBefore(t, target + 1, k, props, ind);
       }
-      return insertBefore(t, target, k, props);
+      return insertBefore(t, target, k, props, ind);
     };
   }
 
@@ -2789,6 +2802,8 @@ window.MA.modules.plantumlSequence = (function() {
     formatLabelWithStereotype: formatLabelWithStereotype,
     insertBefore: insertBefore,
     insertAfter: insertAfter,
+    // 挿入の窓の確定と同じ経路 (帯を見て行と字下げを決める)。unit から確かめるために公開。
+    activationAwareInsertFn: _activationAwareInsertFn,
     duplicateMessage: duplicateMessage,
     resolveAnchor: resolveAnchor,
     withSelected: withSelected,
