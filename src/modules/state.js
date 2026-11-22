@@ -640,7 +640,9 @@ window.MA.modules.plantumlState = (function() {
       var colon = outLine.indexOf(' : ');
       outLine = colon >= 0 ? outLine.slice(0, colon) + stm[1] + outLine.slice(colon) : outLine + stm[1];
     }
-    lines[idx] = indent + outLine;
+    // 直した値の字だけを置き換え、矢印の前後・`:` の前後の空白 (手で揃えた桁) は元の行の字のまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = window.MA.dslUtils.keepLineSpacing(lines[idx], indent + outLine,
+      [fields.from, fields.to, fields.trigger, fields.guard, fields.action]);
     return lines.join('\n');
   }
 

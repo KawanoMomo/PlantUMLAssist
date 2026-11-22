@@ -292,8 +292,13 @@ window.MA.modules.plantumlUsecase = (function() {
     else if (field === 'swap') { var sw1 = from; from = to; to = sw1; }
 
     // 多重度・線の色は種別やラベルの書き換えでは失われない (design 3c)。
-    lines[idx] = window.MA.relationOptions.applyDecorations(
-      indent + fmtRelation(kind, from, to, lbl, rootFirst), deco);
+    var relCore = fmtRelation(kind, from, to, lbl, rootFirst);
+    if (field === 'label') {
+      relCore = DU.keepRelationArrow(window.MA.relationOptions.readableLine(trimmed), relCore, RELATION_RE);
+    }
+    var relLine = window.MA.relationOptions.applyDecorations(indent + relCore, deco);
+    // 直した値以外の空白 (手で揃えた桁) は元の行の字のまま。両端を入れ替えたときは組み直したまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = field === 'swap' ? relLine : window.MA.dslUtils.keepLineSpacing(lines[idx], relLine, [value]);
     return lines.join('\n');
   }
 

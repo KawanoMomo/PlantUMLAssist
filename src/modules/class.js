@@ -793,9 +793,11 @@ window.MA.modules.plantumlClass = (function() {
     else if (field === 'name') name = value;
     else if (field === 'type') type = value;
     else if (field === 'static') isStatic = !!value;
-    lines[idx] = indent + (am.typeFirst && type
+    var attrLine = indent + (am.typeFirst && type
       ? (visibility ? visibility + ' ' : '') + (isStatic ? '{static} ' : '') + type + ' ' + name
       : fmtAttribute(visibility, name, type, isStatic));
+    // 直した値以外の空白 (`baud  : uint16` の桁揃え) は元の行の字のまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = window.MA.dslUtils.keepLineSpacing(lines[idx], attrLine, [value]);
     return lines.join('\n');
   }
 
@@ -818,10 +820,12 @@ window.MA.modules.plantumlClass = (function() {
     else if (field === 'type') returnType = value;
     else if (field === 'static') { isStatic = !!value; if (isStatic) isAbstract = false; }
     else if (field === 'abstract') { isAbstract = !!value; if (isAbstract) isStatic = false; }
-    lines[idx] = indent + (mm.typeFirst && returnType
+    var methLine = indent + (mm.typeFirst && returnType
       ? (visibility ? visibility + ' ' : '') + (isStatic ? '{static} ' : (isAbstract ? '{abstract} ' : '')) +
         returnType + ' ' + name + '(' + (params || '') + ')'
       : fmtMethod(visibility, name, params, returnType, isStatic, isAbstract));
+    // 直した値以外の空白は元の行の字のまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = window.MA.dslUtils.keepLineSpacing(lines[idx], methLine, [value]);
     return lines.join('\n');
   }
 
@@ -1050,8 +1054,13 @@ window.MA.modules.plantumlClass = (function() {
     else if (field === 'swap') { var s = from; from = to; to = s; }
 
     // 多重度・線の色は種別やラベルの書き換えでは失われない (design 3c)。
-    lines[idx] = window.MA.relationOptions.applyDecorations(
-      indent + fmtRelation(kind, from, to, label, rootFirst), deco);
+    var relCore = fmtRelation(kind, from, to, label, rootFirst);
+    if (field === 'label') {
+      relCore = window.MA.dslUtils.keepRelationArrow(window.MA.relationOptions.readableLine(trimmed), relCore, RELATION_RE);
+    }
+    var relLine = window.MA.relationOptions.applyDecorations(indent + relCore, deco);
+    // 直した値以外の空白 (手で揃えた桁) は元の行の字のまま。両端を入れ替えたときは組み直したまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = field === 'swap' ? relLine : window.MA.dslUtils.keepLineSpacing(lines[idx], relLine, [value]);
     return lines.join('\n');
   }
 
