@@ -53,6 +53,7 @@ curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日�
 | `GET /autosave-versions` | `?dir=&type=` | 1 枚の図の版の一覧 |
 | `GET /peek-dirs` | — | 保存フォルダの候補を覗く |
 | `GET /browse-dir` | — | 保存先を選ぶ窓でフォルダを辿る (`?dir=`。子フォルダ・親・ドライブ・.puml の枚数。読むだけ) |
+| `GET /tree-dir` | `?dir=` | 保存先の下のサブフォルダを実在の階層のまま `{ok, root, dirs:[{rel, path, name, depth, files}]}` (隠しフォルダ・`_versions` は出さない。読むだけ) |
 | `GET /git-status` | `?dir=` | 保存先が Git 作業木なら `{repo, branch, ahead, behind, changes:[{code, file, name}]}`。作業木でなければ `{repo:false}`。読むだけで通信しない |
 | `GET /git-log` | `?dir=&file=` | その図 (file 省略で保存先全体) に関係するコミット `{commits:[{hash, short, author, date, message, tags, head, added, removed}]}` |
 | `GET /git-refs` | `?dir=` | ブランチとタグ `{current, branches, tags}` |

@@ -51,10 +51,20 @@ window.MA.topStatus = (function() {
   // 返り値: [{ kind: 'target', label, title }]。保存先が無ければ []
   // (新規の図はファイル名だけ。フォルダの無い図に「ダウンロード /」とは出さない)。
   // ファイル名から部品名を読んで段を足すこと (部品フォルダ) は TICKET-owner-20261116-0321-prune で外した。
-  function crumbs(folder) {
+  // sub: 保存先の下のサブフォルダの図なら、保存先からの道 (['docs', 'api'])。段を 1 つずつ足す
+  // (TICKET-roadmap-20261122-0855-2。パンくずは保存先からの道を言う)。
+  function crumbs(folder, sub) {
     var f = (typeof folder === 'string' ? folder : '').trim();
     if (!f) return [];
-    return [{ kind: 'target', label: f, title: '保存先 ' + f + ' (押すと FILES ツリーでこのフォルダを見せます)' }];
+    var out = [{ kind: 'target', label: f, title: '保存先 ' + f + ' (押すと FILES ツリーでこのフォルダを見せます)' }];
+    var path = f;
+    (Array.isArray(sub) ? sub : []).forEach(function(seg) {
+      var s = String(seg == null ? '' : seg).trim();
+      if (!s) return;
+      path += '/' + s;
+      out.push({ kind: 'sub', label: s, title: '保存先の下のフォルダ ' + path });
+    });
+    return out;
   }
 
   // isError: 状態表示を赤くするかどうか。

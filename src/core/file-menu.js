@@ -132,8 +132,8 @@ window.MA.fileMenu = (function() {
   // 図を開くとツリーが描き直され、
   // 押した行の button が DOM から外れてフォーカスが body に落ちていた (続けて ↓ で次の図へ移れない)。
   // 描き直す前の行を「種類 (class) + 目印の属性」で覚え、描き直した後の同じ行を探してフォーカスを戻す。
-  var ROW_CLASSES = ['files-row', 'files-part-file', 'files-ro-folder', 'files-ro-file'];
-  var ROW_ATTRS = ['data-doc-id', 'data-file-name', 'data-ro-dir', 'data-ro-name'];
+  var ROW_CLASSES = ['files-row', 'files-part-file', 'files-ro-folder', 'files-ro-file', 'files-sub-dir', 'files-sub-file'];
+  var ROW_ATTRS = ['data-doc-id', 'data-file-name', 'data-ro-dir', 'data-ro-name', 'data-sub-rel'];
 
   // el: ツリーの行 (button)。行でなければ null。
   function rowKey(el) {

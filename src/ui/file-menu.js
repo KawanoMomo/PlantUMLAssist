@@ -12,7 +12,9 @@ window.MA = window.MA || {};
 // exportSVG / タブのダブルクリック改名) を
 // そのまま呼ぶ。同じ操作を 2 通りに実装しない。
 window.MA.fileMenuUi = (function() {
-  var ROW_SEL = '.files-sec-head, .files-row, .files-part-file, .files-ro-folder, .files-ro-file, #folder-panel .folder-item[data-file-name]';
+  // サブフォルダの行 (.files-sub-dir / .files-sub-file) は ↑↓ で辿れるが、名前で引く操作 (名前変更・削除・移動) の
+  // 相手にはしない (FILE_SEL に入れない)。名前だけで引くと直下の同じ名前の図に当たる (TICKET-roadmap-20261122-0855-2)。
+  var ROW_SEL = '.files-sec-head, .files-row, .files-part-file, .files-ro-folder, .files-ro-file, .files-sub-dir, .files-sub-file, #folder-panel .folder-item[data-file-name]';
   var FILE_SEL = '.files-row, .files-part-file, #folder-panel .folder-item[data-file-name]';
 
   var panel = null;
@@ -38,7 +40,18 @@ window.MA.fileMenuUi = (function() {
     return el && el.closest ? el.closest(ROW_SEL) : null;
   }
 
-  function isFileRow(row) { return !!(row && row.matches && row.matches(FILE_SEL)); }
+  // 「開いている図」の行のうち、サブフォルダから開いた図 (名前で引くと直下の同じ名前の図に当たる)。
+  function isSubDocRow(row) {
+    if (!row || !row.classList || !row.classList.contains('files-row')) return false;
+    var id = row.getAttribute('data-doc-id');
+    var ws = WS();
+    if (!id || !ws || !ws.list) return false;
+    var docs = ws.list();
+    for (var i = 0; i < docs.length; i++) if (String(docs[i].id) === id) return !!docs[i].sub;
+    return false;
+  }
+
+  function isFileRow(row) { return !!(row && row.matches && row.matches(FILE_SEL)) && !isSubDocRow(row); }
 
   function fileNameOf(row) {
     if (!row) return '';
@@ -493,6 +506,8 @@ window.MA.fileMenuUi = (function() {
     if (isFileRow(row)) return 'file';
     if (row.classList.contains('files-ro-folder')) return 'folder';
     if (row.classList.contains('files-ro-file')) return 'rofile';
+    if (row.classList.contains('files-sub-dir')) return 'folder';
+    if (row.classList.contains('files-sub-file') || isSubDocRow(row)) return 'rofile';
     return 'section';
   }
 
@@ -518,7 +533,8 @@ window.MA.fileMenuUi = (function() {
     var expanded = row.getAttribute('aria-expanded') === 'true';
     var act = FM().keyAction(key, kind === 'rofile' ? 'file' : kind, expanded);
     if (!act) return;
-    // 読むだけのフォルダの図は名前を変えたり消したりしない (編集はできない)。
+    // 読むだけのフォルダの図・サブフォルダの図は、ここでは名前を変えたり消したりしない
+    // (名前で引くと別の図に当たる。サブフォルダの中の操作は右クリックの票で足す)。
     if (kind === 'rofile' && (act === 'rename' || act === 'delete')) return;
     var rows, i;
     switch (act) {
@@ -618,9 +634,13 @@ window.MA.fileMenuUi = (function() {
 
   // ── Ctrl+P: ファイル名から開く ─────────────────────────────────────
   function openFilePalette() {
-    return folderFileNames().then(function(names) {
+    // 保存先の直下の図に続けて、サブフォルダの図も「フォルダ/名前」で引ける (TICKET-roadmap-20261122-0855-2)。
+    var FP = window.MA.filesPanel;
+    var subs = Promise.resolve(FP && FP.reloadSubTree ? FP.reloadSubTree(false) : null)
+      .then(function() { return FP && FP.subFiles ? FP.subFiles() : []; }, function() { return []; });
+    return Promise.all([folderFileNames(), subs]).then(function(both) {
       if (typeof window.MA.openCommandPalette === 'function') {
-        window.MA.openCommandPalette({ group: 'file', files: names });
+        window.MA.openCommandPalette({ group: 'file', files: both[0].concat(both[1]) });
       }
     });
   }

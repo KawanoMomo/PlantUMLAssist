@@ -130,6 +130,75 @@ window.MA.fileTree = (function() {
     });
   }
 
+  // ── サブフォルダ (TICKET-roadmap-20261122-0855-2) ─────────────────────
+  // 保存先の下の実在のフォルダを、実在の階層のまま行にする (仮のフォルダに束ねない・名前も場所も変えない)。
+  // dirs は server の /tree-dir の行 ({ rel, path, name, depth, files }。行きがけ順)。
+  // open は開いているフォルダの rel の集合 ({ 'docs': true, 'docs/api': true })。
+  // 絞り込みが無いとき: フォルダの行と、開いたフォルダ (祖先も全部開いている) の図の行を階層の順に。
+  // 絞り込みがあるとき: 名前 (か「フォルダ/名前」) が当たる図の行だけを、フォルダの道を添えて平らに
+  // (同じ名前の図をフォルダで見分ける)。図の行は { type:'file', name, dir, rel, depth }、
+  // フォルダの行は { type:'dir', rel, path, name, depth, open, count }。
+  function _relParent(rel) {
+    var i = _s(rel).lastIndexOf('/');
+    return i < 0 ? '' : _s(rel).slice(0, i);
+  }
+  function subTreeRows(dirs, open, query) {
+    var list = Array.isArray(dirs) ? dirs : [];
+    var isOpen = open || {};
+    var q = _s(query).trim().toLowerCase();
+    var out = [];
+    if (q) {
+      list.forEach(function(d) {
+        (d.files || []).forEach(function(n) {
+          var name = _s(n);
+          var full = (_s(d.rel) + '/' + name).toLowerCase();
+          if (name.toLowerCase().indexOf(q) >= 0 || full.indexOf(q) >= 0) {
+            out.push({ type: 'file', name: name, dir: _s(d.path), rel: _s(d.rel), depth: 0 });
+          }
+        });
+      });
+      out.sort(function(a, b) {
+        if (a.name !== b.name) return a.name < b.name ? -1 : 1;
+        return a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0;
+      });
+      return out;
+    }
+    // 祖先が 1 つでも畳まれていれば、その下は出さない。
+    var visible = {};
+    list.forEach(function(d) {
+      var rel = _s(d.rel);
+      if (!rel) return;
+      var parent = _relParent(rel);
+      var shown = parent === '' || (visible[parent] && !!isOpen[parent]);
+      if (!shown) return;
+      visible[rel] = true;
+      var on = !!isOpen[rel];
+      var files = Array.isArray(d.files) ? d.files : [];
+      out.push({ type: 'dir', rel: rel, path: _s(d.path), name: _s(d.name) || rel.split('/').pop(),
+                 depth: Number(d.depth) || rel.split('/').length, open: on, count: files.length });
+      if (!on) return;
+      // そのフォルダの図はフォルダの行のすぐ下に名前の順で並べ、続けて子フォルダ (dirs の行きがけ順のまま)。
+      files.slice().sort(function(a, b) {
+        var x = _s(a).toLowerCase(), y = _s(b).toLowerCase();
+        return x < y ? -1 : x > y ? 1 : 0;
+      }).forEach(function(n) {
+        out.push({ type: 'file', name: _s(n), dir: _s(d.path), rel: rel,
+                   depth: (Number(d.depth) || rel.split('/').length) + 1 });
+      });
+    });
+    return out;
+  }
+
+  // 保存先 root から見たフォルダ dir の道 (['docs', 'api'])。root の下でなければ null、root そのものなら []。
+  function relSegments(root, dir) {
+    function norm(p) { return _s(p).split(String.fromCharCode(92)).join('/').replace(/\/+$/, ''); }
+    var r = norm(root), d = norm(dir);
+    if (!r || !d) return null;
+    if (r.toLowerCase() === d.toLowerCase()) return [];
+    if (d.toLowerCase().indexOf(r.toLowerCase() + '/') !== 0) return null;
+    return d.slice(r.length + 1).split('/').filter(Boolean);
+  }
+
   // 畳んだままでも読める件数。読むだけはフォルダの数、GIT は「main · M 2 ↑1」。
   // 右の枠に出している相手の札は TICKET-owner-20261115-2141-prune で外した (読むだけの図は 1 枚を見るだけ)。
   function readonlyCountLabel(total) {
@@ -220,6 +289,8 @@ window.MA.fileTree = (function() {
     glyphSvg: glyphSvg,
     fileKind: fileKind,
     filter: filter,
+    subTreeRows: subTreeRows,
+    relSegments: relSegments,
     readonlyCountLabel: readonlyCountLabel,
     readonlyRows: readonlyRows,
     gitCountLabel: gitCountLabel,

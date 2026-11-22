@@ -105,9 +105,15 @@ function updateTopCrumbs(bc, doc) {
   var TS = window.MA.topStatus;
   if (!host || !TS || !TS.crumbs) return;
   var folder = (bc && bc.mode === 'file') ? bc.folder : '';
-  var list = TS.crumbs(folder);
+  // サブフォルダの図は、保存先の段の後にそこからの道を 1 段ずつ (TICKET-roadmap-20261122-0855-2)。
+  var subRel = _docSubRel(doc);
+  if (subRel && window.MA.saveTarget) {
+    var cfg0 = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+    folder = window.MA.saveTarget.breadcrumb(cfg0, doc, '(無題)').folder;
+  }
+  var list = TS.crumbs(folder, subRel ? subRel.split('/') : null);
   // 保存先を替える前に開いたタブは、そのファイルのフォルダを段に出し、今の保存先ではないことを添える。
-  var held = !!(folder && doc && _docHeldElsewhere(doc));
+  var held = !!(folder && doc && !subRel && _docHeldElsewhere(doc));
   if (held && list[0]) {
     list[0].held = true;
     list[0].title = _docDir(doc) + ' (このタブのファイルの場所。保存先を替える前に開いたので、このタブはここに保存します。今の保存先は '
@@ -3747,8 +3753,19 @@ function initCommandPalette() {
 
   // Ctrl+P は同じ検索欄を「ファイル名」に絞って開く。
   // opts.files は保存先の図の名前 (FILES ツリーの右クリックと同じ「開く」の道で開く)。
+  // サブフォルダの図 ({ name, dir, rel }) は「フォルダ/名前」で出し、そのフォルダのファイルを開く
+  // (直下の同じ名前の図とフォルダで見分ける。TICKET-roadmap-20261122-0855-2)。
   function fileCommands(files) {
     return (files || []).map(function(name) {
+      if (name && typeof name === 'object') {
+        var f = name;
+        var full = f.rel + '/' + f.name;
+        return {
+          id: 'sub:' + full, group: 'file', badge: 'ファイル', title: full, hint: f.rel,
+          keywords: [f.name, full, f.rel, 'file', 'open', 'ふぁいる', 'ひらく'],
+          run: function() { if (window.openFromSubFolder) window.openFromSubFolder(f.name, f.dir, { pin: true }); },
+        };
+      }
       return {
         id: name, group: 'file', badge: 'ファイル', title: name, hint: '保存先',
         keywords: [name, 'file', 'open', 'ふぁいる', 'ひらく'],
@@ -4183,6 +4200,25 @@ function _docDir(doc) {
   return WS.dirOf(doc.id, cur) || cur;
 }
 
+// 前回保存版 (save-diff) を引く名前。サブフォルダの図は、直下の同じ名前の図と基準を分ける
+// (TICKET-roadmap-20261122-0855-2。分けないと、片方を開いただけでもう片方の ● が狂う)。
+function _diffName(doc) {
+  if (!doc) return '';
+  if (!doc.sub || !doc.dir) return doc.name;
+  return 'sub:' + String(doc.dir).split(String.fromCharCode(92)).join('/').toLowerCase() + '|' + doc.name;
+}
+
+// サブフォルダの図の、保存先から見たフォルダの道 ('docs/api')。サブフォルダの図でなければ ''。
+function _docSubRel(doc) {
+  if (!doc || !doc.sub || !doc.dir) return '';
+  var FT = window.MA.fileTree;
+  var FP = window.MA.filesPanel;
+  // 保存先の設定は相対のこともあるので、server が解いた絶対パス (ツリーを読んだ時の root) と比べる。
+  var root = (FP && FP.subRoot && FP.subRoot()) || _wsFileDir();
+  var seg = FT && FT.relSegments ? FT.relSegments(root, doc.dir) : null;
+  return seg && seg.length ? seg.join('/') : '';
+}
+
 // そのタブが今の保存先とは別のフォルダに留めてあるか。
 function _docHeldElsewhere(doc) {
   var PF = window.MA.peekFolder;
@@ -4279,7 +4315,7 @@ function writeDocToFolder(doc, fileDir) {
   if (window.MA.autoSave && window.MA.autoSave.noteFileWritten) {
     window.MA.autoSave.noteFileWritten(out.name, out.diagramType);
   }
-  if (window.MA.saveDiff) window.MA.saveDiff.mark(out.name, out.dsl);
+  if (window.MA.saveDiff) window.MA.saveDiff.mark(_diffName(out), out.dsl);
   if (window.MA.versionTimeline) window.MA.versionTimeline.push(out.name, out.dsl);
   return true;
 }
@@ -4346,7 +4382,7 @@ function saveActiveDoc() {
         window.MA.autoSave.noteFileWritten(doc.name, doc.diagramType);
       }
       // 保存した時点を差分の基準にする。
-      if (window.MA.saveDiff) window.MA.saveDiff.mark(doc.name, doc.dsl);
+      if (window.MA.saveDiff) window.MA.saveDiff.mark(_diffName(doc), doc.dsl);
       // 保存のたびに版を積む。基準 1 点だけでは
       // A → B → A の往復が見えないので、通しで並べられるよう履歴に残す。
       if (window.MA.versionTimeline) window.MA.versionTimeline.push(doc.name, doc.dsl);
@@ -4444,6 +4480,14 @@ function promptRenameDoc(docId, message, suggest) {
   var doc = null;
   (WS.list() || []).forEach(function(d) { if (d && d.id === docId) doc = d; });
   if (!doc) return null;
+  // サブフォルダの図の名前の変更はまだ受けない (前の名前のファイルの付け替えは保存先の直下を相手にするので、
+  // 直下の同じ名前の図を消してしまう)。TICKET-roadmap-20261122-0855-2。
+  if (doc.sub) {
+    var msg0 = 'サブフォルダの図 (' + doc.name + '.puml) の名前はここでは変えられません';
+    if (window.MA.toast) window.MA.toast.show(msg0);
+    else setSaveStatus(msg0);
+    return null;
+  }
   var ask = (message ? message + '\n' : '') + WS.nameRuleText();
   var next = window.prompt(ask, suggest || doc.name);
   if (next == null) return null;
@@ -4532,10 +4576,16 @@ function renderTabs() {
     el.setAttribute('data-doc-name', doc.name);
     el.title = doc.name + ' (' + doc.diagramType.replace('plantuml-', '')
       + ') — ダブルクリックで名前変更';
+    // サブフォルダの図は、直下の同じ名前の図と見分けられるようにフォルダの道を添える。
+    var subRel = _docSubRel(doc);
+    if (subRel) {
+      el.setAttribute('data-sub-rel', subRel);
+      el.title = subRel + '/' + doc.name + '.puml (' + doc.diagramType.replace('plantuml-', '') + ')';
+    }
     // タブの右クリックで ± 差分を開く入口は TICKET-owner-20261115-2141-prune で外した
     // (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。
     // 前回保存時点から変わっている図にだけ印を付ける。
-    var st = window.MA.saveDiff ? window.MA.saveDiff.statusOf(doc.name, doc.dsl) : 'same';
+    var st = window.MA.saveDiff ? window.MA.saveDiff.statusOf(_diffName(doc), doc.dsl) : 'same';
     if (st !== 'same') {
       el.className += ' dirty';
       var dot = document.createElement('span');
@@ -4637,7 +4687,8 @@ function _diffDocs() {
   var docs = window.MA.workspace.list();
   var activeId = window.MA.workspace.getActiveId();
   return docs.map(function(d) {
-    return (d.id === activeId) ? { id: d.id, name: d.name, dsl: mmdText } : d;
+    // 居場所 (サブフォルダの図の dir・sub) も渡す。前回保存版の基準を直下の同じ名前の図と分けて引く (_diffName)。
+    return (d.id === activeId) ? { id: d.id, name: d.name, dsl: mmdText, dir: d.dir, sub: d.sub } : d;
   });
 }
 
@@ -4650,7 +4701,7 @@ function docSaveStatus(id) {
   if (!SD) return 'same';
   var docs = _diffDocs();
   for (var i = 0; i < docs.length; i++) {
-    if (docs[i].id === id) return SD.statusOf(docs[i].name, docs[i].dsl);
+    if (docs[i].id === id) return SD.statusOf(_diffName(docs[i]), docs[i].dsl);
   }
   return 'same';
 }
@@ -4677,7 +4728,7 @@ function syncTabDirtyMarks(docs) {
   docs.forEach(function(d) {
     var el = bar.querySelector('.tab[data-doc-id="' + d.id + '"]');
     if (!el) return;
-    var st = SD.statusOf(d.name, d.dsl);
+    var st = SD.statusOf(_diffName(d), d.dsl);
     var dot = el.querySelector('.tab-dot');
     if (st === 'same') {
       el.className = el.className.replace(/\s*\bdirty\b/, '');
@@ -4722,7 +4773,9 @@ function _liveDiffPair() {
   if (!SD || !name) return null;
   // baselineOf は { dsl, at }。dsl は save-diff の規約で正規化済みなので、
   // ここで整形し直さない (同じ図を 2 つの規約で比べない)。
-  var b = SD.baselineOf(name);
+  var act = null;
+  try { act = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { act = null; }
+  var b = SD.baselineOf(act && act.name === name ? _diffName(act) : name);
   return { name: name, before: (b && typeof b.dsl === 'string') ? b.dsl : '',
            now: mmdText, has: !!(b && typeof b.dsl === 'string') };
 }
@@ -6065,6 +6118,46 @@ function setupTabs() {
   recentOpenedNames = function() { return recentList(); };
 
   openFromFolderByName = function(name) { openFromFolder(name); };
+
+  // TICKET-roadmap-20261122-0855-2: 保存先の下のサブフォルダの図を、そのフォルダのファイルとして開く。
+  // タブはそのフォルダを持ち (workspace の sub・dir)、Ctrl+S・自動保存・!include・パンくずはそのフォルダで決まる。
+  // 直下に同じ名前の図があっても別のタブ (名前を付け替えない)。保存先の一覧と「最近開いた図」は直下の図だけを
+  // 並べるので、ここでは積まない (名前だけの履歴から開くと直下の同じ名前の図を開いてしまう)。
+  // 開いただけでは書かない (開いたときの本文を錠に憶え、変えるまで書き戻さない)。
+  function openFromSubFolder(name, dir, opts) {
+    var WS = window.MA.workspace;
+    if (!WS || !name || !dir) return Promise.resolve(false);
+    var spec0 = { name: name, sub: true, dir: dir };
+    var active = WS.getActive();
+    var sameTab = !!(active && active.sub && active.name === name && WS.samePath && WS.samePath(active.dir, dir));
+    if (!sameTab) saveActiveDoc();
+    var already = WS.findOpen ? WS.findOpen(spec0) : null;
+    if (already) {
+      if (opts && opts.pin && WS.pin) WS.pin(already.id);
+      if (typeof window.switchToDoc === 'function') window.switchToDoc(already.id);
+      else { WS.setActive(already.id); applyActiveDoc(); }
+      if (opts && opts.pin && typeof window.renderTabs === 'function') window.renderTabs();
+      return Promise.resolve(true);
+    }
+    return WS.loadFile(name, dir).then(function(text) {
+      if (text == null) {
+        if (window.MA.toast) window.MA.toast.show(name + '.puml を読めませんでした (' + dir + ')');
+        return false;
+      }
+      // ディスクにある中身が、その図の「前回保存版」(未保存の ○ / ● を付けない)。基準は直下の同じ名前の図と分ける。
+      if (window.MA.saveDiff) { try { window.MA.saveDiff.mark(_diffName({ name: name, sub: true, dir: dir }), text); } catch (e) {} }
+      var d0 = WS.detectType(text);
+      var spec = { name: name, sub: true, dir: dir, dsl: text,
+                   diagramType: (d0 && modules[d0]) ? d0 : currentDiagramType };
+      var doc = (opts && opts.preview && WS.openPreview) ? WS.openPreview(spec) : WS.openOrActivate(spec);
+      if (opts && opts.pin && WS.pin) WS.pin(doc.id);
+      markOpenedSource(doc);
+      applyActiveDoc();
+      try { renderLiveDiffChip(); } catch (e) {}
+      return true;
+    });
+  }
+  window.openFromSubFolder = openFromSubFolder;
   refreshFolderPanelNow = function() { if (panel.classList.contains('open')) renderFolderPanel(); };
 
   // 自動保存・Ctrl+S で新しく書いた図が、FILES ツリーの保存先に読み込み直すまで
@@ -6158,7 +6251,8 @@ function setupTabs() {
     if (!(opts && opts.preview)) closePanel();
     var dir = _wsFileDir();
     var active = window.MA.workspace.getActive();
-    var sameTab = !!(active && active.name === name);
+    // サブフォルダの図 (sub) は同じ名前でも別のファイル。そのタブを「同じ図の読み直し」と取り違えない。
+    var sameTab = !!(active && active.name === name && !active.sub);
     if (!sameTab) saveActiveDoc();
     _ensureSavedKinds(dir).then(function() {
     window.MA.workspace.loadFile(name, dir).then(function(text) {
@@ -8397,9 +8491,10 @@ function renderCompareDiffView() {
   if (!active) {
     html = '<div class="cd-head" id="compare-diff-empty">図を開くと、前回保存時点との差分が出ます。</div>';
   } else {
-    var st = SD.statusOf(active.name, active.dsl);
-    var at = SD.markedAt(active.name);
-    var c = SD.changedLines(active.name, active.dsl);
+    var dn = _diffName(active);
+    var st = SD.statusOf(dn, active.dsl);
+    var at = SD.markedAt(dn);
+    var c = SD.changedLines(dn, active.dsl);
     var head = esc(active.name) + ' ・ ';
     if (st === 'new') head += 'まだ保存していない (基準なし)';
     else if (st === 'same') head += '前回保存時点から変更なし';
@@ -8421,7 +8516,7 @@ function renderCompareDiffView() {
         + esc(LDm.restoreTitle(pair.name, pair.before, pair.now)) + '">'
         + esc(LDm.restoreLabel()) + '</button>';
     }
-    var rowsOut = st === 'changed' ? SD.diffLines(active.name, active.dsl) : [];
+    var rowsOut = st === 'changed' ? SD.diffLines(dn, active.dsl) : [];
     rowsOut.forEach(function(r) {
       var cls = r.mark === '+' ? 'add' : (r.mark === '-' ? 'del' : (r.mark === '…' ? 'skip' : ''));
       html += '<div class="cd-line ' + cls + '">' + esc(r.mark + ' ' + r.text) + '</div>';
@@ -8429,7 +8524,7 @@ function renderCompareDiffView() {
   }
 
   var others = docs.filter(function(d) {
-    return d && d.id !== activeId && SD.statusOf(d.name, d.dsl) !== 'same';
+    return d && d.id !== activeId && SD.statusOf(_diffName(d), d.dsl) !== 'same';
   });
   html += '<div class="cd-others" id="compare-diff-others">';
   html += others.length
@@ -8936,7 +9031,7 @@ function writeBackToSource(doc) {
 var _saveFlashTimer = null;
 function _afterManualSave(doc, target, writtenToFolder) {
   if (!doc || !doc.name) return;
-  try { if (window.MA.saveDiff) window.MA.saveDiff.mark(doc.name, doc.dsl); } catch (e) {}
+  try { if (window.MA.saveDiff) window.MA.saveDiff.mark(_diffName(doc), doc.dsl); } catch (e) {}
   if (writtenToFolder) {
     try { if (window.MA.versionTimeline) window.MA.versionTimeline.push(doc.name, doc.dsl); } catch (e) {}
     // 下端の札も書けた回に揃える (「見本のまま · 書いていません」を書いた後に残さない)。
@@ -8980,7 +9075,8 @@ function saveFile() {
     if (live && live.name) openName = live.name;
   } catch (e) {}
   if (doc && openName && doc.name !== openName) {
-    doc = { id: doc.id, name: openName, diagramType: doc.diagramType, dsl: doc.dsl };
+    doc = { id: doc.id, name: openName, diagramType: doc.diagramType, dsl: doc.dsl,
+            dir: doc.dir, sub: doc.sub };
   }
   // 手元から開いたファイルの上書き保存は、元のファイルへ戻す。
   if (doc && _sourcePathOf(doc.id)) {
@@ -9014,8 +9110,9 @@ function saveFile() {
       setSaveStatus(ST.messageFor(target, ok));
       if (ok) {
         _afterManualSave(doc, target, true);
-        // この保存で中身が別名の図と入れ替わっていないか
-        runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
+        // この保存で中身が別名の図と入れ替わっていないか (突き合わせる相手は保存先の直下の図。
+        // サブフォルダの図は直下の同じ名前の図と別のファイルなので比べない)
+        if (!(doc && doc.sub)) runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
       }
     });
     return;
@@ -9870,6 +9967,14 @@ function _dsRenameActive(next) {
   if (!to || to === from) { renderDiagramSettings(true); return null; }
   if (!ws.isValidName(to)) {
     _dsRenameNotice = { text: ws.nameRuleText(), canRestore: false, from: from, dsl: '' };
+    renderDiagramSettings(true);
+    return null;
+  }
+  // サブフォルダの図の名前はまだ変えない (付け替えは保存先の直下を相手にする。promptRenameDoc と同じ門)。
+  var actDoc = ws.getActive ? ws.getActive() : null;
+  if (actDoc && actDoc.sub) {
+    _dsRenameNotice = { text: 'サブフォルダの図 (' + from + '.puml) の名前はここでは変えられません',
+                        canRestore: false, from: from, dsl: '' };
     renderDiagramSettings(true);
     return null;
   }
