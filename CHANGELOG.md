@@ -1,3 +1,4 @@
+- TICKET-primary-20261116-0420-wish: クラスを選んだ右パネルの「属性を追加」で足した属性が、手書きで並べた属性の塊の末尾(最後の属性の直後。属性が無ければ最初のメソッドの直前)に入り、字下げも隣の行に揃う。メソッドの後ろに付いて並びが崩れることが無くなった。メソッドの追加は今のまま
 - releaser: version 5.2.0(primary 場面 3 手順 1・2 の scenario 追加を含むマイナー)
 - TICKET-releaser-20261122-2154-3: primary 台本 場面 3 手順 3 の scenario `tests/scenarios/primary-3-s3.spec.js` を足した(同名ラベルの混ざる 3 図で指摘の 5 件(seq のラベル 3・class の属性 1・state の条件 1)を図から 1 件ずつ直すと、差分は押した 1 行だけで同名の他の行・字下げ・コメントは動かず、描ける)。fixture `rev-s3-seq.puml`・`rev-s3-state.puml` を足した。製品のコードは変えない
 - TICKET-releaser-20261122-2154-2: primary 台本 場面 3 手順 2 の scenario `tests/scenarios/primary-2-s3.spec.js` を足した(保存先の一覧から rev-seq・rev-class を 1 枚ずつ開くと図種どおりに描け、同名の属性も 2 か所とも描かれ、開いただけでは本文も保存先も 1 バイトも変わらない。1 枚 4 手)。製品のコードは変えない
