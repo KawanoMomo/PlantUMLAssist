@@ -39,6 +39,8 @@ const report = {
         { type: 'clicks', description: '12' },
         { type: 'keys', description: '31' },
         { type: 'hands', description: '43' },
+        { type: 'exportMs', description: '130' },
+        { type: 'exportMs', description: '250' },
       ]),
       spec('without hands', [{ type: 'diffLines', description: '1' }]),
     ],
@@ -60,7 +62,13 @@ describe('TICKET-releaser-20261115-2020-3 summary.json carries hand counts', () 
     expect(withH.renderMs).toBe(880);
   });
 
+  // TICKET-releaser-20261122-1200-3: primary 手順 6 (場面 4) は書き出し 1 回の時間を exportMs に積む。
+  test('exportMs keeps the slowest export', () => {
+    expect(withH.exportMs).toBe(250);
+  });
+
   test('a scenario that does not count hands reports null', () => {
+    expect(without.exportMs).toBeNull();
     expect(without.clicks).toBeNull();
     expect(without.keys).toBeNull();
     expect(without.hands).toBeNull();

@@ -8,8 +8,9 @@
 //   failedNames: ["tests/scenarios/x.spec.js:12 › タイトル", …]
 //   failedFiles: ["tests/e2e/legacy/x.spec.js", …] (赤のあった spec ファイル。重複なし)
 //   tests: scenario は全件、e2e は赤と flaky (再試行で緑。負荷の疑い) だけ。
-//          { kind, file, line, title, status, ms, renderMs, diffLines, clicks, keys, hands, error }
+//          { kind, file, line, title, status, ms, renderMs, exportMs, diffLines, clicks, keys, hands, error }
 //          renderMs = 操作から描画までの ms、diffLines = 1 操作で PlantUML 本文の動いた行数
+//          exportMs = Export ▾ の項目を押してからファイルを受け取るまでの ms (書き出し 1 回。積んでいない scenario は null)
 //          clicks / keys / hands = その手順の手数 (クリック数・打鍵数・その和。積んでいない scenario は null)
 //          (scenario が testInfo.annotations に積んだ値。複数あれば最大)
 //   renderMsMax / diffLinesMax … scenario 全体の最大
@@ -87,6 +88,7 @@ function collect(kind, reportPath) {
       flaky: test.status === 'flaky' || undefined,
       ms: last.duration === undefined ? null : last.duration,
       renderMs: numAnn(anns, 'renderMs'),
+      exportMs: numAnn(anns, 'exportMs'),
       diffLines: numAnn(anns, 'diffLines'),
       clicks: numAnn(anns, 'clicks'),
       keys: numAnn(anns, 'keys'),
