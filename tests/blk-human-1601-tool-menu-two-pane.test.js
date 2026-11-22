@@ -77,10 +77,12 @@ describe('パネルの HTML', function() {
     expect(out).not.toContain('tool-menu-group');
     expect((out.match(/<div class="tool-menu-list">/g) || []).length).toBe(1);
     var list = out.slice(out.indexOf('<div class="tool-menu-list">'), out.indexOf('<div class="tool-menu-hits"'));
-    expect((list.match(/class="tool-menu-item"/g) || []).length).toBe(3);
-    ['btn-tab-lines', 'btn-tab-rename', 'btn-tab-apply'].forEach(function(id) {
+    // 「複数クラスに一括適用する」は TICKET-owner-20261122-1023-prune で外し、残りは 2 行。
+    expect((list.match(/class="tool-menu-item"/g) || []).length).toBe(2);
+    ['btn-tab-lines', 'btn-tab-rename'].forEach(function(id) {
       expect(list).toContain('data-target="' + id + '"');
     });
+    expect(list).not.toContain('btn-tab-apply');
   });
 
   test('項目の件数は項目の印にだけ出る', function() {
@@ -106,8 +108,9 @@ describe('絞り込み', function() {
 
   test('小見出し・分類名でも引ける', function() {
     expect(tm.filterItems('変更の履歴').length).toBe(0);
-    expect(tm.filterItems('まとめて直す').length).toBe(3);
-    expect(tm.filterItems('書き換える').length).toBe(3);
+    // 一括適用 は TICKET-owner-20261122-1023-prune で外し、まとめて直す は 2 行。
+    expect(tm.filterItems('まとめて直す').length).toBe(2);
+    expect(tm.filterItems('書き換える').length).toBe(2);
   });
 
   test('空の絞り込みは全件', function() {

@@ -74,7 +74,7 @@ unit `tests/roadmap-20261115-2114-4-terms.test.js` が、この表と `src/ui/te
 | #24 | 位置を保ったズーム | 見ている場所を保ったまま拡大・縮小する | プレビュー右上のズーム帯(− / ＋ /「Fit」) | 表示だけ。本文は変わらない | `tests/e2e/legacy/blk-builder-0803-4b-zoom-hud.spec.js` |
 | #25 #94 | 図の設定 | 図名・タイトルと図全体の外観(skinparam)を決める | 右パネル「図の設定」タブ | 設定した行だけが変わる・増える | `tests/e2e/legacy/blk-primary-0703-diagram-settings.spec.js` |
 | #6 #48 | Ctrl+K コマンドパレット | 残した機能を名前で引く(入れ子の言い換え「子状態」等でも引ける) | Ctrl+K、上部バーの検索 | 引くだけでは本文は変わらない。押す先の無い行は無い | `tests/e2e/legacy/blk-builder-0803-command-palette.spec.js` |
-| #4 #7 #9 | 画面の骨格 | 上部バー(保存の状態・Import ▾・Export ▾)、ツール ▾(行を書き換える・部品名を一括置換する・複数クラスに一括適用する の 1 段の一覧)、下端ステータス(パース・要素数・保存の結果) | 上部バー・タブ列右端の「ツール」▾(「行を書き換える」「部品名を一括置換する」「複数クラスに一括適用する」)・下端 | 表示と入口だけ。本文は変わらない | `tests/e2e/legacy/blk-primary-0823-design-tool-menu.spec.js` |
+| #4 #7 #9 | 画面の骨格 | 上部バー(保存の状態・Import ▾・Export ▾)、ツール ▾(行を書き換える・部品名を一括置換する の 1 段の一覧)、下端ステータス(パース・要素数・保存の結果) | 上部バー・タブ列右端の「ツール」▾(「行を書き換える」「部品名を一括置換する」)・下端 | 表示と入口だけ。本文は変わらない | `tests/e2e/legacy/blk-primary-0823-design-tool-menu.spec.js` |
 | #10 | ⚙ 設定 | 自動保存・エディタ・ショートカット・描画エンジンを設定する | 左下の「CFG」 | 設定はマシンの設定に書く。保存先には書かない | `tests/e2e/legacy/blk-builder-0843-3-settings-tabs.spec.js` |
 
 ## 直す(図種ごとの操作)

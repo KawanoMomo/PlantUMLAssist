@@ -28,8 +28,10 @@ test('ツールボタンで 1 段の一覧のメニューが開き、Ctrl+K の�
   await expect(menu).toBeVisible();
   await expect(menu.locator('.tool-menu-cat')).toHaveCount(0);
   await expect(menu.locator('.tool-menu-list .tool-menu-item .tool-menu-label')).toHaveText([
-    '行を書き換える', '部品名を一括置換する', '複数クラスに一括適用する',
+    '行を書き換える', '部品名を一括置換する',
   ]);
+  // 「複数クラスに一括適用する」は TICKET-owner-20261122-1023-prune で外した。
+  await expect(page.locator('#btn-tab-apply')).toHaveCount(0);
   await expect(menu.locator('.tool-menu-note')).toHaveText('Ctrl+K でも引けます');
   await expect(page.locator('#btn-tab-tools')).toHaveAttribute('aria-expanded', 'true');
 });
@@ -105,11 +107,13 @@ test('絞り込み欄は一覧の全項目から当て、キーボードだけ�
   await expect(filter).toBeFocused();
   await expect(page.locator('.tool-menu-note')).toHaveText('Ctrl+K でも引けます');
 
-  // 「書き換える」の項目は、分類を開かずに候補へ出る (「一括」で当たるのは 一括置換・一括適用 の 2 行)。
+  // 「書き換える」の項目は、分類を開かずに候補へ出る (「一括」で当たるのは 一括置換 の 1 行。
+  // 一括適用 は TICKET-owner-20261122-1023-prune で外した)。
   // 「図をつくる」の分類は TICKET-owner-20261116-0321-prune で外した。
   await filter.fill('一括');
   const hits = page.locator('.tool-menu-hits .tool-menu-item');
-  await expect(hits).toHaveCount(2);
+  await expect(hits).toHaveCount(1);
+  await expect(hits.first()).toHaveAttribute('data-target', 'btn-tab-rename');
   await filter.fill('行を書き換える');
   await expect(page.locator('.tool-menu-hits [data-target="btn-tab-lines"]')).toBeVisible();
 
