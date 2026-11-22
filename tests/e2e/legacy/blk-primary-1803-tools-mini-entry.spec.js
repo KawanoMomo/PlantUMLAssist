@@ -23,7 +23,8 @@ test('既定のタブ列に「ツール ▾」の札が出る (展開用の ツ�
   expect(m).not.toBeNull();
   // 整理 (1828-prune・TICKET-owner-20261115-2140-prune で「探す」を外した) で道具が減った。
   // 件数は 0 でなく、ツール ▾ の項目以上を数える (図をつくる は TICKET-owner-20261116-0321-prune で外した)。
-  expect(Number(m && m[1])).toBeGreaterThanOrEqual(4);
+  // 一括適用 は TICKET-owner-20261122-1023-prune で外した (行を書き換える・一括置換・この図の履歴 の 3 件)。
+  expect(Number(m && m[1])).toBeGreaterThanOrEqual(3);
 });
 
 test('札を 1 クリックで畳んだ一覧が開く', async ({ page }) => {

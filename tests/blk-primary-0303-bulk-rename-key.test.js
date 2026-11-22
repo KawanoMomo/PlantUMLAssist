@@ -77,7 +77,7 @@ describe('ツールメニューがそのキーを見せる', () => {
   test('一括置換の行にだけ、いま効いているキーが出る', () => {
     KB.resetAll();
     expect(TM.keyHintOf('btn-tab-rename')).toBe('Ctrl+H');
-    expect(TM.keyHintOf('btn-tab-apply')).toBe('');
+    expect(TM.keyHintOf('btn-tab-lines')).toBe('');
 
     var html = TM.buildMenuHtml({});
     expect(html).toContain('<span class="tool-menu-key">Ctrl+H</span>');

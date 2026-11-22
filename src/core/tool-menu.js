@@ -16,7 +16,6 @@ window.MA.toolMenu = (function() {
     { key: 'edit', title: '書き換える', items: [
       { id: 'btn-tab-lines',  label: '行を書き換える', group: 'まとめて直す' },
       { id: 'btn-tab-rename', label: '部品名を一括置換する', group: 'まとめて直す' },
-      { id: 'btn-tab-apply',  label: '複数クラスに一括適用する', group: 'まとめて直す' },
     ] },
     // 「探す」(図をまたぐ調べ物) の分類は TICKET-owner-20261115-2140-prune で中身ごと外した。
     // 図をまたぐ操作は「書き換える」の ⇄ 一括置換 1 本。

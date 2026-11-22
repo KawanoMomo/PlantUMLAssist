@@ -28,8 +28,10 @@ test('ツールボタンで 1 段の一覧のメニューが開き、Ctrl+K の�
   await expect(menu).toBeVisible();
   await expect(menu.locator('.tool-menu-cat')).toHaveCount(0);
   await expect(menu.locator('.tool-menu-list .tool-menu-item .tool-menu-label')).toHaveText([
-    '行を書き換える', '部品名を一括置換する', '複数クラスに一括適用する',
+    '行を書き換える', '部品名を一括置換する',
   ]);
+  // 「複数クラスに一括適用する」は TICKET-owner-20261122-1023-prune で外した。
+  await expect(page.locator('#btn-tab-apply')).toHaveCount(0);
   await expect(menu.locator('.tool-menu-note')).toHaveText('Ctrl+K でも引けます');
   await expect(page.locator('#btn-tab-tools')).toHaveAttribute('aria-expanded', 'true');
 });
@@ -105,11 +107,13 @@ test('絞り込み欄は一覧の全項目から当て、キーボードだけ�
   await expect(filter).toBeFocused();
   await expect(page.locator('.tool-menu-note')).toHaveText('Ctrl+K でも引けます');
 
-  // 「書き換える」の項目は、分類を開かずに候補へ出る (「一括」で当たるのは 一括置換・一括適用 の 2 行)。
+  // 「書き換える」の項目は、分類を開かずに候補へ出る (「一括」で当たるのは 一括置換 の 1 行。
+  // 一括適用 は TICKET-owner-20261122-1023-prune で外した)。
   // 「図をつくる」の分類は TICKET-owner-20261116-0321-prune で外した。
   await filter.fill('一括');
   const hits = page.locator('.tool-menu-hits .tool-menu-item');
-  await expect(hits).toHaveCount(2);
+  await expect(hits).toHaveCount(1);
+  await expect(hits.first()).toHaveAttribute('data-target', 'btn-tab-rename');
   await filter.fill('行を書き換える');
   await expect(page.locator('.tool-menu-hits [data-target="btn-tab-lines"]')).toBeVisible();
 
@@ -117,6 +121,19 @@ test('絞り込み欄は一覧の全項目から当て、キーボードだけ�
   await page.keyboard.press('Enter');
   await expect(page.locator('#tool-menu')).toBeHidden();
   await expect(page.locator('#lines-panel')).toHaveClass(/open/);
+});
+
+// TICKET-owner-20261122-1023-prune: 外した「複数クラスに一括適用する」は Ctrl+K でも出ない。
+test('Ctrl+K で「一括適用」と打っても行が出ない', async ({ page }) => {
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+k');
+  await expect(page.locator('#cp-input')).toBeVisible();
+  await page.locator('#cp-input').fill('一括適用');
+  await page.waitForTimeout(200);
+  const rows = await page.locator('.cp-item').allTextContents();
+  for (const r of rows) expect(r).not.toContain('一括適用');
+  await page.locator('#cp-input').fill('一括置換');
+  await expect(page.locator('.cp-item').filter({ hasText: '一括置換' }).first()).toBeVisible();
 });
 
 test('↑↓ で項目を選び、Enter で開く', async ({ page }) => {

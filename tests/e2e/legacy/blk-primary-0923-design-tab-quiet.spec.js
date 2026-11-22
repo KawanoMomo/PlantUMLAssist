@@ -24,7 +24,7 @@ test('既定のタブ列にはボタンが 1 つも無い (図のタブと ＋ /
   await expect(page.locator('#btn-tab-folder')).toBeVisible();
   await expect(page.locator('#btn-tab-tools')).toBeHidden();
   // 25 個の機能ボタンはどれも出ない。
-  for (const id of ['btn-tab-rename', 'btn-tab-apply', 'btn-tab-lines', 'btn-tab-diff']) {
+  for (const id of ['btn-tab-rename', 'btn-tab-lines', 'btn-tab-diff']) {
     await expect(page.locator('#' + id), id).toBeHidden();
   }
 });
@@ -42,7 +42,8 @@ test('機能は Ctrl+K から引ける (ツールの一覧も Ctrl+K から開�
   await openToolMenu(page);
   // TICKET-roadmap-20261115-2114-2: 分類の列は無く、残った道具だけの 1 段の一覧。
   await expect(page.locator('#tool-menu .tool-menu-cat')).toHaveCount(0);
-  await expect(page.locator('#tool-menu .tool-menu-list .tool-menu-item')).toHaveCount(3);
+  // 一括適用 は TICKET-owner-20261122-1023-prune で外し、残りは 行を書き換える・部品名を一括置換する の 2 行。
+  await expect(page.locator('#tool-menu .tool-menu-list .tool-menu-item')).toHaveCount(2);
   await pickTool(page, 'btn-tab-lines');
   await expect(page.locator('#lines-panel')).toHaveClass(/open/);
 });
