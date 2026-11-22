@@ -342,6 +342,16 @@ window.MA.filesPanel = (function() {
     _focusBack(body, keep);
   }
 
+  // 開いている図の、保存先から見たフォルダの道 ('spi'。直下・サブフォルダの図でなければ '')。
+  // タブ (app.js の _docSubRel) と同じく、server が解いた絶対パス (ツリーを読んだ時の root) から測る。
+  function _openDocRel(doc) {
+    var FT = window.MA.fileTree;
+    if (!doc || !doc.sub || !doc.dir || !FT || !FT.relSegments) return '';
+    var root = _subTree.root || _targetDir();
+    var seg = root ? FT.relSegments(root, String(doc.dir)) : null;
+    return seg && seg.length ? seg.join('/') : '';
+  }
+
   function _renderOpen(body) {
     var FT = window.MA.fileTree;
     var docs = _docs();
@@ -349,6 +359,8 @@ window.MA.filesPanel = (function() {
     var ws = window.MA.workspace;
     var activeId = ws && ws.getActiveId ? ws.getActiveId() : null;
     body.textContent = '';
+    // TICKET-owner-20261122-2322-3: 同じ名前の図が 2 枚以上開いているときだけ、行にフォルダの道を添える (タブと同じ語)。
+    var dirHints = FT && FT.sameNameHints ? FT.sameNameHints(docs, _openDocRel) : {};
     if (!shown.length) {
       var empty = document.createElement('div');
       empty.className = 'files-empty';
@@ -370,6 +382,12 @@ window.MA.filesPanel = (function() {
       var TS = window.MA.topStatus;
       name.textContent = doc.name && TS && TS.fileName ? TS.fileName(String(doc.name)) : String(doc.name || '(無題)');
       b.appendChild(name);
+      if (dirHints[doc.id]) {
+        var dp = document.createElement('span');
+        dp.className = 'files-row-path';
+        dp.textContent = dirHints[doc.id];
+        b.appendChild(dp);
+      }
       var mark = _marks(doc);
       if (mark) {
         var m = document.createElement('span');

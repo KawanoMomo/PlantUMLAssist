@@ -1426,6 +1426,8 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #tab-bar .tab.dirty .tab-label { font-weight: bold; }
 /* 仮のタブ (保存先ツリーの 1 回押し。次の 1 回押しで入れ替わる) は斜体で固定のタブと見分ける */
 #tab-bar .tab.preview .tab-label { font-style: italic; opacity: 0.85; }
+/* 同じ名前の図が 2 枚以上開いているときだけ、名前の後ろにフォルダの道 (spi/・(直下)) を添える */
+#tab-bar .tab .tab-dir { margin-left: 6px; font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
 
 
 

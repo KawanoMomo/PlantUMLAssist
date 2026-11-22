@@ -4607,6 +4607,9 @@ function renderTabs() {
   var tabs = bar.querySelectorAll('.tab');
   for (var i = 0; i < tabs.length; i++) bar.removeChild(tabs[i]);
   var firstTool = bar.querySelector('.tab-tool');
+  // TICKET-owner-20261122-2322-3: 同じ名前の図が 2 枚以上開いているときだけ、タブにフォルダの道を添える。
+  var FTH = window.MA.fileTree;
+  var dirHints = FTH && FTH.sameNameHints ? FTH.sameNameHints(docs, _docSubRel) : {};
   docs.forEach(function(doc) {
     var el = document.createElement('div');
     el.className = 'tab' + (doc.id === activeId ? ' active' : '') + (doc.preview ? ' preview' : '');
@@ -4641,6 +4644,12 @@ function renderTabs() {
     label.textContent = window.MA.topStatus && window.MA.topStatus.fileName
       ? window.MA.topStatus.fileName(doc.name) : doc.name;
     el.appendChild(label);
+    if (dirHints[doc.id]) {
+      var hint = document.createElement('span');
+      hint.className = 'tab-dir';
+      hint.textContent = dirHints[doc.id];
+      el.appendChild(hint);
+    }
     if (docs.length > 1) {
       var close = document.createElement('button');
       close.className = 'tab-close';
