@@ -665,6 +665,7 @@ API_INDEX = {
         {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
         {'endpoint': 'GET /browse-dir', 'summary': '保存先を選ぶ窓でフォルダを辿る (子フォルダ・親・ドライブ。読むだけ)'},
+        {'endpoint': 'GET /tree-dir', 'summary': '保存先の下のサブフォルダを階層のまま (各フォルダの .puml の名前。読むだけ)'},
         {'endpoint': 'GET /git-status', 'summary': '保存先が Git 作業木ならブランチ・ahead/behind・変更 (M/A/D)。読むだけで通信しない',
          'request': '?dir='},
         {'endpoint': 'GET /git-log', 'summary': 'その図 (file 省略で保存先全体) に関係するコミット。新しい順',
@@ -1360,6 +1361,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split('?')[0] == '/peek-dirs':
             with _fs_lock:
                 return self._handle_peek_dirs()
+        if self.path.split('?')[0] == '/tree-dir':
+            return self._handle_tree_dir()
         if self.path.split('?')[0] == '/browse-dir':
             return self._handle_browse_dir()
         # BLK-human-20260923-1702 (design 10c): 保存先の Git を読む口。読むだけで通信しない。
@@ -1882,6 +1885,60 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, {'ok': True, 'path': str(cur),
                               'parent': '' if parent == cur else str(parent),
                               'files': files, 'dirs': dirs, 'drives': drives})
+
+    # TICKET-roadmap-20261122-0855-2: 保存先の下のサブフォルダを FILES ツリーに階層のまま出す口。
+    TREE_MAX_DEPTH = 8
+    TREE_MAX_DIRS = 400
+
+    @staticmethod
+    def _tree_skip(name):
+        """ツリーに出さないフォルダ。隠し (.git・.pua)・$ で始まる系・旧い控えの置き場 (_versions)。"""
+        return name.startswith('.') or name.startswith('$') or name == Handler.VERSIONS_DIRNAME
+
+    def _handle_tree_dir(self):
+        """保存先 dir の下の実在のフォルダを、実在の階層のまま返す (保存先そのものの図は /autosave が返す)。
+
+        読むだけ: どのフォルダにも何も書かない (控え・印・設定を置かない)。PC の中だけで外へは送らない。
+        dirs は行きがけ順 (親 → 子、同じ階層は名前の順)。.puml の無いフォルダも返す。
+        各フォルダ: rel (保存先からの道。区切りは /)・path (絶対パス)・name・depth (1 が直下)・files (.puml の名前、拡張子なし)。
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        raw = (params.get('dir') or '').strip()
+        if not raw:
+            return self._send_json(200, {'ok': False, 'root': '', 'dirs': [], 'error': '保存先がありません'})
+        try:
+            root = self._autosave_resolve_dir(raw)
+        except (OSError, ValueError, RuntimeError):
+            return self._send_json(200, {'ok': False, 'root': raw, 'dirs': [], 'error': 'フォルダのパスとして読めません'})
+        if not (root.exists() and root.is_dir()):
+            return self._send_json(200, {'ok': False, 'root': str(root), 'dirs': [], 'error': 'そのフォルダはありません'})
+        out = []
+        truncated = [False]
+
+        def walk(d, rel, depth):
+            if depth > self.TREE_MAX_DEPTH:
+                return
+            try:
+                children = sorted((c for c in d.iterdir() if c.is_dir() and not self._tree_skip(c.name)),
+                                  key=lambda p: p.name.lower())
+            except OSError:
+                return
+            for c in children:
+                if len(out) >= self.TREE_MAX_DIRS:
+                    truncated[0] = True
+                    return
+                crel = (rel + '/' + c.name) if rel else c.name
+                try:
+                    files = sorted((f.stem for f in c.iterdir()
+                                    if f.is_file() and f.suffix.lower() == '.puml'), key=lambda s: s.lower())
+                except OSError:
+                    files = []
+                out.append({'rel': crel, 'path': str(c), 'name': c.name, 'depth': depth, 'files': files})
+                walk(c, crel, depth + 1)
+
+        walk(root, '', 1)
+        self._send_json(200, {'ok': True, 'root': str(root), 'dirs': out, 'truncated': truncated[0]})
 
     def _autosave_validate_type(self, dt):
         """Return True if dt is a safe filename component."""

@@ -113,12 +113,32 @@ window.MA.workspace = (function() {
     return 'diagram' + n;
   }
 
-  function _uniqueName(name, exceptId) {
+  // ── サブフォルダの図 (TICKET-roadmap-20261122-0855-2) ──────────────────
+  // 保存先の下のサブフォルダから開いた図は、そのフォルダ (dir) と印 (sub) を持つ。
+  // 名前はファイル名そのものなので、同じ名前の図が直下とサブフォルダにあっても名前を付け替えない
+  // (付け替えると別のファイルへ書く)。名前が重ならないことを求めるのは同じフォルダの中だけ。
+  function samePath(a, b) {
+    function norm(p) {
+      return String(p == null ? '' : p).split(String.fromCharCode(92)).join('/').replace(/\/+$/, '').toLowerCase();
+    }
+    return norm(a) === norm(b);
+  }
+  // 図の居場所の鍵。サブフォルダの図はそのフォルダ、ほかは今の保存先 (''。留めたタブも今までどおり同じ組)。
+  function _placeKey(d) {
+    return (d && d.sub && d.dir) ? 'sub:' + String(d.dir).split(String.fromCharCode(92)).join('/').replace(/\/+$/, '').toLowerCase() : '';
+  }
+  function _samePlace(d, spec) {
+    var want = (spec && spec.sub && spec.dir) ? _placeKey({ sub: true, dir: spec.dir }) : '';
+    return _placeKey(d) === want;
+  }
+
+  function _uniqueName(name, exceptId, place) {
     var base = sanitizeName(name);
     var used = {};
     var docs = _state ? _state.docs : [];
+    var key = place || '';
     for (var i = 0; i < docs.length; i++) {
-      if (docs[i].id !== exceptId) used[docs[i].name] = true;
+      if (docs[i].id !== exceptId && _placeKey(docs[i]) === key) used[docs[i].name] = true;
     }
     if (!used[base]) return base;
     var n = 2;
@@ -145,6 +165,7 @@ window.MA.workspace = (function() {
         });
         // 保存先を替える前に開いていたタブは、開いたフォルダを持ち続ける。
         if (typeof d.dir === 'string' && d.dir) docs[docs.length - 1].dir = d.dir;
+        if (d.sub === true && typeof d.dir === 'string' && d.dir) docs[docs.length - 1].sub = true;
         if (d.fresh === true) docs[docs.length - 1].fresh = true;
       }
       if (docs.length === 0) return null;
@@ -192,6 +213,7 @@ window.MA.workspace = (function() {
     if (!d) return null;
     var c = { id: d.id, name: d.name, diagramType: d.diagramType, dsl: d.dsl, preview: !!d.preview };
     if (d.dir) c.dir = d.dir;
+    if (d.sub) c.sub = true;
     if (d.fresh) c.fresh = true;
     return c;
   }
@@ -221,10 +243,22 @@ window.MA.workspace = (function() {
     return _state ? _state.activeId : null;
   }
 
+  // 保存先 (直下) の図を名前で引く。サブフォルダの図は同じ名前でも別のファイルなので当てない。
   function findByName(name) {
     if (!_state) return null;
     for (var i = 0; i < _state.docs.length; i++) {
-      if (_state.docs[i].name === name) return _copy(_state.docs[i]);
+      if (_state.docs[i].name === name && !_state.docs[i].sub) return _copy(_state.docs[i]);
+    }
+    return null;
+  }
+
+  // 開く図 (spec: name と、サブフォルダの図なら sub・dir) のタブが既にあれば返す。
+  function findOpen(spec) {
+    if (!_state || !spec) return null;
+    var name = sanitizeName(spec.name || '');
+    for (var i = 0; i < _state.docs.length; i++) {
+      var d = _state.docs[i];
+      if (d.name === name && _samePlace(d, spec)) return _copy(d);
     }
     return null;
   }
@@ -263,12 +297,16 @@ window.MA.workspace = (function() {
   function open(spec) {
     if (!_state) init({});
     spec = spec || {};
+    var sub = !!(spec.sub && spec.dir);
     var doc = {
       id: _newId(),
-      name: _uniqueName(spec.name || 'diagram' + (_state.docs.length + 1)),
+      name: _uniqueName(spec.name || 'diagram' + (_state.docs.length + 1), null,
+                        sub ? _placeKey({ sub: true, dir: spec.dir }) : ''),
       diagramType: spec.diagramType || 'plantuml-sequence',
       dsl: typeof spec.dsl === 'string' ? spec.dsl : '',
     };
+    // サブフォルダの図は、そのフォルダのファイルを指し続ける (保存・自動保存・!include の起点)。
+    if (sub) { doc.dir = String(spec.dir); doc.sub = true; }
     // ＋ で開いた新しい図は、1 度書けるまで「新しい図」の印を持つ。
     // 印のある図の保存は、保存先に既にある別のファイルを書き換えない (server が 409 で断る)。
     if (spec.fresh === true) doc.fresh = true;
@@ -294,11 +332,12 @@ window.MA.workspace = (function() {
     if (!_state) init({});
     var name = sanitizeName(spec.name || '');
     for (var i = 0; i < _state.docs.length; i++) {
-      if (_state.docs[i].name === name) {
+      // サブフォルダの図と直下の図は、同じ名前でも別のファイル (居場所が同じタブだけに当てる)。
+      if (_state.docs[i].name === name && _samePlace(_state.docs[i], spec)) {
         // 別のフォルダに留めてあるタブと同じ名前のファイルを今の保存先から
         // 開いた。中身を読み込むなら、そのタブは今の保存先のファイルになる (留めを外す)。
         // 中身を渡さない (名前で移るだけ) ときは留めたまま (前のフォルダの中身を今の保存先へ流さない)。
-        if (typeof spec.dsl === 'string' && _state.docs[i].dir) delete _state.docs[i].dir;
+        if (typeof spec.dsl === 'string' && _state.docs[i].dir && !_state.docs[i].sub) delete _state.docs[i].dir;
         if (typeof spec.dsl === 'string') _state.docs[i].dsl = spec.dsl;
         if (spec.diagramType) _state.docs[i].diagramType = spec.diagramType;
         _state.activeId = _state.docs[i].id;
@@ -317,7 +356,7 @@ window.MA.workspace = (function() {
     if (!_state) init({});
     var name = sanitizeName(spec.name || '');
     for (var i = 0; i < _state.docs.length; i++) {
-      if (_state.docs[i].name === name) return openOrActivate(spec);
+      if (_state.docs[i].name === name && _samePlace(_state.docs[i], spec)) return openOrActivate(spec);
     }
     var idx = -1;
     for (var k = 0; k < _state.docs.length; k++) if (_state.docs[k].preview) { idx = k; break; }
@@ -361,7 +400,7 @@ window.MA.workspace = (function() {
   function rename(id, name) {
     var d = _find(id);
     if (!d) return null;
-    d.name = _uniqueName(name, id);
+    d.name = _uniqueName(name, id, _placeKey(d));
     persist();
     return _copy(d);
   }
@@ -393,7 +432,7 @@ window.MA.workspace = (function() {
   function setDir(id, dir) {
     var d = _find(id);
     if (!d) return null;
-    if (dir) d.dir = String(dir); else delete d.dir;
+    if (dir) d.dir = String(dir); else { delete d.dir; delete d.sub; }
     persist();
     return _copy(d);
   }
@@ -567,6 +606,23 @@ window.MA.workspace = (function() {
     }
   }
 
+  // listTree — 保存先の下のサブフォルダを階層のまま (server の /tree-dir。読むだけ)。
+  // 返り値: { ok, root, dirs: [{ rel, path, name, depth, files: [名前] }] }。読めなければ dirs は空。
+  function listTree(fileDir) {
+    var miss = { ok: false, root: _dir(fileDir), dirs: [] };
+    try {
+      return window.fetch('/tree-dir?dir=' + encodeURIComponent(_dir(fileDir)))
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+          if (!data || !Array.isArray(data.dirs)) return miss;
+          return { ok: !!data.ok, root: String(data.root || ''), dirs: data.dirs };
+        })
+        .catch(function() { return miss; });
+    } catch (e) {
+      return Promise.resolve(miss);
+    }
+  }
+
   // deleteFile — 保存フォルダから図を 1 枚だけ消す
   // 過去版は server 側で残るので、
   // 取り違えて消しても「今は無いが前の版が残っている図」から戻せる。
@@ -637,6 +693,9 @@ window.MA.workspace = (function() {
     getActive: getActive,
     getActiveId: getActiveId,
     findByName: findByName,
+    findOpen: findOpen,
+    samePath: samePath,
+    listTree: listTree,
     updateActive: updateActive,
     updateDoc: updateDoc,
     setActive: setActive,

@@ -184,6 +184,20 @@ html, body {
 #files-panel .files-target-row[data-empty="1"] .files-target-caret { visibility: hidden; }
 #files-panel #files-parts[hidden] { display: none; }
 #files-panel #files-parts .files-part-file.files-loose-file { padding-left: 30px; }
+/* TICKET-roadmap-20261122-0855-2: 保存先の下のサブフォルダ (実在の階層のまま)。字下げは行ごとに深さから付ける。 */
+#files-panel #files-subtree[hidden] { display: none; }
+#files-panel .files-sub-dir, #files-panel .files-sub-file {
+  display: flex; align-items: center; gap: 4px; width: 100%; box-sizing: border-box;
+  background: none; border: 0; padding: 2px 8px 2px 18px; font: inherit; font-size: 11px;
+  text-align: left; cursor: pointer; overflow: hidden; white-space: nowrap;
+}
+#files-panel .files-sub-dir { color: var(--text-secondary); }
+#files-panel .files-sub-dir .files-part-label { flex: 1 1 auto; min-width: 0; }
+#files-panel .files-sub-file { color: var(--text-primary); }
+#files-panel .files-sub-file.is-active { color: var(--accent); }
+#files-panel .files-sub-dir:hover, #files-panel .files-sub-file:hover { background: var(--bg-tertiary); }
+#files-panel .files-row-path { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 10px; color: var(--text-secondary); }
+#top-crumbs .top-crumb[data-crumb="sub"] { color: var(--text-secondary); }
 /* ツリーに入れた #folder-panel は浮かせず、節の中身としてそのまま流す。 */
 /* GIT 欄・この図の履歴・比較する相手を選ぶ */
 #files-panel [data-files-section="git"][hidden] { display: none; }
@@ -3558,7 +3572,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         </div>
         <div class="rename-row">
           <input type="checkbox" id="rename-scan-folder" checked style="width:auto;">
-          <label for="rename-scan-folder">保存フォルダの全ファイルも数える</label>
+          <label for="rename-scan-folder" title="サブフォルダの図は数えず、書き換えません (開いているタブの図は「開いている図すべてに適用」で当たります)">保存フォルダの直下の全ファイルも数える (サブフォルダの図は数えません)</label>
         </div>
         <!-- ヒット件数のすぐ横から影響範囲の一覧へ入る
              (件数を読んでから「どの図のどの行か」を見るまでに画面を探させない) -->

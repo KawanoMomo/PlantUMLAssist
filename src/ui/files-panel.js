@@ -68,6 +68,8 @@ window.MA.filesPanel = (function() {
     var host = $('files-parts');
     var btn = $('files-target-caret');
     if (host) host.hidden = !on;
+    var sub = $('files-subtree');
+    if (sub) sub.hidden = !on;
     if (btn) {
       btn.setAttribute('aria-expanded', on ? 'true' : 'false');
       var c = btn.querySelector('.files-caret');
@@ -79,6 +81,170 @@ window.MA.filesPanel = (function() {
   function targetPartsOpen() {
     var host = $('files-parts');
     return !!host && !host.hidden;
+  }
+
+  // ── 保存先の下のサブフォルダ (TICKET-roadmap-20261122-0855-2) ─────────
+  // 実在のフォルダを実在の階層のまま、直下の図の行の下に出す。フォルダの行は押すと開く・畳む
+  // (開閉は次回も覚える)。図の行を押すとそのファイルを開き (仮のタブ)、ダブルクリックで固定にする。
+  // 開く・畳む・絞るだけでは何も書かない (読むのは server の /tree-dir だけ)。
+  var KEY_SUB = 'pua.files.sub.';
+  var _subTree = { dir: '', dirs: [], at: 0, busy: false };
+
+  function _subHost() {
+    var host = $('files-subtree');
+    if (host) return host;
+    var parts = $('files-parts');
+    if (!parts || !parts.parentNode) return null;
+    host = document.createElement('div');
+    host.id = 'files-subtree';
+    host.setAttribute('role', 'group');
+    host.setAttribute('aria-label', '保存先の下のフォルダ');
+    parts.parentNode.insertBefore(host, parts.nextSibling);
+    host.hidden = parts.hidden;
+    return host;
+  }
+
+  function _targetDir() {
+    try {
+      var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+      if (!cfg || cfg.backend !== 'file') return '';
+      return (typeof window._wsFileDir === 'function') ? String(window._wsFileDir() || '') : String(cfg.fileDir || '');
+    } catch (e) { return ''; }
+  }
+
+  function _subOpenSet() {
+    var out = {};
+    (_subTree.dirs || []).forEach(function(d) {
+      if (d && d.rel && _get(KEY_SUB + d.rel, '0') === '1') out[d.rel] = true;
+    });
+    return out;
+  }
+
+  // ディスクから読み直す。force でなければ、同じ保存先を直前に読んだばかりなら読み直さない。
+  function reloadSubTree(force) {
+    var dir = _targetDir();
+    var WS = window.MA.workspace;
+    if (!dir || !WS || !WS.listTree) {
+      _subTree = { dir: '', dirs: [], at: 0, busy: false };
+      renderSubTree();
+      return Promise.resolve(false);
+    }
+    if (!force && _subTree.dir === dir && Date.now() - _subTree.at < 1500) return Promise.resolve(false);
+    if (_subTree.busy) { _subTree.again = true; return Promise.resolve(false); }
+    _subTree.busy = true;
+    return WS.listTree(dir).then(function(res) {
+      _subTree.busy = false;
+      if (_targetDir() !== dir) return false;
+      _subTree.dir = dir;
+      _subTree.root = (res && res.root) || dir;
+      _subTree.dirs = (res && res.ok && Array.isArray(res.dirs)) ? res.dirs : [];
+      _subTree.at = Date.now();
+      renderSubTree();
+      // パンくずの「保存先からの道」は、server が解いた root と比べて決まる。読めた後に引き直す。
+      try { if (typeof window.updateTopSaveTarget === 'function') window.updateTopSaveTarget(); } catch (e) {}
+      if (_subTree.again) { _subTree.again = false; reloadSubTree(true); }
+      return true;
+    }, function() { _subTree.busy = false; return false; });
+  }
+
+  // 今読んでいるサブフォルダの図 ({ name, dir, rel })。Ctrl+P が同じ顔ぶれを引く。
+  function subFiles() {
+    var out = [];
+    (_subTree.dirs || []).forEach(function(d) {
+      (d.files || []).forEach(function(n) { out.push({ name: String(n), dir: String(d.path || ''), rel: String(d.rel || '') }); });
+    });
+    return out;
+  }
+
+  function _activeSubKey() {
+    var ws = window.MA.workspace;
+    var a = ws && ws.getActive ? ws.getActive() : null;
+    if (!a || !a.sub || !a.dir) return '';
+    return String(a.dir).split(String.fromCharCode(92)).join('/').toLowerCase() + '|' + a.name;
+  }
+
+  function _subFileButton(r, withPath, activeKey) {
+    var FT = window.MA.fileTree;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'files-sub-file';
+    b.setAttribute('data-file-name', r.name);
+    b.setAttribute('data-sub-rel', r.rel);
+    b.setAttribute('data-sub-dir', r.dir);
+    b.style.paddingLeft = (30 + 12 * (withPath ? 0 : Math.max(0, r.depth - 2))) + 'px';
+    var key = String(r.dir).split(String.fromCharCode(92)).join('/').toLowerCase() + '|' + r.name;
+    if (activeKey && key === activeKey) b.classList.add('is-active');
+    b.title = r.rel + '/' + r.name + '.puml';
+    b.appendChild(_glyphEl(FT && FT.fileKind ? FT.fileKind(r.name, '') : ''));
+    var nm = document.createElement('span');
+    nm.className = 'files-row-name';
+    nm.textContent = r.name;
+    b.appendChild(nm);
+    if (withPath) {
+      // 絞り込みの間は、同じ名前の図をフォルダで見分けられるように道を添える。
+      var p = document.createElement('span');
+      p.className = 'files-row-path';
+      p.textContent = r.rel + '/';
+      b.appendChild(p);
+    }
+    b.addEventListener('click', function() {
+      if (typeof window.openFromSubFolder === 'function') window.openFromSubFolder(r.name, r.dir, { preview: true });
+    });
+    b.addEventListener('dblclick', function() {
+      if (typeof window.openFromSubFolder === 'function') window.openFromSubFolder(r.name, r.dir, { pin: true });
+    });
+    return b;
+  }
+
+  function _subDirButton(r) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'files-sub-dir';
+    b.setAttribute('data-sub-rel', r.rel);
+    b.setAttribute('data-sub-dir', r.path);
+    b.setAttribute('aria-expanded', r.open ? 'true' : 'false');
+    b.style.paddingLeft = (18 + 12 * Math.max(0, r.depth - 1)) + 'px';
+    b.title = r.rel + ' (保存先の下のフォルダ)';
+    var caret = document.createElement('span');
+    caret.className = 'files-caret';
+    caret.setAttribute('aria-hidden', 'true');
+    caret.textContent = r.open ? '▾' : '▸';
+    b.appendChild(caret);
+    var lab = document.createElement('span');
+    lab.className = 'files-part-label';
+    lab.textContent = r.name;
+    b.appendChild(lab);
+    if (r.count) {
+      var cnt = document.createElement('span');
+      cnt.className = 'files-sec-count';
+      cnt.textContent = String(r.count);
+      b.appendChild(cnt);
+    }
+    b.addEventListener('click', function() {
+      _set(KEY_SUB + r.rel, r.open ? '0' : '1');
+      renderSubTree();
+    });
+    return b;
+  }
+
+  function renderSubTree() {
+    var host = _subHost();
+    if (!host) return;
+    var FT = window.MA.fileTree;
+    var keep = _focusKeep(host);
+    host.textContent = '';
+    if (!FT || !FT.subTreeRows || !_targetDir() || !_subTree.dirs.length) {
+      host.setAttribute('data-count', '0');
+      return;
+    }
+    var q = _query();
+    var rows = FT.subTreeRows(_subTree.dirs, _subOpenSet(), q);
+    var activeKey = _activeSubKey();
+    rows.forEach(function(r) {
+      host.appendChild(r.type === 'dir' ? _subDirButton(r) : _subFileButton(r, !!String(q).trim(), activeKey));
+    });
+    host.setAttribute('data-count', String(_subTree.dirs.length));
+    _focusBack(host, keep);
   }
 
   function secOpen(id) {
@@ -321,6 +487,9 @@ window.MA.filesPanel = (function() {
     var keep = _focusKeep(host);
     _renderParts(host);
     _focusBack(host, keep);
+    // 保存先の一覧を読み直した機会に、サブフォルダも (間を置いて) 読み直す。
+    if (_subTree.dir !== _targetDir()) renderSubTree();
+    reloadSubTree(false);
   }
 
   function _renderParts(host) {
@@ -567,6 +736,7 @@ window.MA.filesPanel = (function() {
     if (!panel) return;
     renderOpen();
     renderParts();
+    renderSubTree();
     refreshSummary();
     syncTargetCaret();
     _gitMarks();
@@ -640,6 +810,7 @@ window.MA.filesPanel = (function() {
         if (filter.value && !targetPartsOpen()) setTargetParts(true);
         renderOpen();
         renderParts();
+        renderSubTree();
         // 保存先の絞り込みは #folder-panel 側の入力に渡す (数える所を 2 つにしない)。
         var ff = document.querySelector('#folder-panel input.folder-filter');
         if (ff) {
@@ -666,6 +837,17 @@ window.MA.filesPanel = (function() {
       moOpen.observe(fp, { attributes: true, attributeFilter: ['class'] });
     }
 
+    // サブフォルダに図を書いた・消した知らせ (workspace の pua:folder-changed) で、そのフォルダの行を読み直す。
+    window.addEventListener('pua:folder-changed', function(ev) {
+      var d = (ev && ev.detail) || {};
+      var FT = window.MA.fileTree;
+      var root = _targetDir();
+      if (!root || !FT || !FT.relSegments) return;
+      var seg = FT.relSegments(_subTree.root || root, String(d.dir || ''));
+      if (seg && seg.length) reloadSubTree(true);
+    });
+    window.addEventListener('focus', function() { reloadSubTree(false); });
+
     refresh();
   }
 
@@ -683,6 +865,10 @@ window.MA.filesPanel = (function() {
     setGitCount: setGitCount,
     setSummary: setSummary,
     renderParts: renderParts,
+    renderSubTree: renderSubTree,
+    reloadSubTree: reloadSubTree,
+    subFiles: subFiles,
+    subRoot: function() { return (_subTree.dir && _subTree.dir === _targetDir()) ? String(_subTree.root || '') : ''; },
     folderEntries: _folderNames,
     reveal: reveal,
     setTargetParts: setTargetParts,
