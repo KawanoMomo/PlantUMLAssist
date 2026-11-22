@@ -61,19 +61,18 @@ test.describe('FEAT-004: 挿入 modal の本文欄への初期フォーカス', 
     await page.screenshot({ path: path.join(SHOT_DIR, 'ac1-typed-without-click.png') });
   });
 
-  test('[AC-3] note 種別のフォーカス挙動は変えない', async ({ page }) => {
+  test('[AC-3] note 種別も本文欄に手が入る (TICKET-owner-20261122-0301-1)', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#preview-svg', { timeout: 5000 });
     await page.waitForTimeout(500);
 
     await openInsertForm(page, 8, 'note');
 
-    const focusedNote = await page.evaluate(() => {
+    // 窓はどの種類でも開いたら最初の打てる欄 (注釈は本文欄) に手を置く (以前は message だけで、note は背後に手が残った)。
+    await expect.poll(() => page.evaluate(() => {
       var ta = document.querySelector('#seq-mod-ntext-rle .rle-textarea');
       return !!ta && document.activeElement === ta;
-    });
-    // note では従来どおりフォーカスは移らない。
-    expect(focusedNote).toBe(false);
+    })).toBe(true);
   });
 
   test('[AC-4] From / Arrow / To の初期選択値と Escape 挙動が不変である', async ({ page }) => {
