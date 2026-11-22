@@ -35,7 +35,7 @@ test('owner 0140 Export ▾ は 1 枚の図の 4 項目で、資料化の控え�
   await page.locator('#btn-export').click();
   const items = page.locator('#export-menu > button');
   await expect(items).toHaveCount(4);
-  await expect(items).toHaveText([/SVG/, /^PNGとして保存/, /透過/, /クリップボード/]);
+  await expect(items).toHaveText([/SVG/, /^PNG で書き出す/, /透過/, /クリップボード/]);
   await expect(page.locator('#export-menu .exp-group-title')).toHaveCount(0);
   await page.keyboard.press('Escape');
   // 保存先から開いた図なので、今の図の名前で保存先 (図と同じフォルダ) に書かれる (TICKET-primary-20261115-2240-wish)。

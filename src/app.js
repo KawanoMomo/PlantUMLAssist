@@ -3474,7 +3474,7 @@ function initCommandPalette() {
     var list = [
       { id: 'open', title: 'ファイルを開く / Open', hint: 'File', keywords: ['open', 'file', 'ひらく'], run: function() { clickById('btn-open'); } },
       // 「保存」の一語で名指しできるのはこれ。
-      // 「保存フォルダの図を一覧」「前回保存からの差分」「SVG として保存」にも
+      // 「保存フォルダの図を一覧」「前回保存からの差分」「保存先のフォルダを選ぶ…」にも
       // その 2 文字は入っているので、完全一致のキーワードで本命を先頭に出す。
       { id: 'save', title: 'ファイルを保存 / Save', hint: 'File', keywords: ['保存', 'save', 'file', 'ほぞん'], run: function() { clickById('btn-save'); } },
       // タブバーの道具はどれもパレットに無く、design 1a で
@@ -3502,9 +3502,11 @@ function initCommandPalette() {
       { id: 'zoom-out', title: '縮小 / Zoom out', hint: 'View', keywords: ['zoom', 'しゅくしょう'], run: function() { clickById('btn-zoom-out'); } },
       { id: 'zoom-fit', title: '幅に合わせる / Fit', hint: 'View', keywords: ['zoom', 'fit'], run: function() { clickById('btn-zoom-fit'); } },
       { id: 'render', title: '再描画 / Render', hint: 'View', keywords: ['render', 'refresh', 'さいびょうが'], run: function() { clickById('btn-render'); } },
-      { id: 'export-svg', title: 'SVG として保存 / Export SVG', hint: 'Export', keywords: ['export', 'svg'], run: function() { clickById('exp-svg'); } },
-      { id: 'export-png', title: 'PNG として保存 / Export PNG', hint: 'Export', keywords: ['export', 'png'], run: function() { clickById('exp-png'); } },
-      { id: 'export-png-t', title: 'PNG（透過背景）/ Export PNG transparent', hint: 'Export', keywords: ['export', 'png', 'transparent'], run: function() { clickById('exp-png-transparent'); } },
+      // 書き出しの 3 行は Export ▾ の項目・FILES の右クリックと同じ語で出す (TICKET-owner-20261122-2242-2)。
+      // 前の語「SVG として保存」と英語は検索語に残す。
+      { id: 'export-svg', title: 'SVG で書き出す', hint: 'Export', keywords: ['export', 'svg', 'かきだす', 'SVG として保存', 'Export SVG'], run: function() { clickById('exp-svg'); } },
+      { id: 'export-png', title: 'PNG で書き出す', hint: 'Export', keywords: ['export', 'png', 'かきだす', 'PNG として保存', 'Export PNG'], run: function() { clickById('exp-png'); } },
+      { id: 'export-png-t', title: 'PNG（透過背景）で書き出す', hint: 'Export', keywords: ['export', 'png', 'transparent', 'かきだす', 'とうか', 'Export PNG transparent'], run: function() { clickById('exp-png-transparent'); } },
       { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
       { id: 'mode-local', title: 'レンダリング: local (Java)', hint: 'Render', keywords: ['render', 'mode', 'local'], run: function() { selectValue('render-mode', 'local'); } },
       { id: 'mode-online', title: 'レンダリング: online (plantuml.com)', hint: 'Render', keywords: ['render', 'mode', 'online'], run: function() { selectValue('render-mode', 'online'); } },

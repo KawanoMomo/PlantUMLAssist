@@ -38,7 +38,7 @@ window.MA.settingsTabs = (function() {
         { id: 'export-menu', keys: 'Ctrl+E', desc: 'エクスポートメニューを開く',             state: 'done', remap: true },
         // design 2c の書き出し 2 つ。表に載っていないと差し替えの衝突判定に入らず、
         // 「一覧に無いのに効くキー」になってしまうので、割り当ての正本はここに置く。
-        { id: 'exp-svg',   keys: 'Ctrl+Shift+S', desc: 'SVG として保存する',                 state: 'done', remap: true },
+        { id: 'exp-svg',   keys: 'Ctrl+Shift+S', desc: 'SVG で書き出す',                     state: 'done', remap: true },
         { id: 'exp-clipboard', keys: 'Ctrl+Shift+C', desc: 'クリップボードにコピーする',     state: 'done', remap: true },
         // 一括置換は台本の主戦場で、ツールは既定でタブ列から畳まれている (design 7b)。
         // メニューを辿るか Ctrl+K でコマンド名を打つかしか入口が無いと、同じ手順の
