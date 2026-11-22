@@ -861,7 +861,8 @@ html, body {
   min-width: 180px;
   border-right: 1px solid var(--border);
   background: var(--bg-primary);
-  flex-shrink: 0;
+  /* 右の枠を開いて幅が足りないときは、プレビューの列 (min-width) を残して縮む */
+  flex-shrink: 1;
 }
 
 /* ── Diagram tabs (複数の図を横断して編集する) ───────────────────────── */
@@ -2113,6 +2114,9 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   background: var(--bg-primary);
   /* キャンバス上に浮くズーム帯 (#zoom-hud) の基準 */
   position: relative;
+  /* 右の枠 (読むだけ・比較) を開いても自分の図とズームの帯 (− % ＋ Fit) が見えて押せる幅は残す。
+     足りない分は本文欄と右の枠が縮んで並ぶ (重ねない・潰さない)。TICKET-owner-20261116-0840-1 */
+  min-width: 300px;
 }
 
 /* ── 参照ペイン (2 枚の図を並べて見比べる) ──────────────────────────────── */
@@ -2121,7 +2125,8 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   flex-direction: column;
   width: 34%;
   min-width: 220px;
-  flex-shrink: 0;
+  /* 幅が足りないときはプレビューの列 (min-width) を残して縮む */
+  flex-shrink: 1;
   overflow: hidden;
   border-left: 1px solid var(--border);
   background: var(--bg-primary);
@@ -2681,7 +2686,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   min-width: 220px;
   border-left: 1px solid var(--border);
   background: var(--bg-secondary);
-  flex-shrink: 0;
+  /* 幅が足りないときはプレビューの列 (min-width) を残して縮む */
+  flex-shrink: 1;
   overflow: hidden;
 }
 /* `display: flex` は `hidden` 属性より強いので、
