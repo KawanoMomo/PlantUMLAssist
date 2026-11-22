@@ -123,6 +123,19 @@ test('絞り込み欄は一覧の全項目から当て、キーボードだけ�
   await expect(page.locator('#lines-panel')).toHaveClass(/open/);
 });
 
+// TICKET-owner-20261122-1023-prune: 外した「複数クラスに一括適用する」は Ctrl+K でも出ない。
+test('Ctrl+K で「一括適用」と打っても行が出ない', async ({ page }) => {
+  await page.locator('#editor').click();
+  await page.keyboard.press('Control+k');
+  await expect(page.locator('#cp-input')).toBeVisible();
+  await page.locator('#cp-input').fill('一括適用');
+  await page.waitForTimeout(200);
+  const rows = await page.locator('.cp-item').allTextContents();
+  for (const r of rows) expect(r).not.toContain('一括適用');
+  await page.locator('#cp-input').fill('一括置換');
+  await expect(page.locator('.cp-item').filter({ hasText: '一括置換' }).first()).toBeVisible();
+});
+
 test('↑↓ で項目を選び、Enter で開く', async ({ page }) => {
   await page.locator('#btn-tab-tools').click();
   await expect(page.locator('#tool-menu .tool-menu-list')).toBeVisible();
