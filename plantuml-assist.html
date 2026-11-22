@@ -816,6 +816,45 @@ html, body {
   color: var(--text-secondary);
   white-space: nowrap;
 }
+/* TICKET-primary-20261115-2240-wish: 書き出し先 (保存先の中) と前回書いた結果。項目ではなく読む行 */
+#export-menu #export-dest {
+  border-top: 1px solid var(--border);
+  padding: 7px 14px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-width: 340px;
+}
+#export-menu #export-dest[hidden] { display: none; }
+#export-menu #export-dest-place { color: var(--text-primary); }
+#export-menu #export-dest-change {
+  display: inline; width: auto; padding: 0 4px; margin-left: 6px;
+  color: var(--accent); font-size: 11px; text-decoration: underline;
+}
+#export-menu #export-dest-last { white-space: normal; word-break: break-all; }
+#export-menu #export-dest-last:empty { display: none; }
+#export-dest-pick {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+}
+#export-dest-pick .edp-box {
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px; width: min(440px, calc(100vw - 32px)); color: var(--text-primary); font-size: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+#export-dest-pick .edp-title { font-weight: 600; font-size: 13px; }
+#export-dest-pick .edp-cur { color: var(--text-secondary); word-break: break-all; }
+#export-dest-pick .edp-list { display: flex; flex-direction: column; gap: 2px; max-height: 40vh; overflow: auto; }
+#export-dest-pick .edp-list button {
+  text-align: left; background: transparent; border: 1px solid transparent; color: var(--text-primary);
+  padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+#export-dest-pick .edp-list button:hover, #export-dest-pick .edp-list button[aria-current="true"] {
+  background: var(--bg-tertiary); border-color: var(--border);
+}
+#export-dest-pick .edp-row { display: flex; gap: 6px; }
+#export-dest-pick .edp-row input { flex: 1; min-width: 0; }
+#export-dest-pick .edp-msg { color: var(--warning, #d19a66); min-height: 1em; }
 
 
 /* Diagram / render mode selects */
@@ -3420,6 +3459,13 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button id="exp-png">PNGとして保存</button>
         <button id="exp-png-transparent">PNG（透過背景）</button>
         <button id="exp-clipboard">クリップボードにコピー</button>
+        <!-- TICKET-primary-20261115-2240-wish: 保存先から開いた図の書き出しは保存先の中へ書く。書き出し先と前回書いた結果を読む行
+             (項目ではない。保存先の無い図では出さない) -->
+        <div id="export-dest" class="menu-note" hidden>
+          <span>書き出し先: <span id="export-dest-place"></span></span>
+          <button type="button" id="export-dest-change">替える…</button>
+          <div id="export-dest-last"></div>
+        </div>
         <!-- 「渡す」見出しと名前を付けた図の組の zip・「その他」は TICKET-owner-20261116-0140-prune で外した。
              Export ▾ は 1 枚の図の SVG / PNG / 透過 PNG / クリップボードの 4 項目 -->
       </div>
@@ -3976,6 +4022,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-impact.js"></script>
 <script src="src/core/bulk-apply.js"></script>
 <script src="src/core/export-name.js"></script>
+<script src="src/core/export-dest.js"></script>
 <script src="src/core/svg-export.js"></script>
 <script src="src/core/rename-redo.js"></script>
 <script src="src/core/rename-seed.js"></script>

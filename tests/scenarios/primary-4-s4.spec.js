@@ -47,12 +47,13 @@ async function openDoc(page, name, text, words) {
   await H.expectRendered(page);
 }
 
+// 保存先から開いた図の SVG は図と同じフォルダに図の名前で書かれる (TICKET-primary-20261115-2240-wish)。
+// 書いた直後の中身を読む (同じ図を書き出し直すと同じ名前を上書きする)。
 async function exportSvg(page, testInfo, label) {
-  const dl = await S.exportVia(page, 'exp-svg');
-  expect(dl, label + ' の SVG を受け取れる').not.toBeNull();
-  const out = testInfo.outputPath(label + '.svg');
-  await dl.saveAs(out);
-  const svg = fs.readFileSync(out, 'utf8');
+  const r = await S.exportToFolder(page, 'exp-svg');
+  expect(r.path, label + ' の SVG を保存先に書く').toMatch(/\.svg$/);
+  const svg = fs.readFileSync(r.path, 'utf8');
+  fs.writeFileSync(testInfo.outputPath(label + '.svg'), svg);
   expect(svg, label).toContain('<svg');
   expect(svg, label).toContain('</svg>');
   return svg;
