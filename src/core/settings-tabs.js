@@ -264,6 +264,17 @@ window.MA.settingsTabs = (function() {
   }
 
   // textarea に直接あてる style。折り返し無しでは横スクロールを残す。
+  // 設定の窓で押された Esc が窓を閉じるか (「キャンセル」と同じ。保存しない)。
+  // 窓が開いていない・IME の変換中・他が先に処理した (ショートカットのキー待ちの取り消し等)・
+  // キー待ちの行がある ときは閉じない。ev: { key, isComposing, defaultPrevented }。
+  function escClosesSettings(ev, open, capturing) {
+    if (!ev || ev.key !== 'Escape') return false;
+    if (ev.isComposing || ev.defaultPrevented) return false;
+    if (!open) return false;
+    if (capturing) return false;
+    return true;
+  }
+
   function editorStyleFor(prefs) {
     var p = normalizeEditorPrefs(prefs);
     return {
@@ -299,5 +310,6 @@ window.MA.settingsTabs = (function() {
     renderModeNote: renderModeNote,
     normalizeEditorPrefs: normalizeEditorPrefs,
     editorStyleFor: editorStyleFor,
+    escClosesSettings: escClosesSettings,
   };
 })();
