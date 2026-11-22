@@ -940,7 +940,8 @@ window.MA.modules.plantumlSequence = (function() {
     to = spec.to || (isOuterEnd(to) ? outerFallback(text, lineNum, 'to') : to);
     // design 5d: 形を選び直しても線の色は保つ (色は別のパレットの持ち物)。bold・dashed などの語も残す。
     var specArrow = _carryArrowStyle(spec.arrow, m[2]);
-    lines[idx] = indent + fmtMessage(from, to, specArrow, label);
+    // 替えた部分 (矢印・相手) 以外の空白は元の行の字のまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = window.MA.dslUtils.keepLineSpacing(lines[idx], indent + fmtMessage(from, to, specArrow, label));
     return lines.join('\n');
   }
 
@@ -966,7 +967,8 @@ window.MA.modules.plantumlSequence = (function() {
     else if (field === 'to') to = value;
     else if (field === 'arrow') arrow = value;
     else if (field === 'label') label = value;
-    lines[idx] = indent + fmtMessage(from, to, arrow, label);
+    // 直した値の字だけを置き換え、矢印の前後・`:` の前後の空白 (手で揃えた桁) は元の行の字のまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = window.MA.dslUtils.keepLineSpacing(lines[idx], indent + fmtMessage(from, to, arrow, label), [value]);
     return lines.join('\n');
   }
 

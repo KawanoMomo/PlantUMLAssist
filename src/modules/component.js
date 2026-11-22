@@ -366,8 +366,13 @@ window.MA.modules.plantumlComponent = (function() {
     else if (field === 'label') lbl = value;
 
     // 多重度・線の色は種別やラベルの書き換えでは失われない (design 3c)。
-    lines[idx] = window.MA.relationOptions.applyDecorations(
-      indent + fmtRelation(kind, from, to, lbl), deco);
+    var relCore = fmtRelation(kind, from, to, lbl);
+    if (field === 'label') {
+      relCore = window.MA.dslUtils.keepRelationArrow(window.MA.relationOptions.plainLine(trimmed), relCore, RELATION_RE);
+    }
+    var relLine = window.MA.relationOptions.applyDecorations(indent + relCore, deco);
+    // 直した値以外の空白 (手で揃えた桁) は元の行の字のまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = window.MA.dslUtils.keepLineSpacing(lines[idx], relLine, [value]);
     return lines.join('\n');
   }
 

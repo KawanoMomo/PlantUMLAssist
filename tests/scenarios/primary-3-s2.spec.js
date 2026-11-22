@@ -4,7 +4,8 @@
 //   (シーケンスはメッセージの文言、状態遷移は遷移の条件 (きっかけ)、クラスは属性の型)。
 // 期待 (principles.md「押した対象だけが変わる」「描ける」「手書きや他の道具で作った .puml は壊さず開ける」):
 //   - 1 か所の直しで本文の差分は直した行の 1 行だけ (消えた 1 行 + 足した 1 行 = 2)
-//   - 直した行は行頭の字下げを保ち、新しい文言・条件・型を持つ
+//   - 直した行は行頭の字下げ・矢印の前後の空白の幅 (`Busy  --> Slow` の桁揃え) を保ち、新しい文言・条件・型を持つ
+//     (直した値の字だけが変わる。完全一致で見る。TICKET-owner-20261122-0720-1)
 //   - ほかの行 (コメント・字下げ・skinparam・!include・同じ語を持つ別の行) は 1 字も動かない
 //   - 直した図がエラー無しで描け、新しい文言が図に出る。操作から描画までは上限 (3 秒) 以内
 // 図: tests/scenarios/fixtures/ の hand-seq・hand-state・hand-class・common (自作の小さい図)。
@@ -28,7 +29,7 @@ async function clickHit(page, locator, what) {
 const DOCS = [
   {
     name: 'hand-seq', type: 'plantuml-sequence', words: ['Drv', 'Open()', 'ready', 'Poll()'],
-    line: '    Bus --> Drv : ready', want: /^ {4}Bus\s*-->\s*Drv\s*:\s*ready\(ok\)$/, drawn: ['ready(ok)'],
+    line: '    Bus --> Drv : ready', want: /^ {4}Bus --> Drv : ready\(ok\)$/, drawn: ['ready(ok)'],
     edit: async (page, lineNo) => {
       // 図のメッセージ「ready」を押し、右パネルの文言を書き換える。
       const hit = page.locator('#overlay-layer rect[data-type="message"][data-line="' + lineNo + '"]').first();
@@ -42,7 +43,7 @@ const DOCS = [
   },
   {
     name: 'hand-state', type: 'plantuml-state', words: ['Idle', 'Busy', 'Slow', 'Throttle'],
-    line: 'Busy  --> Slow : Throttle', want: /^Busy\s*-->\s*Slow\s*:\s*Throttle2$/, drawn: ['Throttle2'],
+    line: 'Busy  --> Slow : Throttle', want: /^Busy {2}--> Slow : Throttle2$/, drawn: ['Throttle2'],
     edit: async (page) => {
       // 右パネルの遷移の一覧から Throttle の遷移を選び、条件 (きっかけ) を書き換える。
       await page.locator('#props-content div:has(> .st-tr-pick)', { hasText: 'Throttle' }).first().locator('.st-tr-pick').click();
@@ -52,7 +53,7 @@ const DOCS = [
   },
   {
     name: 'hand-class', type: 'plantuml-class', words: ['Drv', 'Mon', 'rate : uint16'],
-    line: '  - rate : uint16', want: /^ {2}- rate\s*:\s*uint32$/, drawn: ['rate : uint32'],
+    line: '  - rate : uint16', want: /^ {2}- rate : uint32$/, drawn: ['rate : uint32'],
     edit: async (page, lineNo) => {
       // 図の Drv の属性 rate を押すと右パネルにその属性の欄が開く。型を書き換えて「更新」。
       const hit = page.locator('#overlay-layer rect[data-type="member"][data-parent-id="Drv"][data-line="' + lineNo + '"]').first();
