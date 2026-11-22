@@ -4281,16 +4281,6 @@ function _reviewStore() {
   try { return window.localStorage || null; } catch (e) { return null; }
 }
 
-// 「この名前のファイルに書いてよいか」を答える門。
-// テンプレ宣言を知っている側 (一覧を持つ setupTabs の中) が起動時に差し込む。
-// 書き先を持つ経路が 2 つある (auto-save.js のディスク写しと、ここの saveActiveDoc)
-// ので、判断は 1 か所に置いて両方から引く。
-var _fileWriteBlock = null;   // function(name) -> 理由 / null
-function _blockedFileWrite(name) {
-  if (!_fileWriteBlock || !name) return null;
-  try { return _fileWriteBlock(String(name)) || null; } catch (e) { return null; }
-}
-
 // まだ見本 (または白紙) のままのタブを、保存フォルダへ
 // 自動で書き戻さないための門。起動すると既定のタブ `diagram1` が図種の見本で作られ、
 // 画面のバッジ (整合・⇄ イベント・指摘・書き出し一覧) は数を出すために saveActiveDoc()
@@ -4311,9 +4301,8 @@ function _isUntouchedDoc(doc) {
 }
 
 // 一括置換・改名の後始末が、開いているタブを丸ごと
-// 保存フォルダへ書き戻していた。そこには (a) 今回の置換が 1 文字も当たっていない図、
-// (b) テンプレ宣言で書き込みを止めてある図が混ざる。どちらもタブが持っている本文で
-// 元ファイルを潰すので、見比べのために開いた完了物の中身が別の図の本文に入れ替わった
+// 保存フォルダへ書き戻していた。そこには今回の置換が 1 文字も当たっていない図が混ざり、
+// タブが持っている本文で元ファイルを潰すので、見比べのために開いた完了物の中身が別の図の本文に入れ替わった
 // (reviewer の言う「内容シャッフル」)。
 //
 // 保存フォルダへ書くのはこの 1 か所だけにして、書いてよいかの判定を saveActiveDoc と
@@ -4324,12 +4313,6 @@ function writeDocToFolder(doc, fileDir) {
   if (_docWriteHeld(doc.id)) return false;  // 移動・名前変更の途中
   // まだ見本のままのタブは書かない。
   if (_isUntouchedDoc(doc)) return false;
-  if (_blockedFileWrite(doc.name)) {
-    if (window.MA.autoSave && window.MA.autoSave.noteFileBlocked) {
-      window.MA.autoSave.noteFileBlocked(doc.name, _blockedFileWrite(doc.name));
-    }
-    return false;
-  }
   // 開いたときのまま (読むだけ) なら、書き戻す中身は元ファイルと同じ。何もしない。
   var SL = window.MA.sourceLock;
   if (SL && SL.decide(doc.id, doc.dsl).action === 'skip') return false;
@@ -4370,17 +4353,6 @@ function saveActiveDoc() {
   }
   try {
     var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
-    // テンプレ宣言のあるファイルには書かない (見比べのために開いた前周の完了物が、
-    // 図名を変えるまでの間に編集途中の内容で壊れる事故を止める)。
-    var blocked = doc ? _blockedFileWrite(doc.name) : null;
-    if (blocked) {
-      if (window.MA.autoSave && window.MA.autoSave.noteFileBlocked) {
-        window.MA.autoSave.noteFileBlocked(doc.name, blocked);
-      }
-      renderDiffBadge();
-      try { renderLiveDiffChip(); } catch (e) {}
-      return doc;
-    }
     // まだ見本・白紙のままのタブは、自動の書き戻しではディスクへ書かない
     // (起動しただけで既存の図が見本で潰れる)。
     if (doc && cfg && cfg.backend === 'file' && _isUntouchedDoc(doc)) {
@@ -5258,7 +5230,7 @@ function _renameBadgeDocs() {
   var open = WS.list().map(function(d) {
     return d.id === activeId ? { id: d.id, name: d.name, dsl: mmdText } : d;
   });
-  return FI.merge(open, _rbDir === _wsFileDir() ? _rbFiles : [], _fiRoles);
+  return FI.merge(open, _rbDir === _wsFileDir() ? _rbFiles : []);
 }
 
 function refreshRenameBadge(force) {
@@ -6094,13 +6066,6 @@ function setupTabs() {
   // 「別図種と紛らわしい書き方」をしていても開くときに図種が入れ替わらない。
   var savedKindByName = {};
   var savedKindsLoaded = false;
-  // 図名 → {role, status}。実データ / テンプレの宣言と、
-  // テンプレの中身が宣言時から変わっていないか。22 枚を毎回同列に扱わなくて済むように。
-  var fileRoles = {};        // 保存フォルダの _roles.json の中身
-  var roleStatus = {};       // 一覧に配る早見表
-  var roleScan = null;
-  var roleEntries = [];      // 役割を決めた瞬間の指紋を取るための一覧
-  var roleNote = '';
   // 行の 🗑 を 1 回押した名前 (2 回目で消す)。描き直すと白紙に戻る。
   var deleteArmed = '';
 
@@ -6398,7 +6363,6 @@ function setupTabs() {
     if (window.MA.workspace) {
       window.MA.workspace.updateActive({ dsl: mmdText, diagramType: currentDiagramType });
     }
-    roleNote = '';   // 前に押した結果は持ち越さない
     folderQuery = '';           // 絞り込みは開き直すたびに白紙に戻す
     folderFocusFilter = !!focus;   // 押して開いたらそのまま名前を打ち始められる
     panel.textContent = '';
@@ -6513,26 +6477,11 @@ function setupTabs() {
         panel.appendChild(empty);
         return;
       }
-      // 実データ / テンプレの宣言は保存フォルダに置いてある (GUI の設定ではない)。
-      var FR = window.MA.fileRole;
-      roleEntries = entries;
-      if (FR) {
-        var storedRoles = (res && res.roles) || {};
-        fileRoles = FR.keepExisting(storedRoles, entries);
-        // 消えた図の宣言は画面から外すだけでなく保存フォルダからも落とす。残しておくと、
-        // 同じ名前で作り直した別物が前の baseline と比べられ、汚染として赤くなる。
-        if (Object.keys(FR.parse(storedRoles)).length !== Object.keys(fileRoles).length) {
-          saveFileRoles(dir, fileRoles);
-        }
-        roleScan = FR.scan(entries, fileRoles);
-        roleStatus = FR.statusMap(roleScan);
-      } else {
-        fileRoles = {}; roleScan = null; roleStatus = {};
-      }
-
       // 保存先の一覧は 並べる・絞る・印を付けてまとめて開く・最近開いた図 だけ。
       // SVG の鮮度・前回控えとの比較・中身が同じ図の統合・反映状況・直近の更新・下書きの印での仕分けは
       // TICKET-owner-20261116-0241-prune で外した (保存先に前の版が書いた控えが残っていても読まない)。
+      // 実データ / テンプレの分類 (行の役の印・汚染の赤・保存先に書いた宣言の JSON) は
+      // TICKET-owner-20261122-1140-prune で外した。前の版が置いた宣言は読まず・書かず・消さない。
       // 上書きで消えた中身の控え。一覧の時点で
       // 「この図には前の版がある」「本体は消えたが版は残っている」を出す。
       versionCounts = {};
@@ -6558,7 +6507,6 @@ function setupTabs() {
       appendRecentSection(panel, entries);
       panel.appendChild(folderFilterBar());
       panel.appendChild(folderPickBar());
-      appendRoleSection(panel, dir);
       appendKindSummary(panel);
       entries.forEach(function(e) { panel.appendChild(folderRow(e.name || e)); });
       appendGoneVersionsSection(panel);
@@ -6668,102 +6616,6 @@ function setupTabs() {
     return b;
   }
 
-  // 実データ / テンプレの内訳と、汚染したテンプレの名指し。
-  // 「新規指摘が実データの変更かテンプレの汚染か」を、一覧を開いた時点で答える。
-  function appendRoleSection(panel, dir) {
-    var FR = window.MA.fileRole;
-    if (!FR || !roleScan || !roleScan.rows.length) return;
-    var sum = document.createElement('div');
-    var dirty = roleScan.dirty.length > 0;
-    sum.className = 'folder-role-summary' + (dirty ? ' has-dirty' : '');
-    sum.id = 'folder-role-summary';
-    sum.textContent = FR.summary(roleScan);
-    panel.appendChild(sum);
-    if (dirty) {
-      var list = document.createElement('div');
-      list.className = 'folder-role-summary has-dirty';
-      list.id = 'folder-role-dirty';
-      list.textContent = '汚染: ' + roleScan.dirty.join(' / ');
-      panel.appendChild(list);
-    }
-    if (roleNote) {
-      var note = document.createElement('div');
-      note.className = 'folder-role-summary';
-      note.id = 'folder-role-note';
-      note.textContent = roleNote;
-      panel.appendChild(note);
-    }
-  }
-
-  function _entryOf(name) {
-    var hit = null;
-    (roleEntries || []).forEach(function(e) {
-      if (e && e.name === name) hit = e;
-    });
-    return hit || { name: name, hash: null };
-  }
-
-  // 押すたびに 未分類 → 実データ → テンプレ。テンプレにした瞬間の中身が baseline になる。
-  function folderRoleButton(name) {
-    var FR = window.MA.fileRole;
-    var b = document.createElement('button');
-    b.type = 'button';
-    var rs = roleStatus[name] || { role: 'unset', status: 'none' };
-    var bd = FR.badge(rs.role, rs.status);
-    b.className = 'folder-role ' + bd.cls;
-    b.setAttribute('data-role-name', name);
-    b.setAttribute('data-role', rs.role);
-    b.setAttribute('data-role-status', rs.status);
-    b.textContent = bd.mark || '−';
-    b.title = bd.title + '（押すと ' + FR.roleLabel(FR.nextRole(rs.role)) + ' になります）';
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      setFileRole(name, FR.nextRole(rs.role));
-    });
-    return b;
-  }
-
-  // 汚染したテンプレに付く [今の内容で更新]。自分で直したときに赤を消すための出口
-  // (赤を消す手段が無いと、次からこの印そのものを見なくなる)。
-  function folderRoleAcceptButton(name) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'folder-role-accept';
-    b.setAttribute('data-role-accept', name);
-    b.textContent = '今の内容で更新';
-    b.title = 'このテンプレを自分で直したのなら、今の中身を正として覚え直します';
-    b.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      setFileRole(name, 'template');
-    });
-    return b;
-  }
-
-  // 宣言は保存フォルダの _roles.json に丸ごと置き換えで書く。
-  function saveFileRoles(dir, roles) {
-    var FR = window.MA.fileRole;
-    return fetch('/file-roles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dir: dir, roles: FR.serialize(roles).roles }),
-    }).then(function(resp) {
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      return true;
-    });
-  }
-
-  function setFileRole(name, role) {
-    var FR = window.MA.fileRole;
-    var dir = _wsFileDir();
-    fileRoles = FR.setRole(fileRoles, _entryOf(name), role, new Date().toISOString());
-    roleNote = name + ' を ' + FR.roleLabel(role) + ' にしました';
-    saveFileRoles(dir, fileRoles).catch(function() {
-      roleNote = name + ' の分類を保存できませんでした（この画面の中だけの印です）';
-    }).then(function() {
-      renderFolderPanel();
-    });
-  }
-
   // ── 自動保存の書き先を「図の名前」にする ─────
   // 自動保存は図種 (plantuml-sequence 等) を鍵にディスクへ写していたため、
   // driver_common_class を打てば plantuml-class.puml が、diagram1 を打てば
@@ -6834,34 +6686,11 @@ function setupTabs() {
 
   })();
 
-  // ── テンプレへの自動保存を止める ──────────────
-  // 見比べのために Open で開いたテンプレ (前周の完了物) へ、図名を変えるまでの間に
-  // 自動保存が書き込み、編集途中の内容でテンプレが壊れる事故があった。
-  // 汚染を後から赤く出す (テンプレ宣言) 仕組みは既にあるので、その宣言をそのまま
-  // 「書き込ませない」に使う。編集内容は localStorage 側に残るので失われない。
-  (function setupTemplateAutosaveGuard() {
+  // ── 図種が変わって別ファイルへ回された保存の後始末 ──────────────
+  // (保存フォルダの「テンプレ」宣言で自動保存を止める門は TICKET-owner-20261122-1140-prune で外した)
+  (function setupAutosaveRenamedNotice() {
     var AS = window.MA.autoSave;
-    var FR = window.MA.fileRole;
-    if (!AS || !FR || !AS.setFileGuard) return;
-
-    function blockOf(diagramType) {
-      var name = String(diagramType == null ? '' : diagramType);
-      if (!name) return null;
-      // 書き先は {図名}.puml。宣言は一覧の名前で持っている (拡張子の有無は問わない)。
-      if (FR.blocksAutosave(fileRoles, name)) return FR.blockedMessage(name);
-      if (FR.blocksAutosave(fileRoles, name + '.puml')) return FR.blockedMessage(name + '.puml');
-      return null;
-    }
-    AS.setFileGuard(blockOf);
-    _fileWriteBlock = blockOf;
-
-    if (AS.onFileBlocked) {
-      AS.onFileBlocked(function(info) {
-        if (window.MA.toast) {
-          try { window.MA.toast.show(info.reason); } catch (e) {}
-        }
-      });
-    }
+    if (!AS) return;
 
     // 図種が変わる保存は server が `{名前}_{図種}` へ回す。
     // 画面の図名をその先に合わせないと、次の保存も回り続け、図名と実ファイルが
@@ -6884,19 +6713,6 @@ function setupTabs() {
         if (window.MA.toast) { try { window.MA.toast.show(notice.text); } catch (e) {} }
       });
     }
-
-    // 開き直した直後 (一覧をまだ開いていない) でも宣言を知っているようにする。
-    var WS = window.MA.workspace;
-    if (WS && WS.listFolder) {
-      try {
-        WS.listFolder(_wsFileDir()).then(function(res) {
-          if (!res) return;
-          // 一覧を先に開いていたらそちらが正本。ここで上書きしない。
-          if (Object.keys(fileRoles).length > 0) return;
-          fileRoles = FR.keepExisting((res && res.roles) || {}, res.entries || []);
-        }).catch(function() {});
-      } catch (e) {}
-    }
   })();
 
   function folderRow(name) {
@@ -6917,9 +6733,7 @@ function setupTabs() {
       syncFolderPickUi();
     });
     row.appendChild(box);
-    if (window.MA.fileRole) row.appendChild(folderRoleButton(name));
     row.appendChild(b);
-    if ((roleStatus[name] || {}).status === 'dirty') row.appendChild(folderRoleAcceptButton(name));
     var kb = folderKindBadge(name);
     if (kb) row.appendChild(kb);
     // 本文から読んだ図種を行に持たせる。FILES ツリーは名前に図種が無い図にも
@@ -7523,9 +7337,8 @@ function jumpToDocLine(docId, line) {
 // ヒット数が今開いているタブ分しか出ないので、
 // 「仕様変更が全図に及んだか」を確かめるには残りを 1 枚ずつ開き直すしかなかった。
 // 保存フォルダを先に全部数え、ヒットした図・しなかった図を一覧で出す。
-// 置換もこの一覧の的 (テンプレを除く) にそのまま当てるので、開き直す手順が要らない。
+// 置換もこの一覧の的にそのまま当てるので、開き直す手順が要らない。
 var _fiFileDocs = [];    // 保存フォルダのファイル [{ name, dsl }]
-var _fiRoles = {};       // name → { role } (実データ / テンプレの宣言)
 var _fiDir = null;       // _fiFileDocs を読んだフォルダ
 var _fiLoading = false;
 var _fiSeq = 0;          // 読み込みの世代 (古い応答で新しい一覧を上書きしない)
@@ -7557,7 +7370,6 @@ function loadFolderImpact(force) {
     var names = ((info && info.entries) || []).map(function(e) {
       return e && typeof e === 'object' ? e.name : e;
     }).filter(function(n) { return n; });
-    var roles = (info && info.roles) || {};
     return Promise.all(names.map(function(n) {
       return WS.loadFile(n, dir).then(function(text) {
         return typeof text === 'string' ? { name: n, dsl: text } : null;
@@ -7565,7 +7377,6 @@ function loadFolderImpact(force) {
     })).then(function(docs) {
       if (seq !== _fiSeq) return false;
       _fiFileDocs = docs.filter(function(d) { return d; });
-      _fiRoles = roles;
       _fiDir = dir;
       _fiLoading = false;
       renderRenameFolder();
@@ -7586,7 +7397,7 @@ function _fiRows() {
   var open = (WS ? WS.list() : []).map(function(d) {
     return d.id === activeId ? { id: d.id, name: d.name, dsl: mmdText } : d;
   });
-  return FI.merge(open, _fiFileDocs, _fiRoles);
+  return FI.merge(open, _fiFileDocs);
 }
 
 // 置換を当てる直前の本文を、当たった図だけ控える。
@@ -7790,18 +7601,17 @@ function renderRenameFolder() {
     row.setAttribute('data-doc-name', r.name);
     row.setAttribute('data-count', String(r.count));
     row.setAttribute('data-open', r.open ? '1' : '0');
-    row.setAttribute('data-role', r.role);
     row.setAttribute('data-target', r.target ? '1' : '0');
     var n = document.createElement('span');
     n.className = 'folder-name';
     n.textContent = r.name;
     row.appendChild(n);
-    // 「開いている / テンプレ (置換しない)」だけを印にする。未オープンの実データが
-    // 無印なのは、それが置換の既定の的だから (印は例外にだけ付ける)。
-    if (r.open || r.role === 'template') {
+    // 「開いている」だけを印にする。未オープンの図が無印なのは、
+    // それが置換の既定の的だから (印は例外にだけ付ける)。
+    if (r.open) {
       var tag = document.createElement('span');
       tag.className = 'folder-tag';
-      tag.textContent = r.role === 'template' ? 'テンプレ (置換しない)' : '開いている';
+      tag.textContent = '開いている';
       row.appendChild(tag);
     }
     var c = document.createElement('span');
@@ -7813,7 +7623,7 @@ function renderRenameFolder() {
   box.appendChild(rows);
 }
 
-// 開いていない図のうち、置換の的になるぶん (テンプレとヒット 0 を除く)。
+// 開いていない図のうち、置換の的になるぶん (ヒット 0 を除く)。
 function _fiFolderApply(from) {
   var FI = window.MA.folderImpact;
   var br = window.MA.bulkRename;
@@ -7821,7 +7631,7 @@ function _fiFolderApply(from) {
   if (!FI || !br || !_fiEnabled() || !from || !window.MA.workspace) return out;
   var openNames = {};
   window.MA.workspace.list().forEach(function(d) { openNames[d.name] = true; });
-  FI.applyTargets(FI.merge([], _fiFileDocs, _fiRoles).filter(function(r) {
+  FI.applyTargets(FI.merge([], _fiFileDocs).filter(function(r) {
     return !openNames[r.name];
   }), from).forEach(function(r) {
     out.docs++;
@@ -7843,7 +7653,7 @@ function applyRenameToUnopenedFiles(from, to) {
   var dir = _wsFileDir();
   var openNames = {};
   WS.list().forEach(function(d) { openNames[d.name] = true; });
-  var rows = FI.merge([], _fiFileDocs, _fiRoles).filter(function(r) { return !openNames[r.name]; });
+  var rows = FI.merge([], _fiFileDocs).filter(function(r) { return !openNames[r.name]; });
   var targets = FI.applyTargets(rows, from);
   if (targets.length === 0) return Promise.resolve(empty);
   var res = { docs: 0, total: 0, failed: 0, rows: [] };

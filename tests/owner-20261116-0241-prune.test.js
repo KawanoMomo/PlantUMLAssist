@@ -46,8 +46,7 @@ describe('保存先の一覧の棚卸し・監査の欄を外した (TICKET-owne
 
   test('残す: 並べる・絞る・印を付けてまとめて開く・最近開いた図・この図の履歴・1 枚削除', function() {
     ['function folderFilterBar', 'function folderPickBar', 'function folderOpenButton',
-     'function appendRecentSection', 'function folderVersionButton', 'function folderDeleteButton',
-     'function appendRoleSection'].forEach(function(w) {
+     'function appendRecentSection', 'function folderVersionButton', 'function folderDeleteButton'].forEach(function(w) {
       expect(APP).toContain(w);
     });
   });

@@ -195,48 +195,10 @@ window.MA.autoSave = (function() {
     });
   }
 
-  // ── 書き込みを止める門 ────────────────────────
-  // ディスクへ写す前に「この名前に書いてよいか」を聞く。答えるのは app.js
-  // (保存フォルダの役割宣言を知っているのはあちら)。ここは知らないまま止められる形にする。
-  var _fileGuard = null;      // function(diagramType) -> 理由の文字列 / null
-  var _blockedListeners = [];
-  var _blockedSeen = {};      // 名前 → 最後に知らせた時刻。1 打鍵ごとには鳴らさない
+  // 書かなかった知らせを同じ名前で続けて鳴らさないための控え (名前 → 最後に知らせた時刻)。
+  // 保存フォルダの「テンプレ」宣言で書き込みを止める門は TICKET-owner-20261122-1140-prune で外した。
+  var _blockedSeen = {};
   var BLOCK_QUIET_MS = 5000;  // この間は同じ名前で鳴らさない (打鍵のたびの通知を防ぐ)
-
-  function setFileGuard(fn) {
-    _fileGuard = (typeof fn === 'function') ? fn : null;
-  }
-
-  function _blockedBy(diagramType) {
-    if (!_fileGuard) return null;
-    try {
-      var r = _fileGuard(diagramType);
-      return r ? String(r) : null;
-    } catch (e) {
-      return null;   // 門が壊れていても保存は止めない
-    }
-  }
-
-  function _notifyBlocked(diagramType, reason) {
-    // 直前に知らせたばかりなら黙る。ただし時間が空いたら言い直す
-    // (開いた直後の通知が別の通知に押し流され、編集中は何も言わない状態を作らない)。
-    var now = Date.now();
-    var last = _blockedSeen[diagramType];
-    if (last && (now - last) < BLOCK_QUIET_MS) return;
-    _blockedSeen[diagramType] = now;
-    for (var i = 0; i < _blockedListeners.length; i++) {
-      try { _blockedListeners[i]({ diagramType: diagramType, reason: reason }); } catch (e) {}
-    }
-  }
-
-  // 別の経路 (app.js の saveActiveDoc) が止めたときも、知らせ方はここに揃える。
-  function noteFileBlocked(diagramType, reason) {
-    _notifyBlocked(String(diagramType == null ? '' : diagramType), reason);
-  }
-
-  function onFileBlocked(listener) {
-    if (typeof listener === 'function') _blockedListeners.push(listener);
-  }
 
   // ── 新しい図が保存先の別の図と同じ名前だったとき ──
   // server は書かずに 409 を返す。状態バーは「書かなかった」にし、画面 (app.js) に名前を選ばせる。
@@ -401,17 +363,7 @@ window.MA.autoSave = (function() {
         where = 'deferred';
         reason = (fileInfo && fileInfo.reason) || 'no-name';
       } else {
-        // 書いてはいけないファイル (テンプレ宣言済み) には
-        // ディスクへ写さない。localStorage 側は残すので、編集内容は失われず、
-        // 図名を変えればそのまま新しいファイルに保存される。
-        var block = _blockedBy(fileName);
-        if (block) {
-          where = 'blocked';
-          reason = block;
-          _notifyBlocked(fileName, block);
-        } else {
-          where = 'file';
-        }
+        where = 'file';
       }
     }
     _lastWrite = { at: meta.lastSavedAt, diagramType: diagramType,
@@ -556,16 +508,13 @@ window.MA.autoSave = (function() {
     hydrateFromServer: hydrateFromServer,
     isAvailable: isAvailable,
     onSave: onSave,
-    setFileGuard: setFileGuard,
     setFileNameResolver: setFileNameResolver,
-    onFileBlocked: onFileBlocked,
     onFileDeferred: onFileDeferred,
     getLastWrite: getLastWrite,
     noteFileWritten: noteFileWritten,
     onFileRenamed: onFileRenamed,
     keepNameOnce: keepNameOnce,
     noteFileRenamed: noteFileRenamed,
-    noteFileBlocked: noteFileBlocked,
     noteFileConflict: noteFileConflict,
     onFileConflict: onFileConflict,
     onFreshWritten: onFreshWritten,

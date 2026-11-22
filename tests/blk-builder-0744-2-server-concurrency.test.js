@@ -69,7 +69,6 @@ describe('server.py の同時接続 (BLK-builder-20260908-0744-2-red)', () => {
       '_handle_autosave_get()',
       '_handle_autosave_post()',
       '_handle_autosave_svg_post()',
-      '_handle_file_roles_post()',
       '_handle_prefs_post()',
     ];
     guarded.forEach((call) => {

@@ -41,7 +41,6 @@ const sourceFiles = [
   'src/core/text-sync.js',
   'src/core/save-diff.js',
   'src/core/version-timeline.js',
-  'src/core/file-role.js',
   'src/core/command-palette.js',
   'src/core/diagram-rail.js',
   'src/core/tool-menu.js',

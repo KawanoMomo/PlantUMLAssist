@@ -43,10 +43,10 @@ describe('既存の図や雛形から起こす窓を外した (TICKET-owner-2026
     });
   });
 
-  test('残す: 新しい図 (タブ列の ＋・フォルダの右クリック) とテンプレ宣言の自動保存の守り', function() {
+  // テンプレ宣言の自動保存の守りは TICKET-owner-20261122-1140-prune で外した (保存先に役の宣言を書かない)。
+  test('残す: 新しい図 (タブ列の ＋・フォルダの右クリック)', function() {
     expect(HTML).toContain('id="btn-tab-new"');
     expect(W.MA.fileMenu.folderItems({ kind: 'target' })[0].id).toBe('new-doc');
-    expect(APP).toContain('function setupTemplateAutosaveGuard');
   });
 });
 
