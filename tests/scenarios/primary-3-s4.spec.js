@@ -17,7 +17,6 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const zlib = require('zlib');
 const H = require('./_helpers');
 const S = require('../e2e/scenarios/_scenario');
 
@@ -64,54 +63,8 @@ function elementCount(name, text) {
   return n;
 }
 
-// PNG (8bit RGBA・非インターレース) を画素に戻す。
-function decodePng(buf) {
-  const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20);
-  const info = { w, h, depth: buf[24], ctype: buf[25], interlace: buf[28] };
-  const idat = [];
-  for (let p = 8; p < buf.length;) {
-    const len = buf.readUInt32BE(p);
-    if (buf.toString('ascii', p + 4, p + 8) === 'IDAT') idat.push(buf.subarray(p + 8, p + 8 + len));
-    p += 12 + len;
-  }
-  const raw = zlib.inflateSync(Buffer.concat(idat));
-  const bpp = 4, stride = w * bpp, px = Buffer.alloc(h * stride);
-  for (let y = 0; y < h; y++) {
-    const f = raw[y * (stride + 1)];
-    for (let x = 0; x < stride; x++) {
-      const r = raw[y * (stride + 1) + 1 + x];
-      const a = x >= bpp ? px[y * stride + x - bpp] : 0;
-      const b = y > 0 ? px[(y - 1) * stride + x] : 0;
-      const c = (x >= bpp && y > 0) ? px[(y - 1) * stride + x - bpp] : 0;
-      let v = r;
-      if (f === 1) v = r + a;
-      else if (f === 2) v = r + b;
-      else if (f === 3) v = r + ((a + b) >> 1);
-      else if (f === 4) {
-        const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c);
-        v = r + (pa <= pb && pa <= pc ? a : (pb <= pc ? b : c));
-      }
-      px[y * stride + x] = v & 255;
-    }
-  }
-  return Object.assign(info, { px });
-}
-
-// 隅の色と違う画素 (線・文字・塗り) の数と、そのうち外周 1px に掛かる数。
-function inkStats(img) {
-  const at = (x, y) => img.px.subarray((y * img.w + x) * 4, (y * img.w + x) * 4 + 4);
-  const bg = Array.from(at(0, 0));
-  let ink = 0, edge = 0;
-  for (let y = 0; y < img.h; y++) {
-    for (let x = 0; x < img.w; x++) {
-      const v = at(x, y);
-      if (v[0] === bg[0] && v[1] === bg[1] && v[2] === bg[2] && v[3] === bg[3]) continue;
-      ink++;
-      if (x === 0 || y === 0 || x === img.w - 1 || y === img.h - 1) edge++;
-    }
-  }
-  return { corner: bg, ink, edge };
-}
+// PNG の画素に戻す道具と、線・文字の画素の数え方は _helpers.js (場面 4 の scenario で共用)。
+const { decodePng, inkStats } = H;
 
 test('primary 手順3 (場面4) 書き出した SVG・PNG の中身が本文の要素どおりで、PNG は切れず、既定の保存名は .puml と同じ', async ({ page }, testInfo) => {
   test.setTimeout(150 * 1000);
