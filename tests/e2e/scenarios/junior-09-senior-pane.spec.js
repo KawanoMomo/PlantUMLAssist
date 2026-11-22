@@ -88,7 +88,11 @@ test('手順9 右の枠は既定で出ず、読むだけの図を押すと開き
   await expect(page.locator('#senior-first-note')).toBeHidden();
 });
 
+// TICKET-owner-20261116-0840-1: 枠を開いてもプレビューの列は自分の図とズームの帯が見える幅を残す。
+// 既定の 1280 幅では本文欄が min-width まで縮んだ残りが枠の幅で、境目を引いても広げる余地が無い
+// (以前はプレビューを潰して広げていた)。広げる余地のある 1600 幅で、境目のドラッグと幅の記憶を見る。
 test('手順9 枠とプレビューの境目をドラッグして幅を変えられ、幅は覚えている', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
   await bootWithNeighbor(page);
   await showRoFile(page, 'senior', 'spi_init_sequence');
 
@@ -121,6 +125,7 @@ test('手順9 枠とプレビューの境目をドラッグして幅を変えら
 
 // 参照ペイン (別タブの図を並べる方) と操作を揃える: 片方だけ挙動が違う状態にしない。
 test('手順9 参照ペインも同じく ✕ で閉じ、境目で幅を変えられる', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });   // 上と同じ (TICKET-owner-20261116-0840-1)
   await S.bootWithSaveDir(page, DIR);
 
   const pane = page.locator('#compare-pane');
