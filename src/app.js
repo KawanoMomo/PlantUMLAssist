@@ -6776,6 +6776,12 @@ function setupTabs() {
     line.textContent = DK.summaryLine(kindEntries);
     line.title = '図種は保存された本文から判定しています。0 の図種はこの保存先に 1 枚もありません';
     host.appendChild(line);
+    // TICKET-owner-20261122-2242-1: 一覧・件数・図種・まとめて書き出すは保存先の直下の図だけを扱う。黙って外さず、そう書く。
+    var scope = document.createElement('div');
+    scope.className = 'folder-summary folder-scope';
+    scope.id = 'folder-scope';
+    scope.textContent = '保存先の直下の図だけを並べます（サブフォルダの図は FILES のツリーから開いて書き出します）';
+    host.appendChild(scope);
   }
 
   // 行に付く図種のバッジ。名前が diagram1 でも何の図かがその場で分かる。
@@ -9268,7 +9274,12 @@ function _exportTarget() {
     if (!doc || !doc.name || _sourcePathOf(doc.id)) return null;
     if (WS.isValidName && !WS.isValidName(doc.name)) return null;
     var dir = _docDir(doc);
-    return dir ? { dir: String(dir), name: String(doc.name) } : null;
+    if (!dir) return null;
+    // TICKET-owner-20261122-2242-1: サブフォルダの図は、保存先から見た図のフォルダの道 (folder) と保存先 (root) も持つ。
+    // 置き場は図のフォルダ (dir) ごとに覚える。画面はサブフォルダを「保存先」と呼ばず、保存先と図のフォルダを分けて言う。
+    var FP = window.MA.filesPanel;
+    var root = (FP && FP.subRoot && FP.subRoot()) || _wsFileDir() || dir;
+    return { dir: String(dir), name: String(doc.name), folder: _docSubRel(doc), root: String(root) };
   } catch (e) { return null; }
 }
 
@@ -9288,7 +9299,7 @@ function refreshExportDest() {
   box.hidden = false;
   var sub = ED.loadSub(_exportStorage(), t.dir);
   var place = document.getElementById('export-dest-place');
-  if (place) { place.textContent = ED.placeLabel(sub); place.title = t.dir + (sub ? '/' + sub : ''); }
+  if (place) { place.textContent = ED.placeLabel(sub, t.folder); place.title = ED.slashPath(t.dir) + (sub ? '/' + sub : ''); }
   var last = document.getElementById('export-dest-last');
   if (last) {
     var mine = _lastExport && _lastExport.dir === t.dir && _lastExport.name === t.name ? _lastExport : null;
@@ -9328,7 +9339,7 @@ function deliverExport(kind, downloadName, blob) {
     return r.json().catch(function() { return {}; }).then(function(j) { return { status: r.status, j: j || {} }; });
   }).then(function(res) {
     if (res.status === 200 && res.j.ok) {
-      var msg = ED.message(res.j, sub);
+      var msg = ED.message(res.j, sub, t.folder);
       _lastExport = { dir: t.dir, name: t.name, msg: msg, res: res.j };
       setSaveStatus(msg);
       var el = document.getElementById('status-save-result');
@@ -9376,7 +9387,17 @@ function openExportDestPick() {
   h.textContent = '書き出し先のフォルダを選ぶ';
   var curEl = document.createElement('div');
   curEl.className = 'edp-cur';
-  curEl.textContent = '保存先: ' + t.dir + ' ／ 今の書き出し先: ' + ED.placeLabel(cur);
+  // 「保存先:」は保存先のフォルダを指す (サブフォルダの図でも図のフォルダを保存先と呼ばない)。区切りは / に揃える。
+  curEl.textContent = '保存先: ' + ED.slashPath(t.root) +
+    (t.folder ? ' ／ この図のフォルダ: ' + t.folder : '') +
+    ' ／ 今の書き出し先: ' + ED.placeLabel(cur, t.folder);
+  var note = null;
+  if (t.folder) {
+    note = document.createElement('div');
+    note.className = 'edp-cur';
+    note.id = 'export-dest-note';
+    note.textContent = '書き出し先は図のフォルダごとに覚えます（保存先の直下の図で替えた書き出し先は、この図には効きません）';
+  }
   var row = document.createElement('div');
   row.className = 'edp-row';
   var input = document.createElement('input');
@@ -9400,7 +9421,8 @@ function openExportDestPick() {
   var msg = document.createElement('div');
   msg.className = 'edp-msg';
   msg.id = 'export-dest-msg';
-  box.appendChild(h); box.appendChild(curEl); box.appendChild(list); box.appendChild(row); box.appendChild(msg);
+  box.appendChild(h); box.appendChild(curEl); if (note) box.appendChild(note);
+  box.appendChild(list); box.appendChild(row); box.appendChild(msg);
   m.appendChild(box);
   document.body.appendChild(m);
 
@@ -9413,7 +9435,7 @@ function openExportDestPick() {
     }
     _closeExportDestPick();
     refreshExportDest();
-    setSaveStatus('書き出し先を ' + ED.placeLabel(n) + ' にしました');
+    setSaveStatus('書き出し先を ' + ED.placeLabel(n, t.folder) + ' にしました');
   }
   function addChoice(label, sub) {
     var b = document.createElement('button');
@@ -9425,14 +9447,14 @@ function openExportDestPick() {
     b.addEventListener('click', function() { choose(sub); });
     list.appendChild(b);
   }
-  addChoice('図と同じフォルダ (保存先の直下)', '');
+  addChoice(ED.sameFolderChoice(t.folder), '');
   var FB = window.MA.folderBrowse;
   if (FB && window.fetch) {
     fetch(FB.browseUrl(t.dir)).then(function(r) { return r.ok ? r.json() : null; }).then(function(data) {
       if (!document.body.contains(m)) return;
       var v = FB.view(data);
       (v && v.ok ? v.dirs : []).forEach(function(d) {
-        if (ED.normSub(d.name)) addChoice('保存先の下の「' + d.name + '」フォルダ', d.name);
+        if (ED.normSub(d.name)) addChoice(ED.subChoice(d.name, t.folder), d.name);
       });
     }).catch(function() {});
   }
