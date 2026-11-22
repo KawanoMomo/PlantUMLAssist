@@ -1957,7 +1957,9 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 
 
 #rename-summary { margin-top: 6px; font-size: 10px; color: var(--text-secondary); }
-#rename-panel .rename-actions { display: flex; gap: 6px; margin-top: 8px; }
+#rename-panel .rename-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+/* 置換・閉じるの下に 1 段で出す (出たときに上の 2 つのボタンを動かさない) */
+#rename-panel .rename-actions button#btn-rename-revert { flex: 1 1 100%; }
 #rename-panel .rename-actions button {
   flex: 1;
   font-size: 11px;
@@ -3501,7 +3503,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         </div>
         <div class="rename-row">
           <input type="checkbox" id="rename-scan-folder" checked style="width:auto;">
-          <label for="rename-scan-folder" title="サブフォルダの図は数えず、書き換えません (開いているタブの図は「開いている図すべてに適用」で当たります)">保存フォルダの直下の全ファイルも数える (サブフォルダの図は数えません)</label>
+          <label for="rename-scan-folder" title="保存先の直下とその下のサブフォルダの図を全部数え、選んだ置換を当てます。同じ名前の図はフォルダの道 (docs/api/…) で見分けます (開いているタブの図は「開いている図すべてに適用」で当たります)">保存先の下の全部の図も数える (サブフォルダの図も)</label>
         </div>
         <!-- ヒット件数のすぐ横から影響範囲の一覧へ入る
              (件数を読んでから「どの図のどの行か」を見るまでに画面を探させない) -->
@@ -3515,6 +3517,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <div class="rename-actions">
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
+          <!-- 直前の置換で書いた開いていない図 (タブの Ctrl+Z が効かない図) を置換前に戻す -->
+          <button id="btn-rename-revert" style="display:none;" title="直前の置換で書き換えた、開いていない図を置換前の中身に戻します (その後に書き換えた図は戻しません)">置換前に戻す</button>
         </div>
         <!-- 過去に当てた置換の組と、その組が
              今どうなっているか (残り / 適用済み) を出す。残っている組だけ

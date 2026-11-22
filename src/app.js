@@ -7397,15 +7397,32 @@ function loadFolderImpact(force) {
   var seq = ++_fiSeq;
   _fiLoading = true;
   renderRenameFolder();
-  return WS.listFolder(dir).then(function(info) {
+  // 直下の図に加えて、保存先の下の木 (サブフォルダ) の図も読む (TICKET-roadmap-20261123-0226-1)。
+  // サブフォルダの図は { rel: 'docs/api', dir: 絶対パス, key } を持ち、直下の同じ名前の図とは別の行になる。
+  var treeP = WS.listTree ? WS.listTree(dir).catch(function() { return null; }) : Promise.resolve(null);
+  return Promise.all([WS.listFolder(dir), treeP]).then(function(got) {
+    var info = got[0];
+    var tree = got[1];
     var names = ((info && info.entries) || []).map(function(e) {
       return e && typeof e === 'object' ? e.name : e;
     }).filter(function(n) { return n; });
-    return Promise.all(names.map(function(n) {
+    var reads = names.map(function(n) {
       return WS.loadFile(n, dir).then(function(text) {
         return typeof text === 'string' ? { name: n, dsl: text } : null;
       }, function() { return null; });
-    })).then(function(docs) {
+    });
+    var FI0 = window.MA.folderImpact;
+    ((tree && tree.dirs) || []).forEach(function(d) {
+      if (!d || !d.path || !d.rel) return;
+      (d.files || []).forEach(function(n) {
+        reads.push(WS.loadFile(n, d.path).then(function(text) {
+          if (typeof text !== 'string') return null;
+          return { name: n, dsl: text, rel: d.rel, dir: d.path,
+                   key: FI0 ? FI0.keyOf(n, d.path) : (d.rel + '/' + n) };
+        }, function() { return null; }));
+      });
+    });
+    return Promise.all(reads).then(function(docs) {
       if (seq !== _fiSeq) return false;
       _fiFileDocs = docs.filter(function(d) { return d; });
       _fiDir = dir;
@@ -7423,12 +7440,32 @@ function loadFolderImpact(force) {
 function _fiRows() {
   var FI = window.MA.folderImpact;
   if (!FI) return [];
+  return FI.merge(_fiOpenDocs(), _fiFileDocs);
+}
+
+// 開いているタブを、保存先の図と同じ「居場所の鍵」で並べる (サブフォルダの図は道付き)。
+// 鍵が同じファイルは開いている方 (未保存の編集を含む) が勝つ。直下とサブフォルダの同じ名前は別の行。
+function _fiOpenDocs() {
+  var FI = window.MA.folderImpact;
   var WS = window.MA.workspace;
   var activeId = WS ? WS.getActiveId() : null;
-  var open = (WS ? WS.list() : []).map(function(d) {
-    return d.id === activeId ? { id: d.id, name: d.name, dsl: mmdText } : d;
+  return (WS ? WS.list() : []).map(function(d) {
+    var sub = !!(d.sub && d.dir);
+    var rel = sub ? _docSubRel(d) : '';
+    return {
+      id: d.id, name: d.name, dsl: d.id === activeId ? mmdText : d.dsl,
+      key: FI ? FI.keyOf(d.name, sub ? d.dir : null) : d.name,
+      rel: rel, dir: sub ? d.dir : null,
+      label: rel ? rel + '/' + d.name : d.name,
+    };
   });
-  return FI.merge(open, _fiFileDocs);
+}
+
+// 開いているタブの鍵の集合。開いていない図への書き戻しから、開いている図を外す。
+function _fiOpenKeys() {
+  var keys = {};
+  _fiOpenDocs().forEach(function(d) { keys[d.key] = true; });
+  return keys;
 }
 
 // 置換を当てる直前の本文を、当たった図だけ控える。
@@ -7629,13 +7666,16 @@ function renderRenameFolder() {
   FI.sortForDisplay(pv).forEach(function(r) {
     var row = document.createElement('div');
     row.className = 'folder-row' + (r.count === 0 ? ' zero' : '');
-    row.setAttribute('data-doc-name', r.name);
+    // サブフォルダの図は道付き (docs/api/Foo)。直下の同じ名前の図と見分ける。
+    row.setAttribute('data-doc-name', r.label || r.name);
+    row.setAttribute('data-doc-rel', r.rel || '');
     row.setAttribute('data-count', String(r.count));
     row.setAttribute('data-open', r.open ? '1' : '0');
     row.setAttribute('data-target', r.target ? '1' : '0');
     var n = document.createElement('span');
     n.className = 'folder-name';
-    n.textContent = r.name;
+    n.textContent = r.label || r.name;
+    n.title = r.label || r.name;
     row.appendChild(n);
     // 「開いている」だけを印にする。未オープンの図が無印なのは、
     // それが置換の既定の的だから (印は例外にだけ付ける)。
@@ -7660,10 +7700,9 @@ function _fiFolderApply(from) {
   var br = window.MA.bulkRename;
   var out = { docs: 0, total: 0 };
   if (!FI || !br || !_fiEnabled() || !from || !window.MA.workspace) return out;
-  var openNames = {};
-  window.MA.workspace.list().forEach(function(d) { openNames[d.name] = true; });
+  var openKeys = _fiOpenKeys();
   FI.applyTargets(FI.merge([], _fiFileDocs).filter(function(r) {
-    return !openNames[r.name];
+    return !openKeys[r.key];
   }), from).forEach(function(r) {
     out.docs++;
     out.total += br.countIn(r.dsl, from);
@@ -7682,28 +7721,65 @@ function applyRenameToUnopenedFiles(from, to) {
     return Promise.resolve(empty);
   }
   var dir = _wsFileDir();
-  var openNames = {};
-  WS.list().forEach(function(d) { openNames[d.name] = true; });
-  var rows = FI.merge([], _fiFileDocs).filter(function(r) { return !openNames[r.name]; });
+  var openKeys = _fiOpenKeys();
+  var rows = FI.merge([], _fiFileDocs).filter(function(r) { return !openKeys[r.key]; });
   var targets = FI.applyTargets(rows, from);
   if (targets.length === 0) return Promise.resolve(empty);
   var res = { docs: 0, total: 0, failed: 0, rows: [] };
   return Promise.all(targets.map(function(r) {
     var next = br.replaceIn(r.dsl, from, to);
     var n = br.countIn(r.dsl, from);
-    return WS.saveToFile({ name: r.name, dsl: next }, dir).then(function(ok) {
+    // サブフォルダの図はそのフォルダへ書く (直下の同じ名前の図には触れない)。
+    var at = r.dir || dir;
+    return WS.saveToFile({ name: r.name, dsl: next }, at).then(function(ok) {
       if (!ok) { res.failed++; return; }
       res.docs++;
       res.total += n;
-      res.rows.push({ name: r.name, count: n, before: r.dsl, after: next });
+      res.rows.push({ name: r.name, label: r.label, key: r.key, dir: at, count: n, before: r.dsl, after: next });
       // 読み込み済みの控えも進めておく。次のプレビューが古い本文を数えないように。
-      _fiFileDocs.forEach(function(d) { if (d.name === r.name) d.dsl = next; });
+      _fiSetFileDsl(r.key, next);
       // 書いた後を基準にすると「変更なし」になり、
       // 後から開いたときに直した前後が出せない。基準がまだ無い図は書く **前** を
       // 基準にする (この置換がそのまま ± 差分として読める)。
-      if (window.MA.saveDiff) { try { window.MA.saveDiff.markIfAbsent(r.name, r.dsl); } catch (e) {} }
+      var diffKey = r.dir ? _diffName({ name: r.name, sub: true, dir: r.dir }) : r.name;
+      if (window.MA.saveDiff) { try { window.MA.saveDiff.markIfAbsent(diffKey, r.dsl); } catch (e) {} }
     });
-  })).then(function() { return res; });
+  })).then(function() {
+    // 開いていない図はタブの Ctrl+Z が効かないので、書いた前後をここに残し、
+    // 窓の「置換前に戻す」で 1 回で戻せるようにする (保存先には何も置かない)。
+    _renameUndoRows = res.rows.slice();
+    return res;
+  });
+}
+
+function _fiSetFileDsl(key, dsl) {
+  _fiFileDocs.forEach(function(d) { if ((d.key || d.name) === key) d.dsl = dsl; });
+}
+
+// ── 開いていない図への置換を戻す ─────────────
+// 直前の [置換] で書いた開いていない図 [{ name, label, key, dir, before, after }]。
+// 戻すのは、書いた後に誰も書き換えていない図だけ (今のファイルが after と同じ)。
+// 後から直された図を置換前で潰すと、その直しが黙って消える。
+var _renameUndoRows = [];
+
+function revertUnopenedRename() {
+  var WS = window.MA.workspace;
+  var rows = _renameUndoRows.slice();
+  var out = { reverted: 0, skipped: [], failed: 0 };
+  if (!WS || !rows.length) return Promise.resolve(out);
+  return Promise.all(rows.map(function(r) {
+    return WS.loadFile(r.name, r.dir).then(function(cur) {
+      if (typeof cur !== 'string' || cur !== r.after) { out.skipped.push(r.label || r.name); return; }
+      return WS.saveToFile({ name: r.name, dsl: r.before }, r.dir).then(function(ok) {
+        if (!ok) { out.failed++; return; }
+        out.reverted++;
+        _fiSetFileDsl(r.key, r.before);
+      });
+    }, function() { out.failed++; });
+  })).then(function() {
+    _renameUndoRows = [];
+    return out;
+  });
 }
 
 // 直近のプレビューで数えた総ヒット数。組を覚えるときの hits に使う
@@ -7730,14 +7806,17 @@ function updateRenamePreview() {
 
   hits.textContent = '';
   var rows = br.preview(docs, from);
+  // サブフォルダの図のタブは道付きで出す (直下の同じ名前のタブと見分ける)。
+  var labelById = {};
+  _fiOpenDocs().forEach(function(d) { labelById[d.id] = d.label; });
   var total = 0;
   rows.forEach(function(r) {
     total += r.count;
     var row = document.createElement('div');
     row.className = 'hit' + (r.count === 0 ? ' zero' : '');
-    row.setAttribute('data-doc-name', r.name);
+    row.setAttribute('data-doc-name', labelById[r.id] || r.name);
     var n = document.createElement('span');
-    n.textContent = r.name;
+    n.textContent = labelById[r.id] || r.name;
     var c = document.createElement('span');
     c.className = 'hit-count';
     c.textContent = r.count + ' 件';
@@ -7998,6 +8077,8 @@ function setupBulkRename() {
     var from = fromEl.value;
     var to = toEl.value;
     _seedArmed = false;
+    // 戻せるのは直前の 1 回の置換だけ (前の回の控えを次の置換の後まで持ち越さない)。
+    _renameUndoRows = [];
     var res = applyBulkRename();
     var openTotal = (res && res.total) || 0;
     var openDocs = (res && res.docs) || 0;
@@ -8008,6 +8089,7 @@ function setupBulkRename() {
       var docs = openDocs + f.docs;
       // 当たっても当たらなくても組は覚える。次の run はこの行を押すだけで済む。
       rememberRenamePair(from, to, total, total > 0);
+      renderRenameRevert();
       if (total === 0) return;
       fromEl.value = '';
       toEl.value = '';
@@ -8022,8 +8104,34 @@ function setupBulkRename() {
       summary.textContent = msg;
       summary.setAttribute('data-applied', String(total));
       summary.setAttribute('data-applied-unopened', String(f.docs));
+      renderRenameRevert();
     });
   }
+
+  // 「置換前に戻す」は直前の置換で書いた開いていない図があるときだけ出す。
+  // 開いている図は今までどおり Ctrl+Z 1 回で戻る (ここでは触らない)。
+  var revertBtn = document.getElementById('btn-rename-revert');
+  function renderRenameRevert() {
+    if (!revertBtn) return;
+    var n = _renameUndoRows.length;
+    revertBtn.style.display = n > 0 ? '' : 'none';
+    revertBtn.textContent = '置換前に戻す (未オープン ' + n + ' 枚)';
+    revertBtn.setAttribute('data-docs', String(n));
+  }
+  if (revertBtn) revertBtn.addEventListener('click', function() {
+    revertBtn.disabled = true;
+    revertUnopenedRename().then(function(r) {
+      revertBtn.disabled = false;
+      renderRenameRevert();
+      updateRenamePreview();
+      var msg = '未オープン ' + r.reverted + ' 枚を置換前に戻しました';
+      if (r.skipped.length) msg += ' / 置換の後に書き換わった図は戻していません: ' + r.skipped.join(', ');
+      if (r.failed > 0) msg += ' / ' + r.failed + ' 枚は書き込めませんでした';
+      summary.textContent = msg;
+      summary.setAttribute('data-reverted', String(r.reverted));
+      summary.setAttribute('data-revert-skipped', String(r.skipped.length));
+    });
+  });
 
   if (applyBtn) applyBtn.addEventListener('click', doApply);
   if (cancel) cancel.addEventListener('click', closePanel);
@@ -9001,7 +9109,9 @@ var _sswLogOpen = false;
 function _sswFolderDocs() {
   // 保存フォルダを読んであれば、その一覧と突き合わせる。読んでいないときは
   // 開いているタブどうしで突き合わせる (何とも比べずに黙るより手掛かりになる)。
-  if (_fiFileDocs && _fiFileDocs.length) return _fiFileDocs;
+  // 突き合わせは名前で行うので、直下の図だけを使う (サブフォルダの同じ名前の図と混ぜない)。
+  var root = (_fiFileDocs || []).filter(function(d) { return d && !d.rel; });
+  if (root.length) return root;
   return _diffDocs();
 }
 
