@@ -861,8 +861,10 @@ html, body {
   min-width: 180px;
   border-right: 1px solid var(--border);
   background: var(--bg-primary);
-  /* 右の枠を開いて幅が足りないときは、プレビューの列 (min-width) を残して縮む */
-  flex-shrink: 1;
+  /* 右の枠を開いて幅が足りないときは、プレビューの列 (min-width) を残して縮む。
+     右の枠 (flex-shrink: 1) より先に縮む。比は 4:1 で、どちらも 1 以上にする
+     (縮む側の flex-shrink の和が 1 未満だと、足りない幅の一部しか縮まず右パネルが画面の外へはみ出す) */
+  flex-shrink: 4;
 }
 
 /* ── Diagram tabs (複数の図を横断して編集する) ───────────────────────── */
@@ -2125,7 +2127,8 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
   flex-direction: column;
   width: 34%;
   min-width: 220px;
-  /* 幅が足りないときはプレビューの列 (min-width) を残して縮む */
+  /* 幅が足りないときはプレビューの列 (min-width) を残して縮む。先に縮むのは本文欄
+     (境目をドラッグして広げた枠の幅は、本文欄が min-width に着くまで保つ) */
   flex-shrink: 1;
   overflow: hidden;
   border-left: 1px solid var(--border);
@@ -2686,7 +2689,8 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
   min-width: 220px;
   border-left: 1px solid var(--border);
   background: var(--bg-secondary);
-  /* 幅が足りないときはプレビューの列 (min-width) を残して縮む */
+  /* 幅が足りないときはプレビューの列 (min-width) を残して縮む。先に縮むのは本文欄
+     (境目をドラッグして広げた枠の幅は、本文欄が min-width に着くまで保つ) */
   flex-shrink: 1;
   overflow: hidden;
 }

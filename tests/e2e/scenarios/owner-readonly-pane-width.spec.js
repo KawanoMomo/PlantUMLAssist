@@ -69,6 +69,10 @@ for (const [w, h] of [[1280, 720], [1280, 800]]) {
     expect(pv.right).toBeLessThanOrEqual(sp.left);
     expect(ed.right).toBeLessThanOrEqual(pv.left);
     expect(pv.width).toBeGreaterThanOrEqual(280);
+    // 右パネルも画面の中に収まる (枠を並べた分が右へはみ出さない)。
+    const pp = await rect(page, '#props-pane');
+    expect(sp.right).toBeLessThanOrEqual(pp.left);
+    expect(pp.right).toBeLessThanOrEqual(w + 0.5);
     const hud = await rect(page, '#zoom-hud');
     expect(hud.left).toBeGreaterThanOrEqual(pv.left);
 
@@ -128,6 +132,9 @@ test('幅 1280 でこの図の履歴の「比較」を開いても、プレビ�
   const cp = await rect(page, '#compare-pane');
   expect(pv.right).toBeLessThanOrEqual(cp.left);
   expect(pv.width).toBeGreaterThanOrEqual(280);
+  const pp = await rect(page, '#props-pane');
+  expect(cp.right).toBeLessThanOrEqual(pp.left);
+  expect(pp.right).toBeLessThanOrEqual(1280.5);
   for (const sel of ['#hud-zoom-fit', '#hud-zoom-out']) expect(await hitOf(page, sel), sel).toBe('ok');
   fs.rmSync(env.root, { recursive: true, force: true });
 });
