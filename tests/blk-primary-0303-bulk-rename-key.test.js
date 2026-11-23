@@ -76,8 +76,8 @@ describe('一括置換に単独キーがある', () => {
 describe('ツールメニューがそのキーを見せる', () => {
   test('一括置換の行にだけ、いま効いているキーが出る', () => {
     KB.resetAll();
-    expect(TM.keyHintOf('btn-tab-rename')).toBe('Ctrl+H');
-    expect(TM.keyHintOf('btn-tab-apply')).toBe('');
+    expect(TM.keyHintOf('tool-rename')).toBe('Ctrl+H');
+    expect(TM.keyHintOf('tool-lines')).toBe('');
 
     var html = TM.buildMenuHtml({});
     expect(html).toContain('<span class="tool-menu-key">Ctrl+H</span>');
@@ -88,13 +88,13 @@ describe('ツールメニューがそのキーを見せる', () => {
   test('差し替えたら表示も追随する (表と食い違わせない)', () => {
     KB.resetAll();
     KB.setBinding('bulk-rename', 'Ctrl+Alt+R');
-    expect(TM.keyHintOf('btn-tab-rename')).toBe('Ctrl+Alt+R');
+    expect(TM.keyHintOf('tool-rename')).toBe('Ctrl+Alt+R');
     expect(TM.buildMenuHtml({})).toContain('>Ctrl+Alt+R<');
   });
 
   test('件数の badge と並んでも両方出る', () => {
     KB.resetAll();
-    var html = TM.buildMenuHtml({ 'btn-tab-rename': '3' });
+    var html = TM.buildMenuHtml({ 'tool-rename': '3' });
     expect(html).toContain('<span class="tool-menu-key">Ctrl+H</span>'
       + '<span class="tool-menu-badge">3</span>');
   });

@@ -46,7 +46,7 @@ describe('design 3b 関係の種類カード', function() {
     var html = RC.cardsHtml('co-rel-card', RC.kindsOf('component'), 'dependency');
     expect(html).toContain('data-value="dependency" aria-pressed="true"');
     expect(html).toContain('data-value="association" aria-pressed="false"');
-    expect(html).toContain('関係の種類 / Relation');
+    expect(html).toContain('関係の種類');
     expect(html).toContain('部品がインターフェースを提供する');
   });
 

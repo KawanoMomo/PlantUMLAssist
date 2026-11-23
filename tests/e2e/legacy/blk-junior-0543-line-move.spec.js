@@ -4,7 +4,7 @@
 // DSL を全選択して打ち直すしかなかった (約 350 字 = キー入力 50 超)。
 // 行編集パネルの「↑移動 / ↓移動」(Alt+↑↓) で 1 手で入れ替わることを確認する。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, openLineEdit } = require('../helpers');
 
 const GPIO_CLASS = [
   '@startuml',
@@ -33,7 +33,7 @@ async function openClass(page) {
 }
 
 async function openLinePanel(page) {
-  await page.locator('#btn-tab-lines').click();
+  await openLineEdit(page);
   await expect(page.locator('#lines-panel')).toHaveClass(/open/);
 }
 

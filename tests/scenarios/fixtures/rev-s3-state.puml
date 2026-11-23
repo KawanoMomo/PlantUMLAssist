@@ -1,0 +1,11 @@
+@startuml
+' レビュー用 状態機械(同名の条件あり)
+skinparam shadowing false
+
+[*] --> Idle
+Idle --> Busy : Start
+' 負荷で落とす
+Busy  --> Slow : Tick [load > 80]
+  Idle --> Slow : Tick [load > 80]
+Slow --> Idle : Stop
+@enduml

@@ -1,7 +1,7 @@
 'use strict';
 window.MA = window.MA || {};
 
-// seq-place — シーケンス図の「追加する位置」(BLK-owner-20260924-2232-3)。
+// seq-place — シーケンス図の「追加する位置」。
 //
 // alt に else を足すと end の直前に空の else が入るだけで、else 側へメッセージを
 // 入れる手段がフォームに無かった (空の else は描かれず押せない)。状態遷移・クラス・

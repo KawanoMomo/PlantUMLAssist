@@ -28,8 +28,9 @@ describe('FILES ツリーの節 (design 10a)', function() {
     expect(FT.defaultOpen('git')).toBe(false);
   });
 
-  test('畳んだままでも件数が読める (比較中 N / main · M 2 ↑1)', function() {
-    expect(FT.readonlyCountLabel(1)).toBe('比較中 1');
+  // 読むだけはフォルダの数だけ (右の枠に出している相手の札は TICKET-owner-20261115-2141-prune で外した)。
+  test('畳んだままでも件数が読める (N / main · M 2 ↑1)', function() {
+    expect(FT.readonlyCountLabel(2)).toBe('2');
     expect(FT.readonlyCountLabel(0)).toBe('');
     expect(FT.gitCountLabel({ branch: 'main', modified: 2, ahead: 1 })).toBe('main · M 2 ↑1');
     expect(FT.gitCountLabel({ branch: 'main', modified: 0, ahead: 0 })).toBe('main');
@@ -38,66 +39,39 @@ describe('FILES ツリーの節 (design 10a)', function() {
   });
 });
 
-describe('保存先は部品ごとのフォルダ (design 10a)', function() {
-  test('ファイル名から図種を読む', function() {
+// 部品ごとのフォルダ (ファイル名から部品名を読んで束ねる・`SPI 4 / 6`・未作成の図種) は
+// TICKET-owner-20261116-0321-prune で外した。保存先は実在のファイルを名前の順に並べる。
+describe('保存先は実在のファイルを名前の順に並べる', function() {
+  test('ファイル名から図種を読む (行頭の線画のため)', function() {
     expect(FT.kindOf('spi_init_sequence')).toBe('sequence');
     expect(FT.kindOf('spi_state.puml')).toBe('state');
     expect(FT.kindOf('driver_common_class')).toBe('class');
     expect(FT.kindOf('diagram1')).toBe('');
   });
 
-  test('図種の語を落とした先頭の語が部品 (spi_init_sequence も spi_state も SPI)', function() {
-    expect(FT.partOf('spi_init_sequence')).toBe('spi');
-    expect(FT.partOf('spi_state')).toBe('spi');
-    expect(FT.partOf('can_init_sequence')).toBe('can');
-    expect(FT.partLabel('spi')).toBe('SPI');
-  });
-
-  test('部品ごとにまとまり、6 図種のうち何枚あるかが出る', function() {
-    var g = FT.groups(FOLDER);
-    expect(g.map(function(x) { return x.part; })).toEqual(['can', 'driver', 'spi']);
-    var spi = g.filter(function(x) { return x.part === 'spi'; })[0];
-    expect(spi.countLabel).toBe('SPI 4 / 6');
-    expect(spi.files.length).toBe(4);
-  });
-
-  test('同じ図種が 2 枚あっても「揃い具合」は二重に数えない', function() {
-    var g = FT.groups([
-      { name: 'spi_init_sequence', kind: 'sequence' },
-      { name: 'spi_reset_sequence', kind: 'sequence' },
+  test('名前の順に並び、本文の図種があればそれを、無ければ名前の図種を持つ', function() {
+    var rows = FT.targetRows([
+      { name: 'spi_state', kind: '' },
+      { name: 'TIMERドライバ', kind: 'class' },
+      { name: 'can_init_sequence', kind: '' },
+      'diagram2',
     ]);
-    expect(g[0].countLabel).toBe('SPI 1 / 6');
-    expect(g[0].files.length).toBe(2);
+    expect(rows.map(function(r) { return r.name; }))
+      .toEqual(['TIMERドライバ', 'can_init_sequence', 'diagram2', 'spi_state']);
+    expect(rows.map(function(r) { return r.kind; })).toEqual(['class', 'sequence', '', 'state']);
   });
 
-  test('展開すると未作成の図種が名指しされる (押せばその場で作れる形)', function() {
-    var spi = FT.groups(FOLDER).filter(function(x) { return x.part === 'spi'; })[0];
-    expect(spi.missing).toEqual(['usecase', 'activity']);
-    expect(spi.missingLabel).toBe('未作成 2 図種（UC・ACT）');
-  });
-
-  test('6 図種が揃っている部品は未作成を出さない', function() {
-    var all = FT.KINDS.map(function(k) { return { name: 'spi_' + k, kind: k }; });
-    var g = FT.groups(all)[0];
-    expect(g.countLabel).toBe('SPI 6 / 6');
-    expect(g.missingLabel).toBe('');
+  test('部品で束ねる・未作成を数える関数は無い', function() {
+    ['partOf', 'splitPart', 'partLabel', 'groups', 'layout', 'partFor', 'partOpen', 'missingParts', 'freeName']
+      .forEach(function(k) { expect(FT[k]).toBe(undefined); });
   });
 });
 
-describe('絞り込みはファイル名と部品名のどちらでも引ける', function() {
-  test('ファイル名の一部で引く', function() {
+describe('絞り込みはファイル名で引く', function() {
+  test('ファイル名の一部で引く (大小は問わない)', function() {
     expect(FT.filter(FOLDER, 'state').map(function(e) { return e.name; }))
       .toEqual(['spi_state', 'can_state']);
-  });
-
-  test('部品名で引く (大小は問わない)', function() {
     expect(FT.filter(FOLDER, 'SPI').length).toBe(4);
-  });
-
-  test('図の中の部品名でも引く', function() {
-    var rows = [{ name: 'diagram1', kind: 'sequence', parts: ['Spi_Driver', 'Hal'] }];
-    expect(FT.filter(rows, 'spi_driver').length).toBe(1);
-    expect(FT.filter(rows, 'gpio').length).toBe(0);
   });
 
   test('空の絞り込みは全部を返す (打つ前の状態を隠さない)', function() {
@@ -107,8 +81,9 @@ describe('絞り込みはファイル名と部品名のどちらでも引ける'
 });
 
 describe('下端に出していた枚数の 1 行をパネル内に移す', function() {
-  test('「12 図 · 未反映 1 · 控え 1」の 1 行にまとまる', function() {
-    expect(FT.summaryLine({ total: 12, unapplied: 1, draft: 1 })).toBe('12 図 · 未反映 1 · 控え 1');
+  // 「控え N」は TICKET-owner-20261116-0241-prune で外した (一時控えの仕分けごと)。
+  test('「12 図 · 未反映 1」の 1 行にまとまる', function() {
+    expect(FT.summaryLine({ total: 12, unapplied: 1, draft: 1 })).toBe('12 図 · 未反映 1');
   });
 
   test('0 件のものは言わない (下端と同じく、場所を取らせない)', function() {

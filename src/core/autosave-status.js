@@ -3,11 +3,11 @@ window.MA = window.MA || {};
 
 // autosave-status — 状態バーの保存状態が「どこまで届いたか」を言う。
 //
-// design 9c / 9a (BLK-builder-20260924-1336-3): 保存状態は文字だけの 1 行
+// design 9c / 9a: 保存状態は文字だけの 1 行
 // (「13:31 に自動保存 · 変更なし」)。💾 などの絵文字は付けない。
 // 書けなかった回の ⚠ は警告なので残す。
 //
-// BLK-primary-20260914-2206: 一覧から開いた図に note を打っても保存フォルダの
+// 一覧から開いた図に note を打っても保存フォルダの
 // .puml が変わらない、という詰まりが続いた。自動保存は打鍵のたびに走っており、
 // 💾 も「たった今」と出ていたが、ディスクへ写す側は錠の返事待ちで 1 度も
 // 走っていなかった。💾 が指していたのはブラウザの中の控えで、ファイルではない。
@@ -52,20 +52,12 @@ window.MA.autosaveStatus = (function() {
       return { text: saved + ' · 変更なし', title: when + ' / ' + target + ' は開いたときのままです (本文を変えていないので書き直していません)', pending: false };
     }
     if (last.reason === 'opened') {
-      // BLK-owner-20260925-1132-2: この図はこの起動でまだ書いていない (別のタブで書いた記録を名乗らない)。
+      // この図はこの起動でまだ書いていない (別のタブで書いた記録を名乗らない)。
       return { text: '変更なし · ' + target, title: target + ' は開いてから書いていません (本文を変えていないので書き直していません)', pending: false };
     }
     if (last.reason === 'untouched') {
-      // BLK-owner-20260925-0312-2: 見本・白紙のまま。行を足すか Ctrl+S を押すまでファイルは作らない。
+      // 見本・白紙のまま。行を足すか Ctrl+S を押すまでファイルは作らない。
       return { text: '見本のまま · ' + target + ' には書いていません', title: target + ' は見本・白紙のままなので、保存フォルダに書いていません。行を足すか Ctrl+S を押すとファイルになります', pending: false };
-    }
-    if (last.reason === 'ask') {
-      return {
-        text: '⚠ 未保存 · ' + target + ' に書いてよいか確認中',
-        title: '一覧から開いたファイルです。「上書きする / 元のまま保つ」に答えるまで、'
-          + 'ディスクへは書きません（打った内容はブラウザに残っています）。押すと確認を出します',
-        pending: true,
-      };
     }
     return {
       text: '⚠ 未保存 · ' + target + ' には書けません',
@@ -76,22 +68,18 @@ window.MA.autosaveStatus = (function() {
   }
 
   // shortResult(msg) — 保存直後の 1 行 (#status-save-result) の、下端に見せる短い形。
-  // BLK-builder-20260924-1413-2 (design 7a / 9c): 「./test-results/…/diagram1.puml に保存しました ／
-  // 他 persona との部品名の衝突なし（1 枚と照合）」がそのまま下端を埋め、パース OK や件数が 2 行に
-  // 折れていた。下端は 1 行に保ち、フォルダのパスと（…）の内訳は落として title (全文) に回す。
+  // 「./test-results/…/diagram1.puml に保存しました」の
+  // パスが下端を埋めて 2 行に折れていた。下端は 1 行に保ち、フォルダのパスと（…）の内訳は落として
+  // title (全文) に回す。
   //   - 区切り「 ／ 」は「 · 」に (9c の 1 行の区切りと同じ)
   //   - / や \ を含む語 (パス) はファイル名だけ
   //   - 全角の（…）は内訳なので落とす
-  //   - 「他 persona との部品名の」のような前置きは落とし、「衝突なし」「衝突 2」だけ残す
   function shortResult(msg) {
     var raw = msg == null ? '' : String(msg);
     if (!raw) return '';
     return raw.split(/\s*／\s*/).map(function(seg) {
       var t = seg.replace(/（[^）]*）/g, '')
         .replace(/[^\s]*[\/\\]([^\s\/\\]+)/g, '$1')
-        .replace(/他\s*persona\s*との部品名の/g, '')
-        // 保存時チェックの「名前・整合・… を見て、この図に不一致はありません」は結論だけ
-        .replace(/^.*を見て、この図に不一致はありません。?$/, '不一致なし')
         .replace(/\s+/g, ' ')
         .trim();
       return t;
@@ -101,7 +89,7 @@ window.MA.autosaveStatus = (function() {
   // forActive(own, last) — 札に使う記録を今のタブの図に合わせる。
   //   own  … 今のタブの図を書いた (書こうとした) 直近の記録 (この起動で無ければ null)
   //   last … autoSave.getLastWrite() (どのタブの回かを問わない直近の記録)
-  // BLK-owner-20260925-1132-2: 直近の記録が別のタブの回なら、それを今の図の札にしない。今の図の記録があればそれを、
+  // 直近の記録が別のタブの回なら、それを今の図の札にしない。今の図の記録があればそれを、
   // 無ければ「開いてから書いていない」(reason 'opened') にする。ダウンロード保存 (where 'local') はファイルを名乗らないので従来どおり。
   // 返り値 { last, at } … at はその記録の時刻 (札の時刻に使う。null なら従来どおり meta の時刻)。
   function forActive(own, last) {

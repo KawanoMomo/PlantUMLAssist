@@ -59,14 +59,3 @@ test('状態遷移図の下端は「2 states · 4 transitions」', async ({ page
   await typeDsl(page, ST);
   await expect(page.locator('#status-info')).toHaveText('2 states · 4 transitions');
 });
-
-test('下端の数は構造タブの一行と食い違わない', async ({ page }) => {
-  await gotoApp(page);
-  await page.locator('#diagram-type').selectOption('plantuml-activity');
-  await typeDsl(page, ACT);
-  await page.locator('#btn-editor-tab-outline').click();
-  await page.waitForTimeout(500);
-  const outline = (await page.locator('#outline-summary').textContent()) || '';
-  const status = (await page.locator('#status-info').textContent()) || '';
-  expect(outline).toContain(status.trim());
-});

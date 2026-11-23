@@ -41,6 +41,57 @@ window.MA.bulkRename = (function() {
     return out + text.slice(last);
   }
 
+  // 複数の組を 1 回で当てる。組を 1 つずつ順に当てると
+  // A→B と B→C が続けて効いてしまう (A が C になる) ので、全部の組を 1 回の走査で拾う。
+  // 長い綴りを先に試す (Clock_Ctrl と Clock_Ctrl_Hw があれば長い方を取る)。
+  // pairs: [{from, to}] — 置換後が識別子として使えない組・同じ綴りの組は捨てる。
+  function _validPairs(pairs) {
+    var seen = {};
+    return (Array.isArray(pairs) ? pairs : []).filter(function(p) {
+      if (!p || !p.from || p.from === p.to || !isValidTarget(p.to) || seen[p.from]) return false;
+      seen[p.from] = true;
+      return true;
+    }).sort(function(a, b) { return String(b.from).length - String(a.from).length; });
+  }
+
+  function replaceManyIn(dsl, pairs) {
+    var text = String(dsl == null ? '' : dsl);
+    var list = _validPairs(pairs);
+    if (!list.length) return text;
+    var to = {};
+    list.forEach(function(p) { to[p.from] = String(p.to); });
+    var re = new RegExp(list.map(function(p) { return escapeRe(p.from); }).join('|'), 'g');
+    var out = '', last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      var s = m.index, e = s + m[0].length;
+      var beforeOk = s === 0 || !WORD.test(text.charAt(s - 1));
+      var afterOk = e >= text.length || !WORD.test(text.charAt(e));
+      if (beforeOk && afterOk) {
+        out += text.slice(last, s) + to[m[0]];
+        last = e;
+      }
+      if (re.lastIndex === m.index) re.lastIndex++;
+    }
+    return out + text.slice(last);
+  }
+
+  // apply の複数組版。返す形は apply と同じ (count は当たった組の出現の合計)。
+  function applyMany(docs, pairs) {
+    var result = { changed: [], total: 0, docs: 0 };
+    var list = _validPairs(pairs);
+    if (!Array.isArray(docs) || !list.length) return result;
+    docs.forEach(function(d) {
+      if (!d) return;
+      var n = 0;
+      list.forEach(function(p) { n += countIn(d.dsl, p.from); });
+      if (n === 0) return;
+      result.changed.push({ id: d.id, name: d.name, dsl: replaceManyIn(d.dsl, list), count: n });
+      result.total += n;
+      result.docs++;
+    });
+    return result;
+  }
+
   // 1 本の DSL 中の出現数。
   function countIn(dsl, from) {
     var n = 0;
@@ -91,7 +142,7 @@ window.MA.bulkRename = (function() {
     return result;
   }
 
-  // BLK-primary-20260908-1303-wish: 適用する前に「当てたら各図の該当行がどう変わるか」を
+  // 適用する前に「当てたら各図の該当行がどう変わるか」を
   // 並べて見る。ヒット件数 (N 件) だけでは想定外の行に当たっていても気付けず、
   // 適用してから巻き戻すやり直しが要る。ここは置換後の DSL まで作って返すだけで、
   // 行の突き合わせ (before/after) は changeBoard.diffRows に任せる。
@@ -112,7 +163,7 @@ window.MA.bulkRename = (function() {
       var before = String(d.dsl == null ? '' : d.dsl);
       var n = countIn(before, from);
       out.scanned++;
-      // BLK-primary-20260917-0023: 当たらなかった図も一覧に載せる。影響範囲の
+      // 当たらなかった図も一覧に載せる。影響範囲の
       // 確認は「何枚が変わるか」だけでなく「残りは触らなくてよい」と言い切れて
       // はじめて終わる。落ちた図が見えないと、結局 1 枚ずつ開いて確かめ直す。
       if (n === 0) {
@@ -187,7 +238,7 @@ window.MA.bulkRename = (function() {
 
   // detectRename(before, after) — 1 枚の図に起きた「識別子の綴りの直し」を読み取る。
   //
-  // BLK-junior-20260916-0046: 表記統一の反映は、同じ直しが保存フォルダの何枚にも
+  // 名前の綴りの直しは、同じ直しが保存フォルダの何枚にも
   // 及ぶ。1 枚目を直したその場から一括置換へ渡すために、直した本人に組を打ち直させず
   // 「消えた識別子 1 つ / 増えた識別子 1 つ」を組として拾う。
   // 確実に言えるときだけ答える (消えた・増えたが 1 つずつで、その置換だけで
@@ -216,13 +267,13 @@ window.MA.bulkRename = (function() {
   }
 
   // エディタで選んでいる文字列を「置換前」の初期値にする。部品名として置換できる
-  // 1 語のときだけ使い、行や空白をまたぐ選択は捨てる (BLK-primary-20260917-0223-friction)。
+  // 1 語のときだけ使い、行や空白をまたぐ選択は捨てる。
   function seedFromSelection(text) {
     var s = typeof text === 'string' ? text.trim() : '';
     return isValidTarget(s) ? s : '';
   }
 
-  // BLK-primary-20260924-0021-wish: 「名前で図を探す」を開く前に選んでいた部品名。
+  // 「名前で図を探す」を開く前に選んでいた部品名。
   // 図で 1 つ選んだ要素の名前 → エディタで選んだ文字の順 (Ctrl+H の一括置換と同じ)。
   // メッセージ等の内部 id (`__r_0`)・名前として使えない選択は拾わない。
   function seedForSearch(selected, editorSelText) {
@@ -239,6 +290,8 @@ window.MA.bulkRename = (function() {
     seedForSearch: seedForSearch,
     countIn: countIn,
     replaceIn: replaceIn,
+    replaceManyIn: replaceManyIn,
+    applyMany: applyMany,
     detectRename: detectRename,
     isValidTarget: isValidTarget,
     preview: preview,

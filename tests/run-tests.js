@@ -3,14 +3,16 @@ const fs = require('fs');
 const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..');
+// server.py を読み込む test (python -c) が設定・控えの置き場 (DATA_ROOT) を利用者のものと共有しないよう、
+// test-results/ の下を渡す (子プロセスは環境変数を引き継ぐ)。TICKET-owner-20261115-1827-1。
+if (!process.env.PUA_DATA_ROOT) {
+  process.env.PUA_DATA_ROOT = path.join(projectRoot, 'test-results', 'unit-data');
+}
 const sourceFiles = [
   'src/core/html-utils.js',
   'src/core/svg-export.js',
   'src/core/saved-kind.js',
-  'src/core/name-pairing.js',
-  'src/core/folder-export.js',
   'src/core/diagram-kind.js',
-  'src/core/kind-mismatch.js',
   'src/core/dsl-utils.js',
   'src/core/preproc-live.js',
   'src/core/preproc-expand.js',
@@ -20,10 +22,7 @@ const sourceFiles = [
   'src/core/alias-hint.js',
   'src/core/auto-save.js',
   'src/core/workspace.js',
-  'src/core/review-watch.js',
-  'src/core/review-diff.js',
   'src/core/selected-endpoints.js',
-  'src/core/review-carry.js',
   'src/core/scaffold-notice.js',
   'src/core/state-branch.js',
   'src/core/state-transition.js',
@@ -33,17 +32,8 @@ const sourceFiles = [
   'src/core/state-child.js',
   'src/core/class-scaffold.js',
   'src/core/sequence-scaffold.js',
-  'src/core/name-audit.js',
-  'src/core/template-new.js',
-  'src/core/template-map.js',
-  'src/core/family-audit.js',
-  'src/core/driver-map.js',
   'src/core/note-block.js',
   'src/core/note-edit.js',
-  'src/core/note-intent.js',
-  'src/core/family-clone.js',
-  'src/core/subject-preset.js',
-  'src/core/driver-usecase-starter.js',
   'src/core/activity-insert.js',
   'src/core/sequence-group-range.js',
   'src/core/app-bridge.js',
@@ -51,17 +41,6 @@ const sourceFiles = [
   'src/core/text-sync.js',
   'src/core/save-diff.js',
   'src/core/version-timeline.js',
-  'src/core/svg-freshness.js',
-  'src/core/svg-compare-row.js',
-  'src/core/svg-cross.js',
-  'src/core/part-cross.js',
-  'src/core/finding-actions.js',
-  'src/core/finding-variant.js',
-  'src/core/finding-vocab.js',
-  'src/core/note-board.js',
-  'src/core/review-state.js',
-  'src/core/file-role.js',
-  'src/core/audit-scope.js',
   'src/core/command-palette.js',
   'src/core/diagram-rail.js',
   'src/core/tool-menu.js',
@@ -73,16 +52,14 @@ const sourceFiles = [
   'src/core/zoom-hud.js',
   'src/core/outline.js',
   'src/core/select-at-line.js',
+  'src/core/selection-carry.js',
+  'src/core/props-rebuild.js',
+  'src/core/export-wait.js',
   'src/core/line-peek.js',
-  'src/core/lineage-mark.js',
   'src/core/tail-memory.js',
   'src/core/tail-kind-chips.js',
   'src/core/compare-view.js',
-  'src/core/cross-ref-diff.js',
-  'src/core/change-board.js',
-  'src/core/impact-thumbs.js',
   'src/core/folder-filter.js',
-  'src/core/target-set.js',
   'src/core/line-resolver.js',
   'src/core/formatter-interface.js',
   'src/core/dsl-updater.js',
@@ -92,19 +69,13 @@ const sourceFiles = [
   'src/core/text-updater.js',
   'src/core/parser-utils.js',
   'src/core/history.js',
+  'src/core/undo-route.js',
   'src/core/selection.js',
   'src/core/connection-mode.js',
   'src/core/overlay-builder.js',
   'src/core/selection-router.js',
   'src/core/line-edit.js',
-  'src/core/reuse-picker.js',
   'src/core/relation-kind-cards.js',
-  'src/core/review-pins.js',
-  'src/core/pin-inbox.js',
-  'src/core/pin-reply.js',
-  'src/core/pin-progress.js',
-  'src/core/svg-diff-summary.js',
-  'src/core/pin-verify.js',
   'src/core/relation-options.js',
   'src/core/group-notation.js',
   'src/core/group-place.js',
@@ -114,23 +85,8 @@ const sourceFiles = [
   'src/core/sequence-participant-zone.js',
   'src/core/insert-marker.js',
   'src/core/label-colors.js',
-  'src/core/submit-check.js',
-  'src/core/scope-decl.js',
-  'src/core/trace-coverage.js',
-  'src/core/audit-timeline.js',
-  'src/core/manual-findings.js',
-  'src/core/meeting-notes.js',
-  'src/core/component-deps.js',
-  'src/core/usecase-source.js',
-  'src/core/dep-graph.js',
-  'src/core/dep-version-search.js',
-  'src/core/change-ticket.js',
-  'src/core/material-verify.js',
-  'src/core/material-readback.js',
-  'src/core/bulk-note.js',
-  'src/core/fix-walk.js',
+  'src/ui/terms.js',
   'src/ui/properties.js',
-  'src/ui/reuse-modal.js',
   'src/modules/sequence.js',
   'src/modules/usecase.js',
   'src/modules/component.js',
@@ -260,10 +216,38 @@ const files = testFiles.length > 0
   ? testFiles.map(f => path.resolve(f))
   : fs.readdirSync(__dirname).filter(f => f.endsWith('.test.js')).map(f => path.join(__dirname, f));
 
+// describe / test を使わず自前で数える test ファイルは、赤を `process.exitCode = 1` か
+// `process.exit(1)` で返す。ここが自分の数だけで終えるとその赤が消えるので、ファイルごとに
+// 終了コードを見て 1 件の失敗に数える。読み込みで投げたファイルも同じ (残りのファイルは続けて回す)。
+// TICKET-owner-20261115-2100-1。
+class FileExit extends Error {
+  constructor(code) { super('process.exit(' + code + ')'); this.code = code; }
+}
+const redFiles = [];
+const realExit = process.exit;
 for (const f of files) {
-  console.log(`\n── ${path.basename(f)} ──`);
-  require(f);
+  const name = path.basename(f);
+  console.log(`\n── ${name} ──`);
+  process.exitCode = 0;
+  process.exit = function(code) { throw new FileExit(code == null ? 0 : code); };
+  let why = '';
+  try {
+    require(f);
+  } catch (e) {
+    if (e instanceof FileExit) why = e.code ? e.message : '';
+    else why = '読み込みで投げた: ' + (e && e.message);
+  } finally {
+    process.exit = realExit;
+  }
+  if (!why && process.exitCode) why = 'process.exitCode = ' + process.exitCode;
+  process.exitCode = 0;
+  if (why) {
+    failed++;
+    redFiles.push(name + ' (' + why + ')');
+    console.log(`    ✗ ${name}: ${why}`);
+  }
 }
 
+if (redFiles.length) console.log(`\n  赤のファイル: ${redFiles.join(', ')}`);
 console.log(`\n  ${passed} passed, ${failed} failed\n`);
 process.exit(failed > 0 ? 1 : 0);

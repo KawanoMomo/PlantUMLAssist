@@ -2,7 +2,7 @@
 window.MA = window.MA || {};
 
 // save-swap — 「この保存で、図の中身が別名の図と入れ替わっていないか」を保存の
-// その場で見る (BLK-reviewer-20260912-2103-wish)。
+// その場で見る。
 //
 // reviewer が見つけた事故: driver_common_class.puml が 7 クラス・メソッド 35 個超から
 // 3 行に激減し、その 3 行が plantuml-class.puml とバイト完全一致していた。
@@ -110,6 +110,34 @@ window.MA = window.MA || {};
     return out;
   }
 
+  // 保存した図と、突き合わせる相手の並び (TICKET-roadmap-20261123-0226-4)。
+  //   self.name  保存した図の名前、self.rel  保存先から見たフォルダの道 ('design/api'。直下の図は '')
+  //   docs       保存先の図 [{ name, dsl, rel? }] (rel の無いものは直下の図)
+  // → { name: 名指しに使う名前, folderDocs: [{ name, dsl }] }
+  // 直下の図は今までどおり直下の図とだけ比べる (名前だけで足りる)。
+  // サブフォルダの図は道付きの名前 ('design/api/spi') で名指しし、直下と全部のサブフォルダの図と比べる。
+  // 直下に同じ名前の図があっても自分とは数えない (道が違えば別の図)。
+  function placed(self, docs) {
+    var s = self || {};
+    var rel = _s(s.rel).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    var label = function(d) {
+      var r = _s(d && d.rel).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+      return r ? r + '/' + _s(d.name) : _s(d && d.name);
+    };
+    var list = _list(docs).filter(function(d) { return d && d.name; });
+    if (!rel) {
+      return {
+        name: _s(s.name),
+        folderDocs: list.filter(function(d) { return !_s(d.rel); })
+          .map(function(d) { return { name: _s(d.name), dsl: d.dsl }; }),
+      };
+    }
+    return {
+      name: rel + '/' + _s(s.name),
+      folderDocs: list.map(function(d) { return { name: label(d), dsl: d.dsl }; }),
+    };
+  }
+
   function summaryLine(res) {
     if (!res || !res.warn) return '';
     return '⚠ ' + res.name + ': 保存した中身が別の図と入れ替わっていないか確かめてください';
@@ -162,6 +190,7 @@ window.MA = window.MA || {};
     storageKey: storageKey,
     normalize: normalize,
     inspect: inspect,
+    placed: placed,
     summaryLine: summaryLine,
     load: load,
     save: save,

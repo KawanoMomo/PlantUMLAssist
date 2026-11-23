@@ -1,0 +1,12 @@
+@startuml
+title SPI 駆動の状態
+' 手で整えた状態機械。字下げとコメントは道具に崩させない
+[*] --> Idle
+state Idle : 待機
+state Running
+state RunningSlow
+Idle --> Running : Spi_Start
+  Running --> Idle : Spi_Stop
+  Running --> RunningSlow : Spi_Throttle
+RunningSlow --> Idle : Spi_Stop
+@enduml

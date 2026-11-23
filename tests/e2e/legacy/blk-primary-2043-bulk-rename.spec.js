@@ -3,7 +3,7 @@
 // 業務では 6 枚の図に同じ部品名が現れ、1 語直すのに図ごとに全文を打ち直していた。
 // 置換前・置換後を 1 度入力するだけで全図が直ることを確認する。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, openBulkRename } = require('../helpers');
 
 const SPI_SEQ = '@startuml\nparticipant SpiDrv\nparticipant SpiHw\nSpiDrv -> SpiHw: transfer\n@enduml';
 const CAN_SEQ = '@startuml\nparticipant CanDrv\nparticipant SpiDrv\nCanDrv -> SpiDrv: notify\n@enduml';
@@ -40,7 +40,7 @@ async function setupThreeDocs(page) {
 }
 
 async function fillRename(page, from, to) {
-  await page.locator('#btn-tab-rename').click();
+  await openBulkRename(page);
   await expect(page.locator('#rename-panel')).toHaveClass(/open/);
   await page.locator('#rename-from').fill(from);
   await page.locator('#rename-to').fill(to);
@@ -108,7 +108,7 @@ test.describe('BLK-primary-2043 部品名の一括置換', () => {
 
   test('置換はキー入力が置換前後の2語だけで済む', async ({ page }) => {
     await setupThreeDocs(page);
-    await page.locator('#btn-tab-rename').click();
+    await openBulkRename(page);
     // 実キー入力で行う (fill ではなく type) — 手数が語長ぶんで収まることの確認
     await page.locator('#rename-from').type('SpiDrv');
     await page.locator('#rename-to').type('Spi_Driver');

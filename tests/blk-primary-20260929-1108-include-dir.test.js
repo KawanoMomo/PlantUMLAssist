@@ -75,8 +75,8 @@ describe('BLK-primary-20260929-1108 相対の !include はその図のフォル�
     expect(server).toContain("preproc_local(text, render_base_dir(data.get('dir')))");
     expect(server).toContain("searched = include_search_note(err.get('message')");
     expect(/'dir': \("任意。その図の \.puml のあるフォルダ/.test(server)).toBe(true);
-    // 保存フォルダの svg を確かめ直す経路 (verify-svg) も保存フォルダを起点に描く。
-    expect(server).toContain("render_local(text, save_dir) if mode == 'local'");
+    // 保存フォルダの svg を確かめ直す経路 (verify-svg) は TICKET-owner-20261116-0241-prune で外した。
+    expect(server).not.toContain("'/verify-svg'");
   });
 
   test('daemon: BASEDIR の前置きで起点を受け取り、PlantUML の SourceStringReader(本文, フォルダ) で読む', function() {
@@ -95,9 +95,9 @@ describe('BLK-primary-20260929-1108 相対の !include はその図のフォル�
     var fn = app.slice(app.indexOf('function _renderDirOfDoc('), app.indexOf('function _renderDirOfActive('));
     expect(fn).toContain('_sourcePathOf(doc.id)');
     expect(fn).toContain('_docDir(doc)');
-    // 保存フォルダの図を描き直す経路は、その図のフォルダを渡す
-    expect(app).toContain('return renderDslToSvg(dsl, f.dir);');
-    expect(app).toContain('return renderDslToSvg(dsl, dir);');
+    // 保存フォルダの図を描き直す経路 (古い SVG を作り直す) は TICKET-owner-20261116-0241-prune で外した。
+    // renderDslToSvg は dir を受けて描画の起点にする口を残す。
+    expect(app).toContain('function renderDslToSvg(dsl, dir)');
     var pe = fs.readFileSync(path.join(ROOT, 'src', 'core', 'preproc-expand.js'), 'utf8');
     expect(pe).toContain('function ensure(text, fetchFn, dir)');
     expect(pe).toContain('dir ? { text: withMarks(text), dir: dir }');

@@ -52,7 +52,7 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
 });
 
-test('アクションを選ぶと右ペインに「並び替え / Reorder」の ↑ ↓ が出る', async ({ page }) => {
+test('アクションを選ぶと右ペインに「並び替え」の ↑ ↓ が出る', async ({ page }) => {
   await gotoApp(page);
   await page.locator('#diagram-type').selectOption('plantuml-activity');
   await typeDsl(page, ACT);

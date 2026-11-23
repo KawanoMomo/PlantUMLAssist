@@ -1,7 +1,7 @@
 'use strict';
 // BLK-builder-20260924-1252-3 / design 4b「Activity — 途中に挿入」の Action パネル。
 // 上から 見出し (Action · N 行目 / 名前) → ラベル → スイムレーン → 位置 → この位置に挿入 →
-// ノートを添える → ↑ ↓ → 削除 / Delete の順に並び、見出しと欄の名前は日本語 (英語併記) にそろう。
+// ノートを添える → ↑ ↓ → ✕ 削除 の順に並び、見出しと欄の名前は日本語にそろう (英語の併記は TICKET-roadmap-20261115-2114-4 で外した)。
 var jsdom = require('jsdom');
 var prevWindow = global.window;
 var prevDocument = global.document;
@@ -116,9 +116,9 @@ describe('Action の右パネルの並びと名前 (design 4b)', function() {
     expect(r.host.textContent).not.toContain('Action (L4)');
   });
 
-  test('本文の欄は「ラベル / Label」で、Text とは名乗らない', function() {
+  test('本文の欄は「ラベル」で、Text とは名乗らない', function() {
     var r = renderAction(NESTED, 4);
-    expect(r.host.querySelector('#ac-action-label').textContent).toContain('ラベル / Label');
+    expect(r.host.querySelector('#ac-action-label').textContent).toContain('ラベル');
     expect(r.host.querySelector('#ac-action-text').value).toBe('保存する');
   });
 
@@ -130,10 +130,10 @@ describe('Action の右パネルの並びと名前 (design 4b)', function() {
     for (var i = 1; i < at.length; i++) expect(at[i]).toBeGreaterThan(at[i - 1]);
   });
 
-  test('ノートの入口は「ノートを添える」、削除は「削除 / Delete」', function() {
+  test('ノートの入口は「ノートを添える」、削除は「✕ 削除」', function() {
     var r = renderAction(NESTED, 4);
     expect(r.host.querySelector('#ac-add-note-btn').textContent).toBe('ノートを添える');
-    expect(r.host.querySelector('#ac-action-delete').textContent).toBe('削除 / Delete');
+    expect(r.host.querySelector('#ac-action-delete').textContent).toBe('✕ 削除');
     expect(r.host.textContent).not.toContain('Note 追加');
     expect(r.host.textContent).not.toContain('Notes');
   });

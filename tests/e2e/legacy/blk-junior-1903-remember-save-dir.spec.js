@@ -56,8 +56,9 @@ test.describe('BLK-junior-1903 保存先は起動をまたいで覚えている'
     await gotoApp(page);
     await page.waitForTimeout(1200);
     await openSettings(page);
-    // 打ち直さずに済む = バックエンドは file、欄には前回のフルパス
-    await expect(page.locator('#cfg-file-dir')).toHaveValue(DIR);
+    // 打ち直さずに済む = バックエンドは file、今の保存先の表示に前回のフルパス
+    // (TICKET-owner-20261122-1240-1 で ⚙ の打つ欄は外し、今の保存先を文字で出す)
+    await expect(page.locator('#cfg-file-dir-cur')).toContainText(DIR);
     await expect(page.locator('#cfg-file-dir-row')).toBeVisible();
     await c.close();
   });
@@ -77,7 +78,7 @@ test.describe('BLK-junior-1903 保存先は起動をまたいで覚えている'
     expect(cfg.backend).toBe('file');
     expect(cfg.fileDir).toBe(DIR);
     await openSettings(page);
-    await expect(page.locator('#cfg-file-dir')).toHaveValue(DIR);
+    await expect(page.locator('#cfg-file-dir-cur')).toContainText(DIR);
     await c.close();
   });
 

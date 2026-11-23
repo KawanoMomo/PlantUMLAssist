@@ -6,8 +6,16 @@
 // スクリーンショットは test-results/ にのみ保存する (docs/images は保護対象のため書かない)。
 const path = require('path');
 const { test, expect } = require('@playwright/test');
+const { gotoApp, switchTypeWithSample } = require('../helpers');
 
 const SHOT_DIR = path.join(__dirname, '..', '..', '..', 'test-results', 'feat-002');
+
+// アプリは前回の図を開き直すので、既定の見本に頼らず sequence の見本を置いてから始める
+// (L8 = System -> DB、L9 = DB --> System、L3 = actor User)。
+async function openSequenceSample(page) {
+  await gotoApp(page);
+  await switchTypeWithSample(page, 'plantuml-sequence');
+}
 
 // パネル動線と同じ入口を、指定行をアンカーとして開く。
 async function openInsertForm(page, line) {
@@ -26,9 +34,7 @@ async function openInsertForm(page, line) {
 
 test.describe('FEAT-002: 挿入 modal の To 初期選択', () => {
   test('[AC-1] アンカー L8 (System -> DB) で To が DB になる', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('#preview-svg', { timeout: 5000 });
-    await page.waitForTimeout(500);
+    await openSequenceSample(page);
 
     await openInsertForm(page, 8);
 
@@ -42,9 +48,7 @@ test.describe('FEAT-002: 挿入 modal の To 初期選択', () => {
   });
 
   test('[AC-1] 別のアンカー L9 (DB --> System) で To が System になる', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('#preview-svg', { timeout: 5000 });
-    await page.waitForTimeout(500);
+    await openSequenceSample(page);
 
     await openInsertForm(page, 9);
 
@@ -59,9 +63,7 @@ test.describe('FEAT-002: 挿入 modal の To 初期選択', () => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
 
-    await page.goto('/');
-    await page.waitForSelector('#preview-svg', { timeout: 5000 });
-    await page.waitForTimeout(500);
+    await openSequenceSample(page);
 
     await openInsertForm(page, 3); // L3 = actor User (message ではない)
 
@@ -73,9 +75,7 @@ test.describe('FEAT-002: 挿入 modal の To 初期選択', () => {
   });
 
   test('[AC-3] 挿入が従来どおり成立する (To の既定値が DSL に反映される)', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('#preview-svg', { timeout: 5000 });
-    await page.waitForTimeout(500);
+    await openSequenceSample(page);
 
     await openInsertForm(page, 8);
     await page.locator('#seq-mod-confirm').click();
@@ -90,9 +90,7 @@ test.describe('FEAT-002: 挿入 modal の To 初期選択', () => {
   });
 
   test('E3: 順序入れ替え (.seq-move-up/down) と 種別変更 (#seq-edit-arrow) が無傷である', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('#preview-svg', { timeout: 5000 });
-    await page.waitForTimeout(500);
+    await openSequenceSample(page);
 
     // メッセージ選択の Properties パネルを直接描画させる (overlay 依存を避ける)。
     await page.evaluate(() => {

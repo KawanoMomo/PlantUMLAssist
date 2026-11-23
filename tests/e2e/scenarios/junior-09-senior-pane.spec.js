@@ -1,39 +1,65 @@
 // @ts-check
-// junior 台本 手順9: 「先輩の図」の枠を、要るときだけ横に出して読む。
+// junior 台本 手順9: 右の枠 (読むだけ) を、要るときだけ横に出して読む。
 //
 // BLK-human-20260915-1203: 枠が起動時から出ていて × を押しても隠れず、幅も変えられなかった
 // (CSS の `display: flex` が `hidden` 属性より強く、枠を消す手立てが無かった)。
 // 既定は閉じ・× で閉じる・閉じたまま覚える・境目で幅が変わる、をここで守る。
+// TICKET-owner-20261115-2141-prune: 右の枠に出るのは「読むだけ」節で押した図 1 枚と、この図の履歴の版だけ。
+// 見出しの ⇔・相手の選び直し・据え置く / 1 回だけ は外した。枠は「読むだけ」節の図を押して開く。
 const { test, expect } = require('@playwright/test');
 const S = require('./_scenario');
 
 const DIR = S.dirFor(__filename);
+const PANE_ROOT = DIR + '-pane/';
+const PANE_MINE = PANE_ROOT + 'junior';
+const PANE_SENIOR = PANE_ROOT + 'senior';
 
-test('手順9 比較相手の枠は既定で出ず、並べて比較で開き、× で閉じ、開き直しても閉じたまま', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
+// 自分の保存先の隣に読むだけのフォルダを 1 つ置いて起こす。
+async function bootWithNeighbor(page) {
+  await S.bootWithSaveDir(page, PANE_MINE);
+  for (const d of [PANE_MINE, PANE_SENIOR]) await S.clearDir(page, d);
+  await S.putDoc(page, PANE_MINE, 'spi_state', S.docFor('spi_state'));
+  await S.putDoc(page, PANE_SENIOR, 'spi_init_sequence', S.docFor('spi_init_sequence'));
+  await S.putDoc(page, PANE_SENIOR, 'spi_state', S.docFor('spi_state'));
+  await S.reopenApp(page);
+}
+
+// 「読むだけ」節を開き、隣のフォルダの図を押して右の枠に出す。
+async function showRoFile(page, folderName, fileName) {
+  const head = page.locator('#files-sec-readonly');
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
+  const folder = page.locator('#files-ro-list .files-ro-folder[data-ro-name="' + folderName + '"]');
+  await folder.waitFor();
+  if ((await folder.getAttribute('aria-expanded')) !== 'true') await folder.click();
+  const file = page.locator('#files-ro-list .files-ro-file[data-file-name="' + fileName + '"]');
+  await file.waitFor();
+  await file.click();
+  await expect(page.locator('#senior-pane')).toBeVisible();
+}
+
+test('手順9 右の枠は既定で出ず、読むだけの図を押すと開き、× で閉じ、開き直しても閉じたまま', async ({ page }) => {
+  await bootWithNeighbor(page);
 
   const pane = page.locator('#senior-pane');
-  // BLK-builder-20260924-1716-4 (design 9c / 10a): 相手が決まるまで下端の札は出ない (0 件は出さない)。
-  // 入口は FILES ツリーの「読むだけ」の ⇔。
-  const entry = page.locator('#btn-tab-senior');
-  await expect(page.locator('#status-senior')).toBeHidden();
+  // 下端の札と見出しの ⇔ は TICKET-owner-20261115-2141-prune で外した。入口は「読むだけ」節の図の行。
+  await expect(page.locator('#status-senior')).toHaveCount(0);
+  await expect(page.locator('#btn-tab-senior')).toHaveCount(0);
 
   // 到達条件その1: 起動直後は枠が無い (自分の図とプレビューだけが見えている)。
   await expect(pane).toBeHidden();
 
-  // 到達条件その2: FILES「読むだけ」の ⇔ 1 クリックで開く。
-  await entry.click();
-  await expect(pane).toBeVisible();
+  // 到達条件その2: 「読むだけ」節の図を押すと開く。
+  await showRoFile(page, 'senior', 'spi_init_sequence');
 
   // 到達条件その3: 初めて開いたときだけ「この枠は何か」が 1 行出る。
   const note = page.locator('#senior-first-note');
   await expect(note).toBeVisible();
   await expect(note).toContainText('読むだけ');
-  // BLK-builder-20260924-1801-2 (design 9a / 10c): 相手は手本とは限らない。見出し「比較相手」は 1 行で読め、× は右上。
+  // BLK-builder-20260924-1801-2 (design 9a / 10c): 相手は手本とは限らない。見出しは 1 行で読め、× は右上。
   await expect(note).not.toContainText('手本');
   {
     const head = page.locator('#senior-head > strong');
-    await expect(head).toHaveText('比較相手');
+    await expect(head).toHaveText('読むだけ');
     const hb = await head.boundingBox();
     const lh = await head.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight) || parseFloat(getComputedStyle(el).fontSize) * 1.5);
     expect(hb.height).toBeLessThan(lh * 1.5);
@@ -58,15 +84,17 @@ test('手順9 比較相手の枠は既定で出ず、並べて比較で開き、
   await expect(page.locator('#senior-pane')).toBeHidden();
 
   // 2 回目に開いたときは説明を繰り返さない。
-  await page.locator('#btn-tab-senior').click();
-  await expect(page.locator('#senior-pane')).toBeVisible();
+  await showRoFile(page, 'senior', 'spi_state');
   await expect(page.locator('#senior-first-note')).toBeHidden();
 });
 
+// TICKET-owner-20261116-0840-1: 枠を開いてもプレビューの列は自分の図とズームの帯が見える幅を残す。
+// 既定の 1280 幅では本文欄が min-width まで縮んだ残りが枠の幅で、境目を引いても広げる余地が無い
+// (以前はプレビューを潰して広げていた)。広げる余地のある 1600 幅で、境目のドラッグと幅の記憶を見る。
 test('手順9 枠とプレビューの境目をドラッグして幅を変えられ、幅は覚えている', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await page.locator('#btn-tab-senior').click();
-  await expect(page.locator('#senior-pane')).toBeVisible();
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await bootWithNeighbor(page);
+  await showRoFile(page, 'senior', 'spi_init_sequence');
 
   const handle = page.locator('#resizer-senior');
   // 到達条件その1: 枠が開いていれば取っ手も出ている (閉じている間は出ない)。
@@ -86,9 +114,10 @@ test('手順9 枠とプレビューの境目をドラッグして幅を変えら
   if (!after) throw new Error('枠が消えた');
   expect(after.width).toBeGreaterThan(before.width + 60);
 
-  // 到達条件その3: 読み込み直しても広げた幅のまま。
+  // 到達条件その3: 読み込み直しても、同じ 1 枚を広げた幅のまま出す。
   await S.reopenApp(page);
   await expect(page.locator('#senior-pane')).toBeVisible();
+  await expect(page.locator('#senior-dsl')).toContainText('SPI 初期化シーケンス');
   const reopened = await page.locator('#senior-pane').boundingBox();
   if (!reopened) throw new Error('開いたままのはずの枠が無い');
   expect(Math.abs(reopened.width - after.width)).toBeLessThan(12);
@@ -96,6 +125,7 @@ test('手順9 枠とプレビューの境目をドラッグして幅を変えら
 
 // 参照ペイン (別タブの図を並べる方) と操作を揃える: 片方だけ挙動が違う状態にしない。
 test('手順9 参照ペインも同じく ✕ で閉じ、境目で幅を変えられる', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });   // 上と同じ (TICKET-owner-20261116-0840-1)
   await S.bootWithSaveDir(page, DIR);
 
   const pane = page.locator('#compare-pane');
@@ -123,35 +153,28 @@ test('手順9 参照ペインも同じく ✕ で閉じ、境目で幅を変え�
   await expect(handle).toBeHidden();
 });
 
-// BLK-human-20260923-1600 (design 9a): 「⇔ 先輩」と「他の保存フォルダの版と見比べる」で
-// 2 つあった入口を「並べて比較」1 つにし、据え置く / 1 回だけを枠の中で切り替える。
-test('手順9 枠は「比較相手」と名乗り、据え置く / 1 回だけを枠の中で選べる', async ({ page }) => {
-  await S.bootWithSaveDir(page, DIR);
-  await page.locator('#btn-tab-senior').click();
-  await expect(page.locator('#senior-pane')).toBeVisible();
+// BLK-human-20260923-1600 (design 9a) の「据え置く / 1 回だけ」と相手の選び直しは
+// TICKET-owner-20261115-2141-prune で外した。枠は押した 1 枚を出し、図を切り替えても替えない。
+test('手順9 枠は「読むだけ」と名乗り、押した 1 枚は図を切り替えても替わらず、どこにも書かない', async ({ page }) => {
+  await bootWithNeighbor(page);
+  const before = await S.readDoc(page, PANE_SENIOR, 'spi_init_sequence');
+  await showRoFile(page, 'senior', 'spi_init_sequence');
 
-  // 到達条件その1: 枠の見出しは立場 (先輩) ではなく役割 (比較相手) で名乗る。
-  await expect(page.locator('#senior-head strong')).toHaveText('比較相手');
+  // 到達条件その1: 枠の見出しは「読むだけ」。相手を選び直す口・据え置く / 1 回だけ は無い。
+  await expect(page.locator('#senior-head strong')).toHaveText('読むだけ');
+  for (const id of ['senior-dir', 'senior-mode', 'senior-mode-keep', 'senior-mode-once', 'senior-target', 'senior-slice']) {
+    await expect(page.locator('#' + id)).toHaveCount(0);
+  }
+  await expect(page.locator('#senior-notice')).toContainText('senior の spi_init_sequence');
+  await expect(page.locator('#senior-svg svg')).toHaveCount(1);
 
-  // 到達条件その2: 2 択は枠の中にあり、既定は据え置き。
-  const keep = page.locator('#senior-mode-keep');
-  const once = page.locator('#senior-mode-once');
-  await expect(keep).toBeVisible();
-  await expect(once).toBeVisible();
-  await expect(keep).toHaveAttribute('aria-pressed', 'true');
-  await expect(once).toHaveAttribute('aria-pressed', 'false');
+  // 到達条件その2: 自分の図を切り替えても、右の 1 枚は替わらない。
+  await S.openFolderItem(page, 'spi_state');
+  await page.waitForTimeout(600);
+  await expect(page.locator('#senior-dsl')).toContainText('SPI 初期化シーケンス');
 
-  // 到達条件その3: 1 回だけを押すとそちらが効き、読み込み直しても覚えている。
-  await once.click();
-  await expect(once).toHaveAttribute('aria-pressed', 'true');
-  await expect(keep).toHaveAttribute('aria-pressed', 'false');
-  await S.reopenApp(page);
-  await expect(page.locator('#senior-pane')).toBeVisible();
-  await expect(page.locator('#senior-mode-once')).toHaveAttribute('aria-pressed', 'true');
-
-  // 到達条件その4: 据え置きに戻せる (切り替えは片道ではない)。
-  await page.locator('#senior-mode-keep').click();
-  await expect(page.locator('#senior-mode-keep')).toHaveAttribute('aria-pressed', 'true');
+  // 到達条件その3: 読むだけのフォルダのファイルは書き換わらない。
+  expect(await S.readDoc(page, PANE_SENIOR, 'spi_init_sequence')).toBe(before);
 });
 
 // BLK-human-20260923-1702 (design 10c): 保存先が Git のとき、FILES ツリーの下端に GIT 欄が出て、
@@ -283,8 +306,8 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   await expect(page.locator('#senior-git-legend')).toContainText('緑');
 
   // 到達条件その5: 「差分だけ」で作業中との違いの行だけになる (追記した行が + で出る)。
-  // design 10c (BLK-builder-20260924-1836-2): 見出しは「差分だけ / 並べて比較」の 2 択で、既定は並べて比較。
-  await expect(page.locator('#senior-git-view button')).toHaveText(['差分だけ', '並べて比較']);
+  // design 10c (BLK-builder-20260924-1836-2): 見出しは「差分だけ / 全体」の 2 択で、既定は全体。
+  await expect(page.locator('#senior-git-view button')).toHaveText(['差分だけ', '全体']);
   await expect(page.locator('#senior-git-sbs')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#senior-git-diffonly')).toHaveAttribute('aria-pressed', 'false');
   await page.locator('#senior-git-diffonly').click();
@@ -292,7 +315,7 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   await expect(page.locator('#senior-git-sbs')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#senior-dsl .sg-add')).toContainText('Fault');
   await expect(page.locator('#senior-dsl .sg-same')).toHaveCount(0);
-  // 「並べて比較」を押すと本文の全部に戻り、もう一度押しても裏返らない (押した方になる)。
+  // 「全体」を押すと本文の全部に戻り、もう一度押しても裏返らない (押した方になる)。
   await page.locator('#senior-git-sbs').click();
   await page.locator('#senior-git-sbs').click();
   await expect(page.locator('#senior-git-sbs')).toHaveAttribute('aria-pressed', 'true');
@@ -328,13 +351,13 @@ test('手順9 保存先が Git なら、この図の履歴の「比較」で前�
   await expect(modal).toBeHidden();
   await expect(page.locator('#senior-git-pick')).toContainText('Fault 通知の応答を追記');
 
-  // 到達条件その8: 読むだけのフォルダを選び直すと、今までどおりの比較に戻る。
+  // 到達条件その8: 相手選びは この図の過去の版だけ (読むだけのフォルダのタブは 2141-prune で外した)。
+  // 作業中を選ぶと差が無くなり、左の図の色も消える。
   await page.locator('#senior-git-pick').click();
-  await page.locator('#git-pick-tab-folder').click();
+  await expect(page.locator('#git-pick-tabs .git-pick-tab')).toHaveCount(2);
+  await expect(page.locator('#git-pick-tab-folder')).toHaveCount(0);
   await modal.locator('.git-pick-row').first().click();
-  await expect(page.locator('#senior-git')).toBeHidden();
-  await expect(page.locator('#senior-dir')).toBeVisible();
-  // コミットとの比較をやめると、左の図の色も消える。
+  await expect(modal).toBeHidden();
   await expect(page.locator('#preview-svg svg text.gd-add')).toHaveCount(0);
 
   // BLK-owner-20260924-2157-prune: Git の保存先では「この図の履歴」は GIT 節の 1 つ。
@@ -429,21 +452,26 @@ test('手順9 保存先の図が多くても、読むだけの見出しはツリ
   const roBox = await ro.boundingBox();
   const sumBox = await page.locator('#files-summary').boundingBox();
   expect(roBox && sumBox && Math.abs(roBox.y + roBox.height - sumBox.y) < 4).toBe(true);
-  // 保存先の一覧はその上で流れる (最後の部品は見出しの下に潜らず、流せば見える)。
-  const last = page.locator('#files-parts .files-part-head').last();
-  await last.scrollIntoViewIfNeeded();
-  const lastBox = await last.boundingBox();
-  const roBox2 = await ro.boundingBox();
-  expect(lastBox && roBox2 && lastBox.y + lastBox.height <= roBox2.y + 1).toBe(true);
-  // 見出しの行の目の印は畳んだまま押せる。
-  await expect(page.locator('#btn-tab-peek')).toBeInViewport();
+  // 保存先の一覧はその上で流れる (最後の図は見出しの下に潜らず、流せば見える)。
+  // ツリーは保存先の読み込み・Git の数え直しのたびに描き直されるので (全体実行の負荷で遅れて届くと、
+  // 掴んだ行が DOM から外れて scrollIntoViewIfNeeded が落ちていた)、描き直しを挟んでも測り直す。
+  // 部品のフォルダは TICKET-owner-20261116-0321-prune で外した (図は直下に並ぶ)。
+  const last = page.locator('#files-parts .files-part-file').last();
+  await expect(async () => {
+    await last.scrollIntoViewIfNeeded({ timeout: 2000 });
+    const lastBox = await last.boundingBox();
+    const roBox2 = await ro.boundingBox();
+    expect(lastBox && roBox2 && lastBox.y + lastBox.height <= roBox2.y + 1).toBe(true);
+  }).toPass({ timeout: 15000 });
+  // 見出しの行の入口 (目の印・⇔) は 2141-prune で外した。見出しそのものが押せて見えている。
+  await expect(page.locator('#btn-tab-senior')).toHaveCount(0);
   await S.clearDir(page, dir);
 });
 
-// BLK-builder-20260924-1749-3 (design 10a「読むだけのフォルダ（先輩・過去の版）は下に分けて置き、右クリックから
-// 「並べて比較」できます」「右の枠に並べている間は「比較中」と出ます」): 前は「読むだけ」を開いても説明の 1 行だけで、
-// 隣の保存フォルダが 1 行も並ばず、見出しにも件数・比較中が出なかった。
-test('手順9 読むだけの節に隣の保存フォルダが並び、並べている相手に「比較中」、右クリックで相手を替えられる', async ({ page }) => {
+// BLK-builder-20260924-1749-3 (design 10a): 前は「読むだけ」を開いても説明の 1 行だけで、
+// 隣の保存フォルダが 1 行も並ばず、見出しにも件数が出なかった。
+// TICKET-owner-20261115-2141-prune: 右クリックの比較と「比較中」の札は外した。図を押すとその 1 枚を右の枠で読む。
+test('手順9 読むだけの節に隣の保存フォルダが並び、図を押すとその 1 枚を右の枠で読める (保存先は動かない)', async ({ page }) => {
   const root = DIR + '-ro/';
   const mine = root + 'junior';
   await S.bootWithSaveDir(page, mine);
@@ -463,29 +491,32 @@ test('手順9 読むだけの節に隣の保存フォルダが並び、並べて
   await expect(folder('junior')).toHaveCount(0);
   await expect(page.locator('#files-ro-hint')).toBeHidden();
 
-  // 到達条件その2: フォルダの行を押すと開き、その図が並ぶ。図を押すとその 1 枚が右の枠に並び、相手に「比較中」。
+  // 到達条件その2: フォルダの行を押すと開き、その図が並ぶ。図を押すとその 1 枚が右の枠に出る。
   await folder('senior').click();
-  const roFile = page.locator('#files-ro-list .files-ro-file[data-file-name="spi_init_sequence"]');
+  const roFile = page.locator('#files-ro-list .files-ro-body[data-ro-body$="senior"] .files-ro-file[data-file-name="spi_init_sequence"]');
   await expect(roFile).toBeVisible();
   await roFile.click();
   await expect(page.locator('#senior-pane')).toBeVisible();
   await expect(page.locator('#senior-dsl')).toContainText('SPI 初期化シーケンス');
-  await expect(folder('senior')).toContainText('比較中');
-  await expect(page.locator('#files-count-readonly')).toHaveText('2 · 比較中 1');
+  await expect(page.locator('#files-ro-list .files-ro-tag')).toHaveCount(0);
+  await expect(page.locator('#files-count-readonly')).toHaveText('2');
 
-  // 到達条件その3: 別のフォルダの行を右クリック →「並べて比較」で相手が替わる (新規作成の行は出ない)。
+  // 到達条件その3: 読むだけのフォルダの右クリックに比較・新規作成の行は無い。
   await folder('release_v1.2').click({ button: 'right' });
   const menu = page.locator('#files-ctx-menu');
   await expect(menu.locator('[data-action="new-doc"]')).toHaveCount(0);
-  await menu.locator('[data-action="compare"]').click();
-  await expect(folder('release_v1.2')).toContainText('比較中');
-  await expect(folder('senior')).not.toContainText('比較中');
+  await expect(menu.locator('[data-action="compare"]')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  // 到達条件その4: 別のフォルダの図を押すと、右の枠はその 1 枚に替わる。
+  await folder('release_v1.2').click();
+  await page.locator('#files-ro-list .files-ro-body[data-ro-body$="release_v1.2"] .files-ro-file[data-file-name="spi_state"]').click();
+  await expect(page.locator('#senior-notice')).toContainText('release_v1.2 の spi_state');
   // 保存先は動かない (読むだけ)。
   expect(await S.readDoc(page, mine, 'spi_state')).toContain('SPI 状態遷移');
   await expect(page.locator('#top-crumbs')).toContainText('junior');
 
-  // 到達条件その4: 枠を閉じると「比較中」は消える。
   await page.locator('#senior-close').click();
-  await expect(page.locator('#files-count-readonly')).toHaveText('2');
+  await expect(page.locator('#senior-pane')).toBeHidden();
   for (const d of [mine, root + 'senior', root + 'release_v1.2']) await S.clearDir(page, d);
 });

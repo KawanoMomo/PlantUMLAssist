@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // version-timeline — 1 つの図の中身が保存のたびにどう変わったかを積んで並べる。
 //
-// BLK-reviewer-20260908-0723-wish: save-diff は「前回保存した 1 点」だけを基準に
+// save-diff は「前回保存した 1 点」だけを基準に
 // 持つので、A → B → A のように書き換えが往復しても、単発の diff では毎回
 // 「変わりました」としか出ず、往復していること自体が見えない。reviewer は
 // 過去の run ディレクトリを何個も遡って手で突き合わせ、初めて気付いていた。
@@ -134,7 +134,7 @@ window.MA.versionTimeline = (function() {
   //   added / removed … 1 つ前の版からの増減
   //   revisit  … 直前ではない過去の版と中身が同じ = 往復して戻ってきた版
   //   revisitOf … 戻り先の版番号
-  // を付ける。revisit がこの BLK の眼目で、単発 diff では見えない「行って戻った」
+  // を付ける。revisit がこの機能の眼目で、単発 diff では見えない「行って戻った」
   // をここで名指しする。
   function rows(name) {
     var list = _load()[name] || [];

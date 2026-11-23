@@ -58,7 +58,9 @@ test('人間 手順 6 — 手元の .puml を 2 枚ドロップして 2 タブ�
   }
   await page.keyboard.press('Escape');
   await page.locator('#btn-import').click();
-  await expect(page.locator('#btn-open-file-empty')).toHaveText('ファイルを開く(.puml)');
+  // TICKET-owner-20261123-2222-prune: 空の画面の入口も Import ▾ と同じ語。
+  await expect(page.locator('#btn-open-file-empty')).toHaveText('ファイルを開く…');
+  await expect(page.locator('#imp-file')).toContainText('ファイルを開く…');
   await expect(page.locator('#open-empty-hint')).toBeVisible();
   // BLK-builder-20260924-1415-4 (design 7a / 9a): 入口は図の上に重ねず、図のすぐ下に出る
   await expect(page.locator('#preview-svg svg').first()).toBeVisible();
@@ -67,9 +69,11 @@ test('人間 手順 6 — 手元の .puml を 2 枚ドロップして 2 タブ�
     const hintBox = await page.locator('#open-empty-hint').boundingBox();
     expect(hintBox.y).toBeGreaterThanOrEqual(svgBox.y + svgBox.height);
   }
-  // 📂 一覧 の頭にも出る
+  // TICKET-owner-20261123-2222-prune: 保存先の一覧の頭には出さない (Import ▾ の「ファイルを開く…」と重なる入口を外した)。
   await openFolder(page);
-  await expect(page.locator('#folder-open-file')).toBeVisible();
+  await expect(page.locator('#folder-panel .folder-list-title')).toBeVisible();
+  await expect(page.locator('#folder-open-file')).toHaveCount(0);
+  await expect(page.locator('#folder-panel')).not.toContainText('ファイルを開く');
   await page.click('#btn-tab-folder');   // 閉じる
 
   // Shift_JIS のバイト列はブラウザの TextEncoder では作れないので、server の書き戻しで作る

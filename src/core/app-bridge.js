@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // app-bridge — Web 版とアプリ版 (pywebview) の差を 1 箇所に閉じ込める。
 //
-// BLK-human-20260909-2200: 配布先には Python も Java も PlantUML も無い。
+// 配布先には Python も Java も PlantUML も無い。
 // アプリ版では
 //   - plantuml.jar は同梱せず、利用者が選ぶ (または「公式から取得」で取る)
 //   - Java も同梱せず、無ければ Temurin の URL を出す
@@ -23,7 +23,7 @@ window.MA.appBridge = (function() {
     return !!(e && e.app);
   }
 
-  // BLK-human-20260925-1500: 使っている PlantUML の版と推奨版 (lib/PLANTUML_VERSION。開発・自動検証はこの版) を
+  // 使っている PlantUML の版と推奨版 (lib/PLANTUML_VERSION。開発・自動検証はこの版) を
   // 「使用中: 1.2026.3 / 推奨: 1.2026.8」と並べる。違えば「取得し直す」を隣に出す (differs)。1.2026.3〜.6 は並行領域
   // (`--` / `||`) を持つ複合状態で最初の領域しか描かない (残りが黙って消える) ので、server が古いと言ったらその旨も 1 行出す。
   // 版は server が jar のマニフェストから読む (通信しない)。
@@ -54,7 +54,7 @@ window.MA.appBridge = (function() {
     };
   }
 
-  // BLK-owner-20260925-1932-2: 取得の入口は状態ごとに 1 つ。jar が無いときは下の行の「公式から取得」、
+  // 取得の入口は状態ごとに 1 つ。jar が無いときは下の行の「公式から取得」、
   // jar があるときは版の行の「取得し直す」(推奨版と違うときだけ)。同じ取得をする 2 つのボタンを並べない。
   //   返り値 { fetch: 「公式から取得」を出すか, refetch: 「取得し直す」を出すか, canFetch }
   function fetchEntries(env) {
@@ -82,7 +82,7 @@ window.MA.appBridge = (function() {
     return !!(e && e.jar);
   }
 
-  // BLK-human-20260915-1201: jar を入れる操作は「押した → 数十秒 → 結果」の
+  // jar を入れる操作は「押した → 数十秒 → 結果」の
   // 3 拍あるのに、画面は押す前と押した後しか持っていなかった。取得中・完了・
   // 失敗を 1 つの純関数にまとめ、失敗のときは理由と「再試行の入口が要る」を
   // 呼び出し側へ渡す (文言と再試行ボタンの出し分けを 2 箇所で書かないため)。

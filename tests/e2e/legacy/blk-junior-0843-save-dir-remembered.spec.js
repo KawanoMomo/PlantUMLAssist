@@ -3,6 +3,8 @@
 // 図種を変えるたびに ⚙設定 → ファイル → パス再入力 → OK を打ち直していた。
 // 保存先は server 側 (/prefs) に覚え、localStorage が空のタブでも引き継ぐ。
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
 const { gotoApp, saveDirFor } = require('../helpers');
 
 const SAVE_DIR = saveDirFor(__filename);
@@ -31,17 +33,19 @@ test.describe('保存先ディレクトリを覚える (BLK-junior-20260907-0843
     expect(await got.json()).toEqual({ backend: 'file', fileDir: SAVE_DIR });
   });
 
-  test('設定で保存先を決めると server 側にも残る', async ({ page, request }) => {
+  // TICKET-owner-20261122-1240-1: ⚙ の保存先の欄は外した。⚙ の「保存先のフォルダを選ぶ…」から窓を開き、窓のパスの欄で決める。
+  test('設定から保存先を決めると server 側にも残る', async ({ page, request }) => {
+    fs.mkdirSync(path.join(__dirname, '..', '..', '..', SAVE_DIR.replace(/^\.\//, '')), { recursive: true });
     await gotoApp(page);
     await openSettings(page);
-    await page.locator('#cfg-backend-cards input[value="file"]').check();
-    await expect(page.locator('#cfg-file-dir-row')).toBeVisible();
-    await page.locator('#cfg-file-dir').fill(SAVE_DIR);
-    await page.locator('#cfg-ok').click();
+    await page.locator('#cfg-file-dir-pick').click();
     await expect(page.locator('#cfg-modal')).toBeHidden();
+    await page.locator('#target-pick-path').fill(SAVE_DIR);
+    await page.locator('#target-pick-ok').click();
+    await expect(page.locator('#target-pick')).toHaveCount(0);
 
-    await expect.poll(async () => (await (await request.get('/prefs')).json()).fileDir)
-      .toBe(SAVE_DIR);
+    await expect.poll(async () => String((await (await request.get('/prefs')).json()).fileDir || '').replace(/\\/g, '/'))
+      .toMatch(/\/test-results\/autosave\/blk-junior-0843-save-dir-remembered$/);
   });
 
   test('新しいタブ (localStorage 空) でも保存先が入ったまま開く', async ({ page, request, context }) => {
@@ -62,7 +66,7 @@ test.describe('保存先ディレクトリを覚える (BLK-junior-20260907-0843
     // 設定画面を開けば、その値がそのまま入っている (打ち直しが要らない)。
     await openSettings(fresh);
     await expect(fresh.locator('#cfg-backend-cards input[value="file"]')).toBeChecked();
-    await expect(fresh.locator('#cfg-file-dir')).toHaveValue(SAVE_DIR);
+    await expect(fresh.locator('#cfg-file-dir-cur')).toContainText(SAVE_DIR);
     await fresh.close();
   });
 

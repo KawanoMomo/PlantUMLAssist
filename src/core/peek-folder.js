@@ -3,8 +3,8 @@ window.MA = window.MA || {};
 
 // peek-folder — 他の保存フォルダの図を「読むだけ」で見る。
 //
-// BLK-junior-20260908-0723: 先輩 (primary) の図を読むために、設定ダイアログで
-// 保存先を `persona-data\primary` に打ち替え、読んだ後また `persona-data\junior`
+// 先輩 (primary) の図を読むために、設定ダイアログで
+// 保存先を `作業フォルダ\primary` に打ち替え、読んだ後また `作業フォルダ\junior`
 // へ打ち戻していた。往復でフルパスを 2 回打つことになり (60 字超)、戻し忘れると
 // 自分の図が他人のフォルダに紛れ込む。
 //
@@ -48,7 +48,7 @@ window.MA.peekFolder = (function() {
     return (list || []).filter(function(d) { return !d.current; });
   }
 
-  // BLK-owner-20260924-1836-prune: 覗く窓を開いたときに見るフォルダ。フォルダの一覧は窓から外し
+  // 覗く窓を開いたときに見るフォルダ。フォルダの一覧は窓から外し
   // (ツリーの「読むだけ」で選ぶ)、開いた時点で 1 つに決めておく。
   //   want (右クリックしたフォルダ) → comparing (右の枠に並べている相手) → last (前に覗いていたフォルダ) → 先頭
   // どれも隣に無ければ ''。自分の保存先は選ばない。
@@ -96,41 +96,7 @@ window.MA.peekFolder = (function() {
   }
 
 
-  // 覗いている 1 枚を、そのままテンプレート新規作成の材料にする。
-  // BLK-junior-20260909-0503-wish: 読むだけで見た先輩の図は画面上のテキストの
-  // ままで自分のタブへは何も引き継がれず、見た構成を覚えて新しいタブに打ち直す
-  // (実測 360 字) しかなかった。覗いた図そのものをテンプレートの選択肢にすれば、
-  // 打つのは部品名だけになり、写し違いも起きない。
-  // 中身が空の図は材料にならない (置換する語が無く、押しても何も作れない)。
-  function templateSeed(dir, name, dsl) {
-    var n = _s(name), text = _s(dsl);
-    if (!n || !text.replace(/\s/g, '')) return null;
-    var folder = baseName(dir);
-    return {
-      value: 'peek:' + folder + '/' + n,
-      folder: folder,
-      dir: _s(dir),
-      name: n,
-      label: folder + ' / ' + n + '（他のフォルダ）',
-      dsl: text,
-    };
-  }
-
-  // 置換元にいちばん近い候補。ファイル名 (timer_init_sequence.puml) に出てくる語を
-  // 優先する。図の本文だけで数えると、どの図にも出る App のような語が
-  // 出現数で勝ってしまい、写したい部品名 (Timer) が選ばれない。
-  // 候補は templateNew.candidates の並び (出現数の多い順) をそのまま受ける。
-  function seedHint(fileName, candidates) {
-    var base = _s(fileName).toLowerCase();
-    var list = candidates || [];
-    for (var i = 0; i < list.length; i++) {
-      var n = _s(list[i] && list[i].name);
-      if (n && base.indexOf(n.toLowerCase()) >= 0) return n;
-    }
-    return list.length ? _s(list[0].name) : '';
-  }
-
-  // 覗き一覧の 1 行に出す図種の印 (BLK-junior-20260912-2206)。
+  // 覗き一覧の 1 行に出す図種の印。
   // junior は先輩のフォルダにコンポーネント図があるかを見に行くのに、名前だけの
   // 一覧を 30 行読んで語尾 (_state / _sequence) から図種を推測していた。
   // 自分の 📂 一覧と同じ決め方にする: 保存したときの図種の控え (savedKind) が
@@ -151,12 +117,6 @@ window.MA.peekFolder = (function() {
              title: 'この図の図種（本文から判定）' };
   }
 
-  // テンプレートとして開けるかどうかの 1 行。押せないときは理由を出す。
-  function seedNotice(seed) {
-    if (!seed) return '図を選ぶとテンプレートとして開けます';
-    return seed.folder + ' の ' + seed.name + ' をテンプレートにして新しい図を作ります';
-  }
-
   return {
     baseName: baseName,
     choices: choices,
@@ -167,8 +127,5 @@ window.MA.peekFolder = (function() {
     noticeText: noticeText,
     step: step,
     kindBadge: kindBadge,
-    templateSeed: templateSeed,
-    seedNotice: seedNotice,
-    seedHint: seedHint,
   };
 })();

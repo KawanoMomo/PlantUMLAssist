@@ -53,7 +53,7 @@ window.MA.editorJump = (function() {
     return Math.min.apply(null, lines);
   }
 
-  // BLK-owner-20260930-0111-1: 図を押しただけでは本文欄にフォーカスを渡さない (次の Enter や文字キーで行が
+  // 図を押しただけでは本文欄にフォーカスを渡さない (次の Enter や文字キーで行が
   // 置き換わっていた)。代わりに、その行の上に帯を重ねて「どこへ来たか」を見せる。帯の上端 (#editor-wrap 内の px) と、
   // その行がいま本文欄の見えている範囲にあるか。padTop は #editor の padding-top。
   function bandBox(lineNum, opts) {

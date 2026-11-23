@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const { gotoApp, getEditorText } = require('../helpers');
 
 // BLK-builder-20260907-1401-2 (design 2b): 本文 / Label のツールバーは B I U ··· creole。
-// 色は `···` の内側に畳み、パネルに「文字色 / Text color」「最近使った色」「色を外す」を出す。
+// 色は `···` の内側に畳み、パネルに「文字色」「最近使った色」「色を外す」を出す。
 
 const FIXTURE = [
   '@startuml',
@@ -56,7 +56,7 @@ test.describe('BLK-builder-20260907-1401-2: 本文の色パネル', () => {
     await bar.locator('.rle-color-more').click();
     const panel = bar.locator('.rle-color-panel');
     await expect(panel).toBeVisible();
-    await expect(panel).toContainText('文字色 / Text color');
+    await expect(panel).toContainText('文字色');
     await expect(panel.locator('.rle-color-clear')).toHaveText('色を外す');
     await expect(panel).toContainText('Esc で閉じる');
     await expect(await bar.locator('.rle-color-more').getAttribute('aria-expanded')).toBe('true');

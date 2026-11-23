@@ -3,12 +3,10 @@ window.MA = window.MA || {};
 
 // outline — DSL から図の構造(要素・関係・入れ子ブロック)を組み立てる純関数。
 //
-// design/「PlantUMLAssist - リデザイン案」1a のエディタペインは「DSL」と
-// 「構造 / Outline」の 2 タブで、構造タブは図に何が宣言され関係が何本あるかを
-// 一覧で見せ、下部に「パース OK」「3 elements · 4 relations」を出す。
-// DSL 全文を目で追わずに図の骨格を掴み、行へ飛ぶための索引を作る。
+// 下端の状態表示の「パース OK」「3 elements · 4 relations」はここで数える
+// (エディタペインの「構造」タブは TICKET-owner-20261116-0921-prune で外した)。
 //
-// 図種ごとにモジュールを分けないのは、構造タブが必要とするのが
+// 図種ごとにモジュールを分けないのは、数えるのに要るのが
 // 「この行は宣言か・関係か・ブロックか」という粒度だけで、図種を跨いで
 // 同じ規則で判定できるため(宣言キーワードと矢印の形は図種で重ならない)。
 window.MA.outline = (function() {
@@ -30,10 +28,10 @@ window.MA.outline = (function() {
   var IF_OPEN = /^\s*if\s*\((.*?)\)\s*then\b(.*)$/i;
 
   // 矢印(関係)。図種で形は違うが「左辺 矢印 右辺」の並びは共通。
-  // BLK-builder-20260925-0314-1: 名前は日本語 (U+0080 以上) でもよい (`App -> センサ制御 : Init()`)。
+  // 名前は日本語 (U+0080 以上) でもよい (`App -> センサ制御 : Init()`)。
   var REL_RE = new RegExp(
     '^\\s*(\\[\\*\\]|"[^"]*"|\\(.*?\\)|:[^:]*:|[A-Za-z0-9_\u0080-\uFFFF][A-Za-z0-9_.\u0080-\uFFFF-]*)' +
-    // BLK-migrator-20260929-1155: 向き (`-right->`) と色・線種 (`-[#red]->`) を挟んだ矢印も 1 本の関係として数える
+    // 向き (`-right->`) と色・線種 (`-[#red]->`) を挟んだ矢印も 1 本の関係として数える
     // (state-15 は遷移 6 本を 1 本と数え、下端が「1 state · 1 transition」だった)。
     '\\s*([-.]+(?:(?:up|down|left|right|u|d|l|r)(?=[-.\\[]))?(?:\\[[^\\]]*\\])?[-.]*>+|[-.=]{1,2}(?:\\(\\)|o|\\*|\\|>)?[->x]*|<[-.|]{1,2}[a-z]*|<\\|[-.]+|[-.]+\\|>|\\*[-.]+|o[-.]+|\\)[-.]+|[-.]+\\(|[-.]{2,})\\s*' +
     '(\\[\\*\\]|"[^"]*"|\\(.*?\\)|:[^:]*:|[A-Za-z0-9_\u0080-\uFFFF][A-Za-z0-9_.\u0080-\uFFFF-]*)\\s*(?::\\s*(.*))?$'
@@ -116,12 +114,12 @@ window.MA.outline = (function() {
     // 「どの親の中か」を付けるために持つ。alt/loop のような括りは親に数えない。
     var declStack = [];
     var sawStart = false, sawEnd = false;
-    // BLK-migrator-20260929-1300: `!ifdef` / `!if` の描かれない枝の行は、構造にも件数にも入れない
+    // `!ifdef` / `!if` の描かれない枝の行は、構造にも件数にも入れない
     // (両枝に `A -> B` があると、描かれる 1 本を 2 本と数えていた)。解けない条件の枝は今までどおり数える。
     var PL = window.MA.preprocLive;
     var dead = PL ? PL.deadLines(dsl) : {};
 
-    // BLK-migrator-20260929-1351: 手続き・関数・!definelong の本体は展開前の型紙なので数えない
+    // 手続き・関数・!definelong の本体は展開前の型紙なので数えない
     // (描かれるのは呼んだ行の展開。本体の `target -> target` を矢印と数えると 1 本多い)。
     var inBody = false;
     for (var i = 0; i < lines.length; i++) {
@@ -269,7 +267,7 @@ window.MA.outline = (function() {
         relations++;
         [nodes[n].from, nodes[n].to].forEach(function(end) {
           var name = String(end || '').trim();
-          // BLK-owner-20260923-2332-1: `Idle.Standby` と修飾した端は、`state Idle { state Standby }` の
+          // `Idle.Standby` と修飾した端は、`state Idle { state Standby }` の
           // Standby と同じ状態 (PlantUML は入れ子の子として描く)。別の状態として数えない。
           if (name.indexOf('.') >= 0) name = name.split('.').pop();
           if (name && name !== '[*]') stateNames[name] = 1;

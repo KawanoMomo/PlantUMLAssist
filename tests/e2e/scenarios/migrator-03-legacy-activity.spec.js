@@ -203,10 +203,6 @@ test('手順3 PlantUML の公開版が読めない +package の語順は、版�
   await expect(band).toBeHidden();
 
   // 同じタブが描けた図は、描けない行を入れても帯の下に残る (直前の図を残すのはそのタブ自身の図)。
-  // (開いたファイルを直したので、書いてよいかの確認が出る。上書きで答える。)
-  const lockBtn = page.locator('#source-lock-overwrite');
-  await lockBtn.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-  if (await lockBtn.isVisible()) await lockBtn.click();
   await expect.poll(previewTexts, { timeout: 20000 }).toEqual(expect.arrayContaining(['World']));
   await page.locator('#editor').click();
   await page.keyboard.press('Control+Home');

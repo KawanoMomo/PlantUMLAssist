@@ -54,12 +54,15 @@ describe('server の図種の控え (_kinds.json)', () => {
       'entry = [e for e in data["entries"] if e["name"] == "timer_init"][0]',
       'print(json.dumps({"savedKind": res.get("savedKind"), "kinds": data.get("kinds"),',
       '                  "entrySaved": entry.get("savedKind"), "entryGuess": entry.get("kind"),',
-      '                  "hasFile": os.path.exists(os.path.join(tmp, "_kinds.json"))}))',
+      '                  "hasFile": (srv.folder_state_dir(tmp) / "_kinds.json").exists(),',
+      '                  "inSaveDir": sorted(os.listdir(tmp))}))',
     ]));
     expect(out.savedKind).toBe('sequence');
     expect(out.kinds).toEqual({ timer_init: 'sequence' });
     expect(out.entrySaved).toBe('sequence');
+    // TICKET-owner-20261115-1827-1: 控えは設定の置き場に持ち、保存先には .puml だけを書く。
     expect(out.hasFile).toBe(true);
+    expect(out.inSaveDir).toEqual(['timer_init.puml']);
     // 控えは本文判定の置き換えではない。判定は判定のまま返る (この図では別の値)。
     expect(out.entryGuess).toBe('sequence');
   });

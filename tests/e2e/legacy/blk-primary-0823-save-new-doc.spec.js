@@ -61,26 +61,6 @@ test.describe('新しく作った図が保存フォルダに現れる (BLK-prima
       .toEqual(expect.arrayContaining(names));
   });
 
-  test('テンプレートから作った図が、作った時点でフォルダに現れる', async ({ page }) => {
-    // テンプレート元になる図をまず 1 枚フォルダに用意する
-    await page.locator('#editor').fill('@startuml\nstate Adc_Idle\nstate Adc_Done\nAdc_Idle --> Adc_Done\n@enduml');
-    await page.waitForTimeout(1200);
-    await page.locator('#btn-tab-template').click();
-    await page.waitForSelector('#btn-tpl-create');
-    await page.locator('#tpl-from').fill('Adc');
-    await page.locator('#tpl-to').fill('Timer');
-    await page.locator('#tpl-name').fill('timer_state');
-    // 残っている部品名は「このままで良い」にする
-    const keeps = page.locator('#tpl-modal input[type="checkbox"]');
-    const n = await keeps.count();
-    for (let i = 0; i < n; i++) await keeps.nth(i).check();
-    await expect(page.locator('#btn-tpl-create')).toBeEnabled();
-    await page.locator('#btn-tpl-create').click();
-
-    await expect.poll(() => listFiles(page), { timeout: 8000 })
-      .toContain('timer_state');
-  });
-
   test('「保存」を押すと保存先に書かれ、どこに書いたかが画面に出る', async ({ page }) => {
     await page.locator('#btn-tab-new').click();
     await page.waitForTimeout(500);

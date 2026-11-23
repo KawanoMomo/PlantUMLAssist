@@ -1,0 +1,14 @@
+@startuml
+title SPI ドライバの構成
+' 手で整えた図。字下げとコメントは道具に崩させない
+class Spi_Driver {
+  - baud : uint16
+  - mode : uint8
+  + init(cfg : Spi_Config) : Std_ReturnType
+}
+class Spi_DriverMon {
+  - baud : uint16
+}
+class Spi_Config
+Spi_Driver ..> Spi_Config : uses
+@enduml
