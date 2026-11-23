@@ -9393,7 +9393,40 @@ function exportFileName(ext) {
   return EN.fileName(doc, meta, ext);
 }
 
-function exportSVG() {
+// ── 書き出しは押した図の今の本文の図を書く (TICKET-roadmap-20261123-0857-2 / MA.exportWait) ──────────
+// プレビューの絵がどのタブのどの本文の図か (描き直しが届いたときに控える)。
+var _previewPic = null;      // { key, text }
+var _pendingExport = null;   // { key, text, run } 描き直しを待っている書き出し (1 つだけ。押し直したら後の方)
+function _exportWhenDrawn(run) {
+  var EW = window.MA.exportWait;
+  if (!EW) { run(); return; }
+  var key = _activeDocKey();
+  var st = EW.decide({ hasSvg: !!previewSvgEl.querySelector('svg'), pic: _previewPic, key: key, text: mmdText, verdict: _engineVerdict });
+  if (st === 'now') { _pendingExport = null; run(); return; }
+  if (st === 'error') { _pendingExport = null; setSaveStatus('⚠ ' + EW.ERROR_MSG); return; }
+  _pendingExport = { key: key, text: mmdText, run: run };
+  setSaveStatus(EW.WAIT_MSG);
+  var el = document.getElementById('status-save-result');
+  if (el) el.setAttribute('data-export-waiting', '1');
+  // 描き直しが予約されていなければ頼む (図を開いた直後など)。
+  scheduleRefresh();
+}
+// 描き直しが届いた・描けなかったときに呼ぶ (renderSvg)。
+function _flushPendingExport(ok, renderKey, renderText) {
+  var p = _pendingExport;
+  var EW = window.MA.exportWait;
+  if (!p || !EW) return;
+  var r = EW.onRendered(p, { ok: ok, key: renderKey, text: renderText, activeKey: _activeDocKey(), activeText: mmdText });
+  if (r === 'keep') return;
+  _pendingExport = null;
+  var el = document.getElementById('status-save-result');
+  if (el) el.removeAttribute('data-export-waiting');
+  if (r === 'run') { p.run(); return; }
+  setSaveStatus('⚠ ' + (r === 'cancel' ? EW.CANCEL_MSG : EW.ERROR_MSG));
+}
+
+function exportSVG() { _exportWhenDrawn(_exportSvgNow); }
+function _exportSvgNow() {
   var svgEl = previewSvgEl.querySelector('svg');
   if (!svgEl) return;
   var clone = svgEl.cloneNode(true);
@@ -9713,7 +9746,8 @@ function svgToCanvas(transparent, callback) {
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
 }
 
-function exportPNG(transparent) {
+function exportPNG(transparent) { _exportWhenDrawn(function() { _exportPngNow(transparent); }); }
+function _exportPngNow(transparent) {
   svgToCanvas(transparent, function(canvas) {
     canvas.toBlob(function(blob) {
       if (!blob) return;
@@ -10907,6 +10941,7 @@ function renderSvg() {
       previewSvgEl.innerHTML = svg;
     }
     _previewOwnerId = (renderDocKey === _activeDocKey() && !_isPlantUmlWelcome(svg)) ? renderDocKey : false;
+    _previewPic = _previewOwnerId !== false ? { key: renderDocKey, text: renderText } : null;
     var nse = window.MA.renderError.noStartEnd ? window.MA.renderError.noStartEnd(svg) : null;
     _setEngineVerdict(renderText, nse
       ? { state: 'error', noStartEnd: true, message: nse.message, line: null }
@@ -10986,6 +11021,8 @@ function renderSvg() {
     renderStatusEl.title = '描画: ' + mode;
     _renderTimings[mode] = took;   // design 5a: 設定画面での速度比較に使う
     updateTopRenderStatus('ok', took);
+    // 描き直しを待っていた書き出しを、届いた絵で 1 回だけ書く (MA.exportWait)。
+    _flushPendingExport(true, renderDocKey, renderText);
   }).catch(function(err) {
     if (myGen !== renderGen) return;  // stale failure — ignore
     var bandText = (err && err.message) || err;
@@ -11009,6 +11046,7 @@ function renderSvg() {
     renderStatusEl.textContent = 'ERROR';
     renderStatusEl.classList.add('error');
     updateTopRenderStatus('error');
+    _flushPendingExport(false, renderDocKey, renderText);
   });
 }
 
