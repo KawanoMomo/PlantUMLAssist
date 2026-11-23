@@ -112,6 +112,40 @@ window.MA.tailMemory = (function() {
     return { from: t || f, to: '' };
   }
 
+  // シーケンス図を開いた直後・タブを替えた直後・白紙で参加者を足した直後
+  // (確定の覚えも選んだ行も無いとき) の From / To。
+  // 前は From・To とも先頭の参加者で始まり、本文だけ打って Enter を押すと選んでいない自己メッセージ
+  // (`Ctl -> Ctl`) が入った (TICKET-owner-20261123-1922-2)。確定した後と同じ形にそろえ、
+  // From は本文の最後のメッセージの送り先 (図の参加者に限る。無ければ先頭の参加者)、To は空欄。
+  // source: 'last' (最後のメッセージの送り先) / 'first' (先頭の参加者) / 'none' (参加者が居ない)。
+  function openMessageEnds(participantIds, messages) {
+    var ids = (participantIds || []).map(function(v) { return v == null ? '' : String(v); });
+    var msgs = (messages || []).filter(function(m) { return !!m; }).map(function(m, i) { return { m: m, i: i }; });
+    // 本文の行の順 (line が無ければ並びの順) で最後のメッセージを探す。
+    msgs.sort(function(a, b) {
+      var la = typeof a.m.line === 'number' ? a.m.line : -1;
+      var lb = typeof b.m.line === 'number' ? b.m.line : -1;
+      return la !== lb ? la - lb : a.i - b.i;
+    });
+    for (var k = msgs.length - 1; k >= 0; k--) {
+      var to = msgs[k].m.to == null ? '' : String(msgs[k].m.to);
+      if (to && ids.indexOf(to) >= 0) return { from: to, to: '', source: 'last' };
+    }
+    if (ids.length && ids[0]) return { from: ids[0], to: '', source: 'first' };
+    return { from: '', to: '', source: 'none' };
+  }
+
+  // openMessageEnds の出どころを 1 行で言う (From の欄の値と同じ名前を出す)。
+  function openMessageNote(ends, labelOf) {
+    var e = ends || {};
+    if (!e.from) return '';
+    var l = typeof labelOf === 'function' ? labelOf(e.from) : null;
+    var name = String(l || e.from);
+    var head = e.source === 'last' ? '本文の最後のメッセージの送り先 ' + name + ' から続けます。'
+      : '先頭の参加者 ' + name + ' から始めます。';
+    return head + 'To は図の参加者を押すか選んでください';
+  }
+
   return {
     sync: sync,
     setKeyFn: setKeyFn,
@@ -126,5 +160,7 @@ window.MA.tailMemory = (function() {
     hasOption: hasOption,
     bindSelect: bindSelect,
     nextMessageEnds: nextMessageEnds,
+    openMessageEnds: openMessageEnds,
+    openMessageNote: openMessageNote,
   };
 })();

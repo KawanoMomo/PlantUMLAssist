@@ -50,11 +50,16 @@ test.describe('BLK-junior-2203: 選んだ行の当事者が末尾追加に活き
       .toHaveText('直前に選んだ Gpio_Driver → App を初期値にしています');
   });
 
-  test('何も選んでいなければこれまでどおり先頭の参加者のまま', async ({ page }) => {
+  // TICKET-owner-20261123-1922-2: 何も選んでいなければ、開いた直後も確定の後と同じ形
+  // (From は本文の最後のメッセージ Gpio_Driver --> App の送り先、To は空欄)。前は From・To とも先頭の参加者で、
+  // 本文だけ打って Enter を押すと自己メッセージが入った。
+  test('何も選んでいなければ From は本文の最後のメッセージの送り先、To は空欄', async ({ page }) => {
     await gotoApp(page);
     await setDsl(page, DSL);
     await expect(page.locator('#seq-tail-from')).toHaveValue('App');
-    await expect(page.locator('#seq-tail-endpoint-note')).toHaveCount(0);
+    await expect(page.locator('#seq-tail-to')).toHaveValue('');
+    await expect(page.locator('#seq-tail-endpoint-note'))
+      .toHaveText('本文の最後のメッセージの送り先 App から続けます。To は図の参加者を押すか選んでください');
   });
 
   test('別の行を選び直すと初期値も付いてくる', async ({ page }) => {
