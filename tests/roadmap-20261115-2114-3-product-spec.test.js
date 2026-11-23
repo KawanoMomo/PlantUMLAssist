@@ -91,6 +91,28 @@ var V8_MUST_SCENARIOS = [
   'tests/scenarios/roadmap-20261123-0857-2.spec.js',   // 必須 3 書き出しは今の本文の図
   'tests/scenarios/roadmap-20261123-0226-1.spec.js',   // 必須 4 1 回の置換は 1 押しで全部戻る
 ];
+// v9.0 の必須 1・2 の scenario (roadmap/v9.0.md クライテリア 4。TICKET-roadmap-20261123-2358-2)。
+// 「書き出す」の v9.0 の行が指し、前書きが「図を資料へ渡す順」(大きさ → クリップボード) にこの順で名指しする。
+var V9_MUST_SCENARIOS = [
+  'tests/scenarios/junior-20261123-1142.spec.js',      // 必須 1 PNG が貼って読める大きさで出る
+  'tests/scenarios/roadmap-20261123-2358-1.spec.js',   // 必須 2 クリップボードにコピーも今の本文の図
+];
+// ECN-012 の後 (マージ e2979fa より後) に master へ入った振る舞いの票。ECN-013 がマージのハッシュと並べる。
+var V9_ECN_TICKETS = [
+  'TICKET-owner-20261123-1202-1', 'TICKET-owner-20261123-1242-1', 'TICKET-owner-20261123-1322-prune',
+  'TICKET-owner-20261123-1922-1', 'TICKET-owner-20261123-1922-2', 'TICKET-owner-20261123-2222-prune',
+  'TICKET-owner-20261123-2222-1', 'TICKET-owner-20261123-1922-3', 'TICKET-owner-20261123-2322-1',
+  'TICKET-owner-20261123-2322-2', 'TICKET-owner-20261123-2322-3', 'TICKET-junior-20261123-1142-wish',
+  'TICKET-roadmap-20261123-2358-1',
+];
+// ECN の表で、票の行の最後の欄がマージのハッシュ (7 桁の 16 進) でない票を返す。
+function ecnMissingHash(ecnText, ids) {
+  var lines = ecnText.split(/\r?\n/);
+  return ids.filter(function(id) {
+    var line = lines.filter(function(l) { return l.indexOf('| ' + id + ' |') >= 0; })[0] || '';
+    return !/\|\s*[0-9a-f]{7}(\s[0-9a-f]{7})*\s*\|\s*$/.test(line);
+  });
+}
 var ALL_SCENES = null;
 // 「## 製品の約束」の節の箇条 (- で始まる行)。
 function promiseLines(text) {
@@ -168,20 +190,44 @@ describe('製品仕様書 docs/spec/product-spec.md', function() {
     expect(missingMust(S.rows, V6_SCENES, V6_MUST_SCENARIOS)).toEqual([]);
   });
 
-  test('表題と前書きは v8.0', function() {
-    expect(SPEC.split(/\r?\n/)[0]).toBe('# 製品仕様書 — PlantUMLAssist v8.0');
+  test('表題と前書きは v9.0', function() {
+    expect(SPEC.split(/\r?\n/)[0]).toBe('# 製品仕様書 — PlantUMLAssist v9.0');
+    expect(SPEC.slice(0, SPEC.indexOf('\n## '))).toContain('v9.0「貼って読める版」');
+  });
+
+  test('v9.0 の必須 1・2 の scenario を指す v9.0 の行が「書き出す」にあり、前書きが資料へ渡す順に同じ 2 本を名指しする', function() {
+    var v9rows = S.rows.filter(function(r) { return r.ver === 'v9.0'; });
+    expect(missingMust(v9rows, ['書き出す'], V9_MUST_SCENARIOS)).toEqual([]);
+    var pre = prefaceSpecs(SPEC);
+    expect(pre).toEqual(V9_MUST_SCENARIOS);
+    pre.forEach(function(p) { expect(p + ':' + existsInRepo(p)).toBe(p + ':true'); });
+  });
+
+  test('ECN-012 の後の振る舞いの変更を票・コミットと並べた ECN-013 と、書き出しの大きさの持ち方の ADR ドラフトがある', function() {
+    var ecnPath = 'docs/ecn/ECN-013_v8.0-to-v9.0-behavior.md';
+    var ecn = fs.readFileSync(path.join(ROOT, ecnPath), 'utf8');
+    expect(ecn).toContain('e2979fa');
+    expect(ecnMissingHash(ecn, V9_ECN_TICKETS)).toEqual([]);
+    var adrPath = 'docs/adr/drafts/png-scale-tool-setting.md';
+    var adr = fs.readFileSync(path.join(ROOT, adrPath), 'utf8');
+    expect(adr).toContain('未採番');
+    expect(adr).toContain('本文に書かず');
+    expect(adr).toContain('道具の設定に覚える');
+    expect(adr).toContain('選ばなかった案');
+    ['`scale`', '幅の px 指定', '図ごと'].forEach(function(w) { expect(w + ':' + (adr.indexOf(w) >= 0)).toBe(w + ':true'); });
+    expect(SPEC).toContain(adrPath);
+    expect(SPEC).toContain(ecnPath);
+    expect(README).toContain(ecnPath);
+    expect(fs.readFileSync(path.join(ROOT, 'docs', 'ecn', 'README.md'), 'utf8')).toContain('(ECN-013_v8.0-to-v9.0-behavior.md)');
   });
 
   test('v7.0 の必須 1〜4 の scenario を指す行がある (v8.0 で前書きを替えても行は残る)', function() {
     expect(missingMust(S.rows, ALL_SCENES, V7_MUST_SCENARIOS)).toEqual([]);
   });
 
-  test('v8.0 の必須 1〜4 の scenario を指す v8.0 の行があり、前書きが続けて直して渡す順に同じ 4 本を名指しする', function() {
+  test('v8.0 の必須 1〜4 の scenario を指す v8.0 の行がある (v9.0 で前書きを替えても行は残る)', function() {
     var v8rows = S.rows.filter(function(r) { return r.ver === 'v8.0'; });
     expect(missingMust(v8rows, ALL_SCENES, V8_MUST_SCENARIOS)).toEqual([]);
-    var pre = prefaceSpecs(SPEC);
-    expect(pre).toEqual(V8_MUST_SCENARIOS);
-    pre.forEach(function(p) { expect(p + ':' + existsInRepo(p)).toBe(p + ':true'); });
   });
 
   test('「製品の約束」に操作と描き直しの順の約束が 1 行あり、前からの 5 行も残る', function() {
@@ -319,6 +365,11 @@ describe('突き合わせが変異で落ちる', function() {
     expect(orderPromise(promiseLines(t))).toEqual([]);
     expect(orderPromise(['- **操作は今の本文に働く**。描き直しの結果でなく'])).toEqual(['- **操作は今の本文に働く**。描き直しの結果でなく']);
     expect(promiseLines('# T\n\n## 読み方\n- x')).toEqual([]);
+  });
+
+  test('v9.0: ECN の票の行にハッシュが無い・行が無いと欠けとして出る', function() {
+    var t = '| v9.0 | TICKET-a | x | 139f14f |\n| v9.0 | TICKET-b | x | この票のマージ |\n';
+    expect(ecnMissingHash(t, ['TICKET-a', 'TICKET-b', 'TICKET-c'])).toEqual(['TICKET-b', 'TICKET-c']);
   });
 
   test('README の見出しを拾う', function() {
