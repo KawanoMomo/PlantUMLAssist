@@ -121,18 +121,29 @@ window.MA.exportDest = (function() {
     return k > 0 ? '選んだ ' + k + ' 枚を書き出す' : '選んだ図を書き出す';
   }
 
+  // pathName(rel, name) — サブフォルダの図の道付きの名前 ('hw/a')。直下の図 (rel が空) は名前だけ。
+  function pathName(rel, name) {
+    var f = normSub(rel) || '';
+    return f ? f + '/' + _s(name) : _s(name);
+  }
+
   // batchMessage(results, kind, sub) — まとめて書いた後の 1 行。
-  // results: [{ name, ok, error? }]。書いた枚数・形式・置き場と、書けなかった図の名前。
+  // results: [{ name, ok, error?, rel? }]。書いた枚数・形式・置き場と、書けなかった図の名前。
+  // サブフォルダの図 (rel あり。TICKET-roadmap-20261123-2358-3) が混ざると置き場は図ごとに違うので、
+  // 「それぞれの図のフォルダの置き場」と言い、書いた図を道付きの名前 (hw/a) で並べる。直下の図だけなら今のまま。
   function batchMessage(results, kind, sub) {
     var list = results || [];
     var done = list.filter(function(r) { return r && r.ok; });
     var fail = list.filter(function(r) { return r && !r.ok; });
+    var mixed = list.some(function(r) { return r && normSub(r.rel); });
+    function nameOf(r) { return pathName(r.rel, r.name); }
     var head = done.length
-      ? '書き出しました: ' + done.length + ' 枚 (' + kindLabel(kind) + ') → ' + placeLabel(sub)
+      ? '書き出しました: ' + done.length + ' 枚 (' + kindLabel(kind) + ') → ' +
+        (mixed ? 'それぞれの図のフォルダの置き場: ' + done.map(nameOf).join('・') : placeLabel(sub))
       : '書き出せませんでした: 0 枚 (' + kindLabel(kind) + ')';
     if (!fail.length) return head;
     return head + ' ／ 書かなかった図: ' + fail.map(function(r) {
-      return _s(r.name) + '（' + (_s(r.error) || '描けません') + '）';
+      return nameOf(r) + '（' + (_s(r.error) || '描けません') + '）';
     }).join('、');
   }
 
@@ -164,7 +175,7 @@ window.MA.exportDest = (function() {
     KINDS: KINDS, normSub: normSub, key: key, loadSub: loadSub, saveSub: saveSub,
     kindOf: kindOf, fileName: fileName, url: url, placeLabel: placeLabel, message: message,
     sameFolderChoice: sameFolderChoice, subChoice: subChoice, slashPath: slashPath,
-    BATCH_KINDS: BATCH_KINDS, kindLabel: kindLabel, batchLabel: batchLabel, batchMessage: batchMessage,
+    BATCH_KINDS: BATCH_KINDS, kindLabel: kindLabel, batchLabel: batchLabel, batchMessage: batchMessage, pathName: pathName,
     statusUrl: statusUrl, staleKinds: staleKinds, staleLabel: staleLabel,
   };
 })();
