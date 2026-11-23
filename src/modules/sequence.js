@@ -2968,6 +2968,8 @@ window.MA.modules.plantumlSequence = (function() {
             var tailNote = SE ? SE.noteText(tailDef, labelOfPart) : '';
             // 図の参加者を押して To に入れる手 (_tailToPick) が効くか。確定の後は最初から効く。
             var pickArmed = false;
+            // 開いた直後の案内 (openMessageEnds) を出したとき、欄に触れて押す手が効いたら語を言い替える。
+            var openEndsShown = null;
             var partIdsOpen = participants.map(function(p) { return p.id; });
             // 開いた直後・タブを替えた直後・白紙で参加者を足した直後 (選んだ行も確定の覚えも無い) も、
             // 確定した後と同じく To は空欄で始める。From は本文の最後のメッセージの送り先
@@ -2976,8 +2978,11 @@ window.MA.modules.plantumlSequence = (function() {
               var openEnds = TMm.openMessageEnds(partIdsOpen, messages);
               if (openEnds.from) {
                 fromOptsT = withSelected(partOptsWithNew, openEnds.from);
-                toOptsT = [{ value: '', label: '（図の参加者を押すか選ぶ）', selected: true }].concat(partOptsWithNew);
-                tailNote = TMm.openMessageNote(openEnds, labelOfPart);
+                // 押す手はまだ効かない (選択を奪わない) ので、案内と空欄の行は一覧で選ぶ手だけを言う
+                // (TICKET-owner-20261123-2322-1)。欄に触れたら armPick が「図の参加者を押す」に言い替える。
+                toOptsT = [{ value: '', label: TMm.toPickPlaceholder(false), selected: true }].concat(partOptsWithNew);
+                tailNote = TMm.openMessageNote(openEnds, labelOfPart, false);
+                openEndsShown = openEnds;
               }
             }
             // 1 本確定した後は From = 直前の To、To = 空欄
@@ -2987,9 +2992,10 @@ window.MA.modules.plantumlSequence = (function() {
               var partIds = participants.map(function(p) { return p.id; });
               if (partIds.indexOf(memFrom) >= 0) {
                 fromOptsT = withSelected(partOptsWithNew, memFrom);
-                toOptsT = [{ value: '', label: '（図の参加者を押すか選ぶ）', selected: true }].concat(partOptsWithNew);
-                tailNote = '直前の送り先 ' + labelOfPart(memFrom) + ' から続けます。To は図の参加者を押すか選んでください';
+                toOptsT = [{ value: '', label: TMm.toPickPlaceholder(true), selected: true }].concat(partOptsWithNew);
+                tailNote = '直前の送り先 ' + labelOfPart(memFrom) + ' から続けます。' + TMm.toPickHint(true);
                 pickArmed = true;
+                openEndsShown = null;
               }
             }
             html =
@@ -3106,7 +3112,19 @@ window.MA.modules.plantumlSequence = (function() {
             // 図の参加者を押して To に入れる手は、確定の後か、このフォームの欄に触れた後だけ効く。
             if (toSel) {
               toSel.setAttribute('data-pick-armed', pickArmed ? '1' : '0');
-              var armPick = function() { var ts = document.getElementById('seq-tail-to'); if (ts) ts.setAttribute('data-pick-armed', '1'); };
+              var armPick = function() {
+                var ts = document.getElementById('seq-tail-to');
+                if (!ts) return;
+                ts.setAttribute('data-pick-armed', '1');
+                // 押す手が効き始めたので、案内と空欄の行を「図の参加者を押すか選ぶ」に言い替える
+                // (案内が押す手を言うのは押す手が効く間だけ。TICKET-owner-20261123-2322-1)。
+                if (!openEndsShown || !TMm) return;
+                if (ts.options.length && ts.options[0].value === '') ts.options[0].textContent = TMm.toPickPlaceholder(true);
+                var nt = document.getElementById('seq-tail-endpoint-note');
+                if (nt && nt.textContent === TMm.openMessageNote(openEndsShown, labelOfPart, false)) {
+                  nt.textContent = TMm.openMessageNote(openEndsShown, labelOfPart, true);
+                }
+              };
               detailEl.addEventListener('focusin', armPick);
               detailEl.addEventListener('input', armPick);
             }

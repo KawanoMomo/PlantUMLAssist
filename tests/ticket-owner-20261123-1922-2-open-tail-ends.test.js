@@ -90,17 +90,19 @@ describe('TICKET-owner-20261123-1922-2 開いた直後の「末尾に追加」�
 
   test('案内の語は From の欄の値と同じ参加者を名指しする', function() {
     expect(TM.openMessageNote({ from: 'Bus', source: 'last' })).toContain('Bus');
-    expect(TM.openMessageNote({ from: 'Bus', source: 'last' })).toContain('To は図の参加者を押すか選んでください');
+    // 押す手が効くかで語が替わる (TICKET-owner-20261123-2322-1)。
+    expect(TM.openMessageNote({ from: 'Bus', source: 'last' }, null, true)).toContain('To は図の参加者を押すか選んでください');
     expect(TM.openMessageNote({ from: 'A', source: 'first' })).toContain('先頭の参加者 A');
   });
 
-  test('開いた直後の右パネル: From = 最後の送り先 Bus、To は「（図の参加者を押すか選ぶ）」で、案内が Bus を言う', function() {
+  test('開いた直後の右パネル: From = 最後の送り先 Bus、To は空欄の行「（一覧から選ぶ）」で、案内が Bus を言う', function() {
     tabKey = 'sequence|open-1';
     MA.selectedEndpoints.clear();
     harness(HAND);
     expect($('seq-tail-from').value).toBe('Bus');
     expect($('seq-tail-to').value).toBe('');
-    expect($('seq-tail-to').options[0].textContent).toBe('（図の参加者を押すか選ぶ）');
+    // 開いた直後は図の参加者を押す手がまだ効かない (TICKET-owner-20261123-2322-1)。
+    expect($('seq-tail-to').options[0].textContent).toBe('（一覧から選ぶ）');
     expect($('seq-tail-endpoint-note').textContent).toContain('Bus');
   });
 

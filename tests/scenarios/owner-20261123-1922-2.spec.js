@@ -2,7 +2,7 @@
 // TICKET-owner-20261123-1922-2: シーケンス図を開いた直後の「末尾に追加」(メッセージ) が From = To = 先頭の参加者で始まり、
 // 本文だけ打って Enter を押すと選んでいない自己メッセージ (`A -> A`) が入った。
 // 期待 (principles「GUI の 1 操作は名指しした要素だけを変える」):
-//   - 保存先から開いた直後、From は本文の最後のメッセージの送り先 (B)、To は「（図の参加者を押すか選ぶ）」、案内は B を言う
+//   - 保存先から開いた直後、From は本文の最後のメッセージの送り先 (B)、To は空欄、案内は B を言う
 //   - 本文だけ打って Enter → 本文はバイト一致、「終点 (To)」の語で知らせ、手は To にある
 //   - 図の参加者 C を押して To にし Enter → `B -> C : 本文` の 1 行だけが足される
 const { test, expect } = require('@playwright/test');
@@ -31,7 +31,8 @@ test('owner 1922-2 開いた直後の「末尾に追加」は To が空欄で始
   const to = page.getByRole('combobox', { name: '終点 (To)' });
   await expect(from).toHaveValue('B');
   await expect(to).toHaveValue('');
-  await expect(to.locator('option').first()).toHaveText('（図の参加者を押すか選ぶ）');
+  // 開いた直後は図の参加者を押す手がまだ効かないので、空欄の行は一覧で選ぶ手だけを言う (TICKET-owner-20261123-2322-1)。
+  await expect(to.locator('option').first()).toHaveText('（一覧から選ぶ）');
   await expect(page.locator('#seq-tail-endpoint-note')).toContainText('B');
   await page.screenshot({ path: testInfo.outputPath('open-tail.png') });
 

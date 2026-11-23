@@ -59,7 +59,8 @@ test.describe('BLK-junior-2203: 選んだ行の当事者が末尾追加に活き
     await expect(page.locator('#seq-tail-from')).toHaveValue('App');
     await expect(page.locator('#seq-tail-to')).toHaveValue('');
     await expect(page.locator('#seq-tail-endpoint-note'))
-      .toHaveText('本文の最後のメッセージの送り先 App から続けます。To は図の参加者を押すか選んでください');
+      .toHaveText('本文の最後のメッセージの送り先 App から続けます。To は一覧で選んでください');
+    // 開いた直後は図の参加者を押す手がまだ効かないので、案内は一覧で選ぶ手だけを言う (TICKET-owner-20261123-2322-1)。
   });
 
   test('別の行を選び直すと初期値も付いてくる', async ({ page }) => {
