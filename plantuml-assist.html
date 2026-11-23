@@ -3493,7 +3493,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
           <button id="btn-rename-apply" disabled>置換</button>
           <button id="btn-rename-cancel">閉じる</button>
           <!-- 直前の置換で書いた開いていない図 (タブの Ctrl+Z が効かない図) を置換前に戻す -->
-          <button id="btn-rename-revert" style="display:none;" title="直前の置換で書き換えた、開いていない図を置換前の中身に戻します (その後に書き換えた図は戻しません)">置換前に戻す</button>
+          <button id="btn-rename-revert" style="display:none;" title="直前の置換で書き換えた図を、開いている図も開いていない図も置換前の中身に戻します (置換の後に書き換えた図は戻しません)">置換前に戻す</button>
         </div>
         <!-- 過去に当てた置換の組と、その組が
              今どうなっているか (残り / 適用済み) を出す。残っている組だけ
@@ -3926,6 +3926,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/svg-export.js"></script>
 <script src="src/core/rename-redo.js"></script>
 <script src="src/core/rename-seed.js"></script>
+<script src="src/core/rename-undo.js"></script>
 <script src="src/core/rename-pairs.js"></script>
 <script src="src/core/rename-badge.js"></script>
 <script src="src/core/app-bridge.js"></script>

@@ -96,7 +96,7 @@ test.describe('BLK-primary-0723-wish 開いていない図も含めた置換の�
     expect(Number(await head.getAttribute('data-files'))).toBeGreaterThanOrEqual(5);
     // 開いていない spi / can / tpl の 3 枚が、開き直さずに数に入り、全部が置換の的。
     expect(Number(await head.getAttribute('data-unopened-hit-docs'))).toBeGreaterThanOrEqual(3);
-    await expect(head).toContainText('未オープン');
+    await expect(head).toContainText('開いていない');   // 語は一覧の札と同じ (TICKET-owner-20261123-0742-1)
     await expect(head).not.toContainText('テンプレ');
   });
 
@@ -122,7 +122,7 @@ test.describe('BLK-primary-0723-wish 開いていない図も含めた置換の�
     await page.locator('#btn-rename-apply').click();
     // 「置換しました」が出るまで待つ (押した直後はまだ置換前の予告が出ている)
     await expect(summary).toContainText('置換しました');
-    await expect(summary).toContainText('未オープン');
+    await expect(summary).toContainText('開いていない');
     expect(Number(await summary.getAttribute('data-applied-unopened'))).toBeGreaterThanOrEqual(2);
     expect(await readFile(page, 'P0723_spi')).toContain('Spi_Driver');
     expect(await readFile(page, 'P0723_can')).toContain('Spi_Driver');

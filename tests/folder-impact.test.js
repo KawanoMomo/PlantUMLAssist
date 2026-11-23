@@ -88,7 +88,8 @@ describe('folderImpact.preview / summarize', function() {
   test('要約は未オープンの枚数を書き、テンプレ除外は書かない', function() {
     var text = fi.summaryText(fi.summarize(fi.preview(merged(), 'SpiDrv')));
     expect(text).toContain('4 枚中 3 枚に 6 件');
-    expect(text).toContain('未オープン 2 枚');
+    // 語は一覧の札と同じ「開いていない」(TICKET-owner-20261123-0742-1)
+    expect(text).toContain('開いていない 2 枚');
     expect(text).not.toContain('テンプレ');
   });
 
