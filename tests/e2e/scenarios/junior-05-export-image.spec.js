@@ -32,7 +32,8 @@ test('手順5(他の図種) PNG(透過背景)も同じメニューから選べ�
   const download = await (await S.exportVia(page, 'exp-png-transparent'));
   expect(download).not.toBeNull();
   expect(download.suggestedFilename()).toMatch(/\.png$/);
-  expect(download.suggestedFilename()).toBe('gpio_seq_doc.png');
+  // TICKET-owner-20261124-0342-3: 透過 PNG は通常の PNG と名前で分かれる (保存先の図と同じ `{名前}.transparent.png`)。
+  expect(download.suggestedFilename()).toBe('gpio_seq_doc.transparent.png');
 });
 
 // BLK-builder-20260924-1736-2 (design 9a): Export ▾ は上部バーの右端にあり、開いたメニューは窓の中に収まる
@@ -68,7 +69,7 @@ test('手順5(再現した 1 枚) PNG(透過背景)で書き出せる', async ({
   const download = await (await S.exportVia(page, 'exp-png-transparent'));
   expect(alerts).toEqual([]);
   expect(download).not.toBeNull();
-  expect(download.suggestedFilename()).toBe('irq_init_sequence.png');
+  expect(download.suggestedFilename()).toBe('irq_init_sequence.transparent.png');
 });
 
 test('手順5(再現した 1 枚) PNGとして保存でも書き出せる', async ({ page }) => {

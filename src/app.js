@@ -9572,6 +9572,15 @@ function exportFileName(ext) {
   if (!EN) return ((meta && meta.title) || 'untitled') + '.' + ext;
   return EN.fileName(doc, meta, ext);
 }
+// 書き出しの種類 ('svg' / 'png' / 'png-transparent') のダウンロード名 (TICKET-owner-20261124-0342-3)。
+// 透過 PNG は保存先の図と同じ `{名前}.transparent.png`。
+function exportKindFileName(kind) {
+  var doc = null;
+  try { doc = window.MA.workspace ? window.MA.workspace.getActive() : null; } catch (e) { doc = null; }
+  var EN = window.MA.exportName;
+  if (!EN || !EN.kindFileName) return exportFileName(kind === 'svg' ? 'svg' : (kind === 'png-transparent' ? 'transparent.png' : 'png'));
+  return EN.kindFileName(doc, currentParsed && currentParsed.meta, kind);
+}
 
 // ── 書き出しは押した図の今の本文の図を書く (TICKET-roadmap-20261123-0857-2 / MA.exportWait) ──────────
 // プレビューの絵がどのタブのどの本文の図か (描き直しが届いたときに控える)。
@@ -10008,7 +10017,8 @@ function _exportPngNow(transparent) {
     canvas.toBlob(function(blob) {
       if (!blob || !blob.size) { setSaveStatus('⚠ 書き出しませんでした: PNG を作れませんでした'); return; }
       var PS = window.MA.pngScale;
-      deliverExport(transparent ? 'png-transparent' : 'png', exportFileName('png'), blob, PS ? PS.pxLabel(sz) : '');
+      var kind = transparent ? 'png-transparent' : 'png';
+      deliverExport(kind, exportKindFileName(kind), blob, PS ? PS.pxLabel(sz) : '');
     });
   });
 }

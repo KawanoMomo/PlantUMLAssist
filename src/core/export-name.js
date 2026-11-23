@@ -35,5 +35,16 @@ window.MA.exportName = (function() {
     return baseOf(doc, meta) + (e ? '.' + e : '');
   }
 
-  return { baseOf: baseOf, fileName: fileName };
+  // kindFileName(doc, meta, kind) — 書き出しの種類 ('svg' / 'png' / 'png-transparent') のダウンロード名。
+  // TICKET-owner-20261124-0342-3: 保存先の無い図の透過 PNG も、保存先の図・まとめての書き出しと同じく
+  // `{名前}.transparent.png` (通常の PNG `{名前}.png` と名前で分かれる)。末尾の決め方は MA.exportDest.fileName の 1 か所。
+  var KIND_EXT = { 'svg': '.svg', 'png': '.png', 'png-transparent': '.transparent.png' };
+  function kindFileName(doc, meta, kind) {
+    var base = baseOf(doc, meta);
+    var ED = window.MA.exportDest;
+    if (ED && ED.fileName && ED.KINDS && ED.KINDS[kind]) return ED.fileName(base, kind);
+    return base + (KIND_EXT[kind] || '');
+  }
+
+  return { baseOf: baseOf, fileName: fileName, kindFileName: kindFileName };
 })();
