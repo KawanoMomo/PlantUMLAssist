@@ -90,6 +90,33 @@ window.MA.dslUpdater = (function() {
     }).join('\n');
   }
 
+  // 右パネルの「変更を反映」で名前 (id) を変えたときの共通の口 (TICKET-owner-20261124-0422-1)。
+  // 宣言の行 (declLine, 1 始まり) は図種の更新関数 updateDecl(text) -> text が書き換え (表示名・
+  // ステレオタイプ・色の書き方は図種の流儀のまま)、withRefs なら宣言の行の外で oldId を識別子として
+  // 持つ行 (遷移・関係の両端、`note … of X` など) を newId に付け替える。行の数は変えないので
+  // declLine はどちらの順でも同じ行を指す。宣言の行が更新関数で変わらない (宣言の無い要素で
+  // declLine が関係の行を指す等) ときは、その行も参照として付け替える (要素が 2 つに割れない)。
+  // CRLF の図で、図種の更新関数が宣言の行の末尾の \r を落としたら戻す (その行だけ LF に替わらない)。
+  function _keepCr(before, after, idx) {
+    var b = before.split('\n'), a = after.split('\n');
+    if (a.length !== b.length || idx < 0 || idx >= b.length) return after;
+    if (/\r$/.test(b[idx]) && !/\r$/.test(a[idx])) { a[idx] += '\r'; return a.join('\n'); }
+    return after;
+  }
+  function renameDecl(text, declLine, oldId, newId, updateDecl, withRefs) {
+    var renamed = (oldId && newId && oldId !== newId);
+    var idx = (declLine | 0) - 1;
+    if (!renamed || !withRefs) return _keepCr(text, updateDecl(text), idx);
+    var lines = text.split('\n');
+    if (idx < 0 || idx >= lines.length) return renameWithRefs(updateDecl(text), oldId, newId);
+    var refs = renameWithRefs(text, oldId, newId).split('\n');
+    refs[idx] = lines[idx];
+    var outside = refs.join('\n');
+    var out = updateDecl(outside);
+    if (out === outside) return renameWithRefs(text, oldId, newId);
+    return _keepCr(outside, out, idx);
+  }
+
   // FEAT-180 (resolves HFR-041): 既存の skinparam 行をすべて取り除き、
   // presetLines で与えられた skinparam 行群を @startuml の直後に挿入して返す。
   // プリセットの中身(何を何色にするか)は呼び出し側が持ち、本関数は差し替えのみを行う。
@@ -127,6 +154,7 @@ window.MA.dslUpdater = (function() {
     moveLinesUp: moveLinesUp,
     moveLinesDown: moveLinesDown,
     renameWithRefs: renameWithRefs,
+    renameDecl: renameDecl,
     applySkinparamPreset: applySkinparamPreset,
   };
 })();

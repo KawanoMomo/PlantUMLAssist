@@ -729,10 +729,8 @@ window.MA.modules.plantumlUsecase = (function() {
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(P.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
         P.fieldHtml(window.MA.terms.id, 'uc-edit-id', element.id) +
         P.fieldHtml(window.MA.terms.label, 'uc-edit-label', element.label) +
+        P.renameRefsCheckHtml('uc-edit-rename-refs') +
         P.primaryButtonHtml('uc-edit-apply', window.MA.terms.apply) +
-        '<div style="margin-top:6px;">' +
-          P.primaryButtonHtml('uc-rename-refs', window.MA.terms.renameRefs) +
-        '</div>' +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
           '<button id="uc-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
           '<button id="uc-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
@@ -794,20 +792,13 @@ window.MA.modules.plantumlUsecase = (function() {
         ? renameNorm.label
         : rawNewLabel;
       var fn = element.kind === 'actor' ? updateActor : updateUsecase;
-      if (newId !== element.id) t = fn(t, element.line, 'id', newId);
+      // 改名は宣言の行と、名前を識別子として持つ行 (関係の両端・note の対象) を 1 回で書く。
+      if (newId !== element.id) {
+        t = window.MA.dslUpdater.renameDecl(t, element.line, element.id, newId,
+          function(s) { return fn(s, element.line, 'id', newId); }, P.renameRefsOn('uc-edit-rename-refs'));
+      }
       if (newLabel !== element.label) t = fn(t, element.line, 'label', newLabel);
       ctx.setMmdText(t);
-      ctx.onUpdate();
-    });
-    P.bindEvent('uc-rename-refs', 'click', function() {
-      var rawNewId = document.getElementById('uc-edit-id').value.trim();
-      if (!rawNewId || rawNewId === element.id) { P.needChange('uc-edit-id'); return; }
-      var freshParsed = parse(ctx.getMmdText());
-      var pfx2 = element.kind === 'actor' ? 'A' : 'U';
-      var refsNorm = window.MA.idNormalizer.normalize(rawNewId, _existingUsecaseIdSet(freshParsed), pfx2);
-      var newId = refsNorm.valid ? refsNorm.id : rawNewId;
-      window.MA.history.pushHistory();
-      ctx.setMmdText(renameWithRefs(ctx.getMmdText(), element.id, newId));
       ctx.onUpdate();
     });
     P.bindEvent('uc-move-up', 'click', function() {

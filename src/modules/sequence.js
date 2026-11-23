@@ -3422,7 +3422,7 @@ window.MA.modules.plantumlSequence = (function() {
             P.fieldHtml(window.MA.terms.id, 'seq-edit-alias', pp.id) +
             // 参加者の図に出る名前は 6 図種と同じ「表示名」(メッセージ・注釈の文字は「本文」)。
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + window.MA.terms.label + '</label><div id="seq-edit-label-rle"></div></div>' +
-            '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);margin:8px 0;"><input id="seq-edit-rename-refs" type="checkbox" checked> ' + window.MA.terms.renameRefs + '</label>' +
+            P.renameRefsCheckHtml('seq-edit-rename-refs') +
             paletteHtml +
             actionBarHtml(selLine, 'participant', pp.id);
           var ln = pp.line;

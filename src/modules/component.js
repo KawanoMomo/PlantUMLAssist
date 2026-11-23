@@ -760,12 +760,10 @@ window.MA.modules.plantumlComponent = (function() {
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
         P.fieldHtml(window.MA.terms.id, 'co-edit-id', element.id) +
         P.fieldHtml(window.MA.terms.label, 'co-edit-label', element.label) +
+        P.renameRefsCheckHtml('co-edit-rename-refs') +
         // design 5d: ステレオタイプ (<<service>> など)。空にすれば外れる
         P.fieldHtml(window.MA.terms.stereotype, 'co-edit-stereo', element.stereotype || '', '例: service (空で外す)') +
         P.primaryButtonHtml('co-edit-apply', window.MA.terms.apply) +
-        '<div style="margin-top:6px;">' +
-          P.primaryButtonHtml('co-rename-refs', window.MA.terms.renameRefs) +
-        '</div>' +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
           '<button id="co-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
           '<button id="co-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
@@ -791,20 +789,14 @@ window.MA.modules.plantumlComponent = (function() {
       var stereoEl = document.getElementById('co-edit-stereo');
       var newStereo = stereoEl ? stereoEl.value.trim() : '';
       var fn = element.kind === 'component' ? updateComponent : updateInterface;
-      if (newId !== element.id) t = fn(t, element.line, 'id', newId);
+      // 改名は宣言の行と、名前を識別子として持つ行 (関係の両端・note の対象) を 1 回で書く。
+      if (newId !== element.id) {
+        t = window.MA.dslUpdater.renameDecl(t, element.line, element.id, newId,
+          function(s) { return fn(s, element.line, 'id', newId); }, P.renameRefsOn('co-edit-rename-refs'));
+      }
       if (newLabel !== element.label) t = fn(t, element.line, 'label', newLabel);
       if (newStereo !== (element.stereotype || '')) t = fn(t, element.line, 'stereotype', newStereo);
       ctx.setMmdText(t);
-      ctx.onUpdate();
-    });
-    P.bindEvent('co-rename-refs', 'click', function() {
-      var rawNewId = document.getElementById('co-edit-id').value.trim();
-      if (!rawNewId || rawNewId === element.id) { P.needChange('co-edit-id'); return; }
-      var freshParsed = parse(ctx.getMmdText());
-      var refsNorm = window.MA.idNormalizer.normalize(rawNewId, _existingComponentIdSet(freshParsed), 'C');
-      var newId = refsNorm.valid ? refsNorm.id : rawNewId;
-      window.MA.history.pushHistory();
-      ctx.setMmdText(renameWithRefs(ctx.getMmdText(), element.id, newId));
       ctx.onUpdate();
     });
     P.bindEvent('co-move-up', 'click', function() {

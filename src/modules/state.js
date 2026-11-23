@@ -607,7 +607,9 @@ window.MA.modules.plantumlState = (function() {
     if (fields.label != null) label = fields.label;
     if (fields.stereotype !== undefined) stereotype = fields.stereotype;
     var openBrace = hasBlock ? ' {' : '';
-    lines[idx] = indent + fmtState(id, label, stereotype, color) + openBrace;
+    // CRLF の図では行末の \r を残す (宣言の行だけ改行コードが LF に替わらない)。
+    var cr = /\r$/.test(lines[idx]) ? '\r' : '';
+    lines[idx] = indent + fmtState(id, label, stereotype, color) + openBrace + cr;
     return lines.join('\n');
   }
 
@@ -2104,6 +2106,7 @@ window.MA.modules.plantumlState = (function() {
       window.MA.htmlUtils.escHtml((st.stereotype ? st.stereotype + ' ' : '') + P.lineHead('State', st.line)) + '</div>' +
       P.fieldHtml(window.MA.terms.id, 'st-id', st.id) +
       P.fieldHtml(window.MA.terms.label, 'st-label', st.label || '') +
+      P.renameRefsCheckHtml('st-rename-refs') +
       P.selectFieldHtml(window.MA.terms.stereotype, 'st-stereo', stereoOptions(st)) +
       // 入れ子の中の状態を選んだとき、どの親の中に
       // 居るかが「Parent: Outer」だけでは孫の代で読み取れない。根から並べる。
@@ -2189,14 +2192,18 @@ window.MA.modules.plantumlState = (function() {
       var newId = renameNorm.id;
       var newLabel = (renameNorm.id !== renameNorm.label) ? renameNorm.label : rawLabel;
       var src = ctx.getMmdText();
-      var out = updateState(src, st.line, {
+      var declFields = {
         id: newId,
         label: newLabel,
         stereotype: stereoToWrite(st, document.getElementById('st-stereo').value)
-      });
+      };
       // Apply Behaviors. Use the (possibly renamed) id.
       var bareId = newId.indexOf('.') >= 0 ? newId.split('.').pop() : newId;
       var oldBareId = st.id.indexOf('.') >= 0 ? st.id.split('.').pop() : st.id;
+      // 改名は宣言の行と、名前を識別子として持つ行 (遷移の両端・note の対象・entry/do/exit の行) を
+      // 1 回で書く (TICKET-owner-20261124-0422-1。他の 5 図種と同じ共通の口)。
+      var out = window.MA.dslUpdater.renameDecl(src, st.line, oldBareId, bareId,
+        function(s) { return updateState(s, st.line, declFields); }, P.renameRefsOn('st-rename-refs'));
       // If state id was renamed, clean up orphan description lines under the
       // old bare id first to avoid leaving stale entry/do/exit lines pointing
       // to a now-nonexistent identifier.

@@ -143,7 +143,7 @@ var PANELS = [
     lines: ['@startuml', 'component "受付" as A <<svc>>', 'interface I', 'A --> I', '@enduml'], pick: byLine('elements', 2) },
   { name: 'クラス', mod: 'plantumlClass', roles: ['id', 'label', 'stereotype', 'apply', 'renameRefs', 'del'],
     lines: ['@startuml', 'class "注文" as Order <<entity>> {', '  +id : int', '}', 'class Item', 'Order --> Item', '@enduml'], pick: byLine('elements', 2) },
-  { name: '状態', mod: 'plantumlState', roles: ['id', 'label', 'stereotype', 'apply', 'del'],
+  { name: '状態', mod: 'plantumlState', roles: ['id', 'label', 'renameRefs', 'stereotype', 'apply', 'del'],
     lines: ['@startuml', 'state "待機" as Idle <<s>>', 'state Busy', 'Idle --> Busy : go', '@enduml'], pick: byLine('states', 2, 'state') },
   { name: 'アクション', mod: 'plantumlActivity', roles: ['edgeLabel', 'swimlane', 'reorder', 'apply', 'del'],
     lines: ['@startuml', '|A|', 'start', ':受け取る;', '|B|', ':返す;', 'stop', '@enduml'], pick: actionAt(4) },

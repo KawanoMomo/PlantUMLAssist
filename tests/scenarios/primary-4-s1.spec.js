@@ -261,6 +261,8 @@ const KINDS = [
     },
     // 表示名 (App) は残るので、図には識別子が出ない。描き直しは本文の描画の完了で待つ。
     drawnAfter: [],
+    // 改名は名前を識別子として持つ行 (9 行目の関係) も同じ反映で付け替える (TICKET-owner-20261124-0422-1)。
+    refLines: { 9: (v) => '  App' + v + ' ..> ISpi' },
     expectLine: (v) => 'component "App" as App' + v },
   { kind: 'usecase の名前', fixture: 'uc-1.puml', words: ['Send data'], type: 'usecase', line: 5,
     async edit(page, v) {
@@ -273,6 +275,8 @@ const KINDS = [
       await page.locator('#cl-edit-id').fill('Drv' + v);
       await page.locator('#cl-edit-apply').click();
     },
+    // 改名は名前を識別子として持つ行 (13 行目の関係) も同じ反映で付け替える。Spi_DriverMon は変わらない。
+    refLines: { 13:(v) => 'Drv' + v + ' ..> Spi_Config : uses' },
     expectLine: (v) => 'class Drv' + v + ' {' },
 ];
 
@@ -298,8 +302,10 @@ for (const slow of [false, true]) {
         await K.edit(page, v);
         await waitApplied(page, prev);
         const now = await H.getEditorText(page);
-        expect(changedLineNos(prev, now)).toEqual([target]);
+        const refs = K.refLines || {};
+        expect(changedLineNos(prev, now)).toEqual([target].concat(Object.keys(refs).map(Number)).sort((a, b) => a - b));
         expect(now.split('\n')[target - 1]).toBe(K.expectLine(v));
+        for (const n of Object.keys(refs)) expect(now.split('\n')[Number(n) - 1]).toBe(refs[n](v));
         // 押し直していないのに、右パネルは同じ行の要素のまま (組み直した新しいフォーム)。
         await expect(page.locator('#props-content [data-probe-old]')).toHaveCount(0);
         await expect(panelHead).toContainText(K.line + ' 行目');

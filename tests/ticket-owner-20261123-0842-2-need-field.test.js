@@ -24,9 +24,6 @@ describe('知らせの文 (欄の見出しの語で言う)', function() {
   test('選ぶ欄は「「見出し」を選んでください」', function() {
     expect(P.needFieldText('付ける相手', true)).toBe('「付ける相手」を選んでください');
   });
-  test('値を変えてから押す欄は「「見出し」を変えてから押してください」', function() {
-    expect(P.needChangeText('名前 (id)')).toBe('「名前 (id)」を変えてから押してください');
-  });
 });
 
 describe('6 図種のモジュールに画面に無い語の知らせが残っていない', function() {
