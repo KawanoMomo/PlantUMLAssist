@@ -26,7 +26,8 @@ async function newDiagram(page, type) {
 // 要素 3 つと関係 2 本を足す図種 (末尾に追加の欄の作りが同じ)。
 const KINDS = [
   { kind: 'component', type: 'plantuml-component', p: 'co', elem: 'component', decl: 'component', names: ['Ca', 'Cb', 'Cc'] },
-  { kind: 'usecase', type: 'plantuml-usecase', p: 'uc', elem: 'actor', decl: 'actor', names: ['Ua', 'Ub', 'Uc'] },
+  // アクターだけの図は PlantUML がシーケンス図として描く (図種が替わる) ので、ユースケースで足す。
+  { kind: 'usecase', type: 'plantuml-usecase', p: 'uc', elem: 'usecase', decl: 'usecase', names: ['Ua', 'Ub', 'Uc'] },
   { kind: 'class', type: 'plantuml-class', p: 'cl', elem: 'class', decl: 'class', names: ['Ka', 'Kb', 'Kc'] },
 ];
 
