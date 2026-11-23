@@ -9992,7 +9992,7 @@ function refresh() {
 
   // 右パネルの反映の後も、直した要素 (同じ行) を選んだままにする。
   try { _applySelectionCarry(); } catch (e) { _selCarry = null; }
-  renderProps(currentParsed);
+  if (_propsNeedRebuild()) renderProps(currentParsed);
   syncStateTable();
   renderSvg();
 }
@@ -10617,6 +10617,26 @@ function _applySelectionCarry() {
   else if (r.action === 'clear') window.MA.selection.clearSelection();
 }
 
+// TICKET-roadmap-20261123-0857-1: 右パネルの書き換えの直後に組み直した本文・選択・図種の控え。
+var _propsBuiltFor = null;
+function _propsKey() {
+  var sel = (window.MA.selection && window.MA.selection.getSelected()) || [];
+  return { text: mmdText, sel: JSON.stringify(sel), module: currentModule };
+}
+function _rebuildPropsNow() {
+  try { _applySelectionCarry(); } catch (e) { _selCarry = null; }
+  renderProps(currentParsed);
+  _propsBuiltFor = _propsKey();
+}
+// refresh が右パネルを組み直すか。右パネルの書き換えの直後に同じ本文・選択・図種で組み直し済みなら組み直さない。
+function _propsNeedRebuild() {
+  var b = _propsBuiltFor;
+  _propsBuiltFor = null;
+  if (!b) return true;
+  var k = _propsKey();
+  return !(b.text === k.text && b.sel === k.sel && b.module === k.module);
+}
+
 function renderProps(parsed) {
   if (!parsed) parsed = currentParsed;
   var sel = window.MA.selection.getSelected();
@@ -10661,7 +10681,10 @@ function renderProps(parsed) {
         try { currentParsed = currentModule.parse(mmdText); } catch (e) { /* leave stale */ }
       }
     },
-    onUpdate: function() { scheduleRefresh(); },
+    // 右パネルから本文を書き換えたら、右パネルはその場で今の本文の読みから組み直す
+    // (次の手が描き直し前の古い読み・古いフォームに対して働かない)。後から来る refresh は、
+    // 本文と選択が変わっていなければ組み直さない (確定の直後に選んだ・打った欄を消さない)。
+    onUpdate: function() { _rebuildPropsNow(); scheduleRefresh(); },
   };
   currentModule.renderProps(sel, parsed, propsEl, _gen && _GP ? _GP.guard(_ctx, _gen, _refuseGenerated) : _ctx);
   if (_gen && _GP) _GP.lock(propsEl, _gen);
