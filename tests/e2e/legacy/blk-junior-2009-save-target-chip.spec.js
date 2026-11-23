@@ -50,14 +50,14 @@ test.describe('BLK-junior-2009 保存先が設定済みだと画面で分かる'
   });
 
   // TICKET-owner-20261122-1240-1: ⚙ の保存先の欄は外した。設定の「保存先のフォルダを選ぶ…」から窓で決める。
-  test('チップを押すと設定が開き、設定から保存先を選ぶとその場で表示が変わる', async ({ page }) => {
+  // TICKET-owner-20261123-2222-1: 未設定のチップ (ダウンロード) は ⚙ 設定を挟まず、保存先のフォルダを選ぶ窓を開く。
+  test('未設定のチップを押すと保存先のフォルダを選ぶ窓が開き、選ぶとその場で表示が変わる', async ({ page }) => {
     const rel = './test-results/autosave/blk-junior-2009-save-target-chip/e2e-blk-j2009';
     fs.mkdirSync(path.join(__dirname, '..', '..', '..', rel.replace(/^\.\//, '')), { recursive: true });
     await bootWith(page, LS_CFG);
     await page.locator('#top-save-target').click();
-    await expect(page.locator('#cfg-modal')).toBeVisible();
-    await page.locator('#cfg-tab-autosave').click();
-    await page.locator('#cfg-file-dir-pick').click();
+    await expect(page.locator('#target-pick')).toHaveCount(1);
+    await expect(page.locator('#cfg-modal')).toBeHidden();
     await page.locator('#target-pick-path').fill(rel);
     await page.locator('#target-pick-ok').click();
     await expect(page.locator('#target-pick')).toHaveCount(0);

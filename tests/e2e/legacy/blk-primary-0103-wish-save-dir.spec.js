@@ -26,16 +26,13 @@ async function setDsl(page, text) {
 // TICKET-owner-20261116-0621-prune で外した。残すのは、保存先の欄にパスを打つ (貼る) と
 // 直せる崩れは直して反映し、直せない崩れは断ること。
 
-// 保存先を選ぶ所。パンくずのフォルダ名 (FILES の保存先の一番上) を押すと ⚙設定が開き、
-// 「保存先のフォルダを選ぶ…」で窓を開く。パスを打つ (貼る) 所は窓の欄 1 か所
-// (TICKET-owner-20261122-1240-1 で ⚙ 設定の欄を外した)。
+// 保存先を選ぶ所。保存先が未設定のとき、パンくずのフォルダ名 (FILES の保存先の一番上「ダウンロード」) を押すと
+// 「保存先のフォルダを選ぶ」窓がじかに開く (TICKET-owner-20261123-2222-1 で ⚙ 設定を挟まなくした)。
+// パスを打つ (貼る) 所は窓の欄 1 か所 (TICKET-owner-20261122-1240-1 で ⚙ 設定の欄を外した)。
 async function openSaveDirSetting(page) {
   const target = page.locator('#top-save-target');
   if (!(await target.isVisible())) await page.locator('#btn-tab-folder').click();
   await target.click();
-  await expect(page.locator('#cfg-modal')).toBeVisible();
-  await page.locator('#cfg-tab-autosave').click();
-  await page.locator('#cfg-file-dir-pick').click();
   await expect(page.locator('#target-pick')).toHaveCount(1);
   // 窓が最初のフォルダを読み終えてから打つ (読み終わりが理由の欄を消さないように)。
   await expect(page.locator('#target-pick-here')).not.toHaveText('');

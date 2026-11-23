@@ -75,9 +75,13 @@ window.MA.fileMenu = (function() {
     });
   }
 
-  // ctx: { kind: 'target' | 'readonly' }
+  // 保存先を決めていない間に、保存先の行で押せない行の理由 (TICKET-owner-20261123-2222-1)。
+  var UNSET_REASON = '保存先のフォルダを決めていません (「保存先のフォルダを選ぶ…」で決めると使えます)';
+
+  // ctx: { kind: 'target' | 'readonly' | 'sub', unset: 保存先を決めていない (saveTarget.isUnset) }
   function folderItems(ctx) {
     var kind = _s((ctx || {}).kind) || 'target';
+    var unset = !!(ctx && ctx.unset) && kind === 'target';
     if (kind === 'sub') {
       return FOLDER_ITEMS.filter(function(it) { return it.writable; }).map(_copy);
     }
@@ -92,7 +96,13 @@ window.MA.fileMenu = (function() {
       var o = _copy(it);
       if (o.id === 'set-target' && kind === 'target') {
         o.disabled = true;
-        o.title = '今の保存先です';
+        o.title = unset ? UNSET_REASON : '今の保存先です';
+      }
+      // 決めていない間の「新しいフォルダ」は、画面に出ない既定のフォルダに作ってしまうので押せない。
+      // 「新しい図」はタブを開くだけ (保存はダウンロード) なので今どおり押せる。
+      if (o.id === 'new-folder' && unset) {
+        o.disabled = true;
+        o.title = UNSET_REASON;
       }
       // 「読むだけにする」は名前どおりの操作だけをする (覗く窓は開かない)。
       // 保存先は書く場所なので読むだけにはできない。別のフォルダを保存先にすると、ここは「読むだけ」に並ぶ。
