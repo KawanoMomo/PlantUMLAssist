@@ -127,7 +127,8 @@ describe('PNG の大きさ: 画面側の道 (src/app.js・plantuml-assist.html)'
   test('Export ▾ の PNG・透過 PNG・クリップボード・まとめての書き出しは同じ道を通る', function() {
     expect(slice(APP, 'function svgToCanvas', '\nfunction exportPNG')).toContain('_rasterSvgEl(clone, w, h, transparent,');
     expect(slice(APP, 'function _svgTextToPngBlob', '\n// その図の本文')).toContain('_rasterSvgEl(s.el, s.w, s.h, transparent,');
-    expect(slice(APP, 'function exportClipboard', '\n// 指定の行へ飛ぶ')).toContain('svgToCanvas(false,');
+    // クリップボードは TICKET-roadmap-20261123-2358-1 から待ってから写す道 (_exportClipboardNow) で、同じ _rasterSvgEl を白地で通る。
+    expect(slice(APP, 'function _exportClipboardNow', '\n// 指定の行へ飛ぶ')).toContain('_rasterSvgEl(clone, w, h, false,');
     expect(slice(APP, 'function _exportPngNow', '\n// ──')).toContain('PS.pxLabel(sz)');
   });
   test('書き出しのために本文へ scale / skinparam dpi を書き足さない', function() {

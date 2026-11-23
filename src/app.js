@@ -9480,16 +9480,26 @@ function exportFileName(ext) {
 // ── 書き出しは押した図の今の本文の図を書く (TICKET-roadmap-20261123-0857-2 / MA.exportWait) ──────────
 // プレビューの絵がどのタブのどの本文の図か (描き直しが届いたときに控える)。
 var _previewPic = null;      // { key, text }
-var _pendingExport = null;   // { key, text, run } 描き直しを待っている書き出し (1 つだけ。押し直したら後の方)
-function _exportWhenDrawn(run) {
+var _pendingExport = null;   // { key, text, run, kind } 描き直しを待っている書き出し (1 つだけ。押し直したら後の方)
+// kind: 'clipboard' なら待つ・やめる・描けないの語を「写す」で言う (TICKET-roadmap-20261123-2358-1)。
+function _exportMsgs(EW, kind) {
+  return EW.messages ? EW.messages(kind) : { wait: EW.WAIT_MSG, cancel: EW.CANCEL_MSG, error: EW.ERROR_MSG };
+}
+// 書かずに (写さずに) 終わったことを下端で言う。
+function _exportRefused(kind, msg) {
+  if (kind === 'clipboard') _clipboardResult(false, msg);
+  else setSaveStatus('⚠ ' + msg);
+}
+function _exportWhenDrawn(run, kind) {
   var EW = window.MA.exportWait;
   if (!EW) { run(); return; }
+  var msgs = _exportMsgs(EW, kind);
   var key = _activeDocKey();
   var st = EW.decide({ hasSvg: !!previewSvgEl.querySelector('svg'), pic: _previewPic, key: key, text: mmdText, verdict: _engineVerdict });
   if (st === 'now') { _pendingExport = null; run(); return; }
-  if (st === 'error') { _pendingExport = null; setSaveStatus('⚠ ' + EW.ERROR_MSG); return; }
-  _pendingExport = { key: key, text: mmdText, run: run };
-  setSaveStatus(EW.WAIT_MSG);
+  if (st === 'error') { _pendingExport = null; _exportRefused(kind, msgs.error); return; }
+  _pendingExport = { key: key, text: mmdText, run: run, kind: kind };
+  setSaveStatus(msgs.wait);
   var el = document.getElementById('status-save-result');
   if (el) el.setAttribute('data-export-waiting', '1');
   // 描き直しが予約されていなければ頼む (図を開いた直後など)。
@@ -9506,7 +9516,8 @@ function _flushPendingExport(ok, renderKey, renderText) {
   var el = document.getElementById('status-save-result');
   if (el) el.removeAttribute('data-export-waiting');
   if (r === 'run') { p.run(); return; }
-  setSaveStatus('⚠ ' + (r === 'cancel' ? EW.CANCEL_MSG : EW.ERROR_MSG));
+  var msgs = _exportMsgs(EW, p.kind);
+  _exportRefused(p.kind, r === 'cancel' ? msgs.cancel : msgs.error);
 }
 
 function exportSVG() { _exportWhenDrawn(_exportSvgNow); }
@@ -9994,17 +10005,55 @@ function exportManyToFolder(names, kind, dir, onStep) {
 }
 window.exportManyToFolder = exportManyToFolder;
 
+// 「クリップボードにコピー」(Export ▾・Ctrl+Shift+C・Ctrl+K)。TICKET-roadmap-20261123-2358-1 (roadmap v9.0 必須 2):
+// SVG / PNG の書き出しと同じく、押した図の押した時点の本文の図を写す (_exportWhenDrawn。描き直しが届く前・開いた直後は
+// 待つ旨を出して届いてから 1 回だけ写す。描けない本文・待つ間にタブを替えたときは写さずに理由を言う)。
+// 写す PNG は「PNG で書き出す」と同じ _rasterSvgEl (白地・同じ倍率)。写せた・写せなかったを下端が言う
+// (黙って何もしない、が無い)。クリップボードの API が無い環境は今どおり知らせる。
 function exportClipboard() {
   if (!navigator.clipboard || !window.ClipboardItem) {
     alert('クリップボード API が利用できません');
     return;
   }
-  // 写す PNG の大きさは「PNG で書き出す」と同じ倍率 (TICKET-junior-20261123-1142-wish。待ち・知らせは TICKET-roadmap-20261123-2358-1)。
-  svgToCanvas(false, function(canvas) {
+  _exportWhenDrawn(_exportClipboardNow, 'clipboard');
+}
+function _clipboardResult(ok, msg, px) {
+  setSaveStatus((ok ? '' : '⚠ ') + msg);
+  var el = document.getElementById('status-save-result');
+  if (!el) return;
+  el.setAttribute('data-clip-ok', ok ? '1' : '0');
+  el.setAttribute('data-clip-px', px || '');
+  // 何回目の写しか (続けて押しても前の回の表示と取り違えない)。
+  el.setAttribute('data-clip-seq', String(Number(el.getAttribute('data-clip-seq') || 0) + 1));
+}
+function _exportClipboardNow() {
+  var EW = window.MA.exportWait;
+  var PS = window.MA.pngScale;
+  var svgEl = previewSvgEl.querySelector('svg');
+  if (!svgEl) { _clipboardResult(false, '写しませんでした: 写す図がまだありません。クリップボードは前のまま'); return; }
+  var clone = svgEl.cloneNode(true);
+  if (window.MA.svgExport) window.MA.svgExport.stripNonRendered(clone);
+  var w = parseFloat(clone.getAttribute('width')) || 800;
+  var h = parseFloat(clone.getAttribute('height')) || 400;
+  _rasterSvgEl(clone, w, h, false, function(canvas, sz, why) {
+    if (!canvas) {
+      _clipboardResult(false, String(why || '写しませんでした').replace(/^書き出しませんでした/, '写しませんでした').split('\n').join(' ') +
+        '。クリップボードは前のまま');
+      return;
+    }
     canvas.toBlob(function(blob) {
-      if (!blob) return;
-      navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).catch(function(err) {
-        alert('クリップボードコピー失敗: ' + err);
+      if (!blob || !blob.size) { _clipboardResult(false, '写しませんでした: PNG を作れませんでした。クリップボードは前のまま'); return; }
+      var px = PS ? PS.pxLabel(sz) : (sz.w + '×' + sz.h + ' px');
+      var wrote;
+      try {
+        wrote = navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      } catch (err) {
+        wrote = Promise.reject(err);
+      }
+      Promise.resolve(wrote).then(function() {
+        _clipboardResult(true, EW && EW.copiedMsg ? EW.copiedMsg(px, blob.size) : 'クリップボードに写しました: ' + px, px);
+      }, function(err) {
+        _clipboardResult(false, EW && EW.copyFailedMsg ? EW.copyFailedMsg(err) : '写しませんでした: ' + err);
       });
     });
   });
