@@ -1750,7 +1750,7 @@ window.MA.modules.plantumlClass = (function() {
         if (k === 'class' || k === 'interface' || k === 'abstract') {
           var rawAl = document.getElementById('cl-tail-alias').value;
           var normCl = normalizeIdInput(rawAl, parsedData, ctx.getMmdText());
-          if (!normCl.valid) { alert('Alias 必須'); return; }
+          if (!normCl.valid) { P.needField('cl-tail-alias'); return; }
           var rawLbl = document.getElementById('cl-tail-label').value.trim();
           var lbl = rawLbl || normCl.label;
           var st = document.getElementById('cl-tail-stereo').value.trim() || null;
@@ -1764,7 +1764,7 @@ window.MA.modules.plantumlClass = (function() {
         } else if (k === 'enum') {
           var rawAl2 = document.getElementById('cl-tail-alias').value;
           var normEn = normalizeIdInput(rawAl2, parsedData, ctx.getMmdText());
-          if (!normEn.valid) { alert('Alias 必須'); return; }
+          if (!normEn.valid) { P.needField('cl-tail-alias'); return; }
           var valsStr = document.getElementById('cl-tail-values').value;
           var vals = valsStr.split(/\r?\n/).map(function(s) { return s.trim(); }).filter(function(s) { return s; });
           window.MA.history.pushHistory();
@@ -1772,7 +1772,7 @@ window.MA.modules.plantumlClass = (function() {
           out = GP.applyAdd('class', 'cl-tail', parsedData.groups, t, out);
         } else if (k === 'package' || k === 'namespace') {
           var lbl3 = document.getElementById('cl-tail-label').value.trim();
-          if (!lbl3) { alert('Label 必須'); return; }
+          if (!lbl3) { P.needField('cl-tail-label'); return; }
           window.MA.history.pushHistory();
           out = k === 'package' ? addPackage(t, lbl3) : addNamespace(t, lbl3);
           // 作った直後の境界を次の「追加する位置」にする (続けて中身を足せる)。
@@ -1799,7 +1799,7 @@ window.MA.modules.plantumlClass = (function() {
           out = addRelation(t, rkind, mEnds.from, mEnds.to, document.getElementById('cl-tail-rlabel').value.trim() || null);
         } else if (k === 'note') {
           var ntg = document.getElementById('cl-tail-ntarget').value;
-          if (!ntg) { alert('Target 必須'); return; }
+          if (!ntg) { P.needField('cl-tail-ntarget'); return; }
           var npos = document.getElementById('cl-tail-npos').value;
           var ntext = document.getElementById('cl-tail-ntext').value || '';
           window.MA.history.pushHistory();
@@ -2264,7 +2264,7 @@ window.MA.modules.plantumlClass = (function() {
     });
     P.bindEvent('cl-rename-refs', 'click', function() {
       var rawNewId = document.getElementById('cl-edit-id').value.trim();
-      if (!rawNewId || rawNewId === element.id) { alert('Alias を変更してから実行してください'); return; }
+      if (!rawNewId || rawNewId === element.id) { P.needChange('cl-edit-id'); return; }
       // renameWithRefs rewrites references, so we MUST end up with an ASCII
       // alias (otherwise refs become unparseable). Normalize first.
       var freshParsed = parse(ctx.getMmdText());
@@ -2761,7 +2761,7 @@ window.MA.modules.plantumlClass = (function() {
     propsEl.innerHTML = html;
     P.bindEvent('cl-grp-apply', 'click', function() {
       var newLabel = document.getElementById('cl-grp-label').value.trim();
-      if (!newLabel) { alert('Label 必須'); return; }
+      if (!newLabel) { P.needField('cl-grp-label'); return; }
       window.MA.history.pushHistory();
       var lines = ctx.getMmdText().split('\n');
       var openIdx = group.startLine - 1;

@@ -675,7 +675,7 @@ window.MA.modules.plantumlComponent = (function() {
         if (kind === 'component') {
           var rawAl = document.getElementById('co-tail-alias').value;
           var normCo = normalizeIdInput(rawAl, parsedData, ctx.getMmdText());
-          if (!normCo.valid) { alert('Alias 必須'); return; }
+          if (!normCo.valid) { P.needField('co-tail-alias'); return; }
           var rawLbl = document.getElementById('co-tail-label').value.trim();
           window.MA.history.pushHistory();
           var stEl = document.getElementById('co-tail-stereo');
@@ -684,7 +684,7 @@ window.MA.modules.plantumlComponent = (function() {
         } else if (kind === 'interface') {
           var rawAl2 = document.getElementById('co-tail-alias').value;
           var normIf = normalizeIdInput(rawAl2, parsedData, ctx.getMmdText());
-          if (!normIf.valid) { alert('Alias 必須'); return; }
+          if (!normIf.valid) { P.needField('co-tail-alias'); return; }
           var rawLbl2 = document.getElementById('co-tail-label').value.trim();
           window.MA.history.pushHistory();
           var stEl2 = document.getElementById('co-tail-stereo');
@@ -693,7 +693,7 @@ window.MA.modules.plantumlComponent = (function() {
         } else if (kind === 'port') {
           var rawAl3 = document.getElementById('co-tail-alias').value;
           var normPt = normalizeIdInput(rawAl3, parsedData, ctx.getMmdText());
-          if (!normPt.valid) { alert('Alias 必須'); return; }
+          if (!normPt.valid) { P.needField('co-tail-alias'); return; }
           var parentEl = document.getElementById('co-tail-parent');
           var parentId = parentEl ? parentEl.value : '';
           if (!parentId) { alert('Parent component 必須 (port は component の中に配置)'); return; }
@@ -702,7 +702,7 @@ window.MA.modules.plantumlComponent = (function() {
           out = addPortToComponent(t, parentId, normPt.id, rawLbl3 || normPt.label);
         } else if (kind === 'package') {
           var lbl = document.getElementById('co-tail-label').value.trim();
-          if (!lbl) { alert('Label 必須'); return; }
+          if (!lbl) { P.needField('co-tail-label'); return; }
           window.MA.history.pushHistory();
           var notaEl = document.getElementById('co-tail-notation');
           out = addPackage(t, lbl, notaEl ? notaEl.value : 'package');
@@ -801,7 +801,7 @@ window.MA.modules.plantumlComponent = (function() {
     });
     P.bindEvent('co-rename-refs', 'click', function() {
       var rawNewId = document.getElementById('co-edit-id').value.trim();
-      if (!rawNewId || rawNewId === element.id) { alert('Alias を変更してから実行してください'); return; }
+      if (!rawNewId || rawNewId === element.id) { P.needChange('co-edit-id'); return; }
       var freshParsed = parse(ctx.getMmdText());
       var refsNorm = window.MA.idNormalizer.normalize(rawNewId, _existingComponentIdSet(freshParsed), 'C');
       var newId = refsNorm.valid ? refsNorm.id : rawNewId;

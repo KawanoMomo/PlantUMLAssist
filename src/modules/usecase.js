@@ -618,7 +618,7 @@ window.MA.modules.plantumlUsecase = (function() {
         if (kind === 'actor') {
           var rawAl = document.getElementById('uc-tail-alias').value;
           var normAc = normalizeIdInput(rawAl, parsedData, 'A', ctx.getMmdText());
-          if (!normAc.valid) { alert('Alias 必須'); return; }
+          if (!normAc.valid) { P.needField('uc-tail-alias'); return; }
           var rawLbl = document.getElementById('uc-tail-label').value.trim();
           window.MA.history.pushHistory();
           out = addActor(t, normAc.id, rawLbl || normAc.label);
@@ -626,14 +626,14 @@ window.MA.modules.plantumlUsecase = (function() {
         } else if (kind === 'usecase') {
           var rawAl2 = document.getElementById('uc-tail-alias').value;
           var normUc = normalizeIdInput(rawAl2, parsedData, 'U', ctx.getMmdText());
-          if (!normUc.valid) { alert('Alias 必須'); return; }
+          if (!normUc.valid) { P.needField('uc-tail-alias'); return; }
           var rawLbl2 = document.getElementById('uc-tail-label').value.trim();
           window.MA.history.pushHistory();
           out = addUsecase(t, normUc.id, rawLbl2 || normUc.label);
           out = GP.applyAdd('usecase', 'uc-tail', parsedData.groups, t, out);
         } else if (kind === 'package') {
           var lbl = document.getElementById('uc-tail-label').value.trim();
-          if (!lbl) { alert('Label 必須'); return; }
+          if (!lbl) { P.needField('uc-tail-label'); return; }
           window.MA.history.pushHistory();
           var notaEl = document.getElementById('uc-tail-notation');
           out = addPackage(t, lbl, notaEl ? notaEl.value : 'package');
@@ -660,7 +660,7 @@ window.MA.modules.plantumlUsecase = (function() {
           out = addRelation(t, rkind, ucEnds.from, ucEnds.to, document.getElementById('uc-tail-rlabel').value.trim());
         } else if (kind === 'note') {
           var ntarget = document.getElementById('uc-tail-ntarget').value;
-          if (!ntarget) { alert('Target 必須 (先に actor/usecase を追加)'); return; }
+          if (!ntarget) { P.needField('uc-tail-ntarget'); return; }
           window.MA.history.pushHistory();
           out = addNote(t, ntarget,
             document.getElementById('uc-tail-npos').value,
@@ -803,7 +803,7 @@ window.MA.modules.plantumlUsecase = (function() {
     });
     P.bindEvent('uc-rename-refs', 'click', function() {
       var rawNewId = document.getElementById('uc-edit-id').value.trim();
-      if (!rawNewId || rawNewId === element.id) { alert('Alias を変更してから実行してください'); return; }
+      if (!rawNewId || rawNewId === element.id) { P.needChange('uc-edit-id'); return; }
       var freshParsed = parse(ctx.getMmdText());
       var pfx2 = element.kind === 'actor' ? 'A' : 'U';
       var refsNorm = window.MA.idNormalizer.normalize(rawNewId, _existingUsecaseIdSet(freshParsed), pfx2);

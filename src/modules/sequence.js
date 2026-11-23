@@ -2055,7 +2055,7 @@ window.MA.modules.plantumlSequence = (function() {
         var to = document.getElementById('seq-mod-to').value;
         if (fr === '__new__' || to === '__new__') {
           var al = document.getElementById('seq-mod-new-alias').value.trim();
-          if (!al) { alert('新しい参加者の Alias は必須です'); return; }
+          if (!al) { window.MA.properties.needField('seq-mod-new-alias', '新しい参加者の名前'); return; }
           var ptype = document.getElementById('seq-mod-new-ptype').value;
           window.MA.history.pushHistory();
           var tBefore = t;
@@ -2108,7 +2108,7 @@ window.MA.modules.plantumlSequence = (function() {
         });
       } else if (kind === 'activation') {
         var atgt = document.getElementById('seq-mod-atgt').value;
-        if (!atgt) { alert('Target 必須'); return; }
+        if (!atgt) { window.MA.properties.needField('seq-mod-atgt', '付ける相手'); return; }
         window.MA.history.pushHistory();
         t = insertFn(t, line, 'activation', {
           action: document.getElementById('seq-mod-aact').value,
@@ -3115,7 +3115,7 @@ window.MA.modules.plantumlSequence = (function() {
               if (fr === '__new__' || to === '__new__') {
                 var rawNewAl = document.getElementById('seq-tail-new-alias').value;
                 var inlineNorm = normalizeIdInput(rawNewAl, parsedData, ctx.getMmdText());
-                if (!inlineNorm.valid) { alert('新しい参加者の Alias は必須です'); return; }
+                if (!inlineNorm.valid) { window.MA.properties.needField('seq-tail-new-alias', '新しい参加者の名前'); return; }
                 var ptype = document.getElementById('seq-tail-new-ptype').value;
                 window.MA.history.pushHistory();
                 t = addParticipant(t, ptype, inlineNorm.id, inlineNorm.label);
@@ -3141,14 +3141,14 @@ window.MA.modules.plantumlSequence = (function() {
             } else if (kind === 'participant') {
               var rawAl = document.getElementById('seq-tail-alias').value;
               var partNorm = normalizeIdInput(rawAl, parsedData, ctx.getMmdText());
-              if (!partNorm.valid) { alert('Alias 必須'); return; }
+              if (!partNorm.valid) { window.MA.properties.needField('seq-tail-alias', '名前'); return; }
               var rawPlbl = document.getElementById('seq-tail-plabel').value.trim();
               window.MA.history.pushHistory();
               if (window.MA.tailMemory) window.MA.tailMemory.setField('seq-tail-ptype', document.getElementById('seq-tail-ptype').value);
               out = addParticipant(t, document.getElementById('seq-tail-ptype').value, partNorm.id, rawPlbl || partNorm.label);
             } else if (kind === 'note') {
               var ntg = document.getElementById('seq-tail-ntarget').value;
-              if (!ntg) { alert('Target 必須'); return; }
+              if (!ntg) { window.MA.properties.needField('seq-tail-ntarget', '付ける相手'); return; }
               window.MA.history.pushHistory();
               out = addNote(t, document.getElementById('seq-tail-npos').value, _noteTargetsFromForm('seq-tail-npos', 'seq-tail-ntarget', 'seq-tail-nextra'), (rleObj ? rleObj.getValue() : '').trim());
             } else if (kind === 'block') {
@@ -3156,7 +3156,7 @@ window.MA.modules.plantumlSequence = (function() {
               out = addGroup(t, document.getElementById('seq-tail-bkind').value, document.getElementById('seq-tail-blabel').value.trim());
             } else if (kind === 'activation') {
               var atg = document.getElementById('seq-tail-atgt').value;
-              if (!atg) { alert('Target 必須'); return; }
+              if (!atg) { window.MA.properties.needField('seq-tail-atgt', '付ける相手'); return; }
               window.MA.history.pushHistory();
               out = addActivation(t, document.getElementById('seq-tail-aact').value, atg);
             } else if (kind === 'bulk') {

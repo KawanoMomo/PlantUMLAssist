@@ -1567,7 +1567,7 @@ window.MA.modules.plantumlState = (function() {
         if (k === 'state') {
           var rawId = document.getElementById('st-tail-id').value;
           var normSt = normalizeIdInput(rawId, parsedData, ctx.getMmdText());
-          if (!normSt.valid) { alert('ID 必須'); return; }
+          if (!normSt.valid) { window.MA.properties.needField('st-tail-id'); return; }
           var stereoEl = document.getElementById('st-tail-stereo');
           var st = (stereoEl && stereoEl.value) || null;
           if (where.indexOf('region:') === 0) {
@@ -1587,7 +1587,7 @@ window.MA.modules.plantumlState = (function() {
         } else if (k === 'composite') {
           var rawCid = document.getElementById('st-tail-id').value;
           var normC = normalizeIdInput(rawCid, parsedData, ctx.getMmdText());
-          if (!normC.valid) { alert('ID 必須'); return; }
+          if (!normC.valid) { window.MA.properties.needField('st-tail-id'); return; }
           if (where.indexOf('region:') === 0) {
             var headR = (normC.label && normC.label !== normC.id)
               ? 'state "' + normC.label + '" as ' + normC.id + ' {'
@@ -1648,7 +1648,7 @@ window.MA.modules.plantumlState = (function() {
           out = res.text;
         } else if (k === 'note') {
           var tg = document.getElementById('st-tail-target').value;
-          if (!tg) { alert('Target 必須'); return; }
+          if (!tg) { window.MA.properties.needField('st-tail-target'); return; }
           out = addNote(t, tg, document.getElementById('st-tail-pos').value, document.getElementById('st-tail-ntext').value);
         } else if (k === 'bulk') {
           var block = document.getElementById('st-tail-bulk').value;
@@ -2943,7 +2943,7 @@ window.MA.modules.plantumlState = (function() {
       if (k === 'state') {
         var id = (document.getElementById('st-mod-id') || {}).value || '';
         var modNorm = normalizeIdInput(id, parsed, ctx.getMmdText());
-        if (!modNorm.valid) { alert('ID 必須'); return; }
+        if (!modNorm.valid) { window.MA.properties.needField('st-mod-id', '名前'); return; }
         out = addStateAtLine(t, line, position, modNorm.id, null, modNorm.label);
       } else {
         out = addTransitionAtLine(t, line, position,
