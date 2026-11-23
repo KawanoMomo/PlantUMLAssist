@@ -8,7 +8,7 @@
 // 期待 (principles.md「押した対象だけが変わる」「描ける」):
 //   - SVG の text は本文の要素 (参加者は頭と足の 2 つ・メッセージ・状態・遷移のラベル・クラス名・属性と操作) と
 //     数も文字も一致する (描き落とし・余計な文字が無い)。背景の rect の有無は annotation に残す
-//   - PNG・透過 PNG は 8bit RGBA・非インターレースで、寸法は SVG の viewBox と 2px 以内で一致し、
+//   - PNG・透過 PNG は 8bit RGBA・非インターレースで、寸法は SVG の viewBox × PNG の倍率 (既定 2 倍) と一致し、
 //     線や文字の画素が画像の縁 (外周 1px) に掛からない (図が切れていない)
 //   - PNG の隅は白の不透明、透過 PNG の隅は透明 (透過を選んだときだけ背景が抜ける)
 //   - 保存名は .puml と同じ名前に拡張子 (hand-seq.svg / hand-seq.png / hand-seq.transparent.png)。保存先から開いた図なので
@@ -121,8 +121,9 @@ test('primary 手順3 (場面4) 書き出した SVG・PNG の中身が本文の�
       const st = inkStats(img);
       H.annotate(testInfo, 'png', d.name + ' ' + id + ' ' + img.w + 'x' + img.h + ' ink=' + st.ink + ' edge=' + st.edge);
       expect([img.depth, img.ctype, img.interlace], d.name + ' ' + id + ' は 8bit RGBA・非インターレース').toEqual([8, 6, 0]);
-      expect(Math.abs(img.w - vw), d.name + ' ' + id + ' の幅は viewBox どおり').toBeLessThanOrEqual(2);
-      expect(Math.abs(img.h - vh), d.name + ' ' + id + ' の高さは viewBox どおり').toBeLessThanOrEqual(2);
+      // TICKET-junior-20261123-1142-wish: PNG は SVG の寸法 × PNG の倍率 (何も選ばなければ 2 倍)。
+      expect(Math.abs(img.w - vw * H.PNG_SCALE), d.name + ' ' + id + ' の幅は viewBox × 倍率').toBeLessThanOrEqual(2 * H.PNG_SCALE);
+      expect(Math.abs(img.h - vh * H.PNG_SCALE), d.name + ' ' + id + ' の高さは viewBox × 倍率').toBeLessThanOrEqual(2 * H.PNG_SCALE);
       expect(st.ink, d.name + ' ' + id + ' に線・文字が描かれている').toBeGreaterThan(500);
       expect(st.edge, d.name + ' ' + id + ' の線が画像の縁で切れていない').toBe(0);
       if (transparent) expect(st.corner[3], d.name + ' 透過 PNG の隅は透明').toBe(0);

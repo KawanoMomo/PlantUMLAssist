@@ -46,7 +46,8 @@ describe('app.js の結線', function() {
   });
   test('置き場の言い方はどこでも図のフォルダを渡す', function() {
     expect((APP.match(/ED\.placeLabel\([^)]*\)/g) || []).every(function(s) { return /t\.folder\)$/.test(s); })).toBe(true);
-    expect(APP).toContain('ED.message(res.j, sub, t.folder)');
+    // TICKET-junior-20261123-1142-wish: PNG の画素数 (px) を後ろに足した。図のフォルダを渡すのは変わらない。
+    expect(APP).toContain('ED.message(res.j, sub, t.folder, px)');
   });
   test('保存フォルダの一覧に直下の図だけである旨の行がある', function() {
     expect(APP).toContain("scope.id = 'folder-scope'");

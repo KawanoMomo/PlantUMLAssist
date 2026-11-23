@@ -1,0 +1,15 @@
+@startuml
+title SPI 送信の流れ
+participant App
+participant SpiDrv
+participant Dma
+participant Reg
+App -> SpiDrv : Spi_Write(buf)
+SpiDrv -> Reg : CR1 = SPE
+SpiDrv -> Dma : Dma_Start(tx)
+Dma -> Reg : DR = data
+Reg --> Dma : TXE
+Dma --> SpiDrv : Dma_Done
+SpiDrv -> Reg : CR1 = 0
+SpiDrv --> App : E_OK
+@enduml

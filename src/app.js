@@ -2837,7 +2837,7 @@ function init() {
   btnExport.addEventListener('click', function(e) {
     e.stopPropagation();
     exportMenu.classList.toggle('open');
-    if (exportMenu.classList.contains('open')) refreshExportDest();
+    if (exportMenu.classList.contains('open')) { refreshExportDest(); refreshPngScale(); }
   });
   // TICKET-primary-20261115-2240-wish: 書き出し先の行の「替える…」(Export ▾ の項目ではない)。
   var expDestChange = document.getElementById('export-dest-change');
@@ -2855,6 +2855,19 @@ function init() {
   document.getElementById('exp-png').addEventListener('click', function() { exportMenu.classList.remove('open'); exportPNG(false); });
   document.getElementById('exp-png-transparent').addEventListener('click', function() { exportMenu.classList.remove('open'); exportPNG(true); });
   document.getElementById('exp-clipboard').addEventListener('click', function() { exportMenu.classList.remove('open'); exportClipboard(); });
+  // TICKET-junior-20261123-1142-wish: 「PNG の大きさ」の行。押してもメニューは閉じない (選んでからすぐ書き出せる)。
+  var epsBox = document.getElementById('export-png-scale');
+  if (epsBox) {
+    epsBox.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var b = e.target && e.target.closest ? e.target.closest('.eps-opt') : null;
+      var PS = window.MA.pngScale;
+      if (!b || !PS) return;
+      PS.save(_exportStorage(), b.getAttribute('data-scale'));
+      refreshPngScale();
+    });
+  }
+  refreshPngScale();
   // 開いている図すべての zip・名前を付けた図の組・Export ▾ の「渡す」見出しは TICKET-owner-20261116-0140-prune で外した。
   // Export ▾ は 1 枚の図の SVG / PNG / 透過 PNG / クリップボードの 4 項目。
 
@@ -2872,6 +2885,7 @@ function init() {
     exportReturnFocusEl = document.activeElement;
     exportMenu.classList.add('open');
     refreshExportDest();
+    refreshPngScale();
     var firstItem = document.getElementById('exp-svg');
     if (firstItem) firstItem.focus();
   });
@@ -9579,10 +9593,15 @@ function _refreshExportStale(t, sub) {
     });
 }
 
-function deliverExport(kind, downloadName, blob) {
+// px は PNG の画素数の言い方 (「606×648 px (2 倍)」。SVG は '')。書いた後の 1 行に足す (TICKET-junior-20261123-1142-wish)。
+function _downloadExport(downloadName, blob, px) {
+  downloadBlob(downloadName, blob);
+  if (px) setSaveStatus('書き出しました: ' + downloadName + ' · ' + Number(blob.size || 0) + ' バイト · ' + px + '（ダウンロード）');
+}
+function deliverExport(kind, downloadName, blob, px) {
   var ED = window.MA.exportDest;
   var t = _exportTarget();
-  if (!t || !ED || !window.fetch) { downloadBlob(downloadName, blob); return Promise.resolve(null); }
+  if (!t || !ED || !window.fetch) { _downloadExport(downloadName, blob, px); return Promise.resolve(null); }
   var sub = ED.loadSub(_exportStorage(), t.dir);
   return fetch(ED.url(t.dir, t.name, kind, sub), {
     method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: blob,
@@ -9590,7 +9609,7 @@ function deliverExport(kind, downloadName, blob) {
     return r.json().catch(function() { return {}; }).then(function(j) { return { status: r.status, j: j || {} }; });
   }).then(function(res) {
     if (res.status === 200 && res.j.ok) {
-      var msg = ED.message(res.j, sub, t.folder);
+      var msg = ED.message(res.j, sub, t.folder, px);
       _lastExport = { dir: t.dir, name: t.name, msg: msg, res: res.j };
       setSaveStatus(msg);
       var el = document.getElementById('status-save-result');
@@ -9605,7 +9624,7 @@ function deliverExport(kind, downloadName, blob) {
       return res.j;
     }
     // その図が保存先に無い (保存前の新しい図) ときは今までどおりダウンロード。
-    if (res.j && res.j.fallback) { downloadBlob(downloadName, blob); return null; }
+    if (res.j && res.j.fallback) { _downloadExport(downloadName, blob, px); return null; }
     setSaveStatus('⚠ 書き出せませんでした: ' + (res.j.error || ('HTTP ' + res.status)));
     return null;
   }).catch(function(err) {
@@ -9784,6 +9803,81 @@ function downloadBlob(filename, blob) {
 
 
 
+// ── PNG の大きさ (TICKET-junior-20261123-1142-wish / MA.pngScale) ──────────────────────────
+// PNG は SVG の寸法 × 倍率の画素数で、SVG から描き直す (1 倍の絵を引き伸ばさない)。倍率は Export ▾ の「PNG の大きさ」の
+// 1 か所で替え、道具 (ブラウザ) に 1 つだけ覚える。PNG を出すどの入口 (Export ▾ の PNG・透過 PNG、まとめての書き出し、
+// クリップボード) もこの道を通る。本文・SVG・保存先には何も書かない。
+function _pngScale() {
+  var PS = window.MA.pngScale;
+  return PS ? PS.load(_exportStorage()) : 1;
+}
+
+// Export ▾ の「PNG の大きさ」の行を書き直す (選択肢・今の倍率・今の図で出る画素数)。
+function refreshPngScale() {
+  var PS = window.MA.pngScale;
+  var opts = document.getElementById('export-png-scale-opts');
+  if (!PS || !opts) return;
+  var cur = _pngScale();
+  if (!opts.children.length) {
+    PS.SCALES.forEach(function(s) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'eps-opt';
+      b.setAttribute('data-scale', String(s));
+      b.textContent = PS.label(s);
+      opts.appendChild(b);
+    });
+  }
+  Array.prototype.forEach.call(opts.children, function(b) {
+    b.setAttribute('aria-pressed', Number(b.getAttribute('data-scale')) === cur ? 'true' : 'false');
+  });
+  var pxEl = document.getElementById('export-png-scale-px');
+  if (!pxEl) return;
+  var svgEl = previewSvgEl ? previewSvgEl.querySelector('svg') : null;
+  var w = svgEl ? parseFloat(svgEl.getAttribute('width')) : 0;
+  var h = svgEl ? parseFloat(svgEl.getAttribute('height')) : 0;
+  var sz = (w > 0 && h > 0) ? PS.size(w, h, cur) : null;
+  pxEl.textContent = !sz ? '' : (sz.ok ? '今の図の PNG: ' + sz.w + '×' + sz.h + ' px' : '⚠ 今の図はこの大きさでは描けません');
+}
+
+// el は書き出し用の SVG の要素 (複製。描画に関わらない埋め込みは落とし済み)、w×h はその SVG の寸法。
+// done(canvas, sz) / done(null, sz, why, loadError)。描ける上限を超える・ブラウザが描けなかったときは描かずに理由を返す
+// (空・欠けた PNG を知らせ無しに書かない)。
+function _rasterSvgEl(el, w, h, transparent, done) {
+  var PS = window.MA.pngScale;
+  var sz = PS ? PS.size(w, h, _pngScale()) : { ok: true, w: Math.round(w), h: Math.round(h), scale: 1 };
+  if (!sz.ok) { done(null, sz, sz.error); return; }
+  // SVG の width・height を画素数に替えて描き直す (viewBox が図の座標を持つ)。
+  if (!el.getAttribute('viewBox')) el.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  el.setAttribute('width', String(sz.w));
+  el.setAttribute('height', String(sz.h));
+  var svgData = new XMLSerializer().serializeToString(el);
+  var img = new Image();
+  img.onload = function() {
+    var canvas = document.createElement('canvas');
+    canvas.width = sz.w;
+    canvas.height = sz.h;
+    var ctx = canvas.getContext('2d');
+    if (!ctx || (PS && !PS.drawnOk(canvas, sz))) {
+      done(null, sz, '書き出しませんでした: ブラウザが ' + (PS ? PS.pxLabel(sz) : sz.w + '×' + sz.h + ' px') + ' の PNG を描けません');
+      return;
+    }
+    if (!transparent) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    ctx.drawImage(img, 0, 0, sz.w, sz.h);
+    done(canvas, sz);
+  };
+  img.onerror = function() {
+    // 「SVG読み込みエラー」だけで終わらせず、何が読めなかったかを名指しする。
+    var why = window.MA.svgExport ? window.MA.svgExport.reasonFor(svgData) : '';
+    done(null, sz, 'PNG エクスポートに失敗しました' + (why ? '\n' + why : ' (SVG 読み込みエラー)'), true);
+  };
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+}
+
+// プレビューの図を PNG の canvas にする。callback(canvas, sz)。描けなければ知らせて callback を呼ばない。
 function svgToCanvas(transparent, callback) {
   var svgEl = previewSvgEl.querySelector('svg');
   if (!svgEl) return;
@@ -9794,34 +9888,20 @@ function svgToCanvas(transparent, callback) {
   if (window.MA.svgExport) window.MA.svgExport.stripNonRendered(clone);
   var w = parseFloat(clone.getAttribute('width')) || 800;
   var h = parseFloat(clone.getAttribute('height')) || 400;
-  var svgData = new XMLSerializer().serializeToString(clone);
-  var img = new Image();
-  img.onload = function() {
-    var canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    var ctx = canvas.getContext('2d');
-    if (!transparent) {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-    ctx.drawImage(img, 0, 0, w, h);
-    callback(canvas);
-  };
-  img.onerror = function() {
-    // 「SVG読み込みエラー」だけで終わらせず、何が読めなかったかを名指しする。
-    var why = window.MA.svgExport ? window.MA.svgExport.reasonFor(svgData) : '';
-    alert('PNG エクスポートに失敗しました' + (why ? '\n' + why : ' (SVG 読み込みエラー)'));
-  };
-  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+  _rasterSvgEl(clone, w, h, transparent, function(canvas, sz, why, loadError) {
+    if (canvas) { callback(canvas, sz); return; }
+    if (loadError) alert(why);
+    else setSaveStatus('⚠ ' + why);
+  });
 }
 
 function exportPNG(transparent) { _exportWhenDrawn(function() { _exportPngNow(transparent); }); }
 function _exportPngNow(transparent) {
-  svgToCanvas(transparent, function(canvas) {
+  svgToCanvas(transparent, function(canvas, sz) {
     canvas.toBlob(function(blob) {
-      if (!blob) return;
-      deliverExport(transparent ? 'png-transparent' : 'png', exportFileName('png'), blob);
+      if (!blob || !blob.size) { setSaveStatus('⚠ 書き出しませんでした: PNG を作れませんでした'); return; }
+      var PS = window.MA.pngScale;
+      deliverExport(transparent ? 'png-transparent' : 'png', exportFileName('png'), blob, PS ? PS.pxLabel(sz) : '');
     });
   });
 }
@@ -9840,29 +9920,19 @@ function _svgTextForImage(svgText) {
   if (!root || String(root.nodeName).toLowerCase() !== 'svg' || doc.getElementsByTagName('parsererror').length) return null;
   var size = normalizeSvgSize(root);
   if (window.MA.svgExport) window.MA.svgExport.stripNonRendered(root);
-  return { text: new XMLSerializer().serializeToString(root), w: size.w, h: size.h };
+  return { el: root, text: new XMLSerializer().serializeToString(root), w: size.w, h: size.h };
 }
 
-// SVG の文字列を PNG の Blob にする (1 枚ずつの svgToCanvas と同じく、透過でなければ白で塗ってから描く)。
+// SVG の文字列を PNG の Blob にする (1 枚ずつの書き出しと同じ _rasterSvgEl で、同じ倍率・透過でなければ白地)。
+// 描ける上限を超えるときは { error } を返す (空・欠けた絵を書かない)。
 function _svgTextToPngBlob(svgText, transparent) {
   return new Promise(function(resolve) {
     var s = _svgTextForImage(svgText);
     if (!s) { resolve(null); return; }
-    var img = new Image();
-    img.onload = function() {
-      var canvas = document.createElement('canvas');
-      canvas.width = s.w;
-      canvas.height = s.h;
-      var ctx = canvas.getContext('2d');
-      if (!transparent) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
-      ctx.drawImage(img, 0, 0, s.w, s.h);
+    _rasterSvgEl(s.el, s.w, s.h, transparent, function(canvas, sz, why) {
+      if (!canvas) { resolve(why ? { error: why.split('\n')[0].replace(/^書き出しませんでした: /, '') } : null); return; }
       canvas.toBlob(function(blob) { resolve(blob || null); });
-    };
-    img.onerror = function() { resolve(null); };
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s.text);
+    });
   });
 }
 
@@ -9890,6 +9960,7 @@ function _batchExportOne(name, dir, kind, sub) {
         ? Promise.resolve(new Blob([String(svg)], { type: 'image/svg+xml' }))
         : _svgTextToPngBlob(svg, kind === 'png-transparent');
       return made.then(function(blob) {
+        if (blob && blob.error) return fail(blob.error);
         if (!blob || !blob.size) return fail('画像にできません');
         return fetch(ED.url(dir, name, kind, sub), {
           method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: blob,
@@ -9928,6 +9999,7 @@ function exportClipboard() {
     alert('クリップボード API が利用できません');
     return;
   }
+  // 写す PNG の大きさは「PNG で書き出す」と同じ倍率 (TICKET-junior-20261123-1142-wish。待ち・知らせは TICKET-roadmap-20261123-2358-1)。
   svgToCanvas(false, function(canvas) {
     canvas.toBlob(function(blob) {
       if (!blob) return;

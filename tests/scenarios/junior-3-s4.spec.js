@@ -4,7 +4,7 @@
 //   書き出しの入口は上部バーの Export ▾ → PNGとして保存 (ツール ▾ には書き出しを置かない)。
 // 期待 (principles.md「押した対象だけが変わる」「描ける」):
 //   - 書き出しで本文は 1 行も動かない
-//   - 受けた .png は PNG の署名を持ち、幅・高さが描いた図 (SVG) と同じ寸法 (縮めて字を潰さない)
+//   - 受けた .png は PNG の署名を持ち、幅・高さが描いた図 (SVG) の寸法 × PNG の倍率 (既定 2 倍。縮めて字を潰さない)
 //   - 画像は空同然でない: 白地の上に図の線と文字の画素がある (書き出しが知らせ無しに空にならない)
 //   - 書き出しの失敗の知らせ (alert) が出ない。手数は Export ▾ → PNGとして保存 の 2 クリック
 const fs = require('fs');
@@ -47,9 +47,9 @@ test('junior 手順3 同じ状態遷移図を Export ▾ から PNG で書き出
   const h = buf.readUInt32BE(20);
   expect(w).toBeGreaterThan(0);
   expect(h).toBeGreaterThan(0);
-  // 縮めて字を潰さない: 描いた図と同じ寸法で書き出す。
-  expect(Math.abs(w - svgSize.w)).toBeLessThanOrEqual(1);
-  expect(Math.abs(h - svgSize.h)).toBeLessThanOrEqual(1);
+  // 縮めて字を潰さない: 描いた図 (SVG) の寸法 × PNG の倍率 (何も選ばなければ 2 倍。TICKET-junior-20261123-1142-wish) で書き出す。
+  expect(Math.abs(w - svgSize.w * H.PNG_SCALE)).toBeLessThanOrEqual(H.PNG_SCALE);
+  expect(Math.abs(h - svgSize.h * H.PNG_SCALE)).toBeLessThanOrEqual(H.PNG_SCALE);
 
   // 描ける: 受けた画像をページで読み直し、白地以外の画素 (線・文字) を数える。
   const ink = await page.evaluate(async (b64) => {
