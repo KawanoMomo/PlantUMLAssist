@@ -680,8 +680,39 @@ window.MA.properties = (function() {
     });
   }
 
+  // 空のまま確定された欄の知らせ (TICKET-owner-20261123-0842-2)。欄は画面に無い語 (Alias / ID / Target) では
+  // 指さず、欄の見出しの語 (label[for]) で言う。6 図種で同じ文: 打つ欄は「「名前」を入れてください」、
+  // 選ぶ欄は「「付ける相手」を選んでください」。知らせの後は空だった欄に手を置く (探さずに打てる)。
+  function needFieldText(word, isSelect) {
+    return '「' + String(word || '').trim() + '」を' + (isSelect ? '選んでください' : '入れてください');
+  }
+  function _fieldWord(id) {
+    var lab = document.querySelector ? document.querySelector('label[for="' + id + '"]') : null;
+    var w = lab ? String(lab.textContent || '').trim() : '';
+    return w.replace(/\s*[（(]任意[）)]\s*$/, '');
+  }
+  function needField(id, fallbackWord) {
+    var el = document.getElementById(id);
+    var word = _fieldWord(id) || fallbackWord || '';
+    alert(needFieldText(word, !!(el && el.tagName === 'SELECT')));
+    if (el && typeof el.focus === 'function') { try { el.focus(); } catch (e) {} }
+  }
+  // 値を変えてから押す欄 (改名して関係の行も付け替える) の知らせも、欄の見出しの語で言う。
+  function needChangeText(word) {
+    return '「' + String(word || '').trim() + '」を変えてから押してください';
+  }
+  function needChange(id, fallbackWord) {
+    var el = document.getElementById(id);
+    alert(needChangeText(_fieldWord(id) || fallbackWord || ''));
+    if (el && typeof el.focus === 'function') { try { el.focus(); } catch (e) {} }
+  }
+
   return {
+    needChangeText: needChangeText,
+    needChange: needChange,
     init: init,
+    needFieldText: needFieldText,
+    needField: needField,
     bindTextField: bindTextField,
     bindDateField: bindDateField,
     // HTML builders
