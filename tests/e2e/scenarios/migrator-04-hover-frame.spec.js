@@ -2082,9 +2082,13 @@ test('migrator 手順 4 — 図の部品を押した直後のキーは本文の�
   await page.mouse.click(z.box.x, z.box.y);
   await page.keyboard.press('x');
   expect(await text(), 'Enter・文字キーで本文は変わらない').toBe(dsl);
-  // Delete は ✕ 削除と同じ (宣言の行だけを行ごと消す)。Ctrl+Z で戻る
+  // Delete は ✕ 削除と同じ (TICKET-owner-20261124-0422-3: 窓がメッセージの本数を言い、Enter で宣言とメッセージを
+  // 一緒に行ごと消す)。Ctrl+Z 1 回で戻る
   await page.keyboard.press('Delete');
-  await expect.poll(text, 'Delete で参加者の宣言の行が行ごと消える').toBe(dsl.replace('participant Z\n', ''));
+  await expect(page.locator('#seq-del-message')).toHaveText('参加者 Z を削除します。メッセージ 2 本も消えます。');
+  await page.keyboard.press('Enter');
+  await expect.poll(text, 'Delete で参加者と付いたメッセージの行が行ごと消える')
+    .toBe(['@startuml', 'participant A', '@enduml'].join('\n'));
   await page.keyboard.press('Control+z');
   await expect.poll(text).toBe(dsl);
   await expect(page.locator('#overlay-layer rect[data-type="message"][data-line="4"]').first()).toBeAttached({ timeout: 20000 });
@@ -2536,7 +2540,8 @@ test('migrator 手順 4 — destroy した参加者を同じ名前で create し
   // BLK-owner-20260929-0431-1: 右欄の見出し・✕ 削除は光らせた行 (6) を指す。1 回目のメッセージ (4) を消さない。
   await expect(page.locator('#props-content')).toContainText('participant · 6 行目');
   const before = await page.locator('#editor').inputValue();
-  // 1 回目の頭は宣言の行が無く、選んだ行は最初のメッセージ。✕ 削除は理由を言って本文を変えない。
+  // 1 回目の頭も ✕ 削除で黙って別の行を消さない。TICKET-owner-20261124-0422-3: 参加者の削除は
+  // 6 図種共通の窓が一緒に消える本数を言い、Esc なら本文を変えない。
   // (同じ参加者をもう一度押すと選択が外れるので、Esc で外してから押す)
   await page.keyboard.press('Escape');
   await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).length)).toBe(0);
@@ -2546,9 +2551,11 @@ test('migrator 手順 4 — destroy した参加者を同じ名前で create し
   await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).map((s) => s.type + ':' + s.id)),
     { timeout: 5000 }).toEqual(['participant:Worker']);
   await page.locator('#props-content .seq-delete-line').click();
-  await expect(page.locator('#seq-range-toast')).toContainText('宣言の行がありません');
+  await expect(page.locator('#seq-del-message')).toHaveText('参加者 Worker を削除します。メッセージ 2 本とactivate 等 2 行も消えます。');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#seq-del-modal')).toHaveCount(0);
   expect(await page.locator('#editor').inputValue()).toBe(before);
-  // 2 回目の頭の ✕ 削除は 2 回目の create の行だけを消し、描ける図のまま。
+  // 2 回目の頭の ✕ 削除も同じ窓。Enter で Worker の create・destroy・メッセージが一緒に消え、描ける図のまま。
   await page.keyboard.press('Escape');
   await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).length)).toBe(0);
   await page.mouse.move(pts[1].x, pts[1].y);
@@ -2556,10 +2563,10 @@ test('migrator 手順 4 — destroy した参加者を同じ名前で create し
   await page.mouse.up();
   await expect(page.locator('#props-content')).toContainText('participant · 6 行目');
   await page.locator('#props-content .seq-delete-line').click();
-  const after = before.split('\n');
-  after.splice(5, 1);
-  await expect.poll(() => page.locator('#editor').inputValue()).toBe(after.join('\n'));
-  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(2, { timeout: 20000 });
+  await expect(page.locator('#seq-del-modal')).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.locator('#editor').inputValue()).toBe(['@startuml', 'participant Main', '@enduml'].join('\n'));
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(0, { timeout: 20000 });
   await expect(page.locator('#overlay-warning')).toBeHidden();
 });
 

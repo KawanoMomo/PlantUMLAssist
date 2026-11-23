@@ -1329,13 +1329,20 @@ function init() {
     return sel.length === 1 ? sel[0] : null;
   }
 
-  // ↑↓ の候補に入らない部品 (シーケンス図の参加者) を図で押して Delete を
-  // 押したら、右パネルの「✕ 削除」と同じことをする (宣言の行が無い参加者の断り・元に戻すトーストもボタンの側が持つ)。
+  // 図で要素 (参加者・クラス・部品・アクター・状態 …) を 1 つ押して Delete を押したら、右パネルの
+  // 「✕ 削除」と同じことをする (TICKET-owner-20261124-0422-3)。要素の削除ボタンは data-el-delete を持ち、
+  // 一緒に消える行の本数を言う窓・元に戻すトーストはボタンの側 (src/core/element-delete.js) が持つ。
+  // 線・メッセージの選択はボタンに印が無いので、下の deleteSelectedLine の経路のまま。
   function _kbdDeleteViaPanel() {
     var one = _kbdSingleSelected();
-    if (!one || one.type !== 'participant') return false;
-    var btn = document.querySelector('#props-content .seq-delete-line');
-    if (!btn || btn.disabled) return false;
+    if (!one) return false;
+    // 手が図・右パネルの外 (FILES の一覧・タブ等) にあるときの Delete はそちらの働き。要素を消さない。
+    var ae = document.activeElement;
+    if (ae && ae !== document.body && ae !== document.documentElement
+      && !(ae.closest && ae.closest('#preview-pane, #props-content'))) return false;
+    var btn = document.querySelector('#props-content [data-el-delete]');
+    // パネルが押した要素のものであること (クラスのメンバーを押した選択でクラスを消さない)。
+    if (!btn || btn.disabled || btn.getAttribute('data-el-id') !== String(one.id)) return false;
     btn.click();
     return true;
   }
@@ -1397,11 +1404,10 @@ function init() {
     if (_kbdInTypingTarget()) return;
     // modal 表示中は二重発火させない (FEAT-017 [AC-5])。
     if (_kbdModalOpen()) return;
+    // 要素を押した選択の Delete は、↑↓ の候補 (状態など) に入っていても「✕ 削除」と同じ窓に通す。
+    if ((key === 'Delete' || key === 'Backspace') && _kbdDeleteViaPanel()) { e.preventDefault(); return; }
     var cur = _kbdSelectedItem();
-    if (!cur) {
-      if ((key === 'Delete' || key === 'Backspace') && _kbdDeleteViaPanel()) e.preventDefault();
-      return;
-    }
+    if (!cur) return;
 
     // FEAT-138 (UI-016 / HFR-073): 選択中 message の矢印を 1 打で `->` / `-->` に切り替える。
     // ARROWS の順序・剰余には依存せず、`-->` を既定の相手とする 2 値切替である。

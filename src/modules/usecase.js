@@ -734,7 +734,7 @@ window.MA.modules.plantumlUsecase = (function() {
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
           '<button id="uc-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
           '<button id="uc-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
-          '<button id="uc-delete" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+          '<button id="uc-delete" data-el-delete="1" data-el-id="' + window.MA.htmlUtils.escHtml(element.id) + '" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         '</div>' +
         // 選んだ要素を境界の中へ移す / 外へ出す。
         GP.editFieldHtml('uc-edit', parsedData.groups, element.line) +
@@ -812,11 +812,34 @@ window.MA.modules.plantumlUsecase = (function() {
       ctx.onUpdate();
     });
     P.bindEvent('uc-delete', 'click', function() {
-      if (!confirm('この行を削除しますか？')) return;
-      window.MA.history.pushHistory();
-      ctx.setMmdText(deleteLine(ctx.getMmdText(), element.line));
-      window.MA.selection.clearSelection();
-      ctx.onUpdate();
+      // 宣言の行だけを消すと関係・note の行が元の名前でアクターを描き直す。付いた行も一緒に、本数を言う窓で消す。
+      var text = ctx.getMmdText();
+      var plan = elementDeletePlan(text, element.id);
+      if (!plan) return;
+      window.MA.elementDelete.ask({
+        prefix: 'uc', title: '削除', ctx: ctx, plan: plan,
+        message: window.MA.elementDelete.message(element.kind === 'actor' ? 'アクター' : 'ユースケース', element.id, plan, '関係'),
+      });
+    });
+  }
+
+  // 要素を消すときに一緒に消える行: 宣言・その要素に繋がる関係・その要素を対象に持つ note。
+  // 返り値は MA.elementDelete.plan の形 / 要素が無ければ null。
+  function elementDeletePlan(text, id) {
+    var parsed = parse(text);
+    var elt = null;
+    for (var i = 0; i < parsed.elements.length; i++) {
+      if (parsed.elements[i].id === id) { elt = parsed.elements[i]; break; }
+    }
+    if (!elt) return null;
+    var rels = [];
+    parsed.relations.forEach(function(r) {
+      if (r.from === id || r.to === id) rels.push({ start: r.line, end: r.line });
+    });
+    return window.MA.elementDelete.plan({
+      decl: elt.implicit ? [] : [{ start: elt.line, end: elt.line }],
+      relations: rels,
+      notes: window.MA.elementDelete.notesOf(text, id),
     });
   }
 
@@ -1038,6 +1061,7 @@ window.MA.modules.plantumlUsecase = (function() {
     moveLineDown: moveLineDown,
     setTitle: setTitle,
     renameWithRefs: renameWithRefs,
+    elementDeletePlan: elementDeletePlan,
     renderProps: renderProps,
     capabilities: {
       overlaySelection: true,  // Phase B Task 9 で actor/usecase 対応

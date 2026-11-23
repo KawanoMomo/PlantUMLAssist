@@ -792,6 +792,29 @@ window.MA.modules.plantumlSequence = (function() {
       '。参加者を消すには、その参加者が出るメッセージの行を消してください';
   }
 
+  // 参加者を消すときに一緒に消える行: 宣言 (`participant X`・`create X`)・X が端のメッセージ・
+  // X を対象に持つ note (`note over X, Y` も含む。残すと X が描き直される)・activate / deactivate / destroy X。
+  // 返り値は MA.elementDelete.plan の形 (6 図種の共通部)。
+  function participantDeletePlan(text, id) {
+    if (!id || !window.MA.elementDelete) return null;
+    var parsed = parseSequence(text);
+    var decl = [], rels = [], notes = [], others = [];
+    (parsed.elements || []).forEach(function(e) {
+      if (e.kind === 'participant' && e.id === id && e.line && participantOwnsLine(text, id, e.line)) {
+        decl.push({ start: e.line, end: e.line });
+      } else if (e.kind === 'activation' && e.target === id) {
+        (e.action === 'create' ? decl : others).push({ start: e.line, end: e.line });
+      } else if (e.kind === 'note' && (e.targets || []).indexOf(id) >= 0) {
+        notes.push({ start: e.line, end: e.endLine || e.line });
+      }
+    });
+    (parsed.relations || []).forEach(function(r) {
+      if (r.kind === 'message' && (r.from === id || r.to === id)) rels.push({ start: r.line, end: r.line });
+    });
+    if (!decl.length && !rels.length && !notes.length && !others.length) return null;
+    return window.MA.elementDelete.plan({ decl: decl, relations: rels, notes: notes, others: others });
+  }
+
   function deleteSelectedLine(ctx, lineNum) {
     window.MA.history.pushHistory();
     ctx.setMmdText(deleteLineOrNote(ctx.getMmdText(), lineNum));
@@ -1284,6 +1307,20 @@ window.MA.modules.plantumlSequence = (function() {
       _moveAndReselect(parseInt(btn.getAttribute('data-line'), 10), 1);
     });
     P.bindAllByClass(propsEl, 'seq-delete-line', function(btn) {
+      // 参加者: 宣言の行だけを消すとメッセージ・note の行が元の名前で参加者を描き直す。
+      // メッセージ・note・activate 等の付いた参加者は、本数を言う 6 図種共通の窓で一緒に消す
+      // (宣言の行が無い参加者も、窓が消えるメッセージの本数を言ってから消す。黙って別の行を消さない)。
+      var pid = btn.getAttribute('data-part-id');
+      if (pid) {
+        var pplan = participantDeletePlan(ctx.getMmdText(), pid);
+        if (pplan && window.MA.elementDelete.attached(pplan)) {
+          window.MA.elementDelete.ask({
+            prefix: 'seq', title: '削除', ctx: ctx, plan: pplan,
+            message: window.MA.elementDelete.message('参加者', pid, pplan, 'メッセージ', 'activate 等'),
+          });
+          return;
+        }
+      }
       if (_partGuard(btn, 'delete')) return;
       var ln = parseInt(btn.getAttribute('data-line'), 10);
       // FEAT-015: 削除の確認ダイアログを廃し、削除後の「元に戻す」トーストで代替する。
@@ -2770,6 +2807,7 @@ window.MA.modules.plantumlSequence = (function() {
     addBulk: addBulk,
     deleteLine: deleteLine,
     deleteSelectedLine: deleteSelectedLine,
+    participantDeletePlan: participantDeletePlan,
     updateParticipant: updateParticipant,
     renameBox: renameBox,
     updateMessage: updateMessage,
@@ -3269,7 +3307,7 @@ window.MA.modules.plantumlSequence = (function() {
           '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;display:flex;gap:4px;">' +
             '<button class="seq-move-up" data-line="' + line + '"' + partAttr + ' style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
             '<button class="seq-move-down" data-line="' + line + '"' + partAttr + ' style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
-            '<button class="seq-delete-line" data-line="' + line + '"' + partAttr + ' style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+            '<button class="seq-delete-line" data-line="' + line + '"' + partAttr + (partId ? ' data-el-delete="1" data-el-id="' + escHtml(partId) + '"' : '') + ' style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
           '</div>';
         }
 

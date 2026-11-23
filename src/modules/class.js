@@ -904,62 +904,15 @@ window.MA.modules.plantumlClass = (function() {
 
   // 「クラスを削除」の確かめる窓。ブラウザの confirm は note のことしか言わず、
   // Enter / Esc の約束も他の窓と違った。アプリの窓で、消える関係と note の数を先に言う (Enter で削除・Esc で取り消し)。
+  // 窓と消し方は 6 図種の共通部 (src/core/element-delete.js)。クラス図は窓の id に cl を使う。
   function _askDeleteClass(classId, ctx) {
     var plan = classDeletePlan(ctx.getMmdText(), classId);
     if (!plan) return;
-    var old = document.getElementById('cl-del-modal');
-    if (old && old.parentNode) old.parentNode.removeChild(old);
-    var back = document.activeElement;
-    var wrap = document.createElement('div');
-    wrap.id = 'cl-del-modal';
-    wrap.setAttribute('style', 'position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;');
-    var box = document.createElement('div');
-    box.setAttribute('role', 'dialog');
-    box.setAttribute('aria-modal', 'true');
-    box.setAttribute('aria-label', 'クラスを削除');
-    box.setAttribute('style', 'background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:6px;padding:14px 16px;min-width:300px;max-width:440px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,0.4);');
-    var msg = document.createElement('p');
-    msg.id = 'cl-del-message';
-    msg.setAttribute('style', 'margin:0 0 12px;line-height:1.6;');
-    msg.textContent = classDeleteMessage(classId, plan);
-    box.appendChild(msg);
-    var row = document.createElement('div');
-    row.setAttribute('style', 'display:flex;gap:8px;justify-content:flex-end;');
-    var cancel = document.createElement('button');
-    cancel.type = 'button';
-    cancel.id = 'cl-del-cancel';
-    cancel.textContent = '取り消し';
-    cancel.setAttribute('style', 'background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border);padding:5px 12px;border-radius:4px;font-size:12px;cursor:pointer;');
-    var ok = document.createElement('button');
-    ok.type = 'button';
-    ok.id = 'cl-del-confirm';
-    ok.textContent = '削除する';
-    ok.setAttribute('style', 'background:var(--accent-red);color:#fff;border:none;padding:5px 12px;border-radius:4px;font-size:12px;cursor:pointer;');
-    row.appendChild(cancel);
-    row.appendChild(ok);
-    box.appendChild(row);
-    wrap.appendChild(box);
-    document.body.appendChild(wrap);
-    function close() {
-      if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-      if (back && back.focus && back.isConnected !== false) { try { back.focus(); } catch (e) {} }
-    }
-    function doDelete() {
-      close();
-      window.MA.history.pushHistory();
-      ctx.setMmdText(deleteClassWithNotes(ctx.getMmdText(), classId));
-      window.MA.selection.clearSelection();
-      ctx.onUpdate();
-    }
-    ok.addEventListener('click', doDelete);
-    cancel.addEventListener('click', close);
-    wrap.addEventListener('click', function(e) { if (e.target === wrap) close(); });
-    wrap.addEventListener('keydown', function(e) {
-      if (e.isComposing) return;
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
-      if (e.key === 'Enter' && document.activeElement !== cancel) { e.preventDefault(); e.stopPropagation(); doDelete(); }
+    window.MA.elementDelete.ask({
+      prefix: 'cl', title: 'クラスを削除', ctx: ctx,
+      message: classDeleteMessage(classId, plan),
+      plan: plan,
     });
-    try { ok.focus(); } catch (e) {}
   }
 
   // クラスを消すときに一緒に消える行。宣言 (本体の {} まで)・そのクラスへの note・
@@ -2223,7 +2176,7 @@ window.MA.modules.plantumlClass = (function() {
             '<button id="cl-add-note-btn" style="margin-top:4px;">＋ ノートを添える</button>' +
           '</div>' +
           // design 4a: 削除はパネルの末尾に「クラスを削除」。
-          '<button id="cl-delete" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">' + window.MA.terms.del + '</button>';
+          '<button id="cl-delete" data-el-delete="1" data-el-id="' + window.MA.htmlUtils.escHtml(element.id) + '" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">' + window.MA.terms.del + '</button>';
 
     propsEl.innerHTML = html;
     GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx, element.id);
@@ -2513,7 +2466,7 @@ window.MA.modules.plantumlClass = (function() {
     });
     html += P.fieldHtml('新しい値', 'cl-add-val-name', '', '例: PURPLE') +
             P.primaryButtonHtml('cl-add-val', '+ Value 追加') +
-            '</div>' + '<button id="cl-delete" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">' + window.MA.terms.del + '</button>';
+            '</div>' + '<button id="cl-delete" data-el-delete="1" data-el-id="' + window.MA.htmlUtils.escHtml(element.id) + '" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">' + window.MA.terms.del + '</button>';
     propsEl.innerHTML = html;
     GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx, element.id);
     _bindKindToggle(element, propsEl, ctx);
