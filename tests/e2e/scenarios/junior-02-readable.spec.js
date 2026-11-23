@@ -1033,7 +1033,9 @@ test('手順2 フォームだけで足した直後にリロードしても本文
   await expect(page.locator('#cl-tail-to')).toHaveValue('');
   const beforeRel = await getEditorText(page);
   await page.locator('#cl-tail-add').click();
-  await expect(page.locator('#cl-tail-rpreview')).toContainText('To を選んでください');
+  // To の知らせは 5 図種で同じ共通部 (欄の見出しの語。TICKET-owner-20261123-2322-2)。
+  await expect(page.locator('#cl-tail-rpreview')).toContainText(/「[^」]*\(To\)」を選んでください \(一覧で選ぶ\)/);
+  await expect(page.locator('#cl-tail-to')).toBeFocused();
   expect(await getEditorText(page)).toBe(beforeRel);
   await page.locator('#cl-tail-from').selectOption('Spi_Driver');
   await page.locator('#cl-tail-to').selectOption('Driver_Base');

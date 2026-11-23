@@ -713,10 +713,8 @@ window.MA.modules.plantumlComponent = (function() {
           var to = document.getElementById('co-tail-to').value;
           if (!fr) { alert('From/To 必須'); return; }
           if (!to) {
-            var coHint = document.getElementById('co-tail-rhint');
-            if (coHint) coHint.textContent = 'To を選んでください (一覧で相手を選ぶ)';
-            var coTo = document.getElementById('co-tail-to');
-            if (coTo && coTo.focus) coTo.focus();
+            // 5 図種で同じ共通部 (TICKET-owner-20261123-2322-2)。
+            P.needPick('co-tail-to', 'co-tail-rhint', '一覧で選ぶ', '終点 (To)');
             return;
           }
           var rkind = document.getElementById('co-tail-rkind').value;

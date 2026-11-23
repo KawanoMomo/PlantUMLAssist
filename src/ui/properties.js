@@ -688,6 +688,8 @@ window.MA.properties = (function() {
   }
   function _fieldWord(id) {
     var lab = document.querySelector ? document.querySelector('label[for="' + id + '"]') : null;
+    // 見出しを for でなく {id}-label で結ぶ欄 (クラス図の関係の役割の欄) も同じ語で言う。
+    if (!lab) lab = document.getElementById(id + '-label');
     var w = lab ? String(lab.textContent || '').trim() : '';
     return w.replace(/\s*[（(]任意[）)]\s*$/, '');
   }
@@ -696,6 +698,19 @@ window.MA.properties = (function() {
     var word = _fieldWord(id) || fallbackWord || '';
     alert(needFieldText(word, !!(el && el.tagName === 'SELECT')));
     if (el && typeof el.focus === 'function') { try { el.focus(); } catch (e) {} }
+  }
+  // 「末尾に追加」の関係・遷移・メッセージで相手 (To) を選ばずに確定したときの知らせ (TICKET-owner-20261123-2322-2)。
+  // 5 図種 (sequence・usecase・component・class・state) が同じこの 1 本を呼ぶ: 行は足さず、needField と同じ
+  // 欄の見出しの語で知らせて手をその欄に入れ、欄の下の補足の 1 行も同じ組み立て
+  // 「「{欄の見出し}」を選んでください ({その図種で効く選び方})」にする。
+  function needPickText(word, how) {
+    return needFieldText(word, true) + (how ? ' (' + String(how) + ')' : '');
+  }
+  function needPick(id, hintId, how, fallbackWord) {
+    var word = _fieldWord(id) || fallbackWord || '';
+    var hint = hintId ? document.getElementById(hintId) : null;
+    if (hint) hint.textContent = needPickText(word, how);
+    needField(id, fallbackWord);
   }
   // 値を変えてから押す欄 (改名して関係の行も付け替える) の知らせも、欄の見出しの語で言う。
   function needChangeText(word) {
@@ -713,6 +728,8 @@ window.MA.properties = (function() {
     init: init,
     needFieldText: needFieldText,
     needField: needField,
+    needPickText: needPickText,
+    needPick: needPick,
     bindTextField: bindTextField,
     bindDateField: bindDateField,
     // HTML builders

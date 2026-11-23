@@ -1782,10 +1782,8 @@ window.MA.modules.plantumlClass = (function() {
           var to = document.getElementById('cl-tail-to').value;
           if (!fr) { alert('From/To 必須 (先に要素を追加)'); return; }
           if (!to) {
-            var toHint = document.getElementById('cl-tail-rpreview');
-            if (toHint) toHint.textContent = 'To を選んでください (一覧で相手を選ぶ)';
-            var toSelC = document.getElementById('cl-tail-to');
-            if (toSelC && toSelC.focus) toSelC.focus();
+            // 5 図種で同じ共通部 (TICKET-owner-20261123-2322-2)。欄の見出しは関係の種類で替わる (もう一方 (To) 等)。
+            P.needPick('cl-tail-to', 'cl-tail-rpreview', '一覧で選ぶ', 'To');
             return;
           }
           var rkind = document.getElementById('cl-tail-rkind').value;

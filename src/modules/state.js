@@ -1613,8 +1613,8 @@ window.MA.modules.plantumlState = (function() {
           var to = document.getElementById('st-tail-to').value;
           if (!to) {
             _tx.pick = 'to';
-            var hint = document.getElementById('st-tx-hint');
-            if (hint) hint.textContent = '遷移先を選んでください (図の状態を押すか、To で選ぶ)';
+            // 5 図種で同じ共通部 (TICKET-owner-20261123-2322-2): 欄の見出しの語で知らせ、手は To に入る。
+            window.MA.properties.needPick('st-tail-to', 'st-tx-hint', '図の状態を押すか、一覧で選ぶ', '終点 (To)');
             return;
           }
           // 同じ from の遷移の並びの末尾に入れる (@enduml 直前に散らさない)。
