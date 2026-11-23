@@ -514,16 +514,9 @@ def use_jar(path):
 #   - GET /render は仕様そのものを返す
 #   - POST /render は要求の形が違えば 400 で「何を期待しているか」を言う
 #   - PlantUML のエラー画は 200 ではなく 422 で返す
-# の 3 点を server 側で保証する。
-#
-# 差し戻し (同じ手順が 3 回繰り返された): 400 で名指ししても、呼ぶ側が
-# 「POST の前に GET /render を読む」を手順に組み込まないかぎり、毎回
-# `{"dsl": ...}` → 400 → 直す、の往復が起きる。仕様を先に読ませることに
-# 頼るのをやめ、DSL の入れ物としてよく使われる名前 (dsl / source / uml /
-# puml / diagram) を text の別名として受理して 1 回目の POST を成功させる。
-# 誤りを黙って呑むわけではなく、レスポンスヘッダ X-PlantUMLAssist-Warning と
-# GET /render の 'aliases' で「正式な名前は text」であることを毎回伝える。
-DSL_FIELD_ALIASES = ('dsl', 'source', 'uml', 'puml', 'diagram')
+# の 3 点を server 側で保証する。入力の名前は text の 1 つだけ
+# (別名の受理は TICKET-owner-20261123-1322-prune で外した。text が無い 400 は
+# 受け取ったフィールドを並べ、GET /render で仕様を返すと言う)。
 
 RENDER_API_DOC = {
     'endpoint': 'POST /render',
@@ -535,18 +528,12 @@ RENDER_API_DOC = {
             'dir': ("任意。その図の .puml のあるフォルダ。相対の !include / !includesub をここから探す"
                     "(省略すると server の作業フォルダ)。本文は書き換えない。読めないときの 422 は探したフォルダを言う"),
         },
-        'aliases': {
-            'fields': list(DSL_FIELD_ALIASES),
-            'note': ("text の別名として上記も受理する (1 回目の POST を失敗させないため)。"
-                     '別名で送ると 200 と同時に X-PlantUMLAssist-Warning ヘッダが付く。'
-                     '正式な名前は text'),
-        },
     },
     # 書き出した SVG に道具の印を足す口と、その印を突き合わせる説明・ヘッダは
     # TICKET-owner-20261123-0642-prune で外した (書き出しが古いかは GET /export-file が mtime で言う)。
     'response': {
         '200': 'image/svg+xml — 描画された SVG',
-        '400': "application/json {error} — text (と別名) が無い / 文字列でない / 空",
+        '400': "application/json {error} — text が無い / 文字列でない / 空",
         '422': "application/json {error, line} — DSL の文法エラー (PlantUML のエラー画)",
         '500': 'application/json {error} — 描画そのものの失敗',
     },
@@ -843,41 +830,26 @@ def describe_render_error(err):
 
 
 def resolve_render_request(data):
-    """POST /render の body を (text, mode, warning, error) に解く。
-
-    text が無ければ DSL_FIELD_ALIASES の別名を順に探し、見つかればそれを text
-    として使い、warning に「別名で受理した」旨を入れて返す。error があれば 400。
-    """
+    """POST /render の body を (text, mode, error) に解く。error があれば 400。"""
     if not isinstance(data, dict):
-        return None, None, None, "body must be a JSON object with a 'text' field. GET /render で仕様を返します"
+        return None, None, "body must be a JSON object with a 'text' field. GET /render で仕様を返します"
 
-    field = 'text'
-    warning = None
     if 'text' not in data:
-        found = [k for k in DSL_FIELD_ALIASES if k in data]
-        if not found:
-            got = ', '.join(sorted(data.keys())) or '(なし)'
-            return None, None, None, (
-                "required field 'text' is missing. 受け取ったフィールド: %s. "
-                'GET /render で仕様を返します' % got)
-        if len(found) > 1:
-            return None, None, None, (
-                "DSL のフィールドが複数あります (%s)。どれを描くか決められないので "
-                "'text' 1 つにしてください" % ', '.join(found))
-        field = found[0]
-        warning = ("'%s' を 'text' の別名として受理しました。正式な名前は 'text' です "
-                   '(GET /render に一覧があります)' % field)
+        got = ', '.join(sorted(data.keys())) or '(なし)'
+        return None, None, (
+            "required field 'text' is missing. 受け取ったフィールド: %s. "
+            'GET /render で仕様を返します' % got)
 
-    value = data[field]
+    value = data['text']
     if not isinstance(value, str):
-        return None, None, None, "'%s' must be a string (PlantUML の DSL 全文)" % field
+        return None, None, "'text' must be a string (PlantUML の DSL 全文)"
     if not value.strip():
-        return None, None, None, "'%s' is empty — @startuml … @enduml を含む DSL を渡してください" % field
+        return None, None, "'text' is empty — @startuml … @enduml を含む DSL を渡してください"
 
     mode = data.get('mode', 'local')
     if mode not in ('local', 'online'):
-        return None, None, None, "unknown mode: %r — 'local' か 'online' です" % (mode,)
-    return value, mode, warning, None
+        return None, None, "unknown mode: %r — 'local' か 'online' です" % (mode,)
+    return value, mode, None
 
 
 # BLK-reviewer-20260913-0306: reviewer は保存フォルダの .puml / .svg を GUI の外から
@@ -1460,7 +1432,7 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self._send_json(400, {'error': 'invalid JSON'})
             return
-        text, mode, warning, problem = resolve_render_request(data)
+        text, mode, problem = resolve_render_request(data)
         if problem:
             self._send_json(400, {'error': problem, 'api': RENDER_API_DOC})
             return
@@ -1494,18 +1466,11 @@ class Handler(BaseHTTPRequestHandler):
                         payload[key] = err[key]
                 if searched:
                     payload['includeDir'] = searched.split(': ', 1)[1]
-                if warning:
-                    payload['warning'] = warning
                 self._send_json(422, payload)
                 return
             self.send_response(200)
             self.send_header('Content-Type', 'image/svg+xml')
             self.send_header('Cache-Control', 'no-cache')
-            # 別名で受理したことは 200 でも必ず伝える (黙って呑まない)。
-            # ヘッダ値は ASCII しか通らないので日本語は %xx で包む。
-            if warning:
-                self.send_header('X-PlantUMLAssist-Warning',
-                                 urllib.parse.quote(warning, safe=''))
             self.end_headers()
             self.wfile.write(svg)
 

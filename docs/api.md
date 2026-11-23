@@ -30,13 +30,12 @@ curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日�
 
 | 窓口 | 要求 | 返り |
 | --- | --- | --- |
-| `GET /render` | — | `POST /render` の仕様 (別名の注意つき) |
-| `POST /render` | `{text, mode}` | 200 `image/svg+xml` / 400 `{error}` / 422 `{error, line}` |
+| `GET /render` | — | `POST /render` の仕様 |
+| `POST /render` | `{text, mode, dir}` | 200 `image/svg+xml` / 400 `{error}` / 422 `{error, line}` |
 | `POST /preproc` | `{text}` | 200 `{ok: true, lines}` (同梱 jar のプリプロセッサで展開した最初の図の行) / 200 `{ok: false, error}` / 400 `{error}` |
 
-`text` は `@startuml … @enduml` の DSL 全文。`dsl` `source` `uml` `puml` `diagram` は別名として
-受理されるが、正式な名前は `text` (別名で送ると `X-PlantUMLAssist-Warning` が付く)。
-`mode` は `local` (既定) か `online`。
+`text` は `@startuml … @enduml` の DSL 全文 (入力の名前はこれ 1 つ。無ければ 400 が受け取ったフィールドを並べる)。
+`mode` は `local` (既定) か `online`。`dir` は任意で、相対の `!include` を探すその図のフォルダ。
 
 
 ## 保存フォルダ
