@@ -644,10 +644,8 @@ window.MA.modules.plantumlUsecase = (function() {
           var to = document.getElementById('uc-tail-to').value;
           if (!fr) { alert('From/To 必須 (先に actor/usecase を追加)'); return; }
           if (!to) {
-            var ucHint = document.getElementById('uc-tail-rhint');
-            if (ucHint) ucHint.textContent = 'To を選んでください (一覧で相手を選ぶ)';
-            var ucTo = document.getElementById('uc-tail-to');
-            if (ucTo && ucTo.focus) ucTo.focus();
+            // 5 図種で同じ共通部 (TICKET-owner-20261123-2322-2)。
+            P.needPick('uc-tail-to', 'uc-tail-rhint', '一覧で選ぶ', '終点 (To)');
             return;
           }
           var rkind = document.getElementById('uc-tail-rkind').value;

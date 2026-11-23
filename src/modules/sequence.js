@@ -3159,10 +3159,8 @@ window.MA.modules.plantumlSequence = (function() {
               if (arrowSpec && arrowSpec.from) fr = arrowSpec.from;
               if (arrowSpec && arrowSpec.to) to = arrowSpec.to;
               if (!to) {
-                var toNote = document.getElementById('seq-tail-endpoint-note');
-                if (toNote) toNote.textContent = 'To を選んでください (図の参加者を押すか、To で選ぶ)';
-                // 空の欄の知らせは「名前」等と同じ形 (欄の見出しの語で言い、手をその欄に入れる)。
-                window.MA.properties.needField('seq-tail-to', '終点 (To)');
+                // 5 図種で同じ共通部 (properties.needPick)。手が To に入ると図の参加者を押す手も効く (armPick)。
+                window.MA.properties.needPick('seq-tail-to', 'seq-tail-endpoint-note', '図の参加者を押すか、一覧で選ぶ', '終点 (To)');
                 return;
               }
               var labelVal = (rleObj ? rleObj.getValue() : '').trim();
