@@ -1534,6 +1534,14 @@ window.MA.modules.plantumlSequence = (function() {
     _pickHighlight(true);
   }
 
+  // 選んだ行の当事者の覚えも「図種 + タブ」ごと。タブを替えたら前のタブの From / To を
+  // 「末尾に追加」に持ち込まない (開いた直後と同じく To は空欄で始める。TICKET-owner-20261123-1922-2)。
+  if (window.MA.tailMemory && window.MA.tailMemory.onReset) {
+    window.MA.tailMemory.onReset(function() {
+      if (window.MA.selectedEndpoints) window.MA.selectedEndpoints.clear();
+    });
+  }
+
   // 「末尾に追加」のメッセージで To が空欄のあいだは、
   // 図の参加者 (頭・ライフライン) を押すとその参加者を To に入れる (選択は動かさない)。
   function _tailToPick(target) {
@@ -2943,6 +2951,9 @@ window.MA.modules.plantumlSequence = (function() {
             // 応答を 1 本足すたびに From / To を選び直さずに済む。憶えが無いとき
             // (何も選ばずに開いたとき) はこれまでどおり先頭の参加者のまま。
             var SE = window.MA.selectedEndpoints;
+            var TMm = window.MA.tailMemory;
+            // タブ・図種が替わっていれば、前のタブで選んだ行の覚えをここで捨てる (onReset)。
+            if (TMm && TMm.sync) TMm.sync();
             var tailDef = SE ? SE.defaultsFor(participants.map(function(p) { return p.id; })) : { source: 'none' };
             var fromOptsT = tailDef.from ? withSelected(partOptsWithNew, tailDef.from) : partOptsWithNew;
             var toOptsT = tailDef.to ? withSelected(partOptsWithNew, tailDef.to) : partOptsWithNew;
@@ -2951,9 +2962,20 @@ window.MA.modules.plantumlSequence = (function() {
               return id;
             };
             var tailNote = SE ? SE.noteText(tailDef, labelOfPart) : '';
+            var partIdsOpen = participants.map(function(p) { return p.id; });
+            // 開いた直後・タブを替えた直後・白紙で参加者を足した直後 (選んだ行も確定の覚えも無い) も、
+            // 確定した後と同じく To は空欄で始める。From は本文の最後のメッセージの送り先
+            // (無ければ先頭の参加者)。先頭 / 先頭の自己メッセージを既定にしない (TICKET-owner-20261123-1922-2)。
+            if (tailDef.source !== 'selection' && tailDef.source !== 'partial' && TMm && TMm.openMessageEnds) {
+              var openEnds = TMm.openMessageEnds(partIdsOpen, messages);
+              if (openEnds.from) {
+                fromOptsT = withSelected(partOptsWithNew, openEnds.from);
+                toOptsT = [{ value: '', label: '（図の参加者を押すか選ぶ）', selected: true }].concat(partOptsWithNew);
+                tailNote = TMm.openMessageNote(openEnds, labelOfPart);
+              }
+            }
             // 1 本確定した後は From = 直前の To、To = 空欄
             // (図の参加者を押すか選ぶ)。自己メッセージ (先頭 / 先頭) に戻さない。
-            var TMm = window.MA.tailMemory;
             if (TMm && TMm.hasField('seq-tail-from')) {
               var memFrom = TMm.field('seq-tail-from');
               var partIds = participants.map(function(p) { return p.id; });
@@ -3107,8 +3129,8 @@ window.MA.modules.plantumlSequence = (function() {
               if (!to) {
                 var toNote = document.getElementById('seq-tail-endpoint-note');
                 if (toNote) toNote.textContent = 'To を選んでください (図の参加者を押すか、To で選ぶ)';
-                var toSelE = document.getElementById('seq-tail-to');
-                if (toSelE && toSelE.focus) toSelE.focus();
+                // 空の欄の知らせは「名前」等と同じ形 (欄の見出しの語で言い、手をその欄に入れる)。
+                window.MA.properties.needField('seq-tail-to', '終点 (To)');
                 return;
               }
               var labelVal = (rleObj ? rleObj.getValue() : '').trim();
