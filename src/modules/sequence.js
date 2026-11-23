@@ -723,7 +723,8 @@ window.MA.modules.plantumlSequence = (function() {
     for (i = 0; i < ops.length; i++) {
       var o = ops[i];
       if (o.op !== 'participant') continue;
-      var norm = window.MA.idNormalizer.normalize(o.id, taken, 'P');
+      // parsed は描き直し前で古いことがあるので、今の本文に出ている別名も避ける。
+      var norm = window.MA.idNormalizer.normalize(o.id, taken, 'P', out);
       if (!norm.valid) continue;
       idMap[o.id] = norm.id;
       // 既に宣言済みの参加者は重複宣言せず、メッセージ側の参照先としてだけ使う。

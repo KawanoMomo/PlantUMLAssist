@@ -543,7 +543,8 @@ window.MA.modules.plantumlState = (function() {
       var o = ops[i];
       if (o.op !== 'state') continue;
       if (taken[o.id]) { idMap[o.id] = o.id; continue; }
-      var norm = window.MA.idNormalizer.normalize(o.id, taken, 'S');
+      // parsed は描き直し前で古いことがあるので、今の本文に出ている別名も避ける。
+      var norm = window.MA.idNormalizer.normalize(o.id, taken, 'S', out);
       if (!norm.valid) continue;
       idMap[o.id] = norm.id;
       taken[norm.id] = true;
