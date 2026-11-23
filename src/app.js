@@ -3350,7 +3350,9 @@ function initCommandPalette() {
 
   function commands() {
     var list = [
-      { id: 'open', title: 'ファイルを開く / Open', hint: 'File', keywords: ['open', 'file', 'ひらく'], run: function() { clickById('btn-open'); } },
+      // 手元の .puml を開く入口は Import ▾ の「ファイルを開く…」と同じ語で出す (TICKET-owner-20261123-2222-prune)。
+      // 前の語「ファイルを開く / Open」と英語は検索語に残す。
+      { id: 'open', title: 'ファイルを開く…', hint: 'File', keywords: ['ファイルを開く', 'ファイルを開く / Open', 'Open', 'open', 'file', 'ひらく'], run: function() { clickById('btn-open'); } },
       // 「保存」の一語で名指しできるのはこれ。
       // 「保存フォルダの図を一覧」「前回保存からの差分」「保存先のフォルダを選ぶ…」にも
       // その 2 文字は入っているので、完全一致のキーワードで本命を先頭に出す。
@@ -3371,7 +3373,8 @@ function initCommandPalette() {
       // 題はツール ▾ の語と同じ (右端に前の名前「行編集」を並べない。TICKET-owner-20261123-1242-1)。前の名前は検索語に残す。
       { id: 'tab-lines', title: '行を書き換える', hint: 'Tabs', keywords: ['行編集', '行編集を開く', 'Line edit', 'line', 'edit', 'ぎょう', 'へんしゅう'], button: 'tool-lines', run: function() { runTool('tool-lines'); } },
       // design 9a: 手元の .puml を開く入口は上部バーの Import ▾ へ移した。
-      { id: 'import-clipboard', title: 'クリップボードの DSL から開く / Open from clipboard', hint: 'File', keywords: ['clipboard', 'paste', 'import', 'くりっぷ', 'はりつけ', 'ひらく'], run: function() { clickById('imp-clipboard'); } },
+      // Import ▾ の項目と同じ語 (TICKET-owner-20261123-2222-prune)。前の語と英語は検索語に残す。
+      { id: 'import-clipboard', title: 'クリップボードから開く', hint: 'File', keywords: ['クリップボードの DSL から開く', 'クリップボードの DSL から開く / Open from clipboard', 'Open from clipboard', 'clipboard', 'paste', 'import', 'くりっぷ', 'はりつけ', 'ひらく'], run: function() { clickById('imp-clipboard'); } },
       // この図の履歴 を開く行は FILES のファイルの右クリックと同じ「この図の履歴を表示」1 行 (TICKET-owner-20261123-1242-1)。
       // 前の語「この図の履歴を見る」と旧名「変遷」は語に落とす。
       // 「前回保存からの差分」の行は TICKET-owner-20261115-2141-prune で外し、その語はこの行で引く
@@ -3389,7 +3392,8 @@ function initCommandPalette() {
       { id: 'export-svg', title: 'SVG で書き出す', hint: 'Export', keywords: ['export', 'svg', 'かきだす', 'SVG として保存', 'Export SVG'], run: function() { clickById('exp-svg'); } },
       { id: 'export-png', title: 'PNG で書き出す', hint: 'Export', keywords: ['export', 'png', 'かきだす', 'PNG として保存', 'Export PNG'], run: function() { clickById('exp-png'); } },
       { id: 'export-png-t', title: 'PNG（透過背景）で書き出す', hint: 'Export', keywords: ['export', 'png', 'transparent', 'かきだす', 'とうか', 'Export PNG transparent'], run: function() { clickById('exp-png-transparent'); } },
-      { id: 'export-clip', title: 'クリップボードにコピー / Copy image', hint: 'Export', keywords: ['export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
+      // Export ▾ の項目と同じ語 (TICKET-owner-20261123-2222-prune)。前の英語は検索語に残す。
+      { id: 'export-clip', title: 'クリップボードにコピー', hint: 'Export', keywords: ['クリップボードにコピー / Copy image', 'Copy image', 'export', 'clipboard', 'copy'], run: function() { clickById('exp-clipboard'); } },
       { id: 'mode-local', title: 'レンダリング: local (Java)', hint: 'Render', keywords: ['render', 'mode', 'local'], run: function() { selectValue('render-mode', 'local'); } },
       { id: 'mode-online', title: 'レンダリング: online (plantuml.com)', hint: 'Render', keywords: ['render', 'mode', 'online'], run: function() { selectValue('render-mode', 'online'); } },
     ];
@@ -6393,17 +6397,8 @@ function setupTabs() {
   }
 
   var _folderRenderGen = 0;
-  // 保存フォルダの外にある手元の .puml を開く入口を一覧の頭に置く。
-  function appendOpenHead(host) {
-    var openHead = document.createElement('button');
-    openHead.type = 'button';
-    openHead.className = 'folder-open-file';
-    openHead.id = 'folder-open-file';
-    openHead.textContent = 'ファイルを開く(.puml)';
-    openHead.title = '保存フォルダの外にある .puml を開きます (複数可・ドラッグ&ドロップでも開けます)';
-    openHead.addEventListener('click', function() { closePanel(); openFile(); });
-    host.appendChild(openHead);
-  }
+  // 一覧の頭の手元の .puml を開くボタンは TICKET-owner-20261123-2222-prune で外した
+  // (手元の .puml を開く入口は Import ▾ の「ファイルを開く…」・Ctrl+O・Ctrl+K・空の画面・ドラッグ&ドロップ)。
 
   // TICKET-owner-20261123-1922-1: 保存先を決めていない (保存がダウンロードの) ときは図を並べず、案内だけを出す。
   // 一覧に並べたフォルダと、そこから開いた図の Ctrl+S・書き出し・`!include` の場所を食い違わせない。
@@ -6417,7 +6412,6 @@ function setupTabs() {
     goneVersions = [];
     panel.textContent = '';
     appendListHead(panel);
-    appendOpenHead(panel);
     var h = window.MA.saveTarget.unsetHint();
     var msg = document.createElement('div');
     msg.className = 'folder-empty folder-unset';
@@ -6445,7 +6439,6 @@ function setupTabs() {
       _folderShown = { dir: dir, sig: window.MA.fileTree ? window.MA.fileTree.nameSig(entries) : '' };
       panel.textContent = '';
       appendListHead(panel);
-      appendOpenHead(panel);
       // 保存先の綴りを 1 文字誤っただけでも一覧は
       // 「図がありません」としか言わず、間違いに気づけないまま作業が止まっていた。
       // 実在しない保存先は「無い」と名指しで言い、直す場所まで書く。
@@ -8714,7 +8707,7 @@ function setupCompareView() {
 }
 
 // ── 手元の .puml を開く ──────────────────────────
-// 入口は「📄 ファイルを開く(.puml)」(タブ列・📂 一覧の頭・起動直後の空の画面) と
+// 入口はどこも同じ語「ファイルを開く…」(Import ▾・Ctrl+K・起動直後の空の画面) と Ctrl+O、
 // エディタ/プレビューへのドラッグ&ドロップ。複数枚はタブで全部開く。
 // 開いたファイルの場所・文字コード・改行は doc id ごとに覚え、上書き保存は元のファイルへ
 // 同じ文字コード・改行で戻す (保存先フォルダへ複製しない。複製は別名保存で)。
@@ -8817,7 +8810,7 @@ function onFilePicked(e) {
 }
 
 // 読んだファイルをタブで開く。最後に開いた 1 枚を前に出す。
-// Import ▾ の「クリップボードの DSL から開く」。
+// Import ▾ の「クリップボードから開く」。
 // 他ツールや課題票から貼られた DSL は、今まで新しいタブを作って貼り付ける 2 手だった。
 // 読み込む経路は openSourceFiles 1 本のままにして、入口だけを足す。
 function openFromClipboard() {
@@ -8983,7 +8976,8 @@ function renderOpenEmptyHint() {
     var b = document.createElement('button');
     b.type = 'button';
     b.id = 'btn-open-file-empty';
-    b.textContent = 'ファイルを開く(.puml)';
+    // Import ▾ の項目と同じ語 (TICKET-owner-20261123-2222-prune)。
+    b.textContent = 'ファイルを開く…';
     b.addEventListener('click', function() { openFile(); });
     var p = document.createElement('div');
     p.textContent = 'またはここへ .puml をドラッグ&ドロップ (複数枚はタブで開きます)';
