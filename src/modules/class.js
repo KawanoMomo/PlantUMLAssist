@@ -2086,9 +2086,9 @@ window.MA.modules.plantumlClass = (function() {
         _kindToggleHtml(element.kind) +
         P.fieldHtml(window.MA.terms.id, 'cl-edit-id', element.id) +
         P.fieldHtml(window.MA.terms.label, 'cl-edit-label', element.label || '') +
+        P.renameRefsCheckHtml('cl-edit-rename-refs') +
         P.fieldHtml(window.MA.terms.stereotype, 'cl-edit-stereo', element.stereotype || '', '例: entity') +
         P.primaryButtonHtml('cl-edit-apply', window.MA.terms.apply) +
-        ' ' + P.primaryButtonHtml('cl-rename-refs', window.MA.terms.renameRefs) +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
           '<button id="cl-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
           '<button id="cl-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
@@ -2252,24 +2252,16 @@ window.MA.modules.plantumlClass = (function() {
       var genEl = document.getElementById('cl-edit-generics');
       var genStr = genEl ? genEl.value.trim() : (element.generics || []).join(',');
       var newGen = genStr ? genStr.split(',').map(function(s) { return s.trim(); }) : null;
-      if (newId !== element.id) t = updateClass(t, element.line, 'id', newId);
+      // 改名は宣言の行と、名前を識別子として持つ行 (関係の両端・note の対象) を 1 回で書く。
+      if (newId !== element.id) {
+        t = window.MA.dslUpdater.renameDecl(t, element.line, element.id, newId,
+          function(s) { return updateClass(s, element.line, 'id', newId); }, P.renameRefsOn('cl-edit-rename-refs'));
+      }
       if (newLabel !== element.label) t = updateClass(t, element.line, 'label', newLabel);
       if (newStereo !== element.stereotype) t = updateClass(t, element.line, 'stereotype', newStereo);
       var oldGen = (element.generics || []).join(',');
       if (genStr !== oldGen) t = updateClass(t, element.line, 'generics', newGen);
       ctx.setMmdText(t);
-      ctx.onUpdate();
-    });
-    P.bindEvent('cl-rename-refs', 'click', function() {
-      var rawNewId = document.getElementById('cl-edit-id').value.trim();
-      if (!rawNewId || rawNewId === element.id) { P.needChange('cl-edit-id'); return; }
-      // renameWithRefs rewrites references, so we MUST end up with an ASCII
-      // alias (otherwise refs become unparseable). Normalize first.
-      var freshParsed = parse(ctx.getMmdText());
-      var refsNorm = window.MA.idNormalizer.normalize(rawNewId, _existingClassIdSet(freshParsed), 'C');
-      var newId = refsNorm.valid ? refsNorm.id : rawNewId;
-      window.MA.history.pushHistory();
-      ctx.setMmdText(renameWithRefs(ctx.getMmdText(), element.id, newId));
       ctx.onUpdate();
     });
     _bindKindToggle(element, propsEl, ctx);
@@ -2508,6 +2500,7 @@ window.MA.modules.plantumlClass = (function() {
         // enum にしたあとも種別の欄から戻せる。
         _kindToggleHtml(element.kind) +
         P.fieldHtml(window.MA.terms.id, 'cl-edit-id', element.id) +
+        P.renameRefsCheckHtml('cl-edit-rename-refs') +
         P.fieldHtml(window.MA.terms.stereotype, 'cl-edit-stereo', element.stereotype || '') +
         P.primaryButtonHtml('cl-edit-apply', window.MA.terms.apply) +
         GP.editFieldHtml('cl-edit', parsedData.groups, element.line) +
@@ -2530,7 +2523,10 @@ window.MA.modules.plantumlClass = (function() {
       var t = ctx.getMmdText();
       var newId = document.getElementById('cl-edit-id').value.trim();
       var newStereo = document.getElementById('cl-edit-stereo').value.trim() || null;
-      if (newId !== element.id) t = updateClass(t, element.line, 'id', newId);
+      if (newId !== element.id) {
+        t = window.MA.dslUpdater.renameDecl(t, element.line, element.id, newId,
+          function(s) { return updateClass(s, element.line, 'id', newId); }, P.renameRefsOn('cl-edit-rename-refs'));
+      }
       if (newStereo !== element.stereotype) t = updateClass(t, element.line, 'stereotype', newStereo);
       ctx.setMmdText(t);
       ctx.onUpdate();

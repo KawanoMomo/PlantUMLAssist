@@ -712,19 +712,22 @@ window.MA.properties = (function() {
     if (hint) hint.textContent = needPickText(word, how);
     needField(id, fallbackWord);
   }
-  // 値を変えてから押す欄 (改名して関係の行も付け替える) の知らせも、欄の見出しの語で言う。
-  function needChangeText(word) {
-    return '「' + String(word || '').trim() + '」を変えてから押してください';
+  // 名前 (id) を変えたら参照する行も付け替えるチェック (既定 on)。6 図種で同じ語・同じ場所
+  // (表示名の欄のすぐ下) に出し、改名は「変更を反映」1 つで宣言と参照の行を書く
+  // (TICKET-owner-20261124-0422-1。別ボタンは置かない)。
+  function renameRefsCheckHtml(id) {
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);margin:8px 0;">' +
+      '<input id="' + id + '" type="checkbox" checked> ' + escHtml(window.MA.terms.renameRefs) + '</label>';
   }
-  function needChange(id, fallbackWord) {
+  // チェックが画面に無いときは付け替える (既定 on と同じ)。
+  function renameRefsOn(id) {
     var el = document.getElementById(id);
-    alert(needChangeText(_fieldWord(id) || fallbackWord || ''));
-    if (el && typeof el.focus === 'function') { try { el.focus(); } catch (e) {} }
+    return el ? !!el.checked : true;
   }
 
   return {
-    needChangeText: needChangeText,
-    needChange: needChange,
+    renameRefsCheckHtml: renameRefsCheckHtml,
+    renameRefsOn: renameRefsOn,
     init: init,
     needFieldText: needFieldText,
     needField: needField,

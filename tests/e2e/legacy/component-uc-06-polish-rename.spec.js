@@ -33,15 +33,17 @@ test.describe('UC-6: polish (component / interface id 命名見直し)', () => {
   });
 
   test.describe('γ: workflow completion', () => {
-    test('selection panel exposes rename button', async ({ page }) => {
+    // 改名は「変更を反映」1 つで参照の行も付け替える。付け替えはチェック (既定 on) で、別ボタンは無い
+    // (TICKET-owner-20261124-0422-1)。
+    test('selection panel exposes rename-refs check (default on) and no separate button', async ({ page }) => {
       await gotoApp(page);
       await switchTypeWithSample(page, 'plantuml-component');
       await page.evaluate(() => {
         window.MA.selection.setSelected([{ type: 'component', id: 'WebApp', line: 3 }]);
       });
       await page.waitForTimeout(200);
-      var hasRenameBtn = await page.locator('#co-rename-refs').count();
-      expect(hasRenameBtn).toBeGreaterThan(0);
+      await expect(page.locator('#co-edit-rename-refs')).toBeChecked();
+      expect(await page.locator('#co-rename-refs').count()).toBe(0);
     });
     test('rename via Undo round-trip', async ({ page }) => {
       await gotoApp(page);
