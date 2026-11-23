@@ -75,21 +75,47 @@ window.MA.gitPanel = (function() {
     return out;
   }
 
+  // 保存先の下のフォルダにある図 ('design/api/x.puml') を { rel: 'design/api', name: 'x' } に分ける。
+  // サブフォルダの .puml でなければ null (直下の図・図でないファイル)。
+  function _subOf(file) {
+    var f = _s(file);
+    var i = f.lastIndexOf('/');
+    if (i <= 0 || !/\.puml$/i.test(f)) return null;
+    var name = _stem(f.slice(i + 1));
+    return name ? { rel: f.slice(0, i), name: name } : null;
+  }
+
+  // サブフォルダの図の印。鍵は保存先から見た道と名前 ('design/api/x')。
+  // 直下の図は marksByName が持つ (同じ名前の図を取り違えない)。
+  function marksByPath(status) {
+    var out = {};
+    changes(status).forEach(function(c) {
+      var s = _subOf(c.file || c.path);
+      if (s) out[s.rel + '/' + s.name] = c.code;
+    });
+    return out;
+  }
+
   // 変更の行を押して開く図の名前。
   // 保存先の図 (ツリーに出る名前) だけを開く。消した図 (D) と保存先の外のファイルは開けないので ''。
+  // サブフォルダの図は rel (保存先から見た道) を添え、押した行の道の図を開く (直下の同じ名前の図を開かない)。
   // compare: M の図は開いた上で最後のコミットを右の枠に並べる (何を変えたかをコミットの前に確かめる)。
   function changeOpen(c) {
     if (!c) return null;
     var code = _s(c.code);
     if (code === 'D') return null;
     var file = _s(c.file || c.path);
-    var name = _s(c.name) || (file && file.indexOf('/') < 0 ? _stem(file) : '');
+    var sub = file.indexOf('/') >= 0 ? _subOf(file) : null;
+    var name = sub ? sub.name : (_s(c.name) || (file && file.indexOf('/') < 0 ? _stem(file) : ''));
     if (!name) return null;
-    return {
+    var shown = sub ? sub.rel + '/' + name : name;
+    var out = {
       name: name,
       compare: code === 'M',
-      title: code === 'M' ? name + ' を開いて、最後のコミットと並べる' : name + ' を開く',
+      title: code === 'M' ? shown + ' を開いて、最後のコミットと並べる' : shown + ' を開く',
     };
+    if (sub) out.rel = sub.rel;
+    return out;
   }
 
   function markOf(marks, name) {
@@ -320,6 +346,7 @@ window.MA.gitPanel = (function() {
     changeName: changeName,
     historyLabel: historyLabel,
     marksByName: marksByName,
+    marksByPath: marksByPath,
     markOf: markOf,
     changeOpen: changeOpen,
     canCommit: canCommit,

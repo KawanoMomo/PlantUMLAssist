@@ -25,6 +25,9 @@ window.MA.gitUi = (function() {
   var pickTab = 'commits';
 
   function _dir() { var a = APP(); return a ? a.fileDir() : ''; }
+  // いま開いている図のフォルダ (サブフォルダの図はそのフォルダ、直下の図は保存先)。この図の履歴・比較が使う。
+  function _docDir() { var a = APP(); return (a && a.docDir) ? a.docDir() : _dir(); }
+  function _normDir(d) { return String(d || '').split(String.fromCharCode(92)).join('/').replace(/\/+$/, '').toLowerCase(); }
   function _name() { var a = APP(); return a ? String(a.activeName() || '') : ''; }
   function _stem(n) { return String(n || '').replace(/\.puml$/i, ''); }
 
@@ -94,10 +97,11 @@ window.MA.gitUi = (function() {
     var gp = GP();
     var name = _stem(_name());
     if (!gp || !gp.visible(status)) { history = []; saved = []; renderHistory(); return Promise.resolve(false); }
-    if (!force && name === lastName) return Promise.resolve(true);
-    lastName = name;
+    var dir = _docDir();
+    // 同じ名前でもフォルダが違えば別の図 (直下の a とサブフォルダの a)。
+    if (!force && name + '|' + dir === lastName) return Promise.resolve(true);
+    lastName = name + '|' + dir;
     if (!name) { history = []; saved = []; renderHistory(); return Promise.resolve(true); }
-    var dir = _dir();
     return Promise.all([
       _getJson('/git-log?dir=' + encodeURIComponent(dir) + '&file=' + encodeURIComponent(name)),
       loadSaved(name),
@@ -283,32 +287,61 @@ window.MA.gitUi = (function() {
 
   // 変更の行を押した: ツリーの行を押したのと同じ道 (保存先の一覧の行) で開き、開き終えたら
   // M の図は「この図の履歴」の先頭 (最後のコミット) を右の枠に並べる。
-  function _waitActive(name, ms) {
+  // 開いている図が name か。dir を渡すとサブフォルダのその図 (フォルダも一致)、渡さなければ直下の図。
+  function _isActive(name, dir) {
+    if (_stem(_name()) !== name) return false;
+    var ws = window.MA.workspace;
+    var a = ws && ws.getActive ? ws.getActive() : null;
+    var isSub = !!(a && a.sub && a.dir);
+    if (!dir) return !isSub;
+    return isSub && _normDir(a.dir) === _normDir(dir);
+  }
+
+  function _waitActive(name, ms, dir) {
     return new Promise(function(done) {
       var until = Date.now() + (ms || 5000);
       (function poll() {
-        if (_stem(_name()) === name) { done(true); return; }
+        if (_isActive(name, dir)) { done(true); return; }
         if (Date.now() > until) { done(false); return; }
         window.setTimeout(poll, 80);
       })();
     });
   }
 
+  // サブフォルダの図の行 (保存先から見た道と名前) から、ツリーが読んだそのフォルダの絶対パス。
+  function _subDirOf(rel, name) {
+    var FP = window.MA.filesPanel;
+    var list = (FP && FP.subFiles) ? FP.subFiles() : [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].rel === rel && list[i].name === name) return list[i].dir;
+    }
+    return '';
+  }
+
   function openChange(c) {
     var gp = GP();
     var op = gp && gp.changeOpen ? gp.changeOpen(c) : null;
     if (!op) return Promise.resolve(false);
-    if (_stem(_name()) !== op.name) {
+    var subDir = '';
+    if (op.rel) {
+      // サブフォルダの図: ツリーのその図の行を押したのと同じ道 (openFromSubFolder) で開く。
+      subDir = _subDirOf(op.rel, op.name);
+      if (!subDir || typeof window.openFromSubFolder !== 'function') {
+        say(op.rel + '/' + op.name + ' が保存先の木に見つかりません', true);
+        return Promise.resolve(false);
+      }
+      if (!_isActive(op.name, subDir)) window.openFromSubFolder(op.name, subDir, { preview: true });
+    } else if (!_isActive(op.name)) {
       var q = (window.CSS && window.CSS.escape) ? window.CSS.escape(op.name) : op.name.replace(/(["\\])/g, '\\$1');
       var it = document.querySelector('#folder-panel .folder-item[data-file-name="' + q + '"]');
       if (!it) { say(op.name + ' が保存先の一覧に見つかりません', true); return Promise.resolve(false); }
       it.click();
     }
-    return _waitActive(op.name).then(function(ok) {
+    return _waitActive(op.name, 5000, subDir).then(function(ok) {
       if (!ok || !op.compare) return ok;
       return loadHistory(true).then(function() {
         var head = history[0];
-        if (!head || _stem(_name()) !== op.name) return false;
+        if (!head || !_isActive(op.name, subDir)) return false;
         return compareWith(head);
       });
     });
@@ -338,6 +371,14 @@ window.MA.gitUi = (function() {
     var rows = document.querySelectorAll('#files-panel .files-row[data-file-name], #files-panel .files-part-file[data-file-name]');
     Array.prototype.forEach.call(rows, function(r) {
       var m = gp.markOf(marks, r.getAttribute('data-file-name'));
+      if (m) r.setAttribute('data-git', m);
+      else r.removeAttribute('data-git');
+    });
+    // サブフォルダの図の行は、道と名前で引く (直下の同じ名前の図の印を付けない)。
+    var byPath = (gp.visible(status) && gp.marksByPath) ? gp.marksByPath(status) : {};
+    var subs = document.querySelectorAll('#files-panel .files-sub-file[data-file-name][data-sub-rel]');
+    Array.prototype.forEach.call(subs, function(r) {
+      var m = byPath[r.getAttribute('data-sub-rel') + '/' + _stem(r.getAttribute('data-file-name'))] || '';
       if (m) r.setAttribute('data-git', m);
       else r.removeAttribute('data-git');
     });
