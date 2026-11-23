@@ -4210,7 +4210,7 @@ function writeDocToFolder(doc, fileDir) {
     window.MA.autoSave.noteFileWritten(out.name, out.diagramType);
   }
   if (window.MA.saveDiff) window.MA.saveDiff.mark(_diffName(out), out.dsl);
-  if (window.MA.versionTimeline) window.MA.versionTimeline.push(out.name, out.dsl);
+  if (window.MA.versionTimeline) window.MA.versionTimeline.push(_diffName(out), out.dsl);
   return true;
 }
 
@@ -4273,7 +4273,8 @@ function saveActiveDoc() {
       if (window.MA.saveDiff) window.MA.saveDiff.mark(_diffName(doc), doc.dsl);
       // 保存のたびに版を積む。基準 1 点だけでは
       // A → B → A の往復が見えないので、通しで並べられるよう履歴に残す。
-      if (window.MA.versionTimeline) window.MA.versionTimeline.push(doc.name, doc.dsl);
+      // 積む先は図の居場所 (サブフォルダの図は直下の同じ名前の図と分ける。_vtKeyOf と同じ鍵)。
+      if (window.MA.versionTimeline) window.MA.versionTimeline.push(_diffName(doc), doc.dsl);
     }
   } catch (e) { /* 保存フォルダへの書き出しは best-effort */ }
   renderDiffBadge();
@@ -4814,6 +4815,30 @@ function _vtCurrentName() {
   } catch (e) { return ''; }
 }
 
+// 今開いているサブフォルダの図で、名前が name のもの (無ければ null)。
+// 「この図の履歴」の name はファイルの名前で、版の控え (server) は _histDirFor が同じ規則でそのフォルダから読む。
+function _vtActiveSub(name) {
+  try {
+    var a = window.MA.workspace.getActive();
+    if (a && a.sub && a.dir && a.name === String(name == null ? '' : name)) return a;
+  } catch (e) {}
+  return null;
+}
+
+// このブラウザで積んだ変遷 (versionTimeline) を引く鍵。サブフォルダの図は直下の同じ名前の図と分ける
+// (保存のたびに積む側と同じ _diffName。TICKET-roadmap-20261123-0226-4)。
+function _vtKeyOf(name) {
+  var a = _vtActiveSub(name);
+  return a ? _diffName(a) : String(name == null ? '' : name);
+}
+
+// 窓に出す図の名前。サブフォルダの図は保存先からの道を付ける ('design/api/spi')。
+function _vtLabelOf(name) {
+  var a = _vtActiveSub(name);
+  var rel = a ? _docSubRel(a) : '';
+  return rel ? rel + '/' + a.name : String(name == null ? '' : name);
+}
+
 function renderVersionTimeline() {
   var VT = window.MA.versionTimeline;
   var body = document.getElementById('vt-body');
@@ -4822,7 +4847,10 @@ function renderVersionTimeline() {
   if (!VT || !body) return;
   var esc = window.MA.htmlUtils.escHtml;
 
-  var names = VT.names();
+  // 選べるのは直下の図の名前と、今開いているサブフォルダの図 (道付きで出す)。サブフォルダの図の
+  // 鍵 ('sub:…') は選択肢に並べない。今の図がサブフォルダの図なら、直下の同じ名前は選択肢から外す
+  // (同じ値の行が 2 つ並ぶと、どちらの図の履歴かが分からない)。
+  var names = VT.names().filter(function(k) { return String(k).indexOf('sub:') !== 0; });
   if (sel) {
     // 開いている図に履歴がまだ無くても選べるようにしておく
     // (「この図の履歴はまだありません」を名指しで出すため)。
@@ -4832,11 +4860,12 @@ function renderVersionTimeline() {
     if (!cur && opts.length) cur = opts[0];
     _vtFile = cur;
     sel.innerHTML = opts.map(function(n) {
-      return '<option value="' + esc(n) + '"' + (n === cur ? ' selected' : '') + '>' + esc(n) + '</option>';
+      return '<option value="' + esc(n) + '"' + (n === cur ? ' selected' : '') + '>' + esc(_vtLabelOf(n)) + '</option>';
     }).join('');
   }
   var name = _vtFile;
-  if (sum) sum.textContent = name ? VT.summaryLine(name) : '図がありません';
+  var vtKey = _vtKeyOf(name);
+  if (sum) sum.textContent = name ? VT.summaryLine(vtKey) : '図がありません';
 
   var onlyEl = document.getElementById('vt-only-revisit');
   var only = !!(onlyEl && onlyEl.checked);
@@ -4849,15 +4878,15 @@ function renderVersionTimeline() {
     Promise.all([api.load(name), api.lineCount(name)]).then(function(got) {
       if (gen !== _vtSavedGen) return;
       var saved = got[0] || [];
-      if (!saved.length) { _renderVtTimelineRows(body, name, only); return; }
+      if (!saved.length) { _renderVtTimelineRows(body, vtKey, only); return; }
       _renderVtSavedRows(body, sum, name, saved, got[1], only, api);
     }, function() {
       if (gen !== _vtSavedGen) return;
-      _renderVtTimelineRows(body, name, only);
+      _renderVtTimelineRows(body, vtKey, only);
     });
     return;
   }
-  _renderVtTimelineRows(body, name, only);
+  _renderVtTimelineRows(body, vtKey, only);
 }
 
 // 保存した版の行。各行に「開く」(別タブ)・「比較」(今の図の右に並べる)・「この版に戻す」、
@@ -4868,7 +4897,7 @@ function _renderVtSavedRows(body, sum, name, saved, nowLines, only, api) {
   var rows = VH.markRevisits(saved);
   var revisits = rows.filter(function(r) { return r.revisit; }).length;
   if (sum) {
-    sum.textContent = name + ': 保存した版 ' + rows.length
+    sum.textContent = _vtLabelOf(name) + ': 保存した版 ' + rows.length
       + (revisits ? '（往復 ' + revisits + '）' : '');
   }
   // 「この図の履歴を消す」はこのブラウザで積んだ変遷だけを消す。保存した版は消さないので出さない。
@@ -5080,7 +5109,7 @@ function setupVersionTimeline() {
   if (forget) {
     forget.addEventListener('click', function() {
       if (!_vtFile) return;
-      VT.forget(_vtFile);
+      VT.forget(_vtKeyOf(_vtFile));
       _vtFile = '';
       renderVersionTimeline();
     });
@@ -5975,6 +6004,9 @@ function setupTabs() {
   // 読めなければ null (空洞化の判定をやめる。当てずっぽうで戻す先を勧めない)。
   function _folderLineCount(name) {
     try {
+      // 今開いているサブフォルダの図なら、直下の同じ名前のタブではなくその図の行数 (TICKET-roadmap-20261123-0226-4)。
+      var asub = _vtActiveSub(name);
+      if (asub && typeof asub.dsl === 'string') return Promise.resolve(asub.dsl.split('\n').length);
       var WS = window.MA.workspace;
       var list = (WS && WS.list) ? WS.list() : [];
       for (var i = 0; i < list.length; i++) {
@@ -6757,6 +6789,12 @@ function setupTabs() {
       var gu = window.MA.gitUi;
       var fm = window.MA.fileMenuUi;
       if (gu && gu.isRepo && gu.isRepo() && fm && fm.runFile) {
+        fm.runFile('history', name);
+        return;
+      }
+      // この一覧は直下の図。今開いているのがサブフォルダの同じ名前の図なら、直下の図を開いてから
+      // その図の履歴を出す (開いたままだとサブフォルダの図の版を出してしまう。TICKET-roadmap-20261123-0226-4)。
+      if (_vtActiveSub(name) && fm && fm.runFile) {
         fm.runFile('history', name);
         return;
       }
@@ -8913,7 +8951,7 @@ function _afterManualSave(doc, target, writtenToFolder) {
   if (!doc || !doc.name) return;
   try { if (window.MA.saveDiff) window.MA.saveDiff.mark(_diffName(doc), doc.dsl); } catch (e) {}
   if (writtenToFolder) {
-    try { if (window.MA.versionTimeline) window.MA.versionTimeline.push(doc.name, doc.dsl); } catch (e) {}
+    try { if (window.MA.versionTimeline) window.MA.versionTimeline.push(_diffName(doc), doc.dsl); } catch (e) {}
     // 下端の札も書けた回に揃える (「見本のまま · 書いていません」を書いた後に残さない)。
     try {
       if (window.MA.autoSave && window.MA.autoSave.noteFileWritten) {
@@ -8990,9 +9028,9 @@ function saveFile() {
       setSaveStatus(ST.messageFor(target, ok));
       if (ok) {
         _afterManualSave(doc, target, true);
-        // この保存で中身が別名の図と入れ替わっていないか (突き合わせる相手は保存先の直下の図。
-        // サブフォルダの図は直下の同じ名前の図と別のファイルなので比べない)
-        if (!(doc && doc.sub)) runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
+        // この保存で中身が別名の図と入れ替わっていないか。サブフォルダの図も同じに見る
+        // (道付きの名前で名指しし、直下の同じ名前の図とは別の図として比べる。TICKET-roadmap-20261123-0226-4)
+        runSaveSwapCheck(doc && doc.name, doc && doc.dsl, doc);
       }
     });
     return;
@@ -9011,16 +9049,19 @@ function saveFile() {
 //
 // 直前の中身は、この画面がその図を最後に保存したときのものを覚えておく
 // (server 側の _versions/ は中身は残るが「どの操作で」が残らない)。
-var _sswPrev = {};       // 図の名前 → この画面が最後に保存した中身
+var _sswPrev = {};       // 図の居場所 (_diffName) → この画面が最後に保存した中身
 var _sswLogOpen = false;
 
 function _sswFolderDocs() {
-  // 保存フォルダを読んであれば、その一覧と突き合わせる。読んでいないときは
-  // 開いているタブどうしで突き合わせる (何とも比べずに黙るより手掛かりになる)。
-  // 突き合わせは名前で行うので、直下の図だけを使う (サブフォルダの同じ名前の図と混ぜない)。
-  var root = (_fiFileDocs || []).filter(function(d) { return d && !d.rel; });
-  if (root.length) return root;
-  return _diffDocs();
+  // 保存フォルダを読んであれば、その一覧 (直下の図と、rel を持つサブフォルダの図) と突き合わせる。
+  // 読んでいないときは開いているタブどうしで突き合わせる (何とも比べずに黙るより手掛かりになる)。
+  // どの図と比べるか (直下の図は直下とだけ、サブフォルダの図は道付きで全部と) は saveSwap.placed が決める。
+  var all = (_fiFileDocs || []).filter(function(d) { return d && d.name; });
+  if (all.some(function(d) { return !d.rel; })) return all;
+  return _diffDocs().map(function(d) {
+    if (!(d && d.sub && d.dir)) return d;
+    return { name: d.name, dsl: d.dsl, rel: _docSubRel(d) || String(d.dir) };
+  }).concat(all);
 }
 
 function hideSaveSwap() {
@@ -9091,7 +9132,8 @@ function renderSaveSwap(res) {
 
 var _trGroups = [];      // フォルダ全体で中身が一致した組
 var _trPick = null;      // 保存した図の戻し先 { stamp, label, lines }
-var _trName = '';        // 戻す対象の図の名前
+var _trName = '';        // 戻す対象の図の名指し (サブフォルダの図は道付き)
+var _trFile = null;      // 戻す対象のファイル { name, dir } (dir が null なら保存先の直下)
 
 function renderTwinRestore(res) {
   var TR = window.MA.twinRestore;
@@ -9116,13 +9158,16 @@ function renderTwinRestore(res) {
 
 // 保存した図の戻し先を `_versions/` の一覧から選ぶ。版が読めない・戻せる版が
 // 無いときは何も出さない (中身の分からない版を押し付けない)。
-function _trLoadPick(name, dsl) {
+// file: 戻す対象のファイル { name, dir } (サブフォルダの図は版の控えをそのフォルダから読む)。
+function _trLoadPick(name, dsl, file) {
   var TR = window.MA.twinRestore, VH = window.MA.versionHistory;
   _trPick = null;
   _trName = String(name == null ? '' : name);
+  _trFile = file && file.name ? { name: String(file.name), dir: file.dir || null }
+    : { name: _trName, dir: null };
   if (!TR || !VH || !_trName) return Promise.resolve(null);
-  var url = '/autosave-versions?dir=' + encodeURIComponent(_histDirFor(_trName))
-    + '&type=' + encodeURIComponent(_trName);
+  var url = '/autosave-versions?dir=' + encodeURIComponent(_trFile.dir || _histDirFor(_trFile.name))
+    + '&type=' + encodeURIComponent(_trFile.name);
   return window.fetch(url)
     .then(function(r) { return r.ok ? r.json() : null; })
     .then(function(data) {
@@ -9137,8 +9182,9 @@ function _trLoadPick(name, dsl) {
 function restoreTwinDoc() {
   var TR = window.MA.twinRestore;
   if (!TR || !_trPick || !_trName) return;
-  var url = '/autosave-versions?dir=' + encodeURIComponent(_histDirFor(_trName))
-    + '&type=' + encodeURIComponent(_trName) + '&stamp=' + encodeURIComponent(_trPick.stamp);
+  var f = _trFile || { name: _trName, dir: null };
+  var url = '/autosave-versions?dir=' + encodeURIComponent(f.dir || _histDirFor(f.name))
+    + '&type=' + encodeURIComponent(f.name) + '&stamp=' + encodeURIComponent(_trPick.stamp);
   var pick = _trPick, name = _trName;
   window.fetch(url).then(function(r) { return r.ok ? r.text() : null; }).then(function(text) {
     if (text == null) {
@@ -9154,29 +9200,38 @@ function restoreTwinDoc() {
 }
 
 // 保存のたびに呼ぶ。判定が落ちても保存そのものは成立させる。
-function runSaveSwapCheck(docName, dsl) {
+// doc: 保存した図 (サブフォルダの図なら dir・sub を持つ)。直前の中身と名指しを居場所で分ける
+// (直下とサブフォルダの同じ名前の図を 1 つに混ぜない。TICKET-roadmap-20261123-0226-4)。
+function runSaveSwapCheck(docName, dsl, doc) {
   var SS = window.MA.saveSwap;
   if (!SS || !docName) return null;
-  var prev = _sswPrev[docName] || null;
-  _sswPrev[docName] = String(dsl == null ? '' : dsl);
+  var isSub = !!(doc && doc.sub && doc.dir);
+  var key = isSub ? _diffName(doc) : docName;
+  var rel = isSub ? (_docSubRel(doc) || String(doc.dir)) : '';
+  var file = { name: docName, dir: isSub ? doc.dir : null };
+  var prev = _sswPrev[key] || null;
+  _sswPrev[key] = String(dsl == null ? '' : dsl);
 
   function evaluate() {
     var res = null;
-    var docs = _sswFolderDocs();
+    var place = SS.placed ? SS.placed({ name: docName, rel: rel }, _sswFolderDocs())
+      : { name: docName, folderDocs: _sswFolderDocs() };
+    var label = place.name;
+    var docs = place.folderDocs;
     try {
-      res = SS.inspect({ name: docName, dsl: dsl, prev: prev, folderDocs: docs });
+      res = SS.inspect({ name: label, dsl: dsl, prev: prev, folderDocs: docs });
     } catch (e) { res = null; }
     // フォルダ全体の一致した組は、保存した図が入っていなくても挙げる
     // (3 枚目に気付けるのはここだけ)。判定が落ちても保存は成立させる。
     try {
       var TR = window.MA.twinRestore;
-      _trGroups = TR ? TR.groups(docs.concat([{ name: docName, dsl: dsl }])) : [];
+      _trGroups = TR ? TR.groups(docs.concat([{ name: label, dsl: dsl }])) : [];
     } catch (e) { _trGroups = []; }
     if (!res) { hideSaveSwap(); return null; }
     // 巻き込まれた図にだけ「戻す」を出す。版の一覧は読めてから帯に足す。
     if (_trGroups.length && window.MA.twinRestore
-        && window.MA.twinRestore.groupFor(_trGroups, docName)) {
-      _trLoadPick(docName, dsl).then(function() {
+        && window.MA.twinRestore.groupFor(_trGroups, label)) {
+      _trLoadPick(label, dsl, file).then(function() {
         try { renderTwinRestore(res); } catch (e) {}
       });
     } else {
