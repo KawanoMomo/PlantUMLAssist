@@ -13,7 +13,8 @@
 //   - Ctrl+H 1 回で、a・hw/a・hw/spi/b の 3 枚が道付きで「ヒットした図」に数えられる (当たらない 2 枚は 0 件)
 //   - 置換後は各図で名前を語として持つ行だけが替わる (SpiDrvMon・コメント・字下げ・CRLF は不変)。
 //     同じ名前の a と hw/a はそれぞれ自分の行だけが替わる。他のファイルはバイト一致・増えたファイル 0
-//   - 「置換前に戻す」で、置換した開いていない図 (hw/a・hw/spi/b) が置換前のバイト列に戻る。開いている a は Ctrl+Z 1 回で戻る
+//   - 「置換前に戻す」1 押しで、a・hw/a・hw/spi/b の 3 枚とも置換前のバイト列に戻り、エディタの本文も置換前に戻る。
+//     ボタンと知らせは戻す枚数を言う (TICKET-owner-20261123-0742-1)。先に a で Ctrl+Z を押した後は残りの 2 枚だけを戻す
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
@@ -138,28 +139,88 @@ test('Ctrl+H の置換が保存先の木の全部の図を道付きで数えて�
   expect(after['hw/spi/b.puml'].buf.toString('utf8').indexOf('\r\n') >= 0, 'CRLF のまま').toBe(true);
   expect(after['hw/spi/b.puml'].buf.toString('utf8').replace(/\r\n/g, '').indexOf('\n'), 'LF が混ざらない').toBe(-1);
 
-  // 開いていない図を置換前に戻す (窓の中の 1 押し)。
+  // 「置換前に戻す」1 押しで、開いている a も開いていない hw/a・hw/spi/b も全部置換前に戻る
+  // (TICKET-owner-20261123-0742-1)。ボタンと知らせは戻す枚数を言い、「未オープン」の語を使わない。
   const revert = page.locator('#btn-rename-revert');
-  await expect(revert).toHaveAttribute('data-docs', '2');
+  await expect(revert).toHaveAttribute('data-docs', '3');
+  await expect(revert).toContainText('3 枚');
+  await expect(revert).not.toContainText('未オープン');
   await page.screenshot({ path: testInfo.outputPath('rename-tree-applied.png') });
   await mouseClick(page, revert);
-  await expect(page.locator('#rename-summary')).toHaveAttribute('data-reverted', '2', { timeout: 15000 });
+  await expect(page.locator('#rename-summary')).toHaveAttribute('data-reverted', '3', { timeout: 15000 });
+  await expect(page.locator('#rename-summary')).toContainText('3 枚を置換前に戻しました');
+  await expect(page.locator('#rename-summary')).not.toContainText('未オープン');
   await expect(revert).toBeHidden();
-  const reverted = snapshot(dir);
-  expect(Object.keys(reverted).sort()).toEqual(Object.keys(before).sort());
-  for (const k of ['hw/a.puml', 'hw/spi/b.puml', 'other.puml', 'hw/c.puml']) {
-    expect(reverted[k].sha1, k + ' は置換前のバイト列').toBe(before[k].sha1);
-  }
+  await expect.poll(() => H.getEditorText(page), 'エディタの本文も置換前').toBe(SEQ1());
+  await H.waitDrawn(page, ['SpiDrvMon', 'Spi_Init()']);
+  await H.expectRendered(page);
+  await page.screenshot({ path: testInfo.outputPath('rename-tree-reverted.png') });
+  await expect.poll(() => snapshot(dir)['a.puml'].sha1, { timeout: 10000 }).toBe(before['a.puml'].sha1);
+  await page.waitForTimeout(1500);   // 自動保存の待ちを越えて見る
+  const last = snapshot(dir);
+  expect(Object.keys(last).sort(), '増えた・消えたファイルは無い').toEqual(Object.keys(before).sort());
+  for (const k of Object.keys(before)) expect(last[k].sha1, k + ' は置く前のバイト列').toBe(before[k].sha1);
+  expect(errors, errors.join('\n')).toEqual([]);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
 
-  // 開いている a は今までどおり Ctrl+Z 1 回で戻る。
+test('先に開いている図で Ctrl+Z を押した後も、「置換前に戻す」は残りの図だけを戻し、二重に戻さない。窓の一覧は 1 つ', async ({ page }) => {
+  test.setTimeout(150 * 1000);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e && e.message || e)));
+  const sub = 'tree2-' + process.pid + '-' + Date.now();
+  const dir = path.join(ABS, sub);
+  place(dir);
+  const before = snapshot(dir);
+  await H.bootWithSaveDir(page, REL + '/' + sub);
+  await mouseClick(page, page.locator('#files-parts .files-part-file[data-file-name="a"]'));
+  await expect(page.locator('#editor')).toHaveValue(SEQ1(), { timeout: 20000 });
+  await expect(page.locator('#files-subtree .files-sub-dir[data-sub-rel="hw"]')).toHaveCount(1, { timeout: 10000 });
+
+  await mouseClick(page, page.locator('#editor'));
+  await page.keyboard.press('Control+h');
+  await expect(page.locator('#rename-panel')).toHaveClass(/open/);
+  await mouseClick(page, page.locator('#rename-from'));
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('SpiDrv');
+  await mouseClick(page, page.locator('#rename-to'));
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('SpiCore');
+  await expect(page.locator('#rename-folder-head')).toHaveAttribute('data-loading', '0', { timeout: 15000 });
+  // 窓の一覧は 1 つ: 開いている図も下の一覧に札付きで 1 行。同じ図が 2 行出ない。
+  await expect(page.locator('#rename-hits .hit')).toHaveCount(0);
+  const names = await page.locator('#rename-folder .folder-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-doc-name')));
+  expect(names.length, '数える図がある').toBeGreaterThan(3);
+  expect(new Set(names).size, '同じ図が 2 行出ない: ' + names.join(', ')).toBe(names.length);
+  await expect(page.locator('#rename-folder .folder-row[data-doc-name="a"] .folder-tag')).toHaveText('開いている');
+
+  await mouseClick(page, page.locator('#btn-rename-apply'));
+  await expect(page.locator('#rename-summary')).toHaveAttribute('data-applied-unopened', '2', { timeout: 15000 });
+  await expect(page.locator('#rename-summary')).not.toContainText('未オープン');
+  await expect.poll(() => H.getEditorText(page)).toBe(renamed(Buffer.from(SEQ1())).toString('utf8'));
+  await page.waitForTimeout(1500);
+
+  // 開いている a で先に Ctrl+Z (窓は閉じる)。
   await mouseClick(page, page.locator('#btn-rename-cancel'));
   await mouseClick(page, page.locator('#editor'));
   await page.keyboard.press('Control+z');
   await expect.poll(() => H.getEditorText(page)).toBe(SEQ1());
+  // 窓を開き直すと、ボタンは残りの 2 枚だけを戻すと言う。
+  await page.keyboard.press('Control+h');
+  await expect(page.locator('#rename-panel')).toHaveClass(/open/);
+  const revert = page.locator('#btn-rename-revert');
+  await expect(revert).toHaveAttribute('data-docs', '2');
+  await expect(revert).toHaveAttribute('data-open-docs', '0');
+  await expect(revert).toContainText('2 枚');
+  await mouseClick(page, revert);
+  await expect(page.locator('#rename-summary')).toHaveAttribute('data-reverted', '2', { timeout: 15000 });
+  await expect(page.locator('#rename-summary')).toHaveAttribute('data-reverted-open', '0');
+  // a は二重に戻らない (置換前のまま)。
+  expect(await H.getEditorText(page)).toBe(SEQ1());
   await page.waitForTimeout(1500);
   const last = snapshot(dir);
   expect(Object.keys(last).sort()).toEqual(Object.keys(before).sort());
-  for (const k of Object.keys(before)) expect(last[k].sha1, k + ' は置く前と同じ').toBe(before[k].sha1);
+  for (const k of Object.keys(before)) expect(last[k].sha1, k + ' は置く前のバイト列').toBe(before[k].sha1);
   expect(errors, errors.join('\n')).toEqual([]);
   fs.rmSync(dir, { recursive: true, force: true });
 });

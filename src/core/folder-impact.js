@@ -116,7 +116,8 @@ window.MA.folderImpact = (function() {
     if (!s || s.files === 0) return '保存フォルダを読み込んでいません';
     if (s.hitDocs === 0) return s.files + ' 枚を調べて出現なし';
     var t = s.files + ' 枚中 ' + s.hitDocs + ' 枚に ' + s.total + ' 件';
-    if (s.unopenedHitDocs > 0) t += ' (未オープン ' + s.unopenedHitDocs + ' 枚を含む)';
+    // 語は一覧の札と同じ「開いている / 開いていない」(TICKET-owner-20261123-0742-1)。
+    if (s.unopenedHitDocs > 0) t += ' (開いていない ' + s.unopenedHitDocs + ' 枚を含む)';
     return t;
   }
 

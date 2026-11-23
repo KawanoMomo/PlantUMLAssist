@@ -7732,6 +7732,62 @@ function revertUnopenedRename() {
   });
 }
 
+// ── 直前の置換を 1 押しで全部戻す (TICKET-owner-20261123-0742-1) ─────────────
+// 直前の [置換] で書き換えた開いている図 [{ id, name, label, before, after }] (renameUndo.openRows)。
+// 開いていない図の控え (_renameUndoRows) と合わせて、窓の「置換前に戻す」1 押しで戻す。
+var _renameUndoOpen = [];
+// 置換の窓の「置換前に戻す」を今の状態で描き直す口 (setupBulkRename が入れる)。
+var _renderRenameRevertNow = function() {};
+
+// 開いている図の今の本文 (開いている図はエディタの未確定分を含む)。
+function _renameCurrentOpen() {
+  var out = {};
+  _diffDocs().forEach(function(d) { if (d && d.id != null) out[d.id] = d.dsl; });
+  return out;
+}
+
+function _renameUndoPlan() {
+  var RU = window.MA.renameUndo;
+  if (!RU) return { open: [], already: [], changedAfter: [], unopened: _renameUndoRows.length, total: _renameUndoRows.length };
+  return RU.plan(_renameUndoOpen, _renameCurrentOpen(), _renameUndoRows);
+}
+
+// 開いている図は、今の本文が置換の直後のままのものだけを置換前に戻す。開いている図 (選んでいるタブ) は
+// エディタの履歴に 1 操作として積む (Ctrl+Z でこの戻しを取り消せ、Ctrl+Y と食い違わない)。
+// 先に Ctrl+Z で戻した図は二重に戻さず、置換の後に書き換わった図は戻さず名前を返す。
+function revertRename() {
+  var WS = window.MA.workspace;
+  var p = _renameUndoPlan();
+  var res = { open: 0, unopened: 0, skipped: p.changedAfter.slice(), failed: 0 };
+  if (WS) {
+    var activeId = WS.getActiveId();
+    p.open.forEach(function(r) {
+      if (r.id === activeId) {
+        if (_applyLineEditText(r.before)) res.open++;
+        return;
+      }
+      WS.updateDoc(r.id, { dsl: r.before });
+      var d = null;
+      WS.list().forEach(function(x) { if (x.id === r.id) d = x; });
+      if (d) {
+        try {
+          var cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null;
+          if (cfg && cfg.backend === 'file') writeDocToFolder(d, _docDir(d));
+        } catch (e) {}
+      }
+      res.open++;
+    });
+    try { renderTabs(); } catch (e) {}
+  }
+  _renameUndoOpen = [];
+  return revertUnopenedRename().then(function(u) {
+    res.unopened = u.reverted;
+    res.skipped = res.skipped.concat(u.skipped);
+    res.failed += u.failed;
+    return res;
+  });
+}
+
 // 直近のプレビューで数えた総ヒット数。組を覚えるときの hits に使う
 // (0 件だったことも覚える値なので、数えた側で持つ)。
 var _renameGrand = 0;
@@ -7759,9 +7815,14 @@ function updateRenamePreview() {
   // サブフォルダの図のタブは道付きで出す (直下の同じ名前のタブと見分ける)。
   var labelById = {};
   _fiOpenDocs().forEach(function(d) { labelById[d.id] = d.label; });
+  // 保存フォルダの図も数えている間は、開いている図も下の一覧に「開いている」の札付きで 1 行ずつ出る。
+  // ここにも並べると同じ図が 2 行になるので、一覧は 1 つにする (TICKET-owner-20261123-0742-1)。
+  var oneList = !!allDocs && _fiEnabled();
+  hits.setAttribute('data-merged', oneList ? '1' : '0');
   var total = 0;
   rows.forEach(function(r) {
     total += r.count;
+    if (oneList) return;
     var row = document.createElement('div');
     row.className = 'hit' + (r.count === 0 ? ' zero' : '');
     row.setAttribute('data-doc-name', labelById[r.id] || r.name);
@@ -7793,7 +7854,7 @@ function updateRenamePreview() {
   else if (from === to) summary.textContent = '置換前と置換後が同じです';
   else {
     summary.textContent = grand + ' 件 / ' + grandDocs + ' 枚を置換します'
-      + (folder.docs > 0 ? ' (うち未オープン ' + folder.docs + ' 枚)' : '');
+      + (folder.docs > 0 ? ' (うち開いていない ' + folder.docs + ' 枚)' : '');
   }
   _renameGrand = grand;
   summary.setAttribute('data-total', String(total));
@@ -7806,6 +7867,8 @@ function updateRenamePreview() {
     hitsLabel.setAttribute('data-grand-total', String(grand));
     hitsLabel.setAttribute('data-docs', String(grandDocs));
   }
+  // 開いている図で先に Ctrl+Z を押した後に開き直したら、ボタンは残りの図の枚数を言う。
+  _renderRenameRevertNow();
 }
 
 // 置換前・置換後を決めたあとの共通処理。一括置換パネルと名前突合の
@@ -8026,7 +8089,18 @@ function setupBulkRename() {
     _seedArmed = false;
     // 戻せるのは直前の 1 回の置換だけ (前の回の控えを次の置換の後まで持ち越さない)。
     _renameUndoRows = [];
+    _renameUndoOpen = [];
+    // 開いている図の当てる前の本文を控える (「置換前に戻す」1 押しで開いている図も戻すため)。
+    var beforeById = {}, nameById = {}, labelById = {};
+    try {
+      saveActiveDoc();
+      _diffDocs().forEach(function(d) { beforeById[d.id] = d.dsl; nameById[d.id] = d.name; });
+      _fiOpenDocs().forEach(function(d) { labelById[d.id] = d.label || d.name; });
+    } catch (e) {}
     var res = applyBulkRename();
+    if (res && res.changed && window.MA.renameUndo) {
+      _renameUndoOpen = window.MA.renameUndo.openRows(beforeById, res.changed, labelById, nameById);
+    }
     var openTotal = (res && res.total) || 0;
     var openDocs = (res && res.docs) || 0;
     // 開いていない図はタブを開かずに保存フォルダへ書き戻す。書き終えてから
@@ -8046,7 +8120,7 @@ function setupBulkRename() {
       fillCandidates();
       updateRenamePreview();
       var msg = total + ' 件 / ' + docs + ' 枚を置換しました';
-      if (f.docs > 0) msg += ' (未オープン ' + f.docs + ' 枚を含む)';
+      if (f.docs > 0) msg += ' (開いていない ' + f.docs + ' 枚を含む)';
       if (f.failed > 0) msg += ' / ' + f.failed + ' 枚は書き込めませんでした';
       summary.textContent = msg;
       summary.setAttribute('data-applied', String(total));
@@ -8055,27 +8129,35 @@ function setupBulkRename() {
     });
   }
 
-  // 「置換前に戻す」は直前の置換で書いた開いていない図があるときだけ出す。
-  // 開いている図は今までどおり Ctrl+Z 1 回で戻る (ここでは触らない)。
+  // 「置換前に戻す」は直前の置換で書いた図 (開いている図・開いていない図) のうち、まだ戻せるものがあるときだけ出す。
+  // 1 押しで全部を置換前に戻す。開いている図で先に Ctrl+Z を押した後は、残りの図の枚数を言う
+  // (TICKET-owner-20261123-0742-1。前は開いていない図だけを戻し、開いている図は Ctrl+Z 任せで半分だけ戻った)。
   var revertBtn = document.getElementById('btn-rename-revert');
   function renderRenameRevert() {
     if (!revertBtn) return;
-    var n = _renameUndoRows.length;
+    var RU = window.MA.renameUndo;
+    var p = _renameUndoPlan();
+    var n = p.total;
     revertBtn.style.display = n > 0 ? '' : 'none';
-    revertBtn.textContent = '置換前に戻す (未オープン ' + n + ' 枚)';
+    revertBtn.textContent = RU ? RU.buttonLabel(p) : ('置換前に戻す (' + n + ' 枚)');
+    if (RU) revertBtn.title = RU.buttonTitle(p);
     revertBtn.setAttribute('data-docs', String(n));
+    revertBtn.setAttribute('data-open-docs', String(p.open.length));
+    revertBtn.setAttribute('data-unopened-docs', String(p.unopened));
   }
+  _renderRenameRevertNow = renderRenameRevert;
   if (revertBtn) revertBtn.addEventListener('click', function() {
     revertBtn.disabled = true;
-    revertUnopenedRename().then(function(r) {
+    revertRename().then(function(r) {
       revertBtn.disabled = false;
       renderRenameRevert();
       updateRenamePreview();
-      var msg = '未オープン ' + r.reverted + ' 枚を置換前に戻しました';
-      if (r.skipped.length) msg += ' / 置換の後に書き換わった図は戻していません: ' + r.skipped.join(', ');
-      if (r.failed > 0) msg += ' / ' + r.failed + ' 枚は書き込めませんでした';
-      summary.textContent = msg;
-      summary.setAttribute('data-reverted', String(r.reverted));
+      var RU = window.MA.renameUndo;
+      var n = r.open + r.unopened;
+      summary.textContent = RU ? RU.doneText(r) : (n + ' 枚を置換前に戻しました');
+      summary.setAttribute('data-reverted', String(n));
+      summary.setAttribute('data-reverted-open', String(r.open));
+      summary.setAttribute('data-reverted-unopened', String(r.unopened));
       summary.setAttribute('data-revert-skipped', String(r.skipped.length));
     });
   });
