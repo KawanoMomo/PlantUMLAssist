@@ -5094,6 +5094,8 @@ function toggleVersionTimeline(open, name) {
     renderVersionTimeline();
   }
   modal.style.display = open ? 'flex' : 'none';
+  // TICKET-owner-20261124-0342-2: 開いたら手を窓の最初の操作できる部品 (図の選び) に置く。
+  if (open && window.MA.modalKeys && window.MA.modalKeys.focusModalSoon) window.MA.modalKeys.focusModalSoon(modal);
 }
 
 function setupVersionTimeline() {
@@ -5629,7 +5631,9 @@ function openChangeTarget() {
     if (v.ok) { view = v; render(); return; }
     return go('');
   });
-  hereOk.focus();
+  // TICKET-owner-20261124-0342-2: 開いたら手を窓の最初の打てる欄 (パスの欄) に置く。打って Enter で決まる。
+  // (前は「このフォルダを保存先にする」に置いていたが、フォルダを読み込むまで押せないので手が BODY に落ちていた)
+  if (window.MA.modalKeys && window.MA.modalKeys.focusModalSoon) window.MA.modalKeys.focusModalSoon(m);
   return m;
 }
 window.openChangeTarget = openChangeTarget;

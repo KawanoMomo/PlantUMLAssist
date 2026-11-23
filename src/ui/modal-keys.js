@@ -236,8 +236,18 @@ window.MA.modalKeys = (function() {
     }
     return null;
   }
+  // 開いているか。図の編集の窓は style.display で開け閉めする。開くときに作って閉じるときに外す窓
+  // (#target-pick) は display を書かず CSS で出すので、文書に付いていて計算した display が none でなければ開いている。
+  function isShown(modal) {
+    if (isOpen(modal)) return true;
+    if (!modal || !modal.style || modal.style.display !== '') return false;
+    var doc = modal.ownerDocument || document;
+    if (!doc.body || !doc.body.contains(modal)) return false;
+    var W = doc.defaultView;
+    try { return !W || W.getComputedStyle(modal).display !== 'none'; } catch (e) { return true; }
+  }
   function focusIntoModal(modal) {
-    if (!isOpen(modal)) return false;
+    if (!isShown(modal)) return false;
     var doc = modal.ownerDocument || document;
     var act = doc.activeElement;
     if (act && act !== doc.body && modal.contains(act)) return false;
@@ -245,6 +255,15 @@ window.MA.modalKeys = (function() {
     if (!el) return false;
     try { el.focus(); } catch (e) { return false; }
     return doc.activeElement === el;
+  }
+  // TICKET-owner-20261124-0342-2: 図の編集の窓以外の窓 (「保存先のフォルダを選ぶ」・「この図の履歴」) を開く所が呼ぶ。
+  // その場で手を窓の最初の欄に置き、開いた操作の後始末 (右クリックのメニュー・Ctrl+K が閉じて手を元の行へ戻す) が
+  // 済んだ後にも、手が窓の外にあれば窓の中へ置き直す (窓の中に手があれば触らない)。
+  var SOON_WAITS = [0, 60, 200];
+  function focusModalSoon(modal) {
+    var placed = focusIntoModal(modal);
+    SOON_WAITS.forEach(function(ms) { setTimeout(function() { focusIntoModal(modal); }, ms); });
+    return placed;
   }
   // 手が窓の外 (背後のボタン・BODY) にあっても、Esc は開いている窓を保存せずに閉じる。
   // 背後の選択を外す document の Esc には流さない (窓を閉じた後も選択はそのまま)。
@@ -300,5 +319,6 @@ window.MA.modalKeys = (function() {
   return { init: init, bindModal: bindModal, EDIT_MODALS: EDIT_MODALS,
     isTailEnterArea: isTailEnterArea, isDefaultField: isDefaultField,
     firstTypingField: firstTypingField, refocusAfterAdd: refocusAfterAdd,
-    firstModalField: firstModalField, focusIntoModal: focusIntoModal, onDocEscape: onDocEscape };
+    firstModalField: firstModalField, focusIntoModal: focusIntoModal, focusModalSoon: focusModalSoon,
+    isShown: isShown, onDocEscape: onDocEscape };
 })();
