@@ -72,21 +72,72 @@ window.MA.dslUpdater = (function() {
     return lines.join(sp.eol);
   }
 
+  // 改名で参照する行を付け替える。付け替えるのは識別子の位置 (宣言・線の両端・`note … of X` /
+  // `note over X` の対象) だけで、利用者が書いた文の字は 1 バイトも変えない (TICKET-owner-20261124-0422-2):
+  //   - コメント行・引用符の中
+  //   - 行のラベルの区切り `:` の後 (関係・メッセージのラベル、1 行の note の本文、状態の説明)。
+  //     ユースケース図のアクターの短い書き方 `:User:` は識別子なので区切りと見なさない
+  //   - 複数行の note / legend / ref / title・header・footer・caption の本文
+  //   - 文だけの行 (title 等の 1 行、`== … ==`・`... … ...`、alt / else / loop 等の見出し)
+  var _RWR_Q = '\u0001', _RWR_A = '\u0002';
+  // 見出しの語で始まっても、矢印を持つ行 (`group --> X` のように語を名前にした関係) は文の行と見なさない。
+  var _RWR_TEXT_LINE = /^\s*(?:(?:title|header|footer|caption|newpage)\b.*\S|==.*==\s*$|\.\.\..*\.\.\.\s*$|(?:alt|else|opt|loop|par|par2|break|critical|group)\b(?!.*(?:-+>|<-+|\.\.+>|<\.\.+|--|\.\.)))/i;
+  function _rwrBlockEnd(line, masked) {
+    var t = masked.trim();
+    var m = /^([rh]?note)\b/i.exec(t);
+    if (m) {
+      if (masked.indexOf(':') >= 0 || line.indexOf('"') >= 0) return null;
+      return /^\s*end\s*[rh]?note\b/i;
+    }
+    if (/^legend\b/i.test(t)) return /^\s*end\s*legend\b/i;
+    if (/^ref\s+over\b/i.test(t) && masked.indexOf(':') < 0) return /^\s*end\s*ref\b/i;
+    m = /^(title|header|footer|caption)\s*$/i.exec(t);
+    if (m) return new RegExp('^\\s*end\\s*' + m[1] + '\\b', 'i');
+    return null;
+  }
   function renameWithRefs(text, oldId, newId) {
     if (!oldId || !newId || oldId === newId) return text;
     var escaped = DU.escapeForRegex(oldId);
     var pattern = new RegExp('\\b' + escaped + '\\b', 'g');
+    var blockEnd = null;
     return text.split('\n').map(function(line) {
+      if (blockEnd) {
+        if (blockEnd.test(line)) blockEnd = null;
+        return line;
+      }
       if (DU.isPlantumlComment(line)) return line;
-      var quoted = [];
-      var stripped = line.replace(/"[^"]*"/g, function(m) {
+      var quoted = [], actors = [];
+      var masked = line.replace(/"[^"]*"/g, function(m) {
         quoted.push(m);
-        return '' + (quoted.length - 1) + '';
+        return _RWR_Q + (quoted.length - 1) + _RWR_Q;
+      }).replace(/(^|[\s\-.<>(])(:[^:\s\u0001][^:\u0001]*:)(?=\s|$|[\-.<>)])/g, function(_, pre, tok) {
+        actors.push(tok);
+        return pre + _RWR_A + (actors.length - 1) + _RWR_A;
       });
-      var replaced = stripped.replace(pattern, newId);
-      return replaced.replace(/(\d+)/g, function(_, idx) {
-        return quoted[parseInt(idx, 10)];
-      });
+      var end = _rwrBlockEnd(line, masked);
+      if (end) {
+        blockEnd = end;
+        if (!/^\s*[rh]?note\b|^\s*ref\b/i.test(masked)) return line;
+      }
+      if (_RWR_TEXT_LINE.test(masked)) return line;
+      // ラベルの区切り: 最初の `:` (`::` の名前空間は区切りにしない)。
+      var cut = -1;
+      for (var i = 0; i < masked.length; i++) {
+        if (masked.charAt(i) !== ':') continue;
+        if (masked.charAt(i + 1) === ':') { i++; continue; }
+        cut = i; break;
+      }
+      var head = cut >= 0 ? masked.slice(0, cut) : masked;
+      var tail = cut >= 0 ? masked.slice(cut) : '';
+      var restore = function(s, renameActors) {
+        return s.replace(/\u0002(\d+)\u0002/g, function(_, idx) {
+          var tok = actors[parseInt(idx, 10)];
+          return renameActors ? tok.replace(pattern, newId) : tok;
+        }).replace(/\u0001(\d+)\u0001/g, function(_, idx) {
+          return quoted[parseInt(idx, 10)];
+        });
+      };
+      return restore(head.replace(pattern, newId), true) + restore(tail, false);
     }).join('\n');
   }
 
