@@ -3,6 +3,10 @@
 // 絵がまだ今の本文の図でなければ待って 1 回だけ書き、タブを替えたら別の図を書かずに理由を言う (MA.exportWait)。
 var fs = require('fs');
 var path = require('path');
+// 前の test が global.window を差し替えていても読めるよう、今の window に読み直す。
+var _src = path.join(__dirname, '..', 'src', 'core', 'export-wait.js');
+try { delete require.cache[require.resolve(_src)]; } catch (e) {}
+require(_src);
 var EW = window.MA.exportWait;
 
 describe('TICKET-roadmap-20261123-0857-2 書き出しの待ち (MA.exportWait)', function() {
