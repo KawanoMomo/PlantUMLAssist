@@ -30,7 +30,7 @@ curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日�
 
 | 窓口 | 要求 | 返り |
 | --- | --- | --- |
-| `GET /render` | — | `POST /render` の仕様 (別名・比較の注意つき) |
+| `GET /render` | — | `POST /render` の仕様 (別名の注意つき) |
 | `POST /render` | `{text, mode}` | 200 `image/svg+xml` / 400 `{error}` / 422 `{error, line}` |
 | `POST /preproc` | `{text}` | 200 `{ok: true, lines}` (同梱 jar のプリプロセッサで展開した最初の図の行) / 200 `{ok: false, error}` / 400 `{error}` |
 
@@ -38,18 +38,14 @@ curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日�
 受理されるが、正式な名前は `text` (別名で送ると `X-PlantUMLAssist-Warning` が付く)。
 `mode` は `local` (既定) か `online`。
 
-この応答の SVG には `<!-- @pua-source-sha1 ... -->` の印が**付かない**。保存済みの
-`{name}.svg` には付くので、この 2 つの生バイト比較は内容が同じでも必ず食い違う。
-
 
 ## 保存フォルダ
 
 | 窓口 | 要求 | 返り |
 | --- | --- | --- |
-| `GET /autosave` | `?dir=&type=` | 図の一覧 (`dsl` `hash` `svgSource` など)。`type` 付きは 1 枚の本文 (LF) と、ディスクの改行・文字コードを見出し `X-Pua-Eol` `X-Pua-Encoding` `X-Pua-Bom` で返す |
+| `GET /autosave` | `?dir=&type=` | 図の一覧 (`dsl` `hash` など)。`type` 付きは 1 枚の本文 (LF) と、ディスクの改行・文字コードを見出し `X-Pua-Eol` `X-Pua-Encoding` `X-Pua-Bom` で返す |
 | `POST /autosave` | `{type, dir, dsl, eol?, bom?}` | 図の DSL を保存する。`eol` `bom` が無ければ上書きする相手のファイルの改行・BOM を引き継ぎ、書いた値を `eol` `encoding` `bom` で返す |
 | `DELETE /autosave` | `?dir=&type=` | 保存を消す |
-| `POST /autosave-svg` | `{type, dir, svg}` | 書き出した svg を保存する (印を刻む) |
 | `GET /autosave-versions` | `?dir=&type=` | 1 枚の図の版の一覧 |
 | `GET /peek-dirs` | — | 保存フォルダの候補を覗く |
 | `GET /browse-dir` | — | 保存先を選ぶ窓でフォルダを辿る (`?dir=`。子フォルダ・親・ドライブ・.puml の枚数。読むだけ) |
@@ -64,11 +60,9 @@ curl -sS -H "Accept-Charset: shift_jis" http://127.0.0.1:8766/api  # cp932 (日�
 | `POST /git-push` | `{dir}` | 送信 (`push`)。画面で押したときだけ呼ぶ。認証は OS の git |
 | `POST /git-checkout` | `{dir, branch}` | ブランチ切り替え |
 | `GET /peek-notes` | `?dir=` | 隣のフォルダに置かれた指摘 (`.md`) を読む |
-| `GET /cohort-ack` | `?dir=` | 保存フォルダの**親**にある確認済みの組の台帳 (`_cohort-ack.json`。ドメイン突合で内部揺れと確かめた組) |
-| `POST /cohort-ack` | `{dir, entries}` | 確認済みの組の台帳を丸ごと置き換える |
 
-保存中の svg が今の puml から作られたかは、`GET /autosave` の `svgSource` (svg に刻まれた印) と
-`hash` (今の puml の sha1) を比べる (描き直して比べる窓口 `/verify-svg` は TICKET-owner-20261116-0241-prune で外した)。
+書き出しが今の puml より古いかは `GET /export-file` が更新時刻で答える (描き直して比べる窓口 `/verify-svg` は
+TICKET-owner-20261116-0241-prune、書き出した svg に印を刻む口と保存フォルダの親の確認済みの台帳は TICKET-owner-20261123-0642-prune で外した)。
 
 ## 保管庫・設定・生存
 

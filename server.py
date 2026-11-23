@@ -525,12 +525,6 @@ def use_jar(path):
 # GET /render の 'aliases' で「正式な名前は text」であることを毎回伝える。
 DSL_FIELD_ALIASES = ('dsl', 'source', 'uml', 'puml', 'diagram')
 
-# POST /render の 200 に必ず付ける注記。ヘッダ値は ASCII しか通らないので英語で書く。
-# 「保存中の svg とこの応答をバイト比較する」使い方を、応答の側で止めるためのもの。
-SVG_STAMP_HEADER = ('none; saved {name}.svg ends with <!-- @pua-source-sha1 ... --> '
-                    'which this response never carries, so byte-comparing them always differs. '
-                    'Compare GET /autosave entry.svgSource with entry.hash instead')
-
 RENDER_API_DOC = {
     'endpoint': 'POST /render',
     'request': {
@@ -548,21 +542,10 @@ RENDER_API_DOC = {
                      '正式な名前は text'),
         },
     },
-    # BLK-reviewer-20260908-0103 (1403 追記): 「保存中の svg が今の puml から作られたか」を
-    # curl で確かめようとして、この応答と保存中の svg をバイト比較した run があった。
-    # 保存する svg にだけ末尾へ `<!-- @pua-source-sha1 ... -->` を刻むので、内容が
-    # 完全に一致していてもバイト比較は必ず不一致になる (実データ 17 枚が全滅に見えた)。
-    # 応答の説明とヘッダの両方でそれを言う — 応答だけを見て使う人に届くように。
-    'comparison': {
-        'note': ('この応答には @pua-source-sha1 の印が付かない。保存された {name}.svg には'
-                 '末尾に印があるため、生のバイト比較は内容が同じでも必ず食い違う'),
-        'how': ('保存中の svg が今の puml から作られたかは、GET /autosave の entry の'
-                'svgSource (svg に刻まれた印) と hash (今の puml の sha1) を比べる'),
-        'header': 'X-PlantUMLAssist-Svg-Stamp',
-    },
+    # 書き出した SVG に道具の印を足す口と、その印を突き合わせる説明・ヘッダは
+    # TICKET-owner-20261123-0642-prune で外した (書き出しが古いかは GET /export-file が mtime で言う)。
     'response': {
-        '200': ('image/svg+xml — 描画された SVG。X-PlantUMLAssist-Svg-Stamp ヘッダで'
-                '「この応答に印は付かない」ことを伝える (comparison を参照)'),
+        '200': 'image/svg+xml — 描画された SVG',
         '400': "application/json {error} — text (と別名) が無い / 文字列でない / 空",
         '422': "application/json {error, line} — DSL の文法エラー (PlantUML のエラー画)",
         '500': 'application/json {error} — 描画そのものの失敗',
@@ -681,13 +664,11 @@ API_INDEX = {
          'request': "{text, mode}"},
         {'endpoint': 'POST /preproc', 'summary': 'DSL を同梱の plantuml.jar のプリプロセッサだけに通し、展開後の行を返す (外へ送らない)',
          'request': "{text}"},
-        {'endpoint': 'GET /autosave', 'summary': '保存フォルダの図の一覧 (dsl・hash・svgSource)',
+        {'endpoint': 'GET /autosave', 'summary': '保存フォルダの図の一覧 (dsl・hash)',
          'request': '?dir=&type='},
         {'endpoint': 'POST /autosave', 'summary': '図の DSL を保存する', 'request': "{type, dir, dsl}"},
         {'endpoint': 'DELETE /autosave', 'summary': 'type を付ければその図 1 枚 (版は残す)、省けば保存フォルダの図を全部消す',
          'request': '?dir=&type='},
-        {'endpoint': 'POST /autosave-svg', 'summary': '書き出した svg を保存する (印を刻む)',
-         'request': "{type, dir, svg}"},
         {'endpoint': 'GET /autosave-versions', 'summary': '1 枚の図の版の一覧', 'request': '?dir=&type='},
         {'endpoint': 'GET /peek-dirs', 'summary': '保存フォルダの候補を覗く'},
         {'endpoint': 'GET /browse-dir', 'summary': '保存先を選ぶ窓でフォルダを辿る (子フォルダ・親・ドライブ。読むだけ)'},
@@ -704,10 +685,6 @@ API_INDEX = {
         {'endpoint': 'POST /git-pull', 'summary': '取得 (pull --ff-only)。押したときだけ', 'request': '{dir}'},
         {'endpoint': 'POST /git-push', 'summary': '送信 (push)。押したときだけ。認証は OS の git', 'request': '{dir}'},
         {'endpoint': 'POST /git-checkout', 'summary': 'ブランチ切り替え', 'request': '{dir, branch}'},
-        {'endpoint': 'GET /cohort-ack', 'summary': 'ドメイン突合で内部揺れと確認済みの組の台帳',
-         'request': '?dir='},
-        {'endpoint': 'POST /cohort-ack', 'summary': '確認済みの組の台帳を置き換える',
-         'request': "{dir, entries: [{key, domain, kind, left, right, fingerprint, note, by, at}]}"},
         {'endpoint': 'GET /rename-pairs', 'summary': 'そのフォルダで打たれた置換の組', 'request': '?dir='},
         {'endpoint': 'POST /rename-pairs', 'summary': '置換の組を 1 つ覚える',
          'request': "{dir, from, to, hits, applied}"},
@@ -917,61 +894,6 @@ def resolve_render_request(data):
 # (途中を見せる可能性は残るが、保存は必ず通る)。
 REPLACE_RETRY_SECONDS = 2.0
 REPLACE_RETRY_INTERVAL = 0.005
-
-
-# BLK-reviewer-20260914-0906: 印 (@pua-source-sha1) の付いていない svg では、
-# 「この絵がどの図のものか」を言う手掛かりが svg 自身の中にしかない。PlantUML は
-# 書き出した svg の末尾に元の DSL を `<?plantuml-src …?>` として畳んで埋めるので、
-# それを開けば印が無くても相手を名指しできる。reviewer はこの展開を 1 枚ずつ
-# 手で書いていた (図の枚数だけ render API を叩き直していた)。
-#
-# 畳み方は 2 通りある。PlantUML がそのまま書くと XML の processing instruction
-# `<?plantuml-src …?>` になるが、svg を DOM に入れて取り出し直した経路では
-# `<!--?plantuml-src …?-->` (HTML コメントに包まれた形) で残る。ブラウザが
-# 未知の PI をコメントとして読み直すためで、どちらも中身は同じ token。
-# 片方しか読めないと、まさに入れ替わった図が黙って未刻印に落ちる。
-_PLANTUML_SRC_RE = re.compile(
-    rb'<\?plantuml-src\s+([0-9A-Za-z_-]+)\s*\?>'
-    rb'|<!--\?plantuml-src\s+([0-9A-Za-z_-]+)\s*\?-->')
-_PLANTUML_B64 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_'
-_STD_B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-_PLANTUML_B64_MAP = str.maketrans(_PLANTUML_B64, _STD_B64)
-
-
-def decode_svg_plantuml_src(svg_bytes):
-    """svg に畳まれている元の DSL を返す。埋まっていなければ None。
-
-    埋め込みは `@startuml` / `@enduml` を含まない (PlantUML がそう畳む)。
-    """
-    m = None
-    for m in _PLANTUML_SRC_RE.finditer(svg_bytes or b''):
-        pass          # 最後の 1 つが図全体の元 DSL
-    if m is None:
-        return None
-    token = (m.group(1) or m.group(2)).decode('ascii').translate(_PLANTUML_B64_MAP)
-    token += '=' * (-len(token) % 4)
-    try:
-        return zlib.decompress(base64.b64decode(token), -15).decode('utf-8', 'replace')
-    except (binascii.Error, zlib.error, ValueError):
-        return None
-
-
-def normalize_dsl(text):
-    """畳まれた DSL と保存中の .puml を突き合わせるための形にそろえる。
-
-    埋め込みには `@startuml` / `@enduml` が無く、行末の空白も落ちている。
-    ここを揃えないと、同じ図でも「別物」と言ってしまう。
-    """
-    out = []
-    for line in (text or '').replace('\r\n', '\n').replace('\r', '\n').split('\n'):
-        line = line.rstrip()
-        if not line:
-            continue
-        low = line.strip().lower()
-        if low.startswith('@startuml') or low.startswith('@enduml'):
-            continue
-        out.append(line)
-    return '\n'.join(out)
 
 
 def _eol_newline(eol):
@@ -1400,9 +1322,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith('/autosave'):
             with _fs_lock:
                 return self._handle_autosave_get()
-        if self.path.split('?')[0] == '/cohort-ack':
-            with _fs_lock:
-                return self._handle_cohort_ack_get()
         if self.path.split('?')[0] == '/peek-dirs':
             with _fs_lock:
                 return self._handle_peek_dirs()
@@ -1461,9 +1380,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/autosave':
             with _fs_lock:
                 return self._handle_autosave_post()
-        if self.path == '/autosave-svg':
-            with _fs_lock:
-                return self._handle_autosave_svg_post()
         # TICKET-primary-20261115-2240-wish: 保存先から開いた図の書き出し (SVG / PNG) を保存先の中へ書く。
         if self.path.startswith('/export-file?'):
             with _fs_lock:
@@ -1471,9 +1387,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/rename-pairs':
             with _fs_lock:
                 return self._handle_rename_pairs_post()
-        if self.path == '/cohort-ack':
-            with _fs_lock:
-                return self._handle_cohort_ack_post()
         # BLK-human-20260923-1701 (design 10b): FILES ツリーの右クリック・ドラッグから
         # ファイル単位の操作 (名前変更 / 複製 / 別フォルダへ移動 / 場所を開く) を受ける口。
         if self.path == '/file-op':
@@ -1588,9 +1501,6 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', 'image/svg+xml')
             self.send_header('Cache-Control', 'no-cache')
-            # BLK-reviewer-20260908-0103 (1403 追記): この応答には印が付かない。
-            # 保存中の svg とバイト比較する使い方をここで止める (ASCII のみ)。
-            self.send_header('X-PlantUMLAssist-Svg-Stamp', SVG_STAMP_HEADER)
             # 別名で受理したことは 200 でも必ず伝える (黙って呑まない)。
             # ヘッダ値は ASCII しか通らないので日本語は %xx で包む。
             if warning:
@@ -2440,84 +2350,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json(200, {'dir': str(save_dir), 'pairs': pairs})
 
-    COHORT_ACK_FILE = '_cohort-ack.json'
-    # 確認済みの組の台帳。これを超える大きさは台帳ではない。
-    COHORT_ACK_MAX = 512 * 1024
-
-    def _cohort_ack_path(self, save_dir):
-        return Path(save_dir).parent / self.COHORT_ACK_FILE
-
-    @staticmethod
-    def _cohort_ack_payload(entries):
-        """台帳の 1 行を素通しで受ける形に整える.
-
-        どの組を確認済みとするかの判定 (組の鍵・差分の指紋) は
-        src/core/cohort-ack.js にしか無い (同じ規則を 2 つ持たない)。
-        ここでやるのは型と重複の掃除だけ。
-        """
-        out = []
-        seen = set()
-        for e in entries:
-            if not isinstance(e, dict):
-                continue
-            key = e.get('key')
-            if not isinstance(key, str) or not key.strip():
-                continue
-            key = key.strip()
-            if key in seen:
-                continue
-            seen.add(key)
-            row = {'key': key}
-            for f in ('domain', 'kind', 'left', 'right', 'fingerprint', 'note', 'by', 'at'):
-                v = e.get(f)
-                row[f] = v.strip() if isinstance(v, str) else ''
-            out.append(row)
-        out.sort(key=lambda r: r['key'])
-        return out
-
-    def _read_cohort_ack(self, save_dir):
-        path = self._cohort_ack_path(save_dir)
-        try:
-            if not path.exists() or path.stat().st_size > self.COHORT_ACK_MAX:
-                return {'entries': []}
-            data = json.loads(path.read_text(encoding='utf-8-sig'))
-        except (OSError, ValueError):
-            return {'entries': []}
-        if isinstance(data, list):
-            data = {'entries': data}
-        if not isinstance(data, dict) or not isinstance(data.get('entries'), list):
-            return {'entries': []}
-        return {'entries': self._cohort_ack_payload(data['entries'])}
-
-    def _handle_cohort_ack_get(self):
-        """GET /cohort-ack?dir= — 保存フォルダの親にある確認済みの組の台帳."""
-        parsed = urllib.parse.urlparse(self.path)
-        params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
-        save_dir = self._autosave_resolve_dir(params.get('dir'))
-        led = self._read_cohort_ack(save_dir)
-        self._send_json(200, {'dir': str(save_dir), 'path': str(self._cohort_ack_path(save_dir)),
-                              'entries': led['entries']})
-
-    def _handle_cohort_ack_post(self):
-        """POST /cohort-ack {dir, entries} — 台帳を丸ごと置き換える."""
-        data = self._read_json_object()
-        if data is None:
-            return
-        entries = data.get('entries')
-        if not isinstance(entries, list):
-            self._send_json(400, {'error': 'entries must be a list'})
-            return
-        save_dir = self._autosave_resolve_dir(data.get('dir'))
-        path = self._cohort_ack_path(save_dir)
-        clean = self._cohort_ack_payload(entries)
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            _atomic_write_text(path, json.dumps({'entries': clean}, ensure_ascii=False, indent=2) + '\n')
-        except OSError as e:
-            self._send_json(500, {'error': f'書き込めません: {e}'})
-            return
-        self._send_json(200, {'dir': str(save_dir), 'path': str(path), 'entries': clean})
-
     def _autosave_read_meta(self, save_dir):
         p = self._autosave_meta_path(save_dir)
         if not p.exists():
@@ -2675,47 +2507,6 @@ class Handler(BaseHTTPRequestHandler):
         return base + '-' + stamp, prev_kind, new_kind
 
 
-    def _handle_autosave_svg_post(self):
-        """保存フォルダの {type}.svg だけを書き直す。
-
-        BLK-reviewer-20260908-0103: puml を書き戻すと puml の方が新しくなり、
-        「svg が古い」が永久に消えない。作り直しは svg 側だけに触る。
-        """
-        length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(length).decode('utf-8')
-        try:
-            data = json.loads(body)
-        except ValueError:
-            self._send_json(400, {'error': 'invalid JSON'})
-            return
-        dt = data.get('type')
-        svg = data.get('svg', '')
-        if not self._autosave_validate_type(dt):
-            self._send_json(400, {'error': 'invalid type — パス区切り・制御文字・Windows の禁止文字は使えません'})
-            return
-        if not isinstance(svg, str) or svg == '':
-            self._send_json(400, {'error': 'svg must be a non-empty string'})
-            return
-        save_dir = self._autosave_resolve_dir(data.get('dir'))
-        puml_path = self._autosave_file_path(save_dir, dt)
-        if not puml_path.exists():
-            self._send_json(404, {'error': 'その名前の図が保存フォルダにありません'})
-            return
-        svg_path = puml_path.with_suffix('.svg')
-        try:
-            # newline='' — 改行を CRLF に変換させない。変換すると、描き直した
-            # 結果とはバイトで必ず食い違い、/verify-svg が全件 differ と答える。
-            _atomic_write_text(svg_path, svg + self._svg_stamp(puml_path), newline='')
-        except OSError as e:
-            self._send_json(500, {'error': f'write failed: {e}'})
-            return
-        try:
-            mtime = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(svg_path.stat().st_mtime))
-        except OSError:
-            mtime = None
-        self._send_json(200, {'ok': True, 'path': str(svg_path), 'svgMtime': mtime})
-
-
     # TICKET-primary-20261115-2240-wish: 1 枚書き出しの拡張子。通常の PNG と透過 PNG は別の名前にする
     # (同じ名前だと後から出した方が前の方を黙って上書きする)。
     EXPORT_FILE_EXTS = {'svg': '.svg', 'png': '.png', 'png-transparent': '.transparent.png'}
@@ -2823,48 +2614,6 @@ class Handler(BaseHTTPRequestHandler):
                         'stale': bool(st is not None and st.st_mtime_ns < puml_mtime)})
         self._send_json(200, {'ok': True, 'exports': out})
 
-    # BLK-reviewer-20260908-1103: mtime 比較だけでは「svg が今の puml から作られたか」は
-    # 分からない (保存し直しただけで中身は追いついている図と、前々回の編集から
-    # 追いついていない図が同じ「古い」に見える)。書き出した svg の末尾に、その時の
-    # puml の sha1 を 1 行だけ刻む。以後は一覧がこの印と今の puml の sha1 を突き合わせ、
-    # 内容の一致・不一致を言い切れる (再描画して diff を取る手作業が要らなくなる)。
-    SVG_STAMP_PREFIX = '<!-- @pua-source-sha1 '
-    SVG_STAMP_SUFFIX = ' -->'
-
-    @classmethod
-    def _svg_stamp(cls, puml_path):
-        """svg の末尾に付ける印。puml が読めなければ印を付けない (嘘を刻まない)。"""
-        try:
-            digest = hashlib.sha1(puml_path.read_bytes()).hexdigest()
-        except OSError:
-            return ''
-        return '\n' + cls.SVG_STAMP_PREFIX + digest + cls.SVG_STAMP_SUFFIX + '\n'
-
-    @classmethod
-    def _read_svg_stamp(cls, svg_path):
-        """svg の末尾から sha1 の印を読む。無ければ None。
-
-        末尾 200 バイトだけを読む — 図が大きくても一覧の生成が遅くならないように。
-        """
-        try:
-            with open(svg_path, 'rb') as f:
-                try:
-                    f.seek(-200, 2)
-                except OSError:
-                    f.seek(0)
-                tail = f.read().decode('utf-8', 'replace')
-        except OSError:
-            return None
-        at = tail.rfind(cls.SVG_STAMP_PREFIX)
-        if at < 0:
-            return None
-        rest = tail[at + len(cls.SVG_STAMP_PREFIX):]
-        end = rest.find(cls.SVG_STAMP_SUFFIX)
-        if end < 0:
-            return None
-        digest = rest[:end].strip()
-        return digest if len(digest) == 40 and all(c in '0123456789abcdef' for c in digest) else None
-
     # --- autosave GET --------------------------------------------------------
 
     def _handle_autosave_get(self):
@@ -2944,80 +2693,21 @@ class Handler(BaseHTTPRequestHandler):
         saved_kinds = self._read_saved_kinds(save_dir) if exists else {}
         for entry in entries:
             entry['savedKind'] = saved_kinds.get(entry['name'], '')
-        self._resolve_unstamped_svg_sources(save_dir, entries)
         self._send_json(200, {'files': files, 'entries': entries, 'meta': meta,
                               'dir': str(save_dir), 'exists': exists,
                               'gone': gone,
                               'kinds': saved_kinds})
 
-    def _resolve_unstamped_svg_sources(self, save_dir, entries):
-        """印の無い svg の持ち主を、svg に畳まれた DSL から名指しする。
-
-        BLK-reviewer-20260914-0906: 印 (@pua-source-sha1) が付いていない svg は
-        「今の puml の絵ではない」までしか言えず、無関係な絵への入れ替わりは
-        印の有無では検出できない。reviewer は 1 枚ずつ render API を叩き、
-        返った svg の plantuml-src 埋め込みをデコードして相手を突き止めていた
-        (図の枚数だけ手順が線形に増える)。
-
-        埋め込みを開いて、同じフォルダの他の図の本文とそろえて突き合わせ、
-        一致したら `svgSource` にその図の sha1 を入れる。以後は印が付いていた
-        場合と同じ扱いになり、一覧の「他図の絵 / 絵が入れ替わり」がそのまま出る。
-        `svgSourceFrom` に 'stamp' / 'embedded' のどちらで分かったかを添える。
-        """
-        need = [e for e in entries if e.get('svgMtime') and not e.get('svgSource')]
-        for e in entries:
-            if e.get('svgSource'):
-                e['svgSourceFrom'] = 'stamp'
-        if not need:
-            return
-        by_norm = {}
-        for e in entries:
-            if not e.get('hash'):
-                continue
-            try:
-                raw = self._autosave_file_path(save_dir, e['name']).read_bytes()
-            except OSError:
-                continue
-            by_norm.setdefault(normalize_dsl(raw.decode('utf-8', 'replace')), e['hash'])
-        for e in need:
-            svg_path = self._autosave_file_path(save_dir, e['name']).with_suffix('.svg')
-            try:
-                src = decode_svg_plantuml_src(svg_path.read_bytes())
-            except OSError:
-                continue
-            if src is None:
-                continue
-            norm = normalize_dsl(src)
-            # 相手がこのフォルダに居なくても、「この図の絵ではない」とは言い切れる。
-            # 言わずに黙ると「未刻印 (確かめようが無い)」に落ち、reviewer は
-            # 結局その 1 枚を render API で確かめ直すことになる。
-            e['svgSource'] = by_norm.get(norm) or ('embedded:' + hashlib.sha1(norm.encode('utf-8')).hexdigest())
-            e['svgSourceFrom'] = 'embedded'
-
     def _autosave_entry(self, path, with_text=False):
-        """1 図分の {name, mtime, size, hash, svgMtime}。読めない図でも名前だけは返す。
+        """1 図分の {name, mtime, size, hash}。読めない図でも名前だけは返す。
 
         with_text=True のときは本文 (`text`) も入れる。保存フォルダをまたいだ突合
         (BLK-reviewer-20260914-1106-wish) は本文が無いと判定できない。
-
-        BLK-reviewer-20260908-0103: 隣に置いた {name}.svg が puml より古いかどうかを
-        `ls -l` で 1 枚ずつ突き合わせていた。同じ一覧で答えられるよう、
-        svg の最終更新時刻もここで返す (無ければ None)。
+        隣の {name}.svg の時刻・印・指紋は
+        TICKET-owner-20261123-0642-prune で返すのをやめた (読む画面が無い。書き出しが古いかは GET /export-file)。
         """
         entry = {'name': path.stem, 'mtime': None, 'size': None, 'hash': None,
-                 'svgMtime': None, 'svgSource': None, 'svgHash': None,
                  'kind': ''}
-        svg_path = path.with_suffix('.svg')
-        try:
-            svg_st = svg_path.stat()
-            entry['svgMtime'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(svg_st.st_mtime))
-            # BLK-reviewer-20260908-1103: この svg がどの puml から作られたか。
-            entry['svgSource'] = self._read_svg_stamp(svg_path)
-            # BLK-reviewer-20260908-1103-wish: 「確かめたときの svg」と「今の svg」が
-            # 同じものかは時刻では言えない (保存し直しただけで時刻は動く)。指紋で持つ。
-            entry['svgHash'] = hashlib.sha1(svg_path.read_bytes()).hexdigest()
-        except OSError:
-            pass
         try:
             st = path.stat()
             entry['mtime'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(st.st_mtime))
