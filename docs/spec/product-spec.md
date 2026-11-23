@@ -114,7 +114,7 @@ unit `tests/roadmap-20261115-2114-4-terms.test.js` が、この表と `src/ui/te
 | 整理表 | 機能 | できること | 入口 | 振る舞い | 確かめる |
 |---|---|---|---|---|---|
 | #45 | 状態と遷移をまとめて追加 | state と遷移を 1 回で足し、末尾以外にも置く | 末尾に追加 → まとめて | 足した行だけが増える | `tests/e2e/legacy/blk-junior-0443-state-bulk.spec.js` |
-| #46 | 遷移の連続入力 | 状態を押して遷移を続けてつなぐ(trigger の候補は今の図の中の名前だけ) | 遷移のフォーム | 1 本ごとに 1 行足す | `tests/e2e/legacy/blk-primary-0723-transition-form.spec.js` |
+| #46 | 遷移の連続入力 | 状態を押して遷移を続けてつなぐ(trigger の候補は今の図の中の名前だけ。開いた直後の From は本文の最後の遷移先から始まり、案内がその名前を言う) | 遷移のフォーム | 1 本ごとに 1 行足す | `tests/e2e/legacy/blk-primary-0723-transition-form.spec.js`、`tests/scenarios/owner-20261123-2322-3.spec.js` |
 | #47 | 子状態を追加 | 入れ子の子状態を足す、2 つ足して遷移でつなぐ | 状態の右パネル「＋ 子状態を追加」 | `{ }` の中に足した行だけが増える | `tests/e2e/scenarios/junior-09-state-child.spec.js` |
 | #50 | 開始・終了・履歴 | [*] と [H] をどの入れ子のものか選んで足す | 末尾に追加 → 開始 / 終了 / 履歴 | 選んだ入れ子に 1 行足す | `tests/e2e/legacy/blk-builder-1244-4-state-other.spec.js` |
 | #51 | 分岐・fork/join・入口/出口・並行領域 | 擬似状態と並行領域の区切りを GUI から足す | 末尾に追加 → その他 | 足した行だけが増える | `tests/e2e/legacy/blk-junior-2043-state-branch.spec.js` |
