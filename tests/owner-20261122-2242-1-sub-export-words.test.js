@@ -49,8 +49,10 @@ describe('app.js の結線', function() {
     // TICKET-junior-20261123-1142-wish: PNG の画素数 (px) を後ろに足した。図のフォルダを渡すのは変わらない。
     expect(APP).toContain('ED.message(res.j, sub, t.folder, px)');
   });
-  test('保存フォルダの一覧に直下の図だけである旨の行がある', function() {
+  test('保存フォルダの一覧に、直下の図だけを扱う所とサブフォルダの図が届く所を言う行がある', function() {
+    // TICKET-roadmap-20261123-2358-3: まとめて書き出すはサブフォルダの図にも届いた。画面の語は指す範囲を偽らない。
     expect(APP).toContain("scope.id = 'folder-scope'");
-    expect(APP).toContain('保存先の直下の図だけを並べます');
+    expect(APP).toContain('件数・図種・タブで開くは保存先の直下の図です。サブフォルダの図は下の「サブフォルダの図」に道付きで並び、印を付けてまとめて書き出せます');
+    expect(APP).not.toContain('保存先の直下の図だけを並べます');
   });
 });

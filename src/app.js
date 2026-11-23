@@ -5999,6 +5999,10 @@ function setupTabs() {
   // 印はパネルを開いている間だけ持つ (次に開いたときは白紙から選ぶ)。
   var folderPicked = [];
   var folderNames = [];
+  // 保存先の下のフォルダの図 [{ key: 'hw/a', name, dir, rel }] と、まとめて書き出す印を付けたものの key
+  // (TICKET-roadmap-20261123-2358-3)。直下の図の印 (folderPicked) とは分けて持つ (タブで開く・全部選ぶは直下の図だけ)。
+  var folderSubFiles = [];
+  var folderSubPicked = [];
   // 名前での絞り込み。一覧は 20 枚超の行が縦に並び、
   // 行ごとに印・役割・差分のボタンが付くので、目的の 1 枚を一発で押し分けにくい。
   var folderQuery = '';
@@ -6514,12 +6518,89 @@ function setupTabs() {
       panel.appendChild(folderPickBar());
       appendKindSummary(panel);
       entries.forEach(function(e) { panel.appendChild(folderRow(e.name || e)); });
+      appendSubFolderSection(panel, dir, myGen);
       appendGoneVersionsSection(panel);
       raiseRowsInTree();
       syncFolderPickUi();
       applyFolderFilter();
       focusFolderFilter();
     });
+  }
+
+  // ── 保存先の下のフォルダの図 (TICKET-roadmap-20261123-2358-3) ──
+  // 一覧の直下の図の後に「サブフォルダの図」の節を置き、どの階層の図も道付きの名前 (hw/a) で並べる。
+  // 行の印は「選んだ N 枚を書き出す」に入り、1 枚ずつの書き出しと同じく図のフォルダの置き場に図の名前で書く。
+  // 名前を押すとその図を開く (FILES のツリーと同じ openFromSubFolder)。入口は増やさない (この一覧の中だけ)。
+  // 木は読むだけ (/tree-dir)。保存先には何も書かない。
+  function appendSubFolderSection(host, dir, gen) {
+    var WS = window.MA.workspace;
+    var sec = document.createElement('div');
+    sec.className = 'folder-sub-section';
+    sec.id = 'folder-sub-section';
+    host.appendChild(sec);
+    if (!WS || !WS.listTree) return;
+    WS.listTree(dir).then(function(res) {
+      if (gen !== _folderRenderGen) return;
+      var ED = window.MA.exportDest;
+      var files = [];
+      ((res && res.ok && res.dirs) || []).forEach(function(d) {
+        if (!d || !d.rel || !d.path) return;
+        (d.files || []).forEach(function(n) {
+          var rel = String(d.rel).split(String.fromCharCode(92)).join('/');
+          files.push({ key: ED ? ED.pathName(rel, n) : rel + '/' + n, name: String(n), dir: String(d.path), rel: rel });
+        });
+      });
+      folderSubFiles = files;
+      folderSubPicked = folderSubPicked.filter(function(k) { return files.some(function(f) { return f.key === k; }); });
+      sec.textContent = '';
+      if (!files.length) { syncFolderPickUi(); return; }
+      var head = document.createElement('div');
+      head.className = 'folder-summary folder-sub-head';
+      head.id = 'folder-sub-head';
+      head.textContent = 'サブフォルダの図（' + files.length + ' 枚）';
+      sec.appendChild(head);
+      files.forEach(function(f) { sec.appendChild(folderSubRow(f)); });
+      syncFolderPickUi();
+      applyFolderFilter();
+    });
+  }
+
+  function folderSubRow(f) {
+    var row = document.createElement('div');
+    row.className = 'folder-sub-row';
+    row.setAttribute('data-sub-key', f.key);
+    var box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'folder-sub-pick';
+    box.setAttribute('data-pick-sub', f.key);
+    box.checked = folderSubPicked.indexOf(f.key) >= 0;
+    box.title = 'まとめて書き出す図に印を付ける (' + f.key + '.puml)';
+    box.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var i = folderSubPicked.indexOf(f.key);
+      if (i >= 0) folderSubPicked.splice(i, 1); else folderSubPicked.push(f.key);
+      syncFolderPickUi();
+    });
+    row.appendChild(box);
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'folder-sub-item';
+    b.setAttribute('data-sub-name', f.key);
+    b.setAttribute('data-sub-dir', f.dir);
+    b.title = f.key + '.puml を開く';
+    var label = document.createElement('span');
+    label.className = 'folder-name';
+    label.textContent = f.key;
+    b.appendChild(label);
+    b.addEventListener('click', function() { openFromSubFolder(f.name, f.dir, { preview: true }); });
+    b.addEventListener('dblclick', function() { openFromSubFolder(f.name, f.dir, { pin: true }); });
+    row.appendChild(b);
+    return row;
+  }
+
+  // 印を付けたサブフォルダの図 (一覧の並び)。
+  function _pickedSubFiles() {
+    return folderSubFiles.filter(function(f) { return folderSubPicked.indexOf(f.key) >= 0; });
   }
 
   // 一覧を開いた直後だけ絞り込み欄にカーソルを置く。行のボタンを押しての
@@ -6767,11 +6848,12 @@ function setupTabs() {
     line.textContent = DK.summaryLine(kindEntries);
     line.title = '図種は保存された本文から判定しています。0 の図種はこの保存先に 1 枚もありません';
     host.appendChild(line);
-    // TICKET-owner-20261122-2242-1: 一覧・件数・図種・まとめて書き出すは保存先の直下の図だけを扱う。黙って外さず、そう書く。
+    // TICKET-owner-20261122-2242-1: 一覧の範囲を黙って狭めず、そう書く。TICKET-roadmap-20261123-2358-3 で、
+    // まとめて書き出すは保存先の下のどの階層の図にも届いた (件数・図種・タブで開く・全部選ぶは直下の図のまま)。
     var scope = document.createElement('div');
     scope.className = 'folder-summary folder-scope';
     scope.id = 'folder-scope';
-    scope.textContent = '保存先の直下の図だけを並べます（サブフォルダの図は FILES のツリーから開いて書き出します）';
+    scope.textContent = '件数・図種・タブで開くは保存先の直下の図です。サブフォルダの図は下の「サブフォルダの図」に道付きで並び、印を付けてまとめて書き出せます';
     host.appendChild(scope);
   }
 
@@ -7141,6 +7223,10 @@ function setupTabs() {
       else host.removeAttribute('data-exact');
     }
     _folderExactFirst(rows);
+    // サブフォルダの図の行も道付きの名前で絞る (数には入れない。直下の図の数のまま)。
+    Array.prototype.forEach.call(panel.querySelectorAll('.folder-sub-row'), function(r) {
+      r.style.display = FF.match(r.getAttribute('data-sub-key') || '', folderQuery) ? '' : 'none';
+    });
     var state = panel.querySelector('.folder-filter-state');
     if (state) state.textContent = FF.summaryText(shown, rows.length, folderQuery);
   }
@@ -7202,14 +7288,15 @@ function setupTabs() {
       var FS = window.MA.folderSelect;
       if (!FS || _folderExporting) return;
       var names = FS.selectAll(folderNames).filter(function(n) { return FS.has(folderPicked, n); });
-      if (names.length === 0) return;
+      var subs = _pickedSubFiles();
+      if (names.length + subs.length === 0) return;
       var kind = kindEl.value || 'svg';
       var result = panel.querySelector('.folder-export-result');
       _folderExporting = true;
       b.disabled = true;
       exportManyToFolder(names, kind, _wsFileDir(), function(i, n) {
         b.textContent = '書き出しています… (' + (i + 1) + ' / ' + n + ')';
-      }).then(function(out) {
+      }, subs).then(function(out) {
         _folderExporting = false;
         syncFolderPickUi();
         if (!out) return;
@@ -7218,7 +7305,11 @@ function setupTabs() {
         if (result) {
           result.textContent = out.msg;
           result.setAttribute('data-done', String(done.length));
-          result.setAttribute('data-failed', fail.map(function(r) { return r.name; }).join('/'));
+          // 書けなかった図は道付きの名前 (サブフォルダの図は hw/a。区切りは「、」)。直下の図だけなら名前を / で並べる今の形。
+          var mixedFail = fail.some(function(r) { return r.rel; });
+          result.setAttribute('data-failed', fail.map(function(r) {
+            return window.MA.exportDest.pathName(r.rel, r.name);
+          }).join(mixedFail ? '、' : '/'));
           result.setAttribute('data-seq', String(Number(result.getAttribute('data-seq') || 0) + 1));
         }
         setSaveStatus(out.msg);
@@ -7264,7 +7355,8 @@ function setupTabs() {
     }
     var exp = panel.querySelector('.folder-export-many');
     if (exp && window.MA.exportDest && !_folderExporting) {
-      var picked = FS.selectAll(folderNames).filter(function(n) { return FS.has(folderPicked, n); }).length;
+      var picked = FS.selectAll(folderNames).filter(function(n) { return FS.has(folderPicked, n); }).length
+        + _pickedSubFiles().length;
       exp.textContent = window.MA.exportDest.batchLabel(picked);
       exp.disabled = picked === 0;
     }
@@ -9947,12 +10039,17 @@ function _svgTextToPngBlob(svgText, transparent) {
   });
 }
 
-// その図の本文。保存先の直下の図をタブで開いていればタブの本文 (1 枚ずつの書き出しと同じく、画面の図を書く)、
-// 開いていなければ保存先のファイル。
-function _batchExportDsl(name, dir) {
+// その図の本文。その図をタブで開いていればタブの本文 (1 枚ずつの書き出しと同じく、画面の図を書く)、
+// 開いていなければ保存先のファイル。rel があればサブフォルダ dir の図 (直下の同じ名前の図のタブと取り違えない)。
+function _batchExportDsl(name, dir, rel) {
   var WS = window.MA.workspace;
-  var doc = WS && WS.findByName ? WS.findByName(name) : null;
-  if (doc && (!WS.dirOf || !WS.samePath || WS.samePath(WS.dirOf(doc.id, dir), dir))) {
+  var doc = null;
+  if (rel) doc = WS && WS.findOpen ? WS.findOpen({ name: name, sub: true, dir: dir }) : null;
+  else {
+    doc = WS && WS.findByName ? WS.findByName(name) : null;
+    if (doc && WS.dirOf && WS.samePath && !WS.samePath(WS.dirOf(doc.id, dir), dir)) doc = null;
+  }
+  if (doc) {
     var act = WS.getActive();
     if (act && act.id === doc.id && editorEl) return Promise.resolve(editorEl.value);
     if (typeof doc.dsl === 'string') return Promise.resolve(doc.dsl);
@@ -9960,10 +10057,11 @@ function _batchExportDsl(name, dir) {
   return WS ? WS.loadFile(name, dir) : Promise.resolve(null);
 }
 
-function _batchExportOne(name, dir, kind, sub) {
+// rel はサブフォルダの図の、保存先から見たフォルダの道 ('hw/spi'。直下の図は '')。結果に持たせて道付きの名前で言う。
+function _batchExportOne(name, dir, kind, sub, rel) {
   var ED = window.MA.exportDest;
-  function fail(why) { return { name: name, ok: false, error: why }; }
-  return _batchExportDsl(name, dir).then(function(dsl) {
+  function fail(why) { return { name: name, rel: rel || '', ok: false, error: why }; }
+  return _batchExportDsl(name, dir, rel).then(function(dsl) {
     if (dsl == null || !String(dsl).trim()) return fail('読めません');
     return renderDslToSvg(String(dsl), dir).then(function(svg) {
       if (!svg || String(svg).indexOf('<svg') < 0) return fail('描けません');
@@ -9977,7 +10075,7 @@ function _batchExportOne(name, dir, kind, sub) {
           method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: blob,
         }).then(function(r) {
           return r.json().catch(function() { return {}; }).then(function(j) {
-            if (r.status === 200 && j && j.ok) return { name: name, ok: true, res: j };
+            if (r.status === 200 && j && j.ok) return { name: name, rel: rel || '', ok: true, res: j };
             return fail((j && j.error) || ('HTTP ' + r.status));
           });
         });
@@ -9987,19 +10085,25 @@ function _batchExportOne(name, dir, kind, sub) {
 }
 
 // names を一覧の並びのまま 1 枚ずつ書く。onStep(i, n) で進み具合を返す。
-// 結果は { results: [{ name, ok, error?, res? }], sub, msg }。
-function exportManyToFolder(names, kind, dir, onStep) {
+// subs は保存先の下のフォルダの図 [{ name, dir: そのフォルダ, rel: 'hw/spi' }] (TICKET-roadmap-20261123-2358-3)。
+// 直下の図の後に書き、置き場は 1 枚ずつの書き出しと同じく図のフォルダ (dir) ごとに覚えた置き場 (loadSub)。
+// 結果は { results: [{ name, rel, ok, error?, res? }], sub, msg }。
+function exportManyToFolder(names, kind, dir, onStep, subs) {
   var ED = window.MA.exportDest;
   if (!ED || !dir || !window.fetch) return Promise.resolve(null);
   var sub = ED.loadSub(_exportStorage(), dir);
-  var list = (names || []).slice();
+  var list = (names || []).map(function(n) { return { name: n, dir: dir, rel: '', sub: sub }; });
+  (subs || []).forEach(function(s) {
+    if (s && s.name && s.dir && s.rel) list.push({ name: s.name, dir: s.dir, rel: s.rel, sub: ED.loadSub(_exportStorage(), s.dir) });
+  });
   var results = [];
   function step(i) {
     if (i >= list.length) {
       return { results: results, sub: sub, msg: ED.batchMessage(results, kind, sub) };
     }
     if (onStep) { try { onStep(i, list.length); } catch (e) {} }
-    return _batchExportOne(list[i], dir, kind, sub).then(function(r) { results.push(r); return step(i + 1); });
+    var it = list[i];
+    return _batchExportOne(it.name, it.dir, kind, it.sub, it.rel).then(function(r) { results.push(r); return step(i + 1); });
   }
   return Promise.resolve().then(function() { return step(0); });
 }

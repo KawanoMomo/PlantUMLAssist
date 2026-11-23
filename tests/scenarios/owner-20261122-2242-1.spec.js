@@ -136,9 +136,11 @@ test('owner 2242-1 サブフォルダの図の書き出し先は図のフォル�
   expect(Object.keys(after).sort()).toEqual(Object.keys(before).concat(['out/seq.svg', 'out/st.svg', 'docs/api/st.svg']).sort());
   for (const f of Object.keys(before)) expect(after[f], f + ' は 1 バイトも変わらない').toBe(before[f]);
 
-  // (4) 保存フォルダの一覧は直下の図だけを並べ、そう書く。
+  // (4) 保存フォルダの一覧は届く範囲をそのまま書く。TICKET-roadmap-20261123-2358-3 で、まとめて書き出すは
+  // サブフォルダの図にも届いた (サブフォルダの図は「サブフォルダの図」の節に道付きで並ぶ)。
   await S.openFolder(page);
-  await expect(page.locator('#folder-scope')).toHaveText('保存先の直下の図だけを並べます（サブフォルダの図は FILES のツリーから開いて書き出します）');
+  await expect(page.locator('#folder-scope')).toHaveText('件数・図種・タブで開くは保存先の直下の図です。サブフォルダの図は下の「サブフォルダの図」に道付きで並び、印を付けてまとめて書き出せます');
+  await expect(page.locator('#folder-panel .folder-sub-item[data-sub-name="docs/api/st"]')).toHaveCount(1);
   await page.screenshot({ path: testInfo.outputPath('folder-list.png') });
   H.annotate(testInfo, 'hands', 'clicks=' + hands.clicks + ' keys=' + hands.keys + ' drawMs=' + hands.drawMs);
   // 開いてから描けるまでは 3 秒以内。
