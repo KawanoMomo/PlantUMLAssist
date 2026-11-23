@@ -9052,6 +9052,41 @@ function writeBackToSource(doc) {
 // 時刻と書いた先を数秒出す。以前は自動の書き戻し (saveActiveDoc) だけが基準を更新していたので、
 // 書き戻しを見送る見本のままのタブや、ダウンロード保存では、ファイルが書けても ○ / ● が残った。
 var _saveFlashTimer = null;
+// 札は上部バーの中に収める。保存ボタンの真下に出すとバーからはみ出し、タブ列 (タブ・＋・ツール ▾) と
+// プレビューの見出しを数秒覆っていた。上部バーの並びは押し出さず、検索欄の右の空きへバーの高さの
+// 中央に浮かせる。語が空きに入りきらない幅では状態表示 (local · 所要時間) の上まで伸ばし (札は
+// pointer-events: none なので下の状態表示・検索欄は押せる)、それでも狭ければ保存ボタンの右から始め、
+// 入りきらない語は省略して title に全文を持つ。
+function _placeSaveFlash(el) {
+  var bar = document.getElementById('toolbar');
+  var save = document.getElementById('top-save');
+  if (!bar || !save || !bar.getBoundingClientRect) return;
+  var br = bar.getBoundingClientRect();
+  var sr = save.getBoundingClientRect();
+  if (!(br.height > 0) || !(sr.width > 0)) return;
+  var vis = function(id) {
+    var e = document.getElementById(id);
+    return e && e.offsetParent ? e.getBoundingClientRect() : null;
+  };
+  var cr = vis('btn-command-palette');
+  var rr = vis('top-render-status');
+  var xr = null;
+  var wraps = bar.querySelectorAll('.export-wrap');
+  for (var i = 0; i < wraps.length; i++) {
+    if (wraps[i].offsetParent) { xr = wraps[i].getBoundingClientRect(); break; }
+  }
+  el.style.maxWidth = '360px';
+  var want = Math.ceil(el.getBoundingClientRect().width || 0);
+  var left = cr ? cr.right + 8 : sr.right + 6;
+  var limit = rr ? rr.left - 8 : br.right - 8;
+  if (limit - left < want && xr) limit = xr.left - 8;
+  if (limit - left < 140) left = sr.right + 6;
+  var avail = Math.max(40, Math.round(limit - left));
+  el.style.left = Math.round(left) + 'px';
+  el.style.maxWidth = Math.min(360, avail) + 'px';
+  var h = el.getBoundingClientRect().height || 20;
+  el.style.top = Math.round(br.top + Math.max(0, (br.height - h) / 2)) + 'px';
+}
 function _afterManualSave(doc, target, writtenToFolder) {
   if (!doc || !doc.name) return;
   try { if (window.MA.saveDiff) window.MA.saveDiff.mark(_diffName(doc), doc.dsl); } catch (e) {}
@@ -9072,14 +9107,8 @@ function _afterManualSave(doc, target, writtenToFolder) {
   if (!el || !f) return;
   el.textContent = f.text;
   el.title = f.title;
-  // 保存ボタンの真下に出す (上部バーの並びには入れない)。
-  var btn = document.getElementById('top-save');
-  var r = btn && btn.getBoundingClientRect ? btn.getBoundingClientRect() : null;
-  if (r && r.width > 0) {
-    el.style.left = Math.max(4, Math.round(r.left)) + 'px';
-    el.style.top = Math.round(r.bottom + 4) + 'px';
-  }
   el.hidden = false;
+  _placeSaveFlash(el);
   if (_saveFlashTimer) clearTimeout(_saveFlashTimer);
   _saveFlashTimer = setTimeout(function() { el.hidden = true; _saveFlashTimer = null; }, 4000);
 }
