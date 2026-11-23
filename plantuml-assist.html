@@ -859,8 +859,11 @@ html, body {
   color: var(--text-secondary);
   line-height: 1.5;
 }
+/* 見出しを 1 行に置き、倍率のボタン 4 つは次の 1 行に折り返さずに並べる */
+#export-menu #export-png-scale .eps-head { display: block; margin-bottom: 3px; }
+#export-menu #export-png-scale-opts { display: flex; gap: 4px; flex-wrap: nowrap; }
 #export-menu #export-png-scale .eps-opt {
-  display: inline-block; width: auto; padding: 1px 8px; margin-left: 4px;
+  display: inline-block; width: auto; padding: 1px 8px; margin: 0;
   border: 1px solid var(--border); border-radius: 4px; font-size: 11px; color: var(--text-primary);
 }
 #export-menu #export-png-scale .eps-opt[aria-pressed="true"] {
