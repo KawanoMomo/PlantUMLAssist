@@ -28,9 +28,8 @@ describe('下端の差分の件数は変わった図の数', function() {
     expect(SC.isActive('± 変更 0/10')).toBe(false);
   });
 
-  test('ツール ▾ の件数も同じ読み方をする', function() {
-    expect(app.indexOf('SC.countToken(t)') >= 0).toBe(true);
-  });
+  // ツール ▾ の行に件数を出す読み方 (タブ列のボタン文字から拾う) は、タブ列の道具のボタンごと
+  // TICKET-owner-20261123-0222-prune で外した (件数を持つ道具は無い)。
 });
 
 // TICKET-owner-20261115-2141-prune: 前回保存版と比べるのは「この図の履歴」の行から。

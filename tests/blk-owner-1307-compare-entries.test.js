@@ -62,10 +62,6 @@ describe('メニューに載らない id は、畳む数にも入らない', fun
     expect(TM.menuIds().indexOf('btn-tab-compare')).toBe(-1);
   });
 
-  test('モーダルの中のものは畳む対象に数えない', function() {
-    expect(TM.isFoldable('dp-review')).toBe(false);
-  });
-
   test('知らない id は opener を連れていない', function() {
     expect(TM.openerOf('btn-tab-nope')).toBe('');
     expect(TM.openerOf('dp-review')).toBe('');

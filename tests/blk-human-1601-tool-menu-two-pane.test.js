@@ -56,8 +56,8 @@ describe('一覧の小見出し', function() {
   });
 
   test('項目名は tool-menu.js のラベルそのまま (言い換えない)', function() {
-    expect(tm.labelOf('btn-tab-versions')).toBe('この図の履歴を見る');
-    expect(tm.labelOf('btn-tab-lines')).toBe('行を書き換える');
+    expect(tm.labelOf('tool-versions')).toBe('この図の履歴を見る');
+    expect(tm.labelOf('tool-lines')).toBe('行を書き換える');
     expect(tm.labelOf('btn-tab-diff')).toBe(null);
   });
 });
@@ -79,14 +79,14 @@ describe('パネルの HTML', function() {
     var list = out.slice(out.indexOf('<div class="tool-menu-list">'), out.indexOf('<div class="tool-menu-hits"'));
     // 「複数クラスに一括適用する」は TICKET-owner-20261122-1023-prune で外し、残りは 2 行。
     expect((list.match(/class="tool-menu-item"/g) || []).length).toBe(2);
-    ['btn-tab-lines', 'btn-tab-rename'].forEach(function(id) {
+    ['tool-lines', 'tool-rename'].forEach(function(id) {
       expect(list).toContain('data-target="' + id + '"');
     });
     expect(list).not.toContain('btn-tab-apply');
   });
 
   test('項目の件数は項目の印にだけ出る', function() {
-    var out = tm.buildMenuHtml({ 'btn-tab-lines': '3' });
+    var out = tm.buildMenuHtml({ 'tool-lines': '3' });
     expect((out.match(/tool-menu-badge/g) || []).length).toBe(1);
     expect(out).toContain('<span class="tool-menu-badge">3</span>');
   });
@@ -103,7 +103,7 @@ describe('パネルの HTML', function() {
 describe('絞り込み', function() {
   test('一覧の全項目から当たる', function() {
     var hits = tm.filterItems('一括置換').concat(tm.filterItems('行を'));
-    expect(hits.map(function(h) { return h.id; })).toEqual(['btn-tab-rename', 'btn-tab-lines']);
+    expect(hits.map(function(h) { return h.id; })).toEqual(['tool-rename', 'tool-lines']);
   });
 
   test('小見出し・分類名でも引ける', function() {
@@ -121,13 +121,13 @@ describe('絞り込み', function() {
 
   test('候補の HTML は小見出しを添えて出し、当たりが無ければそう言う', function() {
     var out = tm.buildHitsHtml('部品名', {});
-    expect(out).toContain('data-target="btn-tab-rename"');
+    expect(out).toContain('data-target="tool-rename"');
     expect(out).toContain('まとめて直す');
     expect(tm.buildHitsHtml('そんなものは無い', {})).toContain('該当なし');
   });
 
   test('絞り込みの文言もエスケープされる', function() {
-    expect(tm.buildHitsHtml('', { 'btn-tab-lines': '<b>' })).toContain('&lt;b&gt;');
+    expect(tm.buildHitsHtml('', { 'tool-lines': '<b>' })).toContain('&lt;b&gt;');
   });
 });
 

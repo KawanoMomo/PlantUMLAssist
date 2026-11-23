@@ -47,30 +47,29 @@ function annotate(testInfo, type, value) {
 }
 
 // 台本の scenario は利用者の初回と同じ画面で開く (TICKET-owner-20261116-0340-1)。
-// gotoApp は既定では legacy e2e のために機能ボタンを畳まないタブ列へ書き換えるので、
-// scenario は必ず { foldedTools: true } で開き、製品の既定 (ツール ▾ に畳んだタブ列) を使う。
-// 既定で見えないボタンは、利用者と同じ入口 (ツール ▾・Ctrl+K・FILES の右クリック) から押す。
+// タブ列は 図のタブ・＋・右端の「ツール ▾」1 つ (TICKET-owner-20261123-0222-prune)。道具は利用者と同じ入口
+// (ツール ▾・Ctrl+K・FILES の右クリック) から開く。
 async function expectDefaultTabBar(page) {
-  await expect(page.locator('#tab-bar')).toHaveClass(/(^|\s)tools-folded(\s|$)/);
+  await expect(page.locator('#btn-tab-tools')).toBeVisible();
 }
 
 // アプリを開き、本文を流し込んで描かれるのを待つ (ペルソナが既存の図を開いた状態)。
 async function bootWith(page, dsl) {
   await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
-  await gotoApp(page, { foldedTools: true });
+  await gotoApp(page);
   await expectDefaultTabBar(page);
   if (dsl != null) await setText(page, dsl);
 }
 
 // 保存先を設定済みにして開く (tests/e2e/scenarios/_scenario.js の bootWithSaveDir を既定のタブ列で)。
 async function bootWithSaveDir(page, dir) {
-  await S.bootWithSaveDir(page, dir, { foldedTools: true });
+  await S.bootWithSaveDir(page, dir);
   await expectDefaultTabBar(page);
 }
 
-// 既定の「ツール ▾」(タブ列の右端の札) を押して一覧を開く。
+// 「ツール ▾」(タブ列の右端) を押して一覧を開く。
 async function openToolMenu(page) {
-  await page.locator('#btn-tab-tools-mini').click();
+  await page.locator('#btn-tab-tools').click();
   await page.waitForSelector('#tool-menu:not([hidden])');
 }
 

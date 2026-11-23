@@ -10,13 +10,12 @@ const { gotoApp } = require('../helpers');
 const TOOLS = [
   'btn-tab-new',
   'btn-tab-folder',
-  'btn-tab-rename',
   // ▦ 突合ボード・⇉ 系統チェックは TICKET-owner-20261115-1841-prune で外した
-  'btn-tab-lines',
   // BLK-owner-20260923-1509-prune: ⇔ 並べて見る は「並べて比較」1 つに畳み、タブバーのボタンは無くなった
   // ⧉ 既存の図や雛形から新しい図を起こす (btn-tab-template) は TICKET-owner-20261116-0321-prune で外した
   // ± 差分 (btn-tab-diff) は TICKET-owner-20261115-2141-prune で外した
-  'btn-tab-versions',
+  // ⇄ 一括置換・✎ 行編集・⟲ 変遷 のボタンは TICKET-owner-20261123-0222-prune で外した (道具は ツール ▾ 1 つ)
+  'btn-tab-tools',
 ];
 
 test.describe('BLK-primary-0923 タブバーが潰れない', () => {

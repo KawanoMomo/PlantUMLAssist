@@ -414,7 +414,9 @@ window.MA.fileMenuUi = (function() {
     switch (action) {
       case 'open': return ensureOpenAt(name, where);
       case 'history':
-        return ensureOpenAt(name, where).then(function() { clickId('btn-tab-versions'); });
+        return ensureOpenAt(name, where).then(function() {
+          if (typeof window.MA.runTool === 'function') window.MA.runTool('tool-versions');
+        });
       case 'rename': return renameFile(name, where);
       case 'copy': return copyFile(name, where);
       case 'move': return moveFile(name, where);

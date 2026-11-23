@@ -1644,81 +1644,20 @@ function init() {
     if (filesGlyph && filesSvg) filesGlyph.outerHTML = filesSvg;
   })();
 
-  // ── ツールメニュー (design 7a): 機能ボタンを 1 段の一覧に畳む ────────────────
-  // タブ列に横並びだった機能ボタンを 1 つの「ツール」に畳む。メニュー項目は
-  // 既存ボタンの click を鳴らすだけで、処理そのものは元のボタン側に残す
-  // (Ctrl+K のコマンドパレットと同じ経路を通す)。
-  // 畳んだ状態は localStorage に憶える。既定は畳む (ツール ▾ はタブ列の右端)。
-  // 以前に自分で既定から外した人にだけ、パネルの下端に既定へ戻す 1 行が出る。
+  // ── ツールメニュー (design 7a): 道具の 1 段の一覧 ────────────────
+  // 入口はタブ列の右端の「ツール ▾」1 つ。項目は道具の名前 (tool-*) を持ち、押すと
+  // runTool が窓を開く (Ctrl+K・Ctrl+H・ファイルの右クリックと同じ関数)。
+  // タブ列に道具のボタンを並べる切り替え (畳む / 畳まない・ツール ▾ の置き場) は
+  // TICKET-owner-20261123-0222-prune で外した。以前に切り替えた人の localStorage の値は読まない
+  // (その人も既定と同じタブ列で開く)。
   (function setupToolMenu() {
     var btn = document.getElementById('btn-tab-tools');
-    // 静かなタブ列で「ツール ▾」の代わりに出る小さな入口
-    var mini = document.getElementById('btn-tab-tools-mini');
     var menu = document.getElementById('tool-menu');
-    var bar = document.getElementById('tab-bar');
     var tm = window.MA.toolMenu;
-    if (!btn || !menu || !bar || !tm) return;
-
-    var FOLD_KEY = 'plantuml-tools-folded';
-    // design 7b: 「ツール ▾」自体もタブ列に置かない。既定は静か。
-    var QUIET_KEY = 'plantuml-tools-quiet';
-
-    function foldable() {
-      return Array.prototype.filter.call(bar.querySelectorAll('.tab-tool'), function(b) {
-        return tm.isFoldable(b.id);
-      });
-    }
-
-    function applyFold(folded) {
-      foldable().forEach(function(b) { b.classList.add('tool-folded'); });
-      bar.classList.toggle('tools-folded', !!folded);
-      syncToolButton();
-    }
-
-    function isFolded() {
-      return bar.classList.contains('tools-folded');
-    }
-
-    function isQuiet() {
-      return bar.classList.contains('tools-quiet');
-    }
-
-    // 「ツール ▾」を出すかどうかは畳み方と静かさの組で決まる (tool-menu.js が正本)。
-    function syncToolButton() {
-      bar.classList.toggle('tools-hide-tool-btn',
-        !tm.showsToolButton(isFolded(), isQuiet()));
-      // 「ツール ▾」を出さないときは、代わりに右端の札 (これも「ツール ▾」) を出す。
-      // 畳んで消えているボタンの数 (メニューに載っている数と同じ) は title で読める。
-      bar.classList.toggle('tools-hide-mini-btn',
-        !tm.showsMiniButton(isFolded(), isQuiet()));
-      if (mini) {
-        mini.textContent = tm.miniLabel(foldable().length);
-        if (tm.miniTitle) mini.title = tm.miniTitle(foldable().length);
-      }
-    }
-
-    function applyQuiet(quiet) {
-      bar.classList.toggle('tools-quiet', !!quiet);
-      syncToolButton();
-    }
-
-    // タブ列のボタン文字の末尾に出る件数 (「± 差分 3」の 3) をメニューにも出す。
-    // 「−」や 0 は数が無い印なので付けない。
-    function badges() {
-      var out = {};
-      // 件数の読み方は下端と同じ (「± 変更 2/10」は 2)。
-      var SC = window.MA.statusCounters;
-      foldable().forEach(function(b) {
-        var t = b.textContent || '';
-        var n = SC ? SC.countToken(t) : ((/(\d+)\s*$/.exec(t) || [])[1] || '');
-        if (/^[0-9]+$/.test(n) && n !== '0') out[b.id] = n;
-      });
-      return out;
-    }
+    if (!btn || !menu || !tm) return;
 
     function setExpanded(v) {
       btn.setAttribute('aria-expanded', v ? 'true' : 'false');
-      if (mini) mini.setAttribute('aria-expanded', v ? 'true' : 'false');
     }
 
     function close() {
@@ -1727,14 +1666,8 @@ function init() {
     }
 
     function open() {
-      // 既定 (畳む・ツール ▾ は右端) の人には
-      // 切り替えを出さない。既定から外れている人にだけ、既定へ戻す 1 行を出す。
-      var foot = tm.footToggles(isFolded(), isQuiet()).map(function(t) {
-        return '<button type="button" class="tool-menu-item" id="' + t.id + '">'
-          + '<span class="tool-menu-label">' + t.label + '</span></button>';
-      }).join('');
-      menu.innerHTML = tm.buildMenuHtml(badges())
-        + (foot ? '<div class="tool-menu-foot">' + foot + '</div>' : '');
+      // 件数を持つ道具は今は無いので、件数の札は渡さない。
+      menu.innerHTML = tm.buildMenuHtml({});
       menu.hidden = false;
       setExpanded(true);
       // 開いたらそのまま打てる。
@@ -1778,7 +1711,7 @@ function init() {
       if (list) list.hidden = on;
       hits.hidden = !on;
       if (on) {
-        hits.innerHTML = tm.buildHitsHtml(q, badges());
+        hits.innerHTML = tm.buildHitsHtml(q, {});
         markCurrent(hits.querySelector('.tool-menu-item'));
       } else {
         hits.innerHTML = '';
@@ -1801,75 +1734,39 @@ function init() {
       }
     });
 
-    function toggle(e) {
+    btn.addEventListener('click', function(e) {
       e.stopPropagation();
       if (menu.hidden) open(); else close();
-    }
-
-    btn.addEventListener('click', toggle);
-    if (mini) mini.addEventListener('click', toggle);
+    });
 
     menu.addEventListener('click', function(e) {
       var item = e.target && e.target.closest ? e.target.closest('.tool-menu-item') : null;
       if (!item) return;
-      // 下端の 1 行は既定へ戻すだけ (既定から外す道はパネルに置かない)。
-      // 既定と同じ値 ('1') を書いて戻す (次に開いても既定 = 畳む・ツール ▾ は右端)。
-      if (item.id === 'tool-menu-fold') {
-        applyQuiet(true);
-        applyFold(true);
-        try { localStorage.setItem(FOLD_KEY, '1'); } catch (err) {}
-        try { localStorage.setItem(QUIET_KEY, '1'); } catch (err) {}
-        close();
-        return;
-      }
-      if (item.id === 'tool-menu-quiet') {
-        applyQuiet(true);
-        try { localStorage.setItem(QUIET_KEY, '1'); } catch (err) {}
-        close();
-        return;
-      }
       var targetId = item.getAttribute('data-target');
       // 入口がモーダルの中にしか無いものは、先にその
-      // 画面を開いてからボタンを鳴らす (メニューを開いた時点ではまだ DOM に無い)。
+      // 画面を開いてから道具を呼ぶ (メニューを開いた時点ではまだ DOM に無い)。
       var openerId = item.getAttribute('data-opener');
       close();
       // パネル類は「外側の click で閉じる」を document に付けているので、
-      // 今の click を配り終えてから鳴らす (同期だと開いた直後に閉じる)。
+      // 今の click を配り終えてから開く (同期だと開いた直後に閉じる)。
       setTimeout(function() {
         if (openerId) {
           var opener = document.getElementById(openerId);
           if (opener) opener.click();
         }
-        // 開いた画面が中身を描くのを待ってから目当てのボタンを押す。
-        setTimeout(function() {
-          var target = document.getElementById(targetId);
-          if (target) target.click();
-        }, openerId ? 60 : 0);
+        // 開いた画面が中身を描くのを待ってから道具を呼ぶ。
+        setTimeout(function() { runTool(targetId); }, openerId ? 60 : 0);
       }, 0);
     });
 
     document.addEventListener('click', function(e) {
       if (menu.hidden) return;
       if (menu.contains(e.target) || btn.contains(e.target)) return;
-      if (mini && mini.contains(e.target)) return;
       close();
     });
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape' && !menu.hidden) close();
     });
-
-    // design 7a/7b: 既定は畳んだ状態。タブ列に 25 個の機能ボタンが並ぶと横スクロールが
-    // 要り、「今どれを見ているか」の図タブが「何をするか」に埋もれる。畳んだ側を既定に
-    // すると、タブ列は図のタブと ＋ / 一覧 / ツール ▾ だけになり、件数は下端に出る。
-    // 以前に自分で畳みを解いた人 (localStorage に '0') はその選択が残る。
-    // design 7b: さらに「ツール ▾」も置かない。タブ列は図のタブと ＋ / 一覧 だけになり、
-    // 機能は Ctrl+K から引く (件数は下端の状態表示に出ている)。
-    var saved = null;
-    var savedQuiet = null;
-    try { saved = localStorage.getItem(FOLD_KEY); } catch (err) {}
-    try { savedQuiet = localStorage.getItem(QUIET_KEY); } catch (err) {}
-    applyQuiet(tm.quietAtStart(savedQuiet));
-    applyFold(tm.foldedAtStart(saved));
   })();
 
   // ── 下端の件数表示 (design 7a / 7b) ─────────────────────────────────────
@@ -3107,8 +3004,7 @@ function init() {
         if (rf) rf.focus();
         return;
       }
-      var renameBtn = document.getElementById('btn-tab-rename');
-      if (renameBtn) renameBtn.click();
+      runTool('tool-rename');
       return;
     }
     // フォームの欄で打ちかけの値は change (欄を離れたとき) で図に入る。先に欄を離れてから保存する。
@@ -3487,14 +3383,14 @@ function initCommandPalette() {
       // 前の名前「別のフォルダを保存先にする」「保存先を変える」と英語は検索語に残す。
       { id: 'change-target', title: '保存先のフォルダを選ぶ…', hint: 'Files', keywords: ['別のフォルダを保存先にする', '保存先を変える', 'べつのフォルダ', '別のフォルダ', '保存先', 'ほぞんさき', 'えらぶ', '選ぶ', 'かえる', '変える', '自動保存', 'じどうほぞん', 'change save folder', 'save', 'folder', 'autosave', 'target'], run: function() { setTimeout(openChangeTarget, 0); } },
       { id: 'tab-folder', title: 'FILES: 保存先を開く / Files: save folder', hint: 'Files', keywords: ['folder', 'files', 'tree', 'list', 'いちらん', 'ふぉるだ', 'ほぞんさき'], button: 'btn-tab-folder', run: function() { _ensureFolderListOpen(); } },
-      { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], button: 'btn-tab-rename', run: function() { clickById('btn-tab-rename'); } },
-      { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], button: 'btn-tab-lines', run: function() { clickById('btn-tab-lines'); } },
+      { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], button: 'tool-rename', run: function() { runTool('tool-rename'); } },
+      { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], button: 'tool-lines', run: function() { runTool('tool-lines'); } },
       // design 9a: 手元の .puml を開く入口は上部バーの Import ▾ へ移した。
       { id: 'import-clipboard', title: 'クリップボードの DSL から開く / Open from clipboard', hint: 'File', keywords: ['clipboard', 'paste', 'import', 'くりっぷ', 'はりつけ', 'ひらく'], run: function() { clickById('imp-clipboard'); } },
       // この図の履歴 を開く行は「この図の履歴を見る」1 行。旧名「変遷」は語に落とす。
       // 「前回保存からの差分」の行は TICKET-owner-20261115-2141-prune で外し、その語はこの行で引く
       // (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。
-      { id: 'tab-versions', title: 'この図の履歴を見る / Version history', hint: 'Tabs', keywords: ['version', 'timeline', 'history', 'へんせん', 'りれき', '変遷', 'この図の変遷', '履歴', '保存した版', 'diff', 'さぶん', '差分', '前回保存', 'ぜんかいほぞん'], button: 'btn-tab-versions', run: function() { clickById('btn-tab-versions'); } },
+      { id: 'tab-versions', title: 'この図の履歴を見る / Version history', hint: 'Tabs', keywords: ['version', 'timeline', 'history', 'へんせん', 'りれき', '変遷', 'この図の変遷', '履歴', '保存した版', 'diff', 'さぶん', '差分', '前回保存', 'ぜんかいほぞん'], button: 'tool-versions', run: function() { runTool('tool-versions'); } },
       { id: 'settings', title: '設定を開く / Settings', hint: 'Ctrl', keywords: ['settings', 'config', 'せってい'], run: function() { clickById('btn-config'); } },
       { id: 'undo', title: '元に戻す / Undo', hint: 'Ctrl+Z', keywords: ['undo', 'もどす'], run: function() { clickById('btn-undo'); } },
       { id: 'redo', title: 'やり直す / Redo', hint: 'Ctrl+Y', keywords: ['redo', 'やりなおす'], run: function() { clickById('btn-redo'); } },
@@ -4382,7 +4278,6 @@ function saveActiveDoc() {
   } catch (e) { /* 保存フォルダへの書き出しは best-effort */ }
   renderDiffBadge();
   try { renderLiveDiffChip(); } catch (e) {}
-  renderVersionBadge();
   return doc;
 }
 
@@ -4707,7 +4602,7 @@ function revealActiveTab(bar) {
   var br = bar.getBoundingClientRect();
   var viewRight = br.left + bar.clientLeft + bar.clientWidth;
   var stickLeft = viewRight;
-  Array.prototype.forEach.call(bar.querySelectorAll('#btn-tab-new, #btn-tab-tools-mini'), function(el) {
+  Array.prototype.forEach.call(bar.querySelectorAll('#btn-tab-new, #btn-tab-tools'), function(el) {
     if (!el.offsetParent || window.getComputedStyle(el).position !== 'sticky') return;
     var r = el.getBoundingClientRect();
     if (r.width > 0 && r.left < stickLeft) stickLeft = r.left;
@@ -5116,19 +5011,32 @@ function _renderVtTimelineRows(body, name, only) {
   }).join('');
 }
 
-// ボタンの見出しは、開いている図に往復があるかどうかを常に言う
-// (モーダルを開かないと気付けない、では手順が 1 つ増えるだけになる)。
-function renderVersionBadge() {
-  var btn = document.getElementById('btn-tab-versions');
-  var VT = window.MA.versionTimeline;
-  if (!btn || !VT) return;
-  var name = _vtCurrentName();
-  var n = name ? VT.revisitCount(name) : 0;
-  btn.textContent = n > 0 ? ('⟲ 変遷 往復' + n) : '⟲ 変遷 −';
-  btn.classList.toggle('has-change', n > 0);
-  btn.title = n > 0
-    ? (name + ' には前の版に戻った版が ' + n + ' 回あります')
-    : 'この図が保存のたびにどう変わったかを通しで並べる。前の版に戻った「往復」には印が付く';
+// ── 道具の窓を開く 1 本の関数 ─────────────────────────────────────────────
+// ツール ▾ の行・Ctrl+K・Ctrl+H・ファイルの右クリック「この図の履歴」がどれもこれを呼ぶ
+// (タブ列の ⇄ 一括置換・✎ 行編集・⟲ 変遷 のボタンを押させる経路は
+// TICKET-owner-20261123-0222-prune でボタンごと外した)。一括置換・行を書き換えるの窓は、
+// もう開いていれば閉じる (前のボタンと同じ働き)。
+var _toolRunners = {};
+// 道具を開いたのと同じ click が document まで届いて「外側の click」で窓を閉じないよう、
+// 開いた直後の 1 巡だけ印を立てる。
+var _toolJustOpened = false;
+function runTool(id) {
+  var fn = _toolRunners[id];
+  if (!fn) return false;
+  _toolJustOpened = true;
+  setTimeout(function() { _toolJustOpened = false; }, 0);
+  fn();
+  return true;
+}
+window.MA.runTool = runTool;
+
+// この図の履歴。保存先が Git 管理下なら GIT 節の履歴に置き換える (入口は同じ)。
+function openVersionHistory() {
+  var G = window.MA.gitUi;
+  try {
+    if (G && G.isRepo && G.isRepo()) { G.showHistory(); return; }
+  } catch (e) {}
+  toggleVersionTimeline(true);
 }
 
 // name: 保存先一覧の [履歴 N] から開くときの図名 (開いている図でなくてもその図の履歴を出す)。
@@ -5143,11 +5051,10 @@ function toggleVersionTimeline(open, name) {
 }
 
 function setupVersionTimeline() {
-  var btn = document.getElementById('btn-tab-versions');
   var modal = document.getElementById('vt-modal');
   var VT = window.MA.versionTimeline;
-  if (!btn || !modal || !VT) return;
-  btn.addEventListener('click', function() { toggleVersionTimeline(true); });
+  if (!modal || !VT) return;
+  _toolRunners['tool-versions'] = openVersionHistory;
 
   var closeBtn = document.getElementById('vt-close');
   if (closeBtn) closeBtn.addEventListener('click', function() { toggleVersionTimeline(false); });
@@ -5169,10 +5076,8 @@ function setupVersionTimeline() {
       VT.forget(_vtFile);
       _vtFile = '';
       renderVersionTimeline();
-      renderVersionBadge();
     });
   }
-  renderVersionBadge();
 }
 
 // ── 他フォルダの閲覧 ───────────────────────────────────────────────────────
@@ -5271,8 +5176,7 @@ function renderRenameBadge() {
   btn.addEventListener('click', function() {
     try {
       var panel = document.getElementById('rename-panel');
-      var tab = document.getElementById('btn-tab-rename');
-      if (panel && !panel.classList.contains('open') && tab) tab.click();
+      if (panel && !panel.classList.contains('open')) runTool('tool-rename');
       var next = _rbSum && _rbSum.next;
       if (next) {
         var f = document.getElementById('rename-from');
@@ -7924,8 +7828,7 @@ function applyBulkRename() {
 
 function setupBulkRename() {
   var panel = document.getElementById('rename-panel');
-  var btn = document.getElementById('btn-tab-rename');
-  if (!panel || !btn || !window.MA.bulkRename) return;
+  if (!panel || !window.MA.bulkRename) return;
   var fromEl = document.getElementById('rename-from');
   var toEl = document.getElementById('rename-to');
   var allEl = document.getElementById('rename-all-docs');
@@ -7960,7 +7863,8 @@ function setupBulkRename() {
     });
   }
 
-  btn.addEventListener('click', function() {
+  // ツール ▾「部品名を一括置換する」・Ctrl+H・Ctrl+K・下端の統一バッジが runTool から呼ぶ。
+  _toolRunners['tool-rename'] = function() {
     if (panel.classList.contains('open')) { closePanel(); return; }
     fillCandidates();
     // 選択中の部品があればそれを置換前の初期値にする (入力ゼロで始められる)。
@@ -7982,13 +7886,10 @@ function setupBulkRename() {
     // フォルダを使わない運用ではこのブラウザの組をその場で読むので、入れる組にすぐ間に合う。
     loadRenamePairs(true);
     seedRenamePair();
-    var rect = btn.getBoundingClientRect();
-    // ツール列が畳まれているとこのボタンは幅 0・座標 0 になる。そのときはタブ列の
-    // 下へ出す (何にも紐付かないまま画面の隅に貼り付いた板にしない)。
+    // タブ列の下へ出す (何にも紐付かないまま画面の隅に貼り付いた板にしない)。
     var tabs = document.getElementById('tab-bar');
-    var anchor = (rect.width > 0 || rect.height > 0) ? rect
-      : (tabs ? tabs.getBoundingClientRect() : rect);
-    panel.style.left = Math.max(4, anchor.left + (rect.width > 0 ? -60 : 8)) + 'px';
+    var anchor = tabs ? tabs.getBoundingClientRect() : { left: 0, bottom: 0 };
+    panel.style.left = Math.max(4, anchor.left + 8) + 'px';
     panel.style.top = (anchor.bottom + 2) + 'px';
     panel.classList.add('open');
     // 保存フォルダ運用でなければ、その的が無いのでチェック欄ごと出さない。
@@ -8004,7 +7905,7 @@ function setupBulkRename() {
     // 入れた組は選んだ状態で渡す。そのまま置換に進めるし、別の組を打つ回は
     // 1 文字目でまるごと置き換わる (入れておくことが打ち直しの邪魔にならない)。
     if (fromEl.value) { try { fromEl.select(); } catch (e) {} }
-  });
+  };
 
   // 前回の組を欄に入れる。フォルダ側の組は非同期に届くので、届いた後にもう一度試す
   // (開いた瞬間は先に読めている組だけで決まる)。
@@ -8138,9 +8039,8 @@ function setupBulkRename() {
 
   document.addEventListener('click', function(ev) {
     if (!panel.classList.contains('open')) return;
-    if (panel.contains(ev.target) || ev.target === btn) return;
-    // 下端の統一バッジもこのパネルを開く側。
-    // 外側クリック扱いにすると、開いた同じクリックでそのまま閉じてしまう。
+    // 開いたのと同じ click (Ctrl+K の行・下端の統一バッジ) では閉じない。
+    if (panel.contains(ev.target) || _toolJustOpened) return;
     if (ev.target && ev.target.id === 'status-rename') return;
     closePanel();
   });
@@ -8261,8 +8161,7 @@ function updateLineEditState() {
 function setupLineEdit() {
   var le = window.MA.lineEdit;
   var panel = document.getElementById('lines-panel');
-  var btn = document.getElementById('btn-tab-lines');
-  if (!le || !panel || !btn) return;
+  if (!le || !panel) return;
   var filterEl = document.getElementById('lines-filter');
   var textEl = document.getElementById('lines-text');
   var summary = document.getElementById('lines-summary');
@@ -8319,13 +8218,14 @@ function setupLineEdit() {
     summary.setAttribute('data-applied', String(idx + 1));
   }
 
-  btn.addEventListener('click', function() {
+  // ツール ▾「行を書き換える」・Ctrl+K が runTool から呼ぶ。
+  _toolRunners['tool-lines'] = function() {
     if (panel.classList.contains('open')) { closePanel(); return; }
     _lineEditIndex = null;
     if (textEl) { textEl.value = ''; textEl.disabled = true; }
-    var rect = btn.getBoundingClientRect();
-    panel.style.left = Math.max(4, rect.left - 220) + 'px';
-    panel.style.top = (rect.bottom + 2) + 'px';
+    // 置き場は前と同じ (タブ列のボタンが見えていない既定の画面の位置)。
+    panel.style.left = '4px';
+    panel.style.top = '2px';
     panel.classList.add('open');
     renderLineEditList();
     // 選択中の要素があればその行を初期選択にする (探す手数をゼロにする)。
@@ -8335,7 +8235,7 @@ function setupLineEdit() {
     } else if (filterEl) {
       filterEl.focus();
     }
-  });
+  };
 
   if (filterEl) {
     filterEl.addEventListener('input', renderLineEditList);
@@ -9852,7 +9752,6 @@ function syncEditedText() {
   try { renderDiffBadge(); } catch (e) {}
   // 前回保存版との ＋a −b は、保存を押す前に気付けることが値打ち。
   try { renderLiveDiffChip(); } catch (e) {}
-  try { renderVersionBadge(); } catch (e) {}
   // Git のコミットを並べている間は、作業中との色付けも追う (design 10c)。
   try { if (window.MA.appGit) window.MA.appGit.refreshDiff(); } catch (e) {}
   // 今の本文をタブ (workspace) に控える。以前は下端の「整合」の札を数え直すついでに

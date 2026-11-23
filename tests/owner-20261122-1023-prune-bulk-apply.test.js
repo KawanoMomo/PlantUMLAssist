@@ -39,7 +39,7 @@ describe('一括適用の痕跡が製品に残っていない', function() {
 
 describe('ツール ▾ に残るのは 2 行', function() {
   test('行を書き換える・部品名を一括置換する だけ', function() {
-    expect(TM.menuIds()).toEqual(['btn-tab-lines', 'btn-tab-rename']);
+    expect(TM.menuIds()).toEqual(['tool-lines', 'tool-rename']);
     expect(TM.labelOf('btn-tab-apply')).toBe(null);
   });
 

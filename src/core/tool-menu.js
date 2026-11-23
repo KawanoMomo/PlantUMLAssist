@@ -1,21 +1,21 @@
 'use strict';
 window.MA = window.MA || {};
 
-// tool-menu — タブ列に横並びだった機能ボタンを「ツール」1 か所に畳む (design 7a)。
+// tool-menu — 道具の一覧「ツール ▾」(タブ列の右端の 1 つ。design 7a)。
 //
-// タブ列には 2 種類のものが混ざっている。図のタブ (今どれを見ているか) と、機能ボタン
-// (何をするか)。後者が 20 個以上あるため、目的のボタンを目で探す時間が業務のたびに要る。
-// ここでは機能ボタンを 1 段の一覧のメニューに畳む (整理で分類の中身が外れ、残りは数行)。
-// メニュー項目は既存のボタンの id を指すだけで、実際の処理は元のボタンの click に委ねる
-// (同じ操作が Ctrl+K のコマンドパレットからも引ける、という関係を崩さないため)。
+// タブ列は図のタブ (今どれを見ているか) と ＋ と ツール ▾ だけ。道具 (何をするか) は
+// ツール ▾ の 1 段の一覧から選ぶ。タブ列に道具のボタンを並べる切り替え (畳む / 畳まない・
+// ツール ▾ の置き場) は TICKET-owner-20261123-0222-prune で外した (入口は 1 つ)。
+// 項目の id は道具の名前 (tool-*) で、窓を開く処理は app.js の runTool が持つ
+// (同じ id を Ctrl+K のコマンドパレット・Ctrl+H・ファイルの右クリックも使う)。
 // ここは DOM に触らない純関数だけを置き、描画と結線は app.js。
 window.MA.toolMenu = (function() {
   // 分類と並びは design 7a のパネルに合わせる。label はメニュー上の文言で、
-  // タブ列のボタン文字 (絵文字 + 短い語) ではなく「何をするか」で読める形にする。
+  // 「何をするか」で読める形にする。
   var GROUPS = [
     { key: 'edit', title: '書き換える', items: [
-      { id: 'btn-tab-lines',  label: '行を書き換える', group: 'まとめて直す' },
-      { id: 'btn-tab-rename', label: '部品名を一括置換する', group: 'まとめて直す' },
+      { id: 'tool-lines',  label: '行を書き換える', group: 'まとめて直す' },
+      { id: 'tool-rename', label: '部品名を一括置換する', group: 'まとめて直す' },
     ] },
     // 「探す」(図をまたぐ調べ物) の分類は TICKET-owner-20261115-2140-prune で中身ごと外した。
     // 図をまたぐ操作は「書き換える」の ⇄ 一括置換 1 本。
@@ -30,10 +30,10 @@ window.MA.toolMenu = (function() {
 
   // ファイル 1 枚に対する操作は FILES ツリーの
   // 右クリックに集めた。メニューには並べず案内 1 行に落とす。分類と言い換えは残すので、
-  // Ctrl+K / Ctrl+P からは今まで通りの名前で引ける (ボタンの実体もそのまま)。
+  // Ctrl+K / Ctrl+P からは今まで通りの名前で引ける。
   var MOVED_TO_FILES = [
     { key: 'file', title: 'ファイル', items: [
-      { id: 'btn-tab-versions', label: 'この図の履歴を見る', group: 'ファイルの右クリック' },
+      { id: 'tool-versions', label: 'この図の履歴を見る', group: 'ファイルの右クリック' },
       // フォルダの図を覗く窓は TICKET-owner-20261115-2141-prune で外した。
     ] },
   ];
@@ -49,16 +49,6 @@ window.MA.toolMenu = (function() {
   function menuGroups() {
     return GROUPS.concat(MOVED_TO_EXPORT);
   }
-
-  // タブ列に残すもの。図そのものの出し入れ (＋ / 📂 一覧) はツールではないので畳まない。
-  // 📄 ファイルを開く も図の出し入れなので畳まない。
-  var KEEP_IN_TAB_BAR = ['btn-tab-new', 'btn-tab-folder', 'btn-open-file'];
-
-  // メニューには載るが、タブ列のボタンではないもの (下端ステータスの札・モーダルの中の
-  // ボタン)。畳む対象に数えると「他 N 件」の N が実際に消えた数とずれるので外す。
-  // 下端の「前回保存版」の札 (status-livediff) はメニューから外し (TICKET-owner-20261115-2141-prune)、
-  // 消える向きの警告のときだけ出る守りになった。
-  var NOT_IN_TAB_BAR = ['status-livediff'];
 
   // 絞り込み欄の右端に出す注記。
   var NOTE = 'Ctrl+K でも引けます';
@@ -132,7 +122,7 @@ window.MA.toolMenu = (function() {
   // 単独キーを持つツール。ボタン id → ショートカット表 (settings-tabs) の行 id。
   // メニューの右端にそのキーを出し、「次からはメニューを開かずに押せる」ことを
   // メニューを開いた人に見せる (キーの正本は表側。ここには文字列を書かない)。
-  var KEY_ROWS = { 'btn-tab-rename': 'bulk-rename' };
+  var KEY_ROWS = { 'tool-rename': 'bulk-rename' };
 
   // いま効いているキー。差し替えられていればその姿で出す。無ければ ''。
   function keyHintOf(id) {
@@ -158,21 +148,13 @@ window.MA.toolMenu = (function() {
     });
   }
 
-  // 畳む対象になるタブ列のボタン。下端ステータスの札・モーダルの中のボタンは
-  // タブ列に居ないので数えない (畳んでも画面から消えるものではない)。
+  // 一覧に載る道具の id (並び順)。
   function menuIds() {
     var ids = [];
     GROUPS.forEach(function(g) {
-      g.items.forEach(function(it) {
-        if (NOT_IN_TAB_BAR.indexOf(it.id) >= 0) return;
-        ids.push(it.id);
-      });
+      g.items.forEach(function(it) { ids.push(it.id); });
     });
     return ids;
-  }
-
-  function keepIds() {
-    return KEEP_IN_TAB_BAR.slice();
   }
 
   function groupOf(id) {
@@ -195,14 +177,6 @@ window.MA.toolMenu = (function() {
     return null;
   }
 
-  // 畳む対象か。タブ列に残すものとメニューに無いものは畳まない
-  // (新しいボタンが増えたとき、メニューに載せ忘れたまま画面から消えるのを避ける)。
-  function isFoldable(id) {
-    if (KEEP_IN_TAB_BAR.indexOf(id) >= 0) return false;
-    if (NOT_IN_TAB_BAR.indexOf(id) >= 0) return false;
-    return groupOf(id) !== null;
-  }
-
   // その入口がモーダルの中にしか無いとき、先に開く画面のボタン id。無ければ ''。
   function openerOf(id) {
     var GS = allGroups();
@@ -214,65 +188,13 @@ window.MA.toolMenu = (function() {
     return '';
   }
 
-  // 開いたときに畳むかどうか。design 7a/7b の既定は「畳む」。
-  // 一度でも自分で切り替えた人 ('0' / '1' が残っている人) はその選択が勝つ。
-  function foldedAtStart(saved) {
-    if (saved == null || saved === '') return true;
-    return saved === '1';
-  }
-
-  // design 7b: タブ列にはボタンを 1 つも置かない。7a で 25 個を「ツール ▾」1 個に
-  // 畳んだが、7b はその 1 個も置かず、機能はすべて Ctrl+K から引く。
-  // 既定は静か (true) で、「ツール ▾ をタブ列に出す」を押した人はその選択が残る。
-  function quietAtStart(saved) {
-    if (saved == null || saved === '') return true;
-    return saved !== '0';
-  }
-
-  // 「ツール ▾」をタブ列に出すか。畳んでいないとき (機能ボタンが並んでいるとき) は、
-  // 畳み直す入口が要るので静かの設定にかかわらず出す。
-  function showsToolButton(folded, quiet) {
-    if (!folded) return true;
-    return !quiet;
-  }
-
-  // 静かなタブ列 (7b) でも、畳んだ機能の一覧を 1 クリックで開ける入口は残す。
-  // 「ツール ▾」を出さないときに代わりに出る小さな札で、押すと同じメニューが開く。
-  // コマンド名を知らない人 (新人) が Ctrl+K でしか入口に辿り着けない状態を作らない。
-  function showsMiniButton(folded, quiet) {
-    return !showsToolButton(folded, quiet);
-  }
-
-  // 札の文字。design 7a / 9a / 10a はどれも「ツール ▾」と書く。以前の「他 25 件」は
-  // 押すまで何の 25 件か読めなかったので、件数は title (miniTitle) に回す。
-  function miniLabel(count) {
-    return 'ツール ▾';
-  }
-
-  // 札の title。畳んで見えなくなっているボタンの数と、Ctrl+K でも引けることを出す。
-  function miniTitle(count) {
-    var n = (typeof count === 'number' && count > 0) ? count : 0;
-    return '畳んでいるツール ' + n + ' 件から選ぶ (Ctrl+K でも同じ操作が引ける)';
-  }
-
-  // パネルの下端に出す切り替え。
-  // パネルは絞り込み欄と一覧だけで、既定 (畳む・ツール ▾ は右端) の人に切り替えは要らない。
-  // 以前に自分で切り替えて既定から外れている人にだけ、既定へ戻す 1 行を出す (選んだ状態は消さない)。
-  //   畳んでいない (機能ボタンがタブ列に並ぶ) → 「タブ列から畳む」
-  //   畳んでいるが ツール ▾ が ＋ の隣       → 「ツール ▾ を右端へ戻す」
-  function footToggles(folded, quiet) {
-    if (!folded) return [{ id: 'tool-menu-fold', label: 'タブ列から畳む' }];
-    if (!quiet) return [{ id: 'tool-menu-quiet', label: 'ツール ▾ を右端へ戻す' }];
-    return [];
-  }
-
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // メニューの中身。badges は { 'btn-tab-lines': '2' } のように件数を持つものだけ渡す
-  // (タブ列のボタン文字から拾った数字。0 件・未計算のものは付けない)。
+  // メニューの中身。badges は { 'tool-lines': '2' } のように件数を持つものだけ渡す
+  // (0 件・未計算のものは付けない。今は件数を持つ道具が無いので呼ぶ側は空で渡す)。
   function itemHtml(it, badges) {
     var badge = (badges || {})[it.id];
     var key = keyHintOf(it.id);
@@ -325,18 +247,9 @@ window.MA.toolMenu = (function() {
   return {
     groups: groups,
     menuIds: menuIds,
-    keepIds: keepIds,
     groupOf: groupOf,
     labelOf: labelOf,
-    isFoldable: isFoldable,
     openerOf: openerOf,
-    foldedAtStart: foldedAtStart,
-    quietAtStart: quietAtStart,
-    showsToolButton: showsToolButton,
-    showsMiniButton: showsMiniButton,
-    miniLabel: miniLabel,
-    miniTitle: miniTitle,
-    footToggles: footToggles,
     keyHintOf: keyHintOf,
     buildMenuHtml: buildMenuHtml,
     buildHitsHtml: buildHitsHtml,

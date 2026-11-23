@@ -49,7 +49,7 @@ describe('TICKET-owner-20261115-2140-prune 図をまたぐ調べ物の行は Ctr
   });
 
   test('⇄ 一括置換の行は残る', function() {
-    expect(commandOf('tab-rename').button).toBe('btn-tab-rename');
+    expect(commandOf('tab-rename').button).toBe('tool-rename');
   });
 
   test('ツール ▾ の案内行の文字 (→) は Ctrl+K の行に出ない', function() {

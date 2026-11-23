@@ -109,7 +109,7 @@ test('手順1 14 枚を 1 回押しで見て回ってもタブは 1 枚だけ増
     const br = bar.getBoundingClientRect();
     const t = bar.querySelector('.tab.active').getBoundingClientRect();
     let visRight = br.left + bar.clientLeft + bar.clientWidth;
-    bar.querySelectorAll('#btn-tab-new, #btn-tab-tools-mini').forEach((el) => {
+    bar.querySelectorAll('#btn-tab-new, #btn-tab-tools').forEach((el) => {
       if (!el.offsetParent || getComputedStyle(el).position !== 'sticky') return;
       visRight = Math.min(visRight, el.getBoundingClientRect().left);
     });

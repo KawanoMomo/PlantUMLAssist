@@ -25,10 +25,9 @@ async function reopenApp(page) {
   await page.evaluate((k) => { try { window.localStorage.removeItem(k); } catch (e) {} }, KEEP_KEY);
 }
 
-// 台本の場面は利用者の初回と同じタブ列 (製品の既定 = 機能ボタンをツール ▾ に畳んだ状態) で開く
-// (TICKET-owner-20261116-0340-1)。gotoApp の既定は legacy e2e のための「畳まない」なので、
-// ここの起動は必ず { foldedTools: true } を渡し、helper に畳み方の設定を書かせない。
-const DEFAULT_TAB_BAR = { foldedTools: true };
+// 台本の場面は利用者の初回と同じタブ列 (図のタブ・＋・ツール ▾) で開く (TICKET-owner-20261116-0340-1)。
+// タブ列の切り替え (畳む / 畳まない) は TICKET-owner-20261123-0222-prune で外したので、gotoApp はいつも既定で開く。
+const DEFAULT_TAB_BAR = {};
 
 // 保存先を設定済みにして開く (junior 手順 3・primary が毎回している状態)。
 // opts は既定のタブ列の上に重ねて gotoApp へ渡す。

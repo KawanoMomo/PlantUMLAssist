@@ -22,22 +22,10 @@ function shotOut(name) {
   return path.join(REPO_ROOT, 'test-results', 'shots', name);
 }
 
-// design 7a/7b: タブ列の既定は「ツールを畳んだ状態」。既存の spec は機能ボタン
-// (`#btn-tab-*`) を直接押すので、断らない限りこれまでどおり畳まない状態で開く。
-// 既定そのものを見る spec は gotoApp(page, { foldedTools: true }) で開く
-// (このとき helper は設定に触らないので、アプリの既定がそのまま出る)。
+// 利用者の初回と同じ既定の画面で開く (設定に何も書かない)。タブ列は 図のタブ・＋・ツール ▾ だけ
+// (道具のボタンを並べる切り替えは TICKET-owner-20261123-0222-prune で外した)。
+// 第 2 引数は以前の呼び方 ({ foldedTools: true }) のまま渡されても読まない。
 async function gotoApp(page, opts) {
-  if (!(opts && opts.foldedTools)) {
-    // 未設定のときだけ書く。test の中で畳み方を切り替えた spec は、その選択が
-    // reload をまたいで残る (init script は navigation のたびに走るため)。
-    await page.addInitScript(() => {
-      try {
-        if (window.localStorage.getItem('plantuml-tools-folded') == null) {
-          window.localStorage.setItem('plantuml-tools-folded', '0');
-        }
-      } catch (e) {}
-    });
-  }
   await page.goto('/');
   // BLK-builder-20260908-0744-2-red: no hard-coded cap here. 5s was shorter than
   // the time a page load can legitimately take while other workers are rendering,
@@ -121,6 +109,29 @@ async function pickTool(page, targetId) {
   await page.locator('#tool-menu .tool-menu-list .tool-menu-item[data-target="' + targetId + '"]').click();
 }
 
+// TICKET-owner-20261123-0222-prune: 道具の窓はタブ列の右端の「ツール ▾」の行から開く
+// (タブ列の ⇄ 一括置換・✎ 行編集・⟲ 変遷 のボタンは無い)。利用者と同じく実マウスで押す。
+async function openTool(page, targetId) {
+  await page.locator('#btn-tab-tools').click();
+  await pickTool(page, targetId);
+}
+// ツール ▾「行を書き換える」。窓が開くまで待つ。
+async function openLineEdit(page) {
+  await openTool(page, 'tool-lines');
+  await page.waitForSelector('#lines-panel.open');
+}
+// ツール ▾「部品名を一括置換する」。窓が開くまで待つ (Ctrl+H でも同じ窓)。
+async function openBulkRename(page) {
+  await openTool(page, 'tool-rename');
+  await page.waitForSelector('#rename-panel.open');
+}
+// この図の履歴 (FILES のファイルの右クリックと同じ窓)。保存先に置いていない図でも引ける Ctrl+K の行で開く。
+async function openVersionHistory(page) {
+  await page.keyboard.press('Control+k');
+  await page.locator('#cp-input').fill('この図の履歴を見る');
+  await page.keyboard.press('Enter');
+}
+
 // TICKET-owner-20261115-2141-prune: 参照ペインの入口は「この図の履歴」の行の「比較」1 つになり、
 // 相手を「別タブの図」に選び直す口は外した。ペインの中身を見る spec はその開き口 (toggleCompareView) で開く。
 async function openCompareTabs(page) {
@@ -153,4 +164,5 @@ module.exports = {
   openCompareTabs,
   gotoApp, loadFixture, getEditorText, getEditorLine, clickOverlayByLine, setDiagramTitle,
   saveDirFor, shotOut, E2E_SAVE_ROOT, pickTool, switchTypeWithSample,
+  openTool, openLineEdit, openBulkRename, openVersionHistory,
 };

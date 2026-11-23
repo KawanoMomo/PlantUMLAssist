@@ -21,10 +21,10 @@ function noop() {}
 // 道具のコマンド (button 付き) と、道具でないコマンド (button 無し) を混ぜる。
 var COMMANDS = [
   // TICKET-owner-20261115-1841-prune: 「確かめる」分類 (突合ボードほか) は外した。書き換えるの代表は ⇄ 一括置換。
-  { id: 'tab-rename', title: '部品名の一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'ちかん'], button: 'btn-tab-rename', run: noop },
+  { id: 'tab-rename', title: '部品名の一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'ちかん'], button: 'tool-rename', run: noop },
   // 変更サマリ・引き継ぎ (渡す) は TICKET-owner-20261115-1828-prune で、
   // 「レビュー」分類 (± 差分ほか) は TICKET-owner-20261115-2141-prune で外した。書き換えるの 2 つ目は ✎ 行編集。
-  { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', button: 'btn-tab-lines', run: noop },
+  { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', button: 'tool-lines', run: noop },
   // 「図をつくる」分類 (⧉ 既存の図や雛形から新しい図を起こす) は TICKET-owner-20261116-0321-prune で、
   // 「複数クラスに一括適用する」は TICKET-owner-20261122-1023-prune で外した。
   { id: 'save', title: 'ファイルを保存 / Save', hint: 'File', run: noop },
@@ -58,7 +58,7 @@ describe('道具のコマンドは 6 分類に入る', () => {
 
   test('題はツールメニューと同じ言い換えになる (メニューで覚えた語で引ける)', () => {
     expect(byId(itemsOf(), 'tab-rename').title).toBe('部品名を一括置換する');
-    expect(byId(itemsOf(), 'tab-rename').title).toBe(TM.labelOf('btn-tab-rename'));
+    expect(byId(itemsOf(), 'tab-rename').title).toBe(TM.labelOf('tool-rename'));
   });
 
   test('右端には道具の短い呼び名が残る (どの道具かが消えない)', () => {
@@ -134,7 +134,7 @@ describe('名指しされた道具は見出し順より前に出る', () => {
   // 外したので、同じ形を ⇄ 一括置換 で確かめる)。
   var CMDS = [
     { id: 'save', title: 'ファイルを保存 / Save', keywords: ['保存', 'save'], run: noop },
-    { id: 'tab-rename', title: '保存した図の部品名を一括置換 / Bulk rename', button: 'btn-tab-rename', run: noop },
+    { id: 'tab-rename', title: '保存した図の部品名を一括置換 / Bulk rename', button: 'tool-rename', run: noop },
     { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', run: noop },
   ];
 
@@ -163,7 +163,7 @@ describe('名指しされた道具は見出し順より前に出る', () => {
 describe('右端の呼び名', () => {
   test('言い換えと同じ文字なら出さない (同じ語が 2 度並ばない)', () => {
     var items = CP.buildItems([
-      { id: 'tab-lines', title: '行を書き換える / Line edit', button: 'btn-tab-lines', run: noop },
+      { id: 'tab-lines', title: '行を書き換える / Line edit', button: 'tool-lines', run: noop },
     ], '');
     expect(items[0].title).toBe('行を書き換える');
     expect(items[0].hint).toBe('');
