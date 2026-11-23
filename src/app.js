@@ -10600,9 +10600,12 @@ function _applySelectionCarry() {
 }
 
 // TICKET-roadmap-20261123-0857-1: 右パネルの書き換えの直後に組み直した本文・選択・図種の控え (MA.propsRebuild)。
+// 右パネルが「末尾に追加」のフォームを出している間は、選択が残っていても (別のタブで選んだまま新しい図を開いた等)
+// 無選択と同じに扱う (同じ本文・図種なら refresh で組み直さず、打ち始めた欄を消さない)。
 var _propsBuilt = window.MA.propsRebuild.tracker(function() {
   var sel = (window.MA.selection && window.MA.selection.getSelected()) || [];
-  return { text: mmdText, sel: JSON.stringify(sel), module: currentModule };
+  var tail = !!(propsEl && propsEl.querySelector && propsEl.querySelector('[id$="-tail-detail"]'));
+  return { text: mmdText, sel: tail ? '[]' : JSON.stringify(sel), module: currentModule };
 });
 function _rebuildPropsNow() {
   try { _applySelectionCarry(); } catch (e) { _selCarry = null; }
@@ -10640,8 +10643,12 @@ function _editCtx(carrySelection) {
 }
 
 function renderProps(parsed) {
-  if (!parsed) parsed = currentParsed;
+  _renderPropsBody(parsed);
+  // 組み直した後の右パネル (末尾に追加のフォームか) で控える。
   if (_propsBuilt) _propsBuilt.markBuilt(false);
+}
+function _renderPropsBody(parsed) {
+  if (!parsed) parsed = currentParsed;
   var sel = window.MA.selection.getSelected();
   updatePropsTabLabel(sel);
   // フォームが読めない記法の要素 (overlay-builder.addUnclaimed) は、

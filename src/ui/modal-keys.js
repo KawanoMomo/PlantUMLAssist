@@ -166,24 +166,34 @@ window.MA.modalKeys = (function() {
     var tries = 0;
     var wait = o.wait || 50;
     var limit = o.limit || 40;
-    function poll() {
-      tries++;
+    var done = false;
+    // 描き直されていればキャレットを戻して true。まだなら false。
+    function attempt() {
       var now = doc.getElementById(formId);
-      if (now && now !== form) {
-        var act = doc.activeElement;
-        // 描き直しの後に利用者が自分で別の欄へ移っていれば、そのまま。
-        if (act && act !== doc.body && act.tagName !== 'HTML' && now.contains && !now.contains(act)
-            && act.ownerDocument === doc && doc.body.contains(act)) return;
-        var el = _resolve(formId, key);
-        var carry = _typedSince(key);
-        if (el && carry && !el.value) el.value = carry;
-        if (el && el !== act) {
-          try { el.focus(); } catch (e) { return; }
-          try { var n = el.value ? el.value.length : 0; el.setSelectionRange(n, n); } catch (e2) {}
-        }
-        return;
+      if (!now || now === form) return false;
+      var act = doc.activeElement;
+      // 描き直しの後に利用者が自分で別の欄へ移っていれば、そのまま。
+      if (act && act !== doc.body && act.tagName !== 'HTML' && now.contains && !now.contains(act)
+          && act.ownerDocument === doc && doc.body.contains(act)) return true;
+      var el = _resolve(formId, key);
+      var carry = _typedSince(key);
+      if (el && carry && !el.value) el.value = carry;
+      if (el && el !== act) {
+        try { el.focus(); } catch (e) { return true; }
+        try { var n = el.value ? el.value.length : 0; el.setSelectionRange(n, n); } catch (e2) {}
       }
+      return true;
+    }
+    function poll() {
+      if (done) return;
+      tries++;
+      if (attempt()) { done = true; return; }
       if (tries < limit) setTimeout(poll, wait);
+    }
+    // 右パネルは確定のその場で組み直す (MA.propsRebuild) ので、確定の処理が終わった直後 (次のキーより前) に 1 度見る。
+    // 組み直しが後から来る経路は、間を置いて見続ける。
+    if (typeof Promise === 'function') {
+      Promise.resolve().then(function() { if (!done && attempt()) done = true; });
     }
     setTimeout(poll, 0);
   }
