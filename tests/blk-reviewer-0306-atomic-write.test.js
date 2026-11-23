@@ -95,7 +95,7 @@ describe('保存フォルダの書き込みは読んでいる側に途中を見�
     // 呼び出しは 1 行に収まらなくなった。窓口が _atomic_write_text であることを見る。
     expect(src).toContain('_atomic_write_text(file_path,');
     expect(src).toContain('_atomic_write_text(target, old)');
-    expect(src).toContain("_atomic_write_text(svg_path, svg + self._svg_stamp(puml_path), newline='')");
+    // 書き出した svg に印を足して書く窓口は TICKET-owner-20261123-0642-prune で外した。
     expect(/(file_path|puml|svg_path)\.write_text\(/.test(src)).toBe(false);
   });
 });
