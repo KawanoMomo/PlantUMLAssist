@@ -164,12 +164,12 @@ test('roadmap 0855-3 右クリックだけでサブフォルダに新しい図�
   await expect.poll(() => fs.existsSync(path.join(dir, 'design', 'archive', 'gpio_init.puml')), { timeout: 10000 }).toBe(false);
   after = snapshot(dir);
   expectOthersSame(before, after, ['design/archive/gpio_init.puml']);
-  // 消した図のタブは開いたまま。そのタブで Ctrl+K「この図の履歴を見る」(ファイルの行はもう無い)。
+  // 消した図のタブは開いたまま。そのタブで Ctrl+K「この図の履歴を表示」(ファイルの行はもう無い)。
   await page.locator('#editor').click();
   await page.keyboard.press('Control+k');
   await expect(page.locator('#cp-input')).toBeFocused();
   await page.keyboard.type('この図の履歴');
-  await mouseClick(page, page.locator('.cp-item', { hasText: 'この図の履歴を見る' }).first());
+  await mouseClick(page, page.locator('.cp-item', { hasText: 'この図の履歴を表示' }).first());
   await expect(page.locator('#vt-modal')).toBeVisible();
   const restore = page.locator('#vt-modal .folder-version-restore').first();
   await mouseClick(page, restore);

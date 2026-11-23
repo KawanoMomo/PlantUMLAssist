@@ -163,9 +163,10 @@ describe('元の入口 (ツール ▾) は右クリックへの案内に落と�
     // 一時控え (btn-tab-draft) は TICKET-owner-20261116-0241-prune で外した。
     // タブ列の ⟲ 変遷 のボタンは TICKET-owner-20261123-0222-prune で外した (窓は runTool('tool-versions') で開く)。
     expect(TM.groupOf('tool-versions')).toBe('file');
-    expect(TM.labelOf('tool-versions')).toBe('この図の履歴を見る'); // BLK-owner-20260924-1212-prune: 行名は画面の名前にそろえた
+    // BLK-owner-20260924-1212-prune: 行名は画面の名前にそろえた。TICKET-owner-20261123-1242-1: 右クリックの語と同じ。
+    expect(TM.labelOf('tool-versions')).toBe('この図の履歴を表示');
     var items = CP.buildItems([
-      { id: 'tab-versions', title: 'この図の履歴を見る / History', button: 'tool-versions', run: function() {} },
+      { id: 'tab-versions', title: 'この図の履歴を表示', button: 'tool-versions', run: function() {} },
       { id: 'spi_state', group: 'file', badge: 'ファイル', title: 'spi_state', run: function() {} },
     ], '');
     var hist = items.filter(function(i) { return i.id === 'file:tab-versions'; })[0];

@@ -33,7 +33,8 @@ window.MA.toolMenu = (function() {
   // Ctrl+K / Ctrl+P からは今まで通りの名前で引ける。
   var MOVED_TO_FILES = [
     { key: 'file', title: 'ファイル', items: [
-      { id: 'tool-versions', label: 'この図の履歴を見る', group: 'ファイルの右クリック' },
+      // 語は FILES のファイルの右クリックと同じ (TICKET-owner-20261123-1242-1)。
+      { id: 'tool-versions', label: 'この図の履歴を表示', group: 'ファイルの右クリック' },
       // フォルダの図を覗く窓は TICKET-owner-20261115-2141-prune で外した。
     ] },
   ];

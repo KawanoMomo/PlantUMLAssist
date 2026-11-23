@@ -3368,13 +3368,15 @@ function initCommandPalette() {
       // 前の語「FILES: 保存先を開く」「保存フォルダの図を開く（一覧）」と英語は検索語に残す。
       { id: 'tab-folder', title: '保存先の一覧を開く', hint: 'Files', keywords: ['保存先の一覧', '一覧', 'FILES: 保存先を開く', '保存先を開く', '保存フォルダの図を開く（一覧）', '保存フォルダの図', 'Files: save folder', 'folder', 'files', 'tree', 'list', 'いちらん', 'ふぉるだ', 'ほぞんさき'], button: 'btn-tab-folder', run: function() { _ensureFolderListOpen(); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], button: 'tool-rename', run: function() { runTool('tool-rename'); } },
-      { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], button: 'tool-lines', run: function() { runTool('tool-lines'); } },
+      // 題はツール ▾ の語と同じ (右端に前の名前「行編集」を並べない。TICKET-owner-20261123-1242-1)。前の名前は検索語に残す。
+      { id: 'tab-lines', title: '行を書き換える', hint: 'Tabs', keywords: ['行編集', '行編集を開く', 'Line edit', 'line', 'edit', 'ぎょう', 'へんしゅう'], button: 'tool-lines', run: function() { runTool('tool-lines'); } },
       // design 9a: 手元の .puml を開く入口は上部バーの Import ▾ へ移した。
       { id: 'import-clipboard', title: 'クリップボードの DSL から開く / Open from clipboard', hint: 'File', keywords: ['clipboard', 'paste', 'import', 'くりっぷ', 'はりつけ', 'ひらく'], run: function() { clickById('imp-clipboard'); } },
-      // この図の履歴 を開く行は「この図の履歴を見る」1 行。旧名「変遷」は語に落とす。
+      // この図の履歴 を開く行は FILES のファイルの右クリックと同じ「この図の履歴を表示」1 行 (TICKET-owner-20261123-1242-1)。
+      // 前の語「この図の履歴を見る」と旧名「変遷」は語に落とす。
       // 「前回保存からの差分」の行は TICKET-owner-20261115-2141-prune で外し、その語はこの行で引く
       // (前回保存版と比べる入口は「この図の履歴」の行の「比較」1 つ)。
-      { id: 'tab-versions', title: 'この図の履歴を見る / Version history', hint: 'Tabs', keywords: ['version', 'timeline', 'history', 'へんせん', 'りれき', '変遷', 'この図の変遷', '履歴', '保存した版', 'diff', 'さぶん', '差分', '前回保存', 'ぜんかいほぞん'], button: 'tool-versions', run: function() { runTool('tool-versions'); } },
+      { id: 'tab-versions', title: 'この図の履歴を表示', hint: 'Tabs', keywords: ['履歴を表示', 'この図の履歴を見る', 'Version history', 'version', 'timeline', 'history', 'へんせん', 'りれき', '変遷', 'この図の変遷', '履歴', '保存した版', 'diff', 'さぶん', '差分', '前回保存', 'ぜんかいほぞん'], button: 'tool-versions', run: function() { runTool('tool-versions'); } },
       { id: 'settings', title: '設定を開く / Settings', hint: 'Ctrl', keywords: ['settings', 'config', 'せってい'], run: function() { clickById('btn-config'); } },
       { id: 'undo', title: '元に戻す / Undo', hint: 'Ctrl+Z', keywords: ['undo', 'もどす'], run: function() { clickById('btn-undo'); } },
       { id: 'redo', title: 'やり直す / Redo', hint: 'Ctrl+Y', keywords: ['redo', 'やりなおす'], run: function() { clickById('btn-redo'); } },

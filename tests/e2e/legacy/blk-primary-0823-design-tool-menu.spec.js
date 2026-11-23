@@ -77,7 +77,7 @@ for (const [label, stored] of [['既定の画面', null], ['以前に畳まな�
     await expect(menu.locator('.tool-menu-item', { hasText: /畳む|右端へ戻す|タブ列に/ })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath(stored ? 'tool-menu-stored.png' : 'tool-menu-default.png') });
 
-    // 各行・Ctrl+H・Ctrl+K「この図の履歴を見る」が今と同じ窓を開く
+    // 各行・Ctrl+H・Ctrl+K「この図の履歴を表示」が今と同じ窓を開く
     await pickTool(page, 'tool-lines');
     await expect(page.locator('#lines-panel')).toHaveClass(/open/);
     await page.keyboard.press('Escape');
@@ -91,7 +91,7 @@ for (const [label, stored] of [['既定の画面', null], ['以前に畳まな�
     await expect(page.locator('#rename-panel')).toHaveClass(/open/);
     await page.locator('#btn-rename-cancel').click();
     await page.keyboard.press('Control+k');
-    await page.locator('#cp-input').fill('この図の履歴を見る');
+    await page.locator('#cp-input').fill('この図の履歴を表示');
     await page.keyboard.press('Enter');
     await expect(page.locator('#vt-modal')).toBeVisible();
   });
