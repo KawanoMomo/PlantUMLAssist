@@ -838,36 +838,34 @@ window.MA.modules.plantumlState = (function() {
     return lineNum;
   }
 
-  function deleteStateWithRefs(text, stateId) {
+  // 状態を消すときに一緒に消える行 (宣言・その状態に出入りする遷移と添えた note on link・その状態への note)。
+  // 返り値は MA.elementDelete.plan の形 (6 図種の共通部) / 状態が無ければ null。
+  function stateDeletePlan(text, stateId) {
     var parsed = parse(text);
     var elt = null;
     for (var i = 0; i < parsed.states.length; i++) {
       if (parsed.states[i].id === stateId) { elt = parsed.states[i]; break; }
     }
-    if (!elt) return text;
-    var ranges = [];
-    ranges.push({ start: elt.line, end: elt.endLine && elt.endLine > elt.line ? elt.endLine : elt.line });
+    if (!elt) return null;
+    var decl = [{ start: elt.line, end: elt.endLine && elt.endLine > elt.line ? elt.endLine : elt.line }];
+    var rels = [], notes = [];
     var srcLines = text.split('\n');
     parsed.transitions.forEach(function(tr) {
       if (tr.from === stateId || tr.to === stateId) {
         // 遷移に添えたノート (`note on link`) は遷移の一部。行き先を失った
         // ノートが残らないよう、同じ範囲で消す。
-        ranges.push({ start: tr.line, end: _linkNoteEndLine(srcLines, tr.line) });
+        rels.push({ start: tr.line, end: _linkNoteEndLine(srcLines, tr.line) });
       }
     });
     parsed.notes.forEach(function(n) {
-      if (n.targetId === stateId) {
-        ranges.push({ start: n.line, end: n.endLine });
-      }
+      if (n.targetId === stateId) notes.push({ start: n.line, end: n.endLine });
     });
-    ranges.sort(function(a, b) { return b.start - a.start; });
-    var lines = text.split('\n');
-    ranges.forEach(function(r) {
-      var startIdx = r.start - 1;
-      var endIdx = r.end - 1;
-      lines.splice(startIdx, endIdx - startIdx + 1);
-    });
-    return lines.join('\n');
+    return window.MA.elementDelete.plan({ decl: decl, relations: rels, notes: notes });
+  }
+
+  function deleteStateWithRefs(text, stateId) {
+    var plan = stateDeletePlan(text, stateId);
+    return plan ? window.MA.elementDelete.apply(text, plan) : text;
   }
 
   function _detectCompositeRects(svgEl, ents) {
@@ -2180,6 +2178,9 @@ window.MA.modules.plantumlState = (function() {
       P.primaryButtonHtml('st-delete', window.MA.terms.del) +
       '</div>';
     propsEl.innerHTML = html;
+    // 図で状態を押した選択の Delete キーは、この「✕ 削除」と同じ窓に通す (app.js が data-el-delete を押す)。
+    var stDelBtn = propsEl.querySelector('#st-delete');
+    if (stDelBtn) { stDelBtn.setAttribute('data-el-delete', '1'); stDelBtn.setAttribute('data-el-id', st.id); }
 
     P.bindEvent('st-update', 'click', function() {
       window.MA.history.pushHistory();
@@ -2228,11 +2229,13 @@ window.MA.modules.plantumlState = (function() {
       ctx.onUpdate();
     });
     P.bindEvent('st-delete', 'click', function() {
-      if (!confirm('この state と紐付く transition / note も削除します。続行しますか？')) return;
-      window.MA.history.pushHistory();
-      ctx.setMmdText(deleteStateWithRefs(ctx.getMmdText(), st.id));
-      window.MA.selection.clearSelection();
-      ctx.onUpdate();
+      // 6 図種で同じ窓: 一緒に消える遷移と note の本数を先に言う (Enter で削除・Esc で取り消し)。
+      var plan = stateDeletePlan(ctx.getMmdText(), st.id);
+      if (!plan) return;
+      window.MA.elementDelete.ask({
+        prefix: 'st', title: '削除', ctx: ctx, plan: plan,
+        message: window.MA.elementDelete.message('状態', st.id, plan, '遷移'),
+      });
     });
     // 親を選んで子を足す 1 手。名前を空で押しても
     // 迷わないように、その場で空いている名前 (Sub / Sub2 …) を当てる。
@@ -3030,6 +3033,7 @@ window.MA.modules.plantumlState = (function() {
     moveStateOutOfComposite: moveStateOutOfComposite,
     deleteNode: deleteNode,
     deleteStateWithRefs: deleteStateWithRefs,
+    stateDeletePlan: stateDeletePlan,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,
     showAddTransitionModal: showAddTransitionModal,

@@ -33,6 +33,7 @@ const sourceFiles = [
   'src/core/class-scaffold.js',
   'src/core/sequence-scaffold.js',
   'src/core/note-block.js',
+  'src/core/element-delete.js',
   'src/core/note-edit.js',
   'src/core/activity-insert.js',
   'src/core/sequence-group-range.js',
