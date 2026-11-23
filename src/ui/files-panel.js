@@ -500,7 +500,10 @@ window.MA.filesPanel = (function() {
     var host = $('files-parts');
     var btn = $('files-target-caret');
     var row = btn ? btn.parentNode : null;
-    if (row) row.setAttribute('data-empty', host && host.firstChild ? '0' : '1');
+    // 未設定の案内 (#files-target-unset) は図ではないので数えない。
+    var first = host ? host.firstChild : null;
+    if (first && first.id === 'files-target-unset') first = first.nextSibling;
+    if (row) row.setAttribute('data-empty', first ? '0' : '1');
   }
 
   function renderParts() {
@@ -522,6 +525,17 @@ window.MA.filesPanel = (function() {
       // 最後の 1 枚が消えた後も前の件数が見出しに残らないように消す。
       var c0 = $('files-count-target');
       if (c0) c0.textContent = '';
+      // TICKET-owner-20261123-1922-1: 保存先を決めていない間は図を並べず、節の中で理由を言う
+      // (中央の一覧と同じ語。決める入口はこの節の右クリック「保存先のフォルダを選ぶ…」)。
+      var ST = window.MA.saveTarget;
+      if (!_targetDir() && ST && ST.unsetHint) {
+        var hint = document.createElement('div');
+        hint.className = 'files-empty files-target-unset';
+        hint.id = 'files-target-unset';
+        hint.textContent = ST.unsetHint().text;
+        hint.title = ST.unsetHint().how;
+        host.appendChild(hint);
+      }
       _syncTargetRow();
       refreshSummary();
       return;

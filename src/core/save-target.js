@@ -21,13 +21,30 @@ window.MA.saveTarget = (function() {
   // ドキュメントは書けないのでダウンロードに落とす。黙って何も起きない状態を作らない。
   function decide(cfg, doc, fallbackName) {
     var name = (doc && doc.name) || '';
-    var backend = cfg && cfg.backend;
+    var dir = listDir(cfg);
     var canName = !!(window.MA.workspace && window.MA.workspace.isValidName)
       && window.MA.workspace.isValidName(name);
-    if (backend === 'file' && canName) {
-      return { mode: 'file', name: name, dir: (cfg && cfg.fileDir) || './autosave' };
+    if (dir && canName) {
+      return { mode: 'file', name: name, dir: dir };
     }
     return { mode: 'download', name: name || fallbackName || 'untitled' };
+  }
+
+  // TICKET-owner-20261123-1922-1: 保存先の一覧 (FILES の保存先節・中央の一覧) が読むフォルダ。
+  // 保存 (decide) が書くフォルダと同じ 1 つから決める。保存先を決めていない (保存がダウンロードの) ときは
+  // '' を返し、一覧は図を並べない。前は未設定でも既定の ./autosave を並べ、そこから開いた図の Ctrl+S・
+  // 書き出しはダウンロードになり、一覧のファイルは直らず、`!include` もそのフォルダを探さなかった。
+  function listDir(cfg) {
+    if (!cfg || cfg.backend !== 'file') return '';
+    return cfg.fileDir || './autosave';
+  }
+
+  // 保存先を決めていないとき、一覧の場所に出す案内 (図を並べない理由と、決める入口の語)。
+  function unsetHint() {
+    return {
+      text: '保存先のフォルダを決めていません。保存と書き出しはブラウザのダウンロードになります。',
+      how: '「保存先のフォルダを選ぶ…」(この節の右クリック・Import ▾・Ctrl+K)で決めると、そのフォルダの図がここに並び、Ctrl+S でその図に書きます。',
+    };
   }
 
   // 保存後にステータスバーへ出す 1 行。何が・どこに書かれたかを必ず言う。
@@ -172,6 +189,6 @@ window.MA.saveTarget = (function() {
       title: hm + ' に ' + target.dir + '/' + target.name + '.puml へ保存しました' };
   }
 
-  return { decide: decide, messageFor: messageFor, tailOf: tailOf, label: label,
+  return { decide: decide, listDir: listDir, unsetHint: unsetHint, messageFor: messageFor, tailOf: tailOf, label: label,
     saveButton: saveButton, breadcrumb: breadcrumb, saveState: saveState, savedFlash: savedFlash };
 })();

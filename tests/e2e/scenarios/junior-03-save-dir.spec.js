@@ -21,8 +21,11 @@ test('手順3 設定で保存先を変えると、上部バーの表示がその
   await S.putDoc(page, PREV, 'diagram1', ['@startuml', 'participant A', 'A -> B : x', '@enduml'].join('\n'));
   await page.reload();
   await page.waitForSelector('html[data-app-ready="1"]', { state: 'attached' });
-  await expect(page.locator('#folder-panel .folder-item[data-file-name="diagram1"]')).toHaveCount(1);
-  await expect(page.locator('#files-parts .files-part-file[data-file-name="diagram1"]')).toHaveCount(1);
+  // TICKET-owner-20261123-1922-1: 保存先を決めていない間は、控えているフォルダの図を一覧に並べない
+  // (並べると、そこから開いた図の Ctrl+S はダウンロードになり一覧の図が直らない)。並べない理由と決める入口を言う。
+  await expect(page.locator('#folder-panel .folder-item[data-file-name="diagram1"]')).toHaveCount(0);
+  await expect(page.locator('#files-parts .files-part-file[data-file-name="diagram1"]')).toHaveCount(0);
+  await expect(page.locator('#folder-unset')).toContainText('保存先のフォルダを決めていません');
   // 未設定ならダウンロードになることが先に出る。
   await expect(page.locator('#top-save-target')).toHaveAttribute('data-mode', 'download');
   // 保存先の無い新規の図は、上部バーにフォルダの段を出さない (ファイル名だけ)。

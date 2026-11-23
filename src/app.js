@@ -6375,7 +6375,10 @@ function setupTabs() {
     head.className = 'folder-list-head';
     var t = document.createElement('span');
     t.className = 'folder-list-title';
-    t.textContent = '保存先の一覧 — ' + _wsFileDir();
+    var cfgH = null;
+    try { cfgH = window.MA.autoSave ? window.MA.autoSave.getConfig() : null; } catch (e) { cfgH = null; }
+    var ST = window.MA.saveTarget;
+    t.textContent = '保存先の一覧 — ' + ((ST && ST.listDir) ? (ST.listDir(cfgH) || '保存先は未設定') : _wsFileDir());
     head.appendChild(t);
     var x = document.createElement('button');
     x.type = 'button';
@@ -6390,8 +6393,50 @@ function setupTabs() {
   }
 
   var _folderRenderGen = 0;
+  // 保存フォルダの外にある手元の .puml を開く入口を一覧の頭に置く。
+  function appendOpenHead(host) {
+    var openHead = document.createElement('button');
+    openHead.type = 'button';
+    openHead.className = 'folder-open-file';
+    openHead.id = 'folder-open-file';
+    openHead.textContent = 'ファイルを開く(.puml)';
+    openHead.title = '保存フォルダの外にある .puml を開きます (複数可・ドラッグ&ドロップでも開けます)';
+    openHead.addEventListener('click', function() { closePanel(); openFile(); });
+    host.appendChild(openHead);
+  }
+
+  // TICKET-owner-20261123-1922-1: 保存先を決めていない (保存がダウンロードの) ときは図を並べず、案内だけを出す。
+  // 一覧に並べたフォルダと、そこから開いた図の Ctrl+S・書き出し・`!include` の場所を食い違わせない。
+  function renderFolderUnset() {
+    _folderShown = { dir: '', sig: '' };
+    setFolderNames([]);
+    kindEntries = [];
+    kindByName = {};
+    versionCounts = {};
+    versionNowLines = {};
+    goneVersions = [];
+    panel.textContent = '';
+    appendListHead(panel);
+    appendOpenHead(panel);
+    var h = window.MA.saveTarget.unsetHint();
+    var msg = document.createElement('div');
+    msg.className = 'folder-empty folder-unset';
+    msg.id = 'folder-unset';
+    msg.textContent = h.text;
+    panel.appendChild(msg);
+    var how = document.createElement('div');
+    how.className = 'folder-empty';
+    how.id = 'folder-unset-hint';
+    how.textContent = h.how;
+    panel.appendChild(how);
+  }
+
   function renderFolderPanel() {
     var myGen = ++_folderRenderGen;
+    var ST = window.MA.saveTarget;
+    var cfgNow = null;
+    try { cfgNow = window.MA.autoSave ? window.MA.autoSave.getConfig() : null; } catch (e) { cfgNow = null; }
+    if (ST && ST.listDir && !ST.listDir(cfgNow)) { renderFolderUnset(); return; }
     var dir = _wsFileDir();
     window.MA.workspace.listFolder(dir).then(function(res) {
       if (myGen !== _folderRenderGen) return;
@@ -6400,15 +6445,7 @@ function setupTabs() {
       _folderShown = { dir: dir, sig: window.MA.fileTree ? window.MA.fileTree.nameSig(entries) : '' };
       panel.textContent = '';
       appendListHead(panel);
-      // 保存フォルダの外にある手元の .puml を開く入口を一覧の頭に置く。
-      var openHead = document.createElement('button');
-      openHead.type = 'button';
-      openHead.className = 'folder-open-file';
-      openHead.id = 'folder-open-file';
-      openHead.textContent = 'ファイルを開く(.puml)';
-      openHead.title = '保存フォルダの外にある .puml を開きます (複数可・ドラッグ&ドロップでも開けます)';
-      openHead.addEventListener('click', function() { closePanel(); openFile(); });
-      panel.appendChild(openHead);
+      appendOpenHead(panel);
       // 保存先の綴りを 1 文字誤っただけでも一覧は
       // 「図がありません」としか言わず、間違いに気づけないまま作業が止まっていた。
       // 実在しない保存先は「無い」と名指しで言い、直す場所まで書く。
