@@ -57,7 +57,7 @@ test('owner 0840 Import ▾ はマウスで開いても Esc 1 回で閉じ、手
   await expect(importMenu).toBeHidden();
 
   // ツール ▾ (畳み方で出る方のボタン) も実マウスで開いて Esc 1 回で閉じる。
-  const toolBtn = (await page.locator('#btn-tab-tools').isVisible()) ? '#btn-tab-tools' : '#btn-tab-tools-mini';
+  const toolBtn = '#btn-tab-tools';
   await mouseClick(page, toolBtn);
   const toolMenu = page.locator('#tool-menu');
   await expect(toolMenu).toBeVisible();

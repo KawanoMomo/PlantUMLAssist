@@ -19,7 +19,7 @@ var CP = global.window.MA.commandPalette;
 function noop() {}
 
 var COMMANDS = [
-  { id: 'tab-rename', title: '部品名の一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'ちかん'], button: 'btn-tab-rename', run: noop },
+  { id: 'tab-rename', title: '部品名の一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'ちかん'], button: 'tool-rename', run: noop },
   // 「図をつくる」分類は TICKET-owner-20261116-0321-prune で外した。分類に入らない道具の代表は 一覧。
   { id: 'tab-folder', title: '保存フォルダの図を一覧 / Folder', hint: 'Tabs', button: 'btn-tab-folder', run: noop },
   { id: 'save', title: 'ファイルを保存 / Save', hint: 'File', run: noop },

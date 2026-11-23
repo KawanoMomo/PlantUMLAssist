@@ -1206,9 +1206,6 @@ html, body {
 }
 #folder-panel .folder-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
 
-/* 機能ボタンを「ツール」1 か所に畳む。
-   畳んだ状態では機能ボタンがタブ列から消え、ツール ▾ の一覧から選ぶ。 */
-#tab-bar.tools-folded .tab-tool.tool-folded { display: none; }
 /* 手元の .puml を開く入口・ドロップ・未対応記法の一覧 */
 .folder-open-file { display: block; width: 100%; margin: 0 0 6px; padding: 6px 8px; text-align: left; font-size: 12px; cursor: pointer;
   background: var(--bg-tertiary, #2d333b); color: var(--text-primary, #e6edf3); border: 1px solid var(--accent, #58a6ff); border-radius: 4px; }
@@ -1226,16 +1223,9 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 #unsupported-summary { padding-right: 275px; }
 #unsupported-panel ul { margin: 4px 0 0 16px; padding: 0; }
 #unsupported-panel button { font-size: 11px; margin-right: 6px; }
-/* タブ列にはボタンを 1 つも置かない。
-   「ツール ▾」も消し、機能の入口は Ctrl+K だけにする。 */
-#tab-bar.tools-hide-tool-btn #btn-tab-tools { display: none; }
-#btn-tab-tools[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
-/* 「ツール ▾」を出さないときの入口 (右端の「ツール ▾」)。
-   タブ列を静かに保ったまま、畳んだ機能の一覧を 1 クリックで開けるようにする。 */
-#tab-bar.tools-hide-mini-btn #btn-tab-tools-mini { display: none; }
-/* design 7a / 9a / 10a: 入口は枠付きの「ツール ▾」をタブ列の右端に置く。図のタブが増えて
+/* design 7a / 9a / 10a: 道具の入口は枠付きの「ツール ▾」1 つをタブ列の右端に置く。図のタブが増えて
    タブ列が横に流れても見えるよう、右端に貼り付ける。 */
-#tab-bar #btn-tab-tools-mini {
+#tab-bar #btn-tab-tools {
   margin-left: auto;
   position: sticky;
   right: 0;
@@ -1250,15 +1240,15 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 }
 /* 9a: ＋ は図のタブの隣。タブ列が流れても ＋ は札の左に貼り付けて隠さない
    (札の幅 62px + タブ列の gap 2px)。 */
-#tab-bar:not(.tools-hide-mini-btn) #btn-tab-new {
+#tab-bar #btn-tab-new {
   position: sticky;
   right: 64px;
   z-index: 1;
   flex-shrink: 0;
   box-shadow: -8px 0 6px -2px var(--bg-secondary);
 }
-#btn-tab-tools-mini:hover { color: var(--accent); }
-#btn-tab-tools-mini[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+#btn-tab-tools:hover { color: var(--accent); }
+#btn-tab-tools[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
 #tool-menu {
   position: absolute;
   top: 26px;
@@ -1314,10 +1304,6 @@ body.file-dragging #editor-pane, body.file-dragging #preview-pane { outline: 2px
 .tool-menu-list > .tool-menu-sub:first-child { padding-top: 2px; }
 .tool-menu-list[hidden] { display: none; }
 .tool-menu-hits[hidden] { display: none; }
-.tool-menu-foot {
-  border-top: 1px solid var(--border);
-  padding: 4px 6px;
-}
 .tool-menu-item {
   display: flex;
   align-items: center;
@@ -3469,21 +3455,10 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <!-- / design 9a: 手元の .puml を開く入口は上部バーの
              Import ▾ へ移した。DOM には残す (ドラッグ&ドロップ・空の画面・Ctrl+K が叩く) -->
         <button class="tab-tool" id="btn-open-file" hidden title="手元の .puml / .plantuml / .uml / .txt を開きます (複数可)。エディタやプレビューへドラッグ&ドロップでも開けます" aria-label="ファイルを開く(.puml)">開く</button>
-        <!-- 機能ボタンを 1 段の一覧のメニューに畳む -->
+        <!-- 道具の入口はタブ列の右端の「ツール ▾」1 つ (行を書き換える・部品名を一括置換する)。
+             この図の履歴は FILES のファイルの右クリック、どれも Ctrl+K からも引ける -->
         <button class="tab-tool" id="btn-tab-tools" aria-expanded="false" aria-controls="tool-menu"
                 title="ツールの一覧から選ぶ (Ctrl+K でも同じ操作が引ける)">ツール ▾</button>
-        <!-- 静かなタブ列でも、畳んだ機能の入口を 1 クリック分残す。
-             文字は「ツール ▾」、置き場所はタブ列の右端 -->
-        <button class="tab-tool tab-tool-mini" id="btn-tab-tools-mini" aria-expanded="false" aria-controls="tool-menu"
-                title="畳んでいるツールの一覧から選ぶ (Ctrl+K でも同じ操作が引ける)">ツール ▾</button>
-        <!-- 隣のフォルダの図は FILES ツリーの「読むだけ」節から開く -->
-        <!-- やり直し途中の控えに印を付け、📂 一覧で畳む -->
-        <button class="tab-tool" id="btn-tab-rename" title="開いている図をまたいで部品名を一括置換">⇄ 一括置換</button>
-        <button class="tab-tool" id="btn-tab-lines" title="この図の 1 行だけを選んで書き換え・挿入・削除する">✎ 行編集</button>
-        <!-- 「⇔ 並べて見る」はタブ列から外した (並べる面 compare-pane は「この図の履歴」の比較が使う)。 -->
-        <!-- 「± 差分」は TICKET-owner-20261115-2141-prune で外した (前回保存版と比べるのは「この図の履歴」の比較) -->
-        <!-- 単発 diff では見えない「行って戻った」を履歴の上で見る -->
-        <button class="tab-tool" id="btn-tab-versions" title="この図が保存のたびにどう変わったかを通しで並べる。前の版に戻った「往復」には印が付く">⟲ 変遷 −</button>
       </div>
       <!-- ツールを 1 段の一覧で縦に並べるパネル -->
       <div id="tool-menu" role="menu" aria-label="ツール" hidden></div>

@@ -20,7 +20,7 @@ async function boot(page) {
       }));
     } catch (e) {}
   }, DIR);
-  await gotoApp(page, { foldedTools: true });
+  await gotoApp(page);
 }
 
 function savedConfig(page) {

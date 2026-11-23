@@ -38,6 +38,8 @@ function paletteOrphans(app, html) {
   while ((m = re.exec(seg))) ids.push(m[1] || m[2]);
   return ids.filter(function(id) {
     if (html.indexOf('id="' + id + '"') >= 0) return false;
+    // 道具の窓 (tool-*) はボタンではなく runTool の受け口として宣言する (TICKET-owner-20261123-0222-prune)。
+    if (app.indexOf("_toolRunners['" + id + "'] =") >= 0) return false;
     var decl = new RegExp("\\.id\\s*=\\s*['\"]" + id.replace(/[-]/g, '\\-') + "['\"]");
     return !decl.test(app);
   });

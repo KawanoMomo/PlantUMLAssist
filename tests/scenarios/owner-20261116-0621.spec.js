@@ -46,7 +46,7 @@ test('owner 0621 Ctrl+H のパネルは 置換前 / 置換後 / 当てる図 / �
       window.localStorage.setItem('plantuml-rename-history', old);
     } catch (e) {}
   }, OLD_HISTORY);
-  await gotoApp(page, { foldedTools: true });
+  await gotoApp(page);
   await H.expectDefaultTabBar(page);
   await H.setText(page, SEQ);
   await H.waitDrawn(page, ['SpiDrv', 'Reg']);

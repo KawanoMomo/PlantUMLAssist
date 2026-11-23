@@ -42,46 +42,48 @@ describe('ツールメニューの分類', function() {
     });
   });
 
-  // ⇔ の入口 (btn-tab-senior) は TICKET-owner-20261115-2141-prune で外した。
-  test('タブ列に残すのは 図の出し入れ だけで、それらは畳まない', function() {
-    expect(tm.keepIds()).toEqual(['btn-tab-new', 'btn-tab-folder', 'btn-open-file']);
-    expect(tm.isFoldable('btn-tab-new')).toBe(false);
-    expect(tm.isFoldable('btn-tab-folder')).toBe(false);
-    expect(tm.isFoldable('btn-tab-lines')).toBe(true);
-    // メニューに載っていない未知のボタンは畳まない (画面から消してしまわない)
-    expect(tm.isFoldable('btn-tab-unknown')).toBe(false);
-  });
-
   test('分類と文言が id から引ける', function() {
     // 引き継ぎ zip・納品パッケージ (渡す) は TICKET-owner-20261115-1828-prune で外した。
     expect(tm.groupOf('btn-tab-handoff')).toBe(null);
     // 「レビュー」分類 (前回保存からの差分) は TICKET-owner-20261115-2141-prune で外した。
     expect(tm.groupOf('btn-tab-diff')).toBe(null);
-    expect(tm.groupOf('btn-tab-lines')).toBe('edit');
-    expect(tm.labelOf('btn-tab-lines')).toBe('行を書き換える');
+    expect(tm.groupOf('tool-lines')).toBe('edit');
+    expect(tm.labelOf('tool-lines')).toBe('行を書き換える');
     expect(tm.groupOf('btn-tab-lineage')).toBe(null);
     expect(tm.groupOf('btn-tab-nope')).toBe(null);
   });
 });
 
-describe('タブ列の機能ボタンとの対応', function() {
-  test('タブ列の .tab-tool が漏れなく「残す」か「どれかの分類」に入る', function() {
+// TICKET-owner-20261123-0222-prune: タブ列に道具のボタンを並べる切り替え (畳む / 畳まない) を外し、
+// 道具の入口は右端の「ツール ▾」1 つにした。メニューの行は道具の名前 (tool-*) を持ち、
+// app.js の runTool が窓を開く (タブ列のボタンを押させない)。
+describe('タブ列は 図のタブ・＋・ツール ▾ だけ', function() {
+  test('タブ列の .tab-tool は ＋・(隠した) 開く・ツール ▾ の 3 つだけ', function() {
+    var bar = html.slice(html.indexOf('<div id="tab-bar">'), html.indexOf('<div id="tool-menu"'));
     var ids = [];
     var re = /<button[^>]*class="tab-tool"[^>]*id="([^"]+)"/g;
     var m;
-    while ((m = re.exec(html))) ids.push(m[1]);
-    // 図をまたぐ監査を外して 20 個を切った (TICKET-owner-20261115-1841-prune)。
-    // 探す (2140-prune)・基準の図との指摘 (2141-prune) を外しても、畳む道具は 5 個を超える。
-    expect(ids.length).toBeGreaterThan(5);
-    var uncovered = ids.filter(function(id) {
-      return id !== 'btn-tab-tools' && tm.keepIds().indexOf(id) < 0 && tm.groupOf(id) === null;
-    });
-    expect(uncovered).toEqual([]);
+    while ((m = re.exec(bar))) ids.push(m[1]);
+    expect(ids).toEqual(['btn-tab-new', 'btn-open-file', 'btn-tab-tools']);
   });
 
-  test('メニューが指す id はすべてタブ列に実在する', function() {
-    tm.menuIds().forEach(function(id) {
-      expect(html.indexOf('id="' + id + '"')).toBeGreaterThan(0);
+  test('畳む・置き場の切り替えの痕跡が画面と部品に無い', function() {
+    var src = html + fs.readFileSync(path.resolve(__dirname, '..', 'src', 'app.js'), 'utf8')
+      + fs.readFileSync(path.resolve(__dirname, '..', 'src', 'core', 'tool-menu.js'), 'utf8');
+    ['plantuml-tools-folded', 'tool-menu-fold', 'tool-menu-quiet', 'タブ列から畳む', '右端へ戻す',
+      'btn-tab-tools-mini', 'btn-tab-lines', 'btn-tab-versions', 'btn-tab-rename'].forEach(function(w) {
+      expect(src.indexOf(w)).toBe(-1);
+    });
+    ['foldedAtStart', 'quietAtStart', 'footToggles', 'miniTitle', 'isFoldable', 'keepIds'].forEach(function(k) {
+      expect(typeof tm[k]).toBe('undefined');
+    });
+  });
+
+  test('メニューが指す id はどれも道具の名前で、app.js の runTool が受ける', function() {
+    var app = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'app.js'), 'utf8');
+    expect(tm.menuIds()).toEqual(['tool-lines', 'tool-rename']);
+    tm.menuIds().concat(['tool-versions']).forEach(function(id) {
+      expect(app.indexOf("_toolRunners['" + id + "'] =")).toBeGreaterThan(0);
     });
   });
 });
@@ -93,18 +95,18 @@ describe('メニューの HTML', function() {
     expect(out).toContain('Ctrl+K でも引けます');
     expect(out).toContain('>まとめて直す<');
     expect(out).not.toContain('>書き換える<');
-    expect(out).toContain('data-target="btn-tab-lines"');
+    expect(out).toContain('data-target="tool-lines"');
     expect(out).toContain('行を書き換える');
     expect(out).not.toContain('>レビュー<');
   });
 
   test('件数を持つものだけ数字が付く', function() {
-    var out = tm.buildMenuHtml({ 'btn-tab-lines': '3' });
+    var out = tm.buildMenuHtml({ 'tool-lines': '3' });
     expect(out).toContain('<span class="tool-menu-badge">3</span>');
     expect((out.match(/tool-menu-badge/g) || []).length).toBe(1);
   });
 
   test('文言はエスケープされる', function() {
-    expect(tm.buildMenuHtml({ 'btn-tab-lines': '<b>' })).toContain('&lt;b&gt;');
+    expect(tm.buildMenuHtml({ 'tool-lines': '<b>' })).toContain('&lt;b&gt;');
   });
 });

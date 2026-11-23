@@ -150,7 +150,7 @@ describe('元の入口 (ツール ▾) は右クリックへの案内に落と�
     var all = [];
     TM.panelGroups().forEach(function(g) { g.items.forEach(function(it) { all.push(it.id); }); });
     expect(all.indexOf('btn-tab-draft')).toBe(-1);
-    expect(all.indexOf('btn-tab-versions')).toBe(-1);
+    expect(all.indexOf('tool-versions')).toBe(-1);
   });
 
   test('パネルの下端に「FILES のファイルを右クリック」の案内が出る', function() {
@@ -159,12 +159,13 @@ describe('元の入口 (ツール ▾) は右クリックへの案内に落と�
     expect(html.indexOf('右クリック') >= 0).toBe(true);
   });
 
-  test('ボタンの実体は畳んだまま残り、Ctrl+K / Ctrl+P からは「ファイル」の見出しで引ける', function() {
+  test('Ctrl+K / Ctrl+P からは「ファイル」の見出しで引ける', function() {
     // 一時控え (btn-tab-draft) は TICKET-owner-20261116-0241-prune で外した。
-    expect(TM.isFoldable('btn-tab-versions')).toBe(true);
-    expect(TM.labelOf('btn-tab-versions')).toBe('この図の履歴を見る'); // BLK-owner-20260924-1212-prune: 行名は画面の名前にそろえた
+    // タブ列の ⟲ 変遷 のボタンは TICKET-owner-20261123-0222-prune で外した (窓は runTool('tool-versions') で開く)。
+    expect(TM.groupOf('tool-versions')).toBe('file');
+    expect(TM.labelOf('tool-versions')).toBe('この図の履歴を見る'); // BLK-owner-20260924-1212-prune: 行名は画面の名前にそろえた
     var items = CP.buildItems([
-      { id: 'tab-versions', title: 'この図の履歴を見る / History', button: 'btn-tab-versions', run: function() {} },
+      { id: 'tab-versions', title: 'この図の履歴を見る / History', button: 'tool-versions', run: function() {} },
       { id: 'spi_state', group: 'file', badge: 'ファイル', title: 'spi_state', run: function() {} },
     ], '');
     var hist = items.filter(function(i) { return i.id === 'file:tab-versions'; })[0];

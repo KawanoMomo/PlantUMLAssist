@@ -8,7 +8,7 @@
 // 保存先の「テンプレ」宣言で的から外す分岐は TICKET-owner-20261122-1140-prune で外した
 // (plantuml-p0723-tpl は前ならテンプレと宣言できた図。今は他の図と同じく的に入る)。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, saveDirFor } = require('../helpers');
+const { gotoApp, saveDirFor, openBulkRename } = require('../helpers');
 
 const DIR = saveDirFor(__filename);
 
@@ -68,7 +68,7 @@ async function typeDsl(page, text) {
 }
 
 async function openRename(page, from, to) {
-  await page.locator('#btn-tab-rename').click();
+  await openBulkRename(page);
   await expect(page.locator('#rename-panel')).toHaveClass(/open/);
   await expect(page.locator('#rename-folder-head')).toHaveAttribute('data-loading', '0');
   if (from != null) await page.locator('#rename-from').fill(from);

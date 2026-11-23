@@ -18,7 +18,7 @@ async function boot(page) {
     } catch (e) {}
   }, DIR);
   // 利用者の初回と同じタブ列 (製品の既定) で開く (TICKET-owner-20261116-0340-1)。
-  await gotoApp(page, { foldedTools: true });
+  await gotoApp(page);
 }
 
 async function putFile(page, name, dsl) {

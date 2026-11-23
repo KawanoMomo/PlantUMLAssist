@@ -471,7 +471,7 @@ window.MA.gitUi = (function() {
     });
   }
 
-  // ── ツール ▾ の「この図の変遷」は、Git 管理下ではこの履歴を開く ─────────
+  // ── 「この図の履歴」(ファイルの右クリック・Ctrl+K) は、Git 管理下ではこの履歴を開く ─────────
   function showHistory() {
     var fp = window.MA.filesPanel;
     if (fp) { fp.setOpen(true); fp.setSec('git', true); }
@@ -524,16 +524,7 @@ window.MA.gitUi = (function() {
       var m = $('git-pick-modal');
       if (ev.key === 'Escape' && m && !m.hidden) { ev.preventDefault(); closePicker(); }
     });
-    // 「この図の変遷」は Git 管理下では履歴に置き換える (入口は残す)。
-    var vt = $('btn-tab-versions');
-    if (vt) {
-      vt.addEventListener('click', function(ev) {
-        if (!isRepo()) return;
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        showHistory();
-      }, true);
-    }
+    // 「この図の履歴」は Git 管理下では履歴に置き換える (app.js の openVersionHistory が isRepo を見て呼ぶ)。
     // 別のアプリで commit / checkout したときに追い付く (通信はしない。ローカルを読むだけ)。
     window.addEventListener('focus', function() { if (lastDir !== null) refreshSoon(); });
     if (body) body.setAttribute('data-git-ready', '1');
