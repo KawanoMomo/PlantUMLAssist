@@ -138,6 +138,20 @@ describe('TICKET-owner-20261123-1922-2 開いた直後の「末尾に追加」�
     expect(h.text).toContain('participant Pb');
   });
 
+  test('開いた直後にフォームへ触れずに図の参加者を押すのは参加者を選ぶ手のまま。欄に触れた後は押した参加者が To に入る', function() {
+    tabKey = 'sequence|pick-1';
+    MA.selectedEndpoints.clear();
+    harness(HAND);
+    var head = W.document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    head.setAttribute('data-type', 'participant');
+    head.setAttribute('data-id', 'Ctl');
+    expect(SEQ.handleOverlayPick(head)).toBe(false);
+    expect($('seq-tail-to').value).toBe('');
+    W.document.querySelector('#seq-tail-label-rle .rle-textarea').dispatchEvent(new W.FocusEvent('focusin', { bubbles: true }));
+    expect(SEQ.handleOverlayPick(head)).toBe(true);
+    expect($('seq-tail-to').value).toBe('Ctl');
+  });
+
   test('タブを替えた直後: 前のタブで選んだ行の当事者を持ち込まず、To は空欄', function() {
     tabKey = 'sequence|tabA';
     TM.sync();

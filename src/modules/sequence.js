@@ -1548,6 +1548,10 @@ window.MA.modules.plantumlSequence = (function() {
     if (!target || !target.getAttribute) return false;
     var toSel = document.getElementById('seq-tail-to');
     if (!toSel || toSel.value !== '' || toSel.disabled) return false;
+    // 図を開いた直後で「末尾に追加」にまだ手を付けていない間は、図の参加者を押すのは参加者を選ぶ手のまま
+    // (To が空欄で始まっても選択を奪わない。TICKET-owner-20261123-1922-2)。
+    // 1 本確定した後、またはフォームの欄に触れた後だけ、押した参加者を To に入れる。
+    if (toSel.getAttribute('data-pick-armed') !== '1') return false;
     var type = target.getAttribute('data-type');
     if (type !== 'participant' && type !== 'lifeline') return false;
     var id = target.getAttribute('data-id');
@@ -2962,6 +2966,8 @@ window.MA.modules.plantumlSequence = (function() {
               return id;
             };
             var tailNote = SE ? SE.noteText(tailDef, labelOfPart) : '';
+            // 図の参加者を押して To に入れる手 (_tailToPick) が効くか。確定の後は最初から効く。
+            var pickArmed = false;
             var partIdsOpen = participants.map(function(p) { return p.id; });
             // 開いた直後・タブを替えた直後・白紙で参加者を足した直後 (選んだ行も確定の覚えも無い) も、
             // 確定した後と同じく To は空欄で始める。From は本文の最後のメッセージの送り先
@@ -2983,6 +2989,7 @@ window.MA.modules.plantumlSequence = (function() {
                 fromOptsT = withSelected(partOptsWithNew, memFrom);
                 toOptsT = [{ value: '', label: '（図の参加者を押すか選ぶ）', selected: true }].concat(partOptsWithNew);
                 tailNote = '直前の送り先 ' + labelOfPart(memFrom) + ' から続けます。To は図の参加者を押すか選んでください';
+                pickArmed = true;
               }
             }
             html =
@@ -3096,6 +3103,13 @@ window.MA.modules.plantumlSequence = (function() {
             }
             var frSel = document.getElementById('seq-tail-from');
             var toSel = document.getElementById('seq-tail-to');
+            // 図の参加者を押して To に入れる手は、確定の後か、このフォームの欄に触れた後だけ効く。
+            if (toSel) {
+              toSel.setAttribute('data-pick-armed', pickArmed ? '1' : '0');
+              var armPick = function() { var ts = document.getElementById('seq-tail-to'); if (ts) ts.setAttribute('data-pick-armed', '1'); };
+              detailEl.addEventListener('focusin', armPick);
+              detailEl.addEventListener('input', armPick);
+            }
             if (frSel) frSel.addEventListener('change', maybeShowInline);
             if (toSel) toSel.addEventListener('change', maybeShowInline);
             // design 2d: 矢印パレットの選択を hidden #seq-tail-arrow に反映する。
