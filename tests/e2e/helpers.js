@@ -128,7 +128,7 @@ async function openBulkRename(page) {
 // この図の履歴 (FILES のファイルの右クリックと同じ窓)。保存先に置いていない図でも引ける Ctrl+K の行で開く。
 async function openVersionHistory(page) {
   await page.keyboard.press('Control+k');
-  await page.locator('#cp-input').fill('この図の履歴を見る');
+  await page.locator('#cp-input').fill('この図の履歴を表示');
   await page.keyboard.press('Enter');
 }
 

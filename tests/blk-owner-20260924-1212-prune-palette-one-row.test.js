@@ -61,11 +61,12 @@ describe('TICKET-owner-20261115-2140-prune 図をまたぐ調べ物の行は Ctr
 
 describe('BLK-owner-20260924-1212-prune この図の履歴 は Ctrl+K に 1 行', function() {
   ['履歴', '変遷', 'この図の変遷', 'version'].forEach(function(q) {
-    test('「' + q + '」で この図の履歴を見る の行が 1 行、旧名「変遷」は行に出ない', function() {
+    // 行の語は右クリックと同じ「この図の履歴を表示」(TICKET-owner-20261123-1242-1)。
+    test('「' + q + '」で この図の履歴を表示 の行が 1 行、旧名「変遷」は行に出ない', function() {
       var got = CP.filter(items(), q);
       var v = got.filter(function(i) { return /tab-versions$/.test(i.id); });
       expect(v.length).toBe(1);
-      expect(v[0].title).toBe('この図の履歴を見る');
+      expect(v[0].title).toBe('この図の履歴を表示');
       expect(v[0].hint).toBe('');
       got.forEach(function(i) { expect((i.title + i.hint).indexOf('変遷')).toBe(-1); });
     });

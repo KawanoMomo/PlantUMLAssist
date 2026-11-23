@@ -56,7 +56,7 @@ describe('一覧の小見出し', function() {
   });
 
   test('項目名は tool-menu.js のラベルそのまま (言い換えない)', function() {
-    expect(tm.labelOf('tool-versions')).toBe('この図の履歴を見る');
+    expect(tm.labelOf('tool-versions')).toBe('この図の履歴を表示'); // 右クリックと同じ語 (TICKET-owner-20261123-1242-1)
     expect(tm.labelOf('tool-lines')).toBe('行を書き換える');
     expect(tm.labelOf('btn-tab-diff')).toBe(null);
   });

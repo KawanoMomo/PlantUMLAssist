@@ -173,7 +173,7 @@ test('版を開くと、今の図を上書きせずに別タブで開く', async
   expect(now).toContain('IDLE --> ERROR');
 });
 
-// BLK-owner-20260924-1212-prune: Ctrl+K でこの図の履歴を開く行は「この図の履歴を見る」1 行。
+// BLK-owner-20260924-1212-prune: Ctrl+K でこの図の履歴を開く行は 1 行 (語は右クリックと同じ「この図の履歴を表示」。TICKET-owner-20261123-1242-1)。
 // 旧名 (変遷) で打っても同じ 1 行が出て、旧名は行の文字に並ばない。
 test('Ctrl+K で「変遷」「履歴」と打っても、この図の履歴を開く行は 1 行', async ({ page }) => {
   await putFile(page, 'gpio_state', STATE);
@@ -189,7 +189,7 @@ test('Ctrl+K で「変遷」「履歴」と打っても、この図の履歴を�
     await page.waitForTimeout(150);
     const rows = page.locator('.cp-item[data-cp-id$=":tab-versions"]');
     await expect(rows).toHaveCount(1);
-    await expect(rows.first().locator('.cp-title')).toHaveText('この図の履歴を見る');
+    await expect(rows.first().locator('.cp-title')).toHaveText('この図の履歴を表示');
     await expect(page.locator('.cp-item').filter({ hasText: '変遷' })).toHaveCount(0);
     if (q === '履歴') {
       await rows.first().click();
