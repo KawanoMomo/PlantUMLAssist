@@ -32,8 +32,10 @@ describe('最近開いた図の入口は画面どおりに書く (TICKET-owner-2
       expect(doc.indexOf('Import ▾ の 🕘') < 0).toBe(true);
     });
   });
-  test('README と製品仕様書は、最近開いた図を Import ▾ の「保存フォルダの図を開く（一覧）」の上端と書く', function() {
-    var item = importMenuItems().filter(function(t) { return t.indexOf('保存フォルダの図を開く') === 0; })[0];
+  test('README と製品仕様書は、最近開いた図を Import ▾ の一覧を開く項目 (#imp-folder) の上端と書く', function() {
+    // 項目の語は TICKET-owner-20261123-1202-1 で「保存先の一覧を開く」に揃えた。語は画面の #imp-folder から読む。
+    var item = (/<button id="imp-folder">([^<]*)/.exec(HTML) || [])[1];
+    expect(item).toBe('保存先の一覧を開く');
     expect(!!item).toBe(true);
     [README, SPEC].forEach(function(doc) {
       expect(doc.indexOf('「' + item + '」)の「最近開いた図」') >= 0).toBe(true);

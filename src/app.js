@@ -3364,7 +3364,9 @@ function initCommandPalette() {
       // 保存先の行の右クリック・Import ▾・⚙ 設定と同じ窓を、窓の見出しと同じ語で出す (TICKET-owner-20261122-1240-1)。
       // 前の名前「別のフォルダを保存先にする」「保存先を変える」と英語は検索語に残す。
       { id: 'change-target', title: '保存先のフォルダを選ぶ…', hint: 'Files', keywords: ['別のフォルダを保存先にする', '保存先を変える', 'べつのフォルダ', '別のフォルダ', '保存先', 'ほぞんさき', 'えらぶ', '選ぶ', 'かえる', '変える', '自動保存', 'じどうほぞん', 'change save folder', 'save', 'folder', 'autosave', 'target'], run: function() { setTimeout(openChangeTarget, 0); } },
-      { id: 'tab-folder', title: 'FILES: 保存先を開く / Files: save folder', hint: 'Files', keywords: ['folder', 'files', 'tree', 'list', 'いちらん', 'ふぉるだ', 'ほぞんさき'], button: 'btn-tab-folder', run: function() { _ensureFolderListOpen(); } },
+      // 保存先の一覧を開く入口 (FILES の保存先の右クリック・Import ▾・Ctrl+K) は同じ語で出す (TICKET-owner-20261123-1202-1)。
+      // 前の語「FILES: 保存先を開く」「保存フォルダの図を開く（一覧）」と英語は検索語に残す。
+      { id: 'tab-folder', title: '保存先の一覧を開く', hint: 'Files', keywords: ['保存先の一覧', '一覧', 'FILES: 保存先を開く', '保存先を開く', '保存フォルダの図を開く（一覧）', '保存フォルダの図', 'Files: save folder', 'folder', 'files', 'tree', 'list', 'いちらん', 'ふぉるだ', 'ほぞんさき'], button: 'btn-tab-folder', run: function() { _ensureFolderListOpen(); } },
       { id: 'tab-rename', title: '部品名を一括置換 / Bulk rename', hint: 'Tabs', keywords: ['rename', 'replace', 'いっかつ', 'ちかん'], button: 'tool-rename', run: function() { runTool('tool-rename'); } },
       { id: 'tab-lines', title: '行編集を開く / Line edit', hint: 'Tabs', keywords: ['line', 'edit', 'ぎょう', 'へんしゅう'], button: 'tool-lines', run: function() { runTool('tool-lines'); } },
       // design 9a: 手元の .puml を開く入口は上部バーの Import ▾ へ移した。
