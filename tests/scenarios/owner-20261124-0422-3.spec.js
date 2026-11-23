@@ -77,6 +77,7 @@ for (const c of CASES) {
         else await page.keyboard.press('Delete');
         await expect(page.locator('.el-del-modal')).toBeVisible();
         await expect(page.locator('.el-del-message')).toHaveText(c.message);
+        if (how === 'button') await page.screenshot({ path: testInfo.outputPath(c.kind + '-window.png') });
         await expect.poll(() => H.getEditorText(page)).toBe(before);
         await page.keyboard.press('Enter');
         await expect(page.locator('.el-del-modal')).toHaveCount(0);
