@@ -135,15 +135,28 @@ window.MA.tailMemory = (function() {
     return { from: '', to: '', source: 'none' };
   }
 
+  // 「末尾に追加」の To を埋める手のうち、今効くものだけを言う語。
+  // armed (図の参加者を押すと To に入る間 = 確定の後かフォームの欄に触れた後) だけ「図の参加者を押す」を言う。
+  // 開いた直後の図の参加者の押下は参加者を選ぶ手のままなので、その間は一覧で選ぶ手だけを言う
+  // (案内どおり押しても To に入らない時間を作らない。TICKET-owner-20261123-2322-1)。
+  function toPickHint(armed) {
+    return armed ? 'To は図の参加者を押すか選んでください' : 'To は一覧で選んでください';
+  }
+  // To の欄の空欄の行の語 (toPickHint と同じ手を言う)。
+  function toPickPlaceholder(armed) {
+    return armed ? '（図の参加者を押すか選ぶ）' : '（一覧から選ぶ）';
+  }
+
   // openMessageEnds の出どころを 1 行で言う (From の欄の値と同じ名前を出す)。
-  function openMessageNote(ends, labelOf) {
+  // armed は toPickHint と同じ (省くと開いた直後 = 押す手がまだ効かない間)。
+  function openMessageNote(ends, labelOf, armed) {
     var e = ends || {};
     if (!e.from) return '';
     var l = typeof labelOf === 'function' ? labelOf(e.from) : null;
     var name = String(l || e.from);
     var head = e.source === 'last' ? '本文の最後のメッセージの送り先 ' + name + ' から続けます。'
       : '先頭の参加者 ' + name + ' から始めます。';
-    return head + 'To は図の参加者を押すか選んでください';
+    return head + toPickHint(!!armed);
   }
 
   return {
@@ -162,5 +175,7 @@ window.MA.tailMemory = (function() {
     nextMessageEnds: nextMessageEnds,
     openMessageEnds: openMessageEnds,
     openMessageNote: openMessageNote,
+    toPickHint: toPickHint,
+    toPickPlaceholder: toPickPlaceholder,
   };
 })();
