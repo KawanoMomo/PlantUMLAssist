@@ -201,7 +201,8 @@ window.MA.modules.plantumlUsecase = (function() {
     for (i = 0; i < ops.length; i++) {
       var o = ops[i];
       if (o.op !== 'actor' && o.op !== 'usecase') continue;
-      var norm = window.MA.idNormalizer.normalize(o.id, taken, o.op === 'actor' ? 'A' : 'U');
+      // parsed は描き直し前で古いことがあるので、今の本文に出ている別名も避ける。
+      var norm = window.MA.idNormalizer.normalize(o.id, taken, o.op === 'actor' ? 'A' : 'U', out);
       if (!norm.valid) continue;
       idMap[o.id] = norm.id;
       taken[norm.id] = true;

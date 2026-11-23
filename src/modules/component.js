@@ -273,7 +273,8 @@ window.MA.modules.plantumlComponent = (function() {
     for (i = 0; i < ops.length; i++) {
       var o = ops[i];
       if (o.op !== 'component' && o.op !== 'interface') continue;
-      var norm = window.MA.idNormalizer.normalize(o.id, taken, 'C');
+      // parsed は描き直し前で古いことがあるので、今の本文に出ている別名も避ける。
+      var norm = window.MA.idNormalizer.normalize(o.id, taken, 'C', out);
       if (!norm.valid) continue;
       idMap[o.id] = norm.id;
       taken[norm.id] = true;
