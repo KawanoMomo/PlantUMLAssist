@@ -9990,6 +9990,8 @@ function refresh() {
     window.MA.outline.build((_PE && _PE.has(mmdText) && _PE.splicedText(mmdText)) || mmdText).counts,
     detectedType || currentDiagramType);
 
+  // 右パネルの反映の後も、直した要素 (同じ行) を選んだままにする。
+  try { _applySelectionCarry(); } catch (e) { _selCarry = null; }
   renderProps(currentParsed);
   syncStateTable();
   renderSvg();
@@ -10594,6 +10596,27 @@ function _refuseGenerated(gen) {
   if (window.MA.toast) window.MA.toast.show('書き換えませんでした: ' + gen.message);
 }
 
+// 右パネルから本文を書き換えたら (「変更を反映」・種別のカード・色など)、描き直しの前に
+// 右パネルを組み直すときに、選んでいた要素を新しい本文の同じ行の要素へ持ち越す (MA.selectionCarry)。
+// 書き換えた側が選択を自分で替えた (削除で外した・動かした先を選んだ) ときはそちらに任せる。
+var _selCarry = null;   // { text, parsed, selKey } 最初に書き換える直前の本文と選択
+function _noteSelectionCarry() {
+  if (_selCarry || !window.MA.selectionCarry || !window.MA.selection) return;
+  var sel = window.MA.selection.getSelected() || [];
+  if (sel.length !== 1) return;
+  _selCarry = { text: mmdText, parsed: currentParsed, selKey: JSON.stringify(sel) };
+}
+function _applySelectionCarry() {
+  var c = _selCarry;
+  _selCarry = null;
+  if (!c || !window.MA.selectionCarry || !window.MA.selection) return;
+  var sel = window.MA.selection.getSelected() || [];
+  if (JSON.stringify(sel) !== c.selKey) return;
+  var r = window.MA.selectionCarry.carry(sel, c.parsed, c.text, currentParsed, mmdText);
+  if (r.action === 'set') window.MA.selection.setSelected(r.selection);
+  else if (r.action === 'clear') window.MA.selection.clearSelection();
+}
+
 function renderProps(parsed) {
   if (!parsed) parsed = currentParsed;
   var sel = window.MA.selection.getSelected();
@@ -10624,6 +10647,7 @@ function renderProps(parsed) {
   var _ctx = {
     getMmdText: function() { return mmdText; },
     setMmdText: function(s) {
+      _noteSelectionCarry();
       mmdText = s;
       suppressSync = true;
       editorEl.value = s;
