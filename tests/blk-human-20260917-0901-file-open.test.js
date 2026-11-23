@@ -116,19 +116,25 @@ describe('GUI と server の配線', function() {
     // BLK-human-20260923-1600 (design 9a): 札そのものはタブ列から外し、入口は上部バーの
     // Import ▾ に移した。入れる・出すが対で並ぶ方が探す場所が 1 つで済む。
     // #btn-open-file は DOM に残る (ドラッグ&ドロップ・空の画面・Ctrl+K が叩く先)。
-    expect(html).toContain('aria-label="ファイルを開く(.puml)">開く</button>');
+    // TICKET-owner-20261123-2222-prune: 入口の語は Import ▾ の「ファイルを開く…」にそろえた。
+    expect(html).toContain('aria-label="ファイルを開く…">開く</button>');
     expect(html).toContain('id="btn-import"');
     expect(html).toContain('id="imp-file"');
     expect(html).toContain('id="imp-clipboard"');
     expect(html).toContain('id="imp-folder"');
     // Import ▾ は Export ▾ の左に置く (入れる → 出すの順)。
     expect(html.indexOf('id="btn-import"')).toBeLessThan(html.indexOf('id="btn-export"'));
-    expect(app).toContain("'ファイルを開く(.puml)'");
+    expect(app).toContain("b.textContent = 'ファイルを開く…'");
+    expect(html).toContain('ファイルを開く…<span class="menu-key">Ctrl+O</span>');
+    // 前の語は画面のどこにも残さない (この試験自身が grep に掛からないよう字を分けて書く)。
+    expect(app + html).not.toContain('ファイルを開く' + '(.puml)');
     expect(/id="file-input"[^>]*multiple/.test(html)).toBe(true);
     expect(html).toContain('src/core/file-open.js');
   });
-  test('一覧の頭・空の画面・ドロップ・未対応の一覧を app.js が組み立てる', function() {
-    expect(app).toContain('folder-open-file');
+  test('空の画面・ドロップ・未対応の一覧を app.js が組み立てる (一覧の頭の入口は外した)', function() {
+    // TICKET-owner-20261123-2222-prune: 保存先の一覧の頭の開くボタンは Import ▾ の「ファイルを開く…」と重なるので外した。
+    expect(app).not.toContain('folder-open-file');
+    expect(html).not.toContain('.folder-open-file');
     expect(app).toContain('open-empty-hint');
     expect(app).toContain("addEventListener('drop'");
     expect(app).toContain('btn-unsupported-copy');

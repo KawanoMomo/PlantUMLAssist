@@ -1207,8 +1207,6 @@ html, body {
 #folder-panel .folder-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
 
 /* 手元の .puml を開く入口・ドロップ・未対応記法の一覧 */
-.folder-open-file { display: block; width: 100%; margin: 0 0 6px; padding: 6px 8px; text-align: left; font-size: 12px; cursor: pointer;
-  background: var(--bg-tertiary, #2d333b); color: var(--text-primary, #e6edf3); border: 1px solid var(--accent, #58a6ff); border-radius: 4px; }
 /* 入口は残すが図の上に重ねない。
    プレビューの流れの中で図 (#preview-svg) のすぐ下に置く (見本の図の下段を隠さない) */
 #open-empty-hint { position: relative; display: block; width: fit-content; max-width: calc(100% - 8px); box-sizing: border-box;
@@ -3454,7 +3452,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
              見出しになった (id はそのまま。押すと保存先の図が開く) -->
         <!-- / design 9a: 手元の .puml を開く入口は上部バーの
              Import ▾ へ移した。DOM には残す (ドラッグ&ドロップ・空の画面・Ctrl+K が叩く) -->
-        <button class="tab-tool" id="btn-open-file" hidden title="手元の .puml / .plantuml / .uml / .txt を開きます (複数可)。エディタやプレビューへドラッグ&ドロップでも開けます" aria-label="ファイルを開く(.puml)">開く</button>
+        <button class="tab-tool" id="btn-open-file" hidden title="手元の .puml / .plantuml / .uml / .txt を開きます (複数可)。エディタやプレビューへドラッグ&ドロップでも開けます" aria-label="ファイルを開く…">開く</button>
         <!-- 道具の入口はタブ列の右端の「ツール ▾」1 つ (行を書き換える・部品名を一括置換する)。
              この図の履歴は FILES のファイルの右クリック、どれも Ctrl+K からも引ける -->
         <button class="tab-tool" id="btn-tab-tools" aria-expanded="false" aria-controls="tool-menu"

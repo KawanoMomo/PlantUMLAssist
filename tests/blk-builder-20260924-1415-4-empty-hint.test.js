@@ -1,5 +1,5 @@
 'use strict';
-// BLK-builder-20260924-1415-4 (design 7a / 9a): 空の画面の入口「ファイルを開く(.puml)」は残すが、
+// BLK-builder-20260924-1415-4 (design 7a / 9a): 空の画面の入口「ファイルを開く…」は残すが、
 // 見本の図の上に重ねない。図のすぐ下に流れで置き、拡大 (transform: scale) しても図の下へずらす。
 if (!global.window) {
   var jsdom = require('jsdom');
