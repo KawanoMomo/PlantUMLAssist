@@ -141,6 +141,44 @@ window.MA.stateTxEntry = (function() {
     return _s(lastTo);
   }
 
+  // 開いた直後・タブを替えた直後 (選んだ状態も確定の覚えも無いとき) の From。
+  // 前は一覧の先頭の `[*]` で始まり、To だけ選んで足すと選んでいない開始の遷移
+  // (`[*] --> Stop`) が入った (TICKET-owner-20261123-2322-3)。sequence の openMessageEnds と同じ形で、
+  // 本文の行の順で最後の遷移の行き先から続ける。行き先が終了 `[*]` (と履歴 `[H]`) ならその遷移の始点
+  // (nextFrom と同じ考え)。両端とも状態でない遷移は飛ばして前の遷移を見る。
+  // resolve(name, scope) は書かれた端を選択肢の値 (入れ子は `Parent.Child`) にする口 (省くと書かれたまま)。
+  // 返り値 { from, source }。source: 'last' (最後の遷移の行き先) / 'lastEnd' (行き先が終了なので始点) / 'none'。
+  var _HIST_RE = /\[H\*?\]$/;
+  function _isStateEnd(v) { var s = _s(v).trim(); return !!s && s !== '[*]' && !_HIST_RE.test(s); }
+  function openFrom(transitions, resolve) {
+    var res = typeof resolve === 'function' ? resolve : function(n) { return n; };
+    var trs = (transitions || []).filter(function(tr) { return !!tr; }).map(function(tr, i) { return { tr: tr, i: i }; });
+    trs.sort(function(a, b) {
+      var la = typeof a.tr.line === 'number' ? a.tr.line : -1;
+      var lb = typeof b.tr.line === 'number' ? b.tr.line : -1;
+      return la !== lb ? la - lb : a.i - b.i;
+    });
+    for (var k = trs.length - 1; k >= 0; k--) {
+      var tr = trs[k].tr;
+      if (_isStateEnd(tr.to)) return { from: _s(res(_s(tr.to).trim(), tr.scope)), source: 'last' };
+      if (_isStateEnd(tr.from)) return { from: _s(res(_s(tr.from).trim(), tr.scope)), source: 'lastEnd' };
+    }
+    return { from: '', source: 'none' };
+  }
+
+  // openFrom の出どころを 1 行で言う (From の欄の値と同じ名前を出す)。To を選ぶ手の案内を続ける。
+  var PICK_TO_HINT = '図で遷移先の状態を押してください (同じ状態を押すと自己遷移)';
+  function openFromNote(ends, labelOf) {
+    var e = ends || {};
+    if (!e.from) return '';
+    var l = typeof labelOf === 'function' ? labelOf(e.from) : null;
+    var name = _s(l || e.from);
+    var head = e.source === 'lastEnd'
+      ? '本文の最後の遷移の始点 ' + name + ' から続けます。'
+      : '本文の最後の遷移先 ' + name + ' から続けます。';
+    return head + PICK_TO_HINT;
+  }
+
   // ── 書き込む位置 ─────────────────────────────────────────────────────
   function _indentOf(line) { return (_s(line).match(/^\s*/) || [''])[0]; }
 
@@ -223,6 +261,9 @@ window.MA.stateTxEntry = (function() {
     candidates: candidates,
     filter: filter,
     nextFrom: nextFrom,
+    openFrom: openFrom,
+    openFromNote: openFromNote,
+    PICK_TO_HINT: PICK_TO_HINT,
     insert: insert,
     countLabel: countLabel,
   };

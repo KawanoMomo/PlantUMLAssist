@@ -1357,11 +1357,26 @@ window.MA.modules.plantumlState = (function() {
           P.primaryButtonHtml('st-tail-add', '+ 追加');
       } else if (kind === 'transition') {
         // 開いたままの回。from は直前の to、to は図の状態を押して選ぶ。
-        if (!_tx.open) { _tx.open = true; _tx.pick = 'to'; _tx.to = ''; _bindTxCapture(); }
+        var opening = !_tx.open;
+        if (opening) { _tx.open = true; _tx.pick = 'to'; _tx.to = ''; _bindTxCapture(); }
         // 入れ子の子は `親 / 子` で出す。表の「親 / （開始）」の行から開いたときは、その開始を From に足す。
         var STl = window.MA.stateTable;
         // 遷移にだけ出る (宣言の無い) 状態も候補に入れる。
         var txOpts = [{ value: '[*]', label: '[*] (initial/final)' }].concat(_endOptions(parsedData));
+        // 開いた直後・タブを替えた直後 (選んだ状態も確定の覚えも無い) は、From を本文の最後の遷移の行き先
+        // (行き先が終了ならその始点) から始め、案内がその名前を言う。一覧の先頭の `[*]` で始めると
+        // To だけ選んで足したとき選んでいない開始の遷移が入る (TICKET-owner-20261123-2322-3)。
+        var TXo = window.MA.stateTxEntry;
+        if (opening && !_tx.from && TXo && TXo.openFrom) {
+          var openEnds = TXo.openFrom(parsedData.transitions, function(n, sc) {
+            return STl ? STl.resolveEnd(n, sc, allStates) : n;
+          });
+          var inOpts = txOpts.some(function(o) { return o.value === openEnds.from; });
+          if (openEnds.from && inOpts) {
+            _tx.from = openEnds.from;
+            _tx.note = TXo.openFromNote(openEnds, function(id) { return STl ? STl.rowLabel(id, allStates) : id; });
+          }
+        }
         var fromBase = txOpts.slice();
         if (_tx.from && String(_tx.from).indexOf('[*]@') === 0) {
           fromBase.unshift({ value: _tx.from, label: STl ? STl.rowLabel(_tx.from, allStates) : _tx.from });
