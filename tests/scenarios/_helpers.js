@@ -161,6 +161,9 @@ function decodePng(buf) {
   return Object.assign(info, { px });
 }
 
+// 何も選ばずに書き出した PNG の倍率 (TICKET-junior-20261123-1142-wish。PNG の画素数は SVG の寸法 × これ)。
+const PNG_SCALE = 2;
+
 // 隅の色と違う画素 (線・文字・塗り) の数と、そのうち外周 1px に掛かる数。
 function inkStats(img) {
   const at = (x, y) => img.px.subarray((y * img.w + x) * 4, (y * img.w + x) * 4 + 4);
@@ -178,6 +181,6 @@ function inkStats(img) {
 }
 
 module.exports = {
-  FIXTURES, fixture, diffLines, removedLines, annotate, decodePng, inkStats,
+  FIXTURES, fixture, diffLines, removedLines, annotate, decodePng, inkStats, PNG_SCALE,
   bootWith, bootWithSaveDir, expectDefaultTabBar, openToolMenu, setText, svgText, waitDrawn, measure, expectRendered, getEditorText,
 };

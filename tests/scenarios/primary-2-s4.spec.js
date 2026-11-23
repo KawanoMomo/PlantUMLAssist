@@ -7,7 +7,7 @@
 // 期待 (principles.md「押した対象だけが変わる」「描ける」):
 //   - 開いた図は図種どおりに選ばれ、エラー無しで描け、開いただけで本文は 1 字も変わらない
 //   - 書き出した 3 形式はどれも受け取れる: SVG は図の文字を持つ `<svg`、PNG・透過 PNG は PNG の署名を持ち、
-//     寸法は書き出した SVG の viewBox と 2px 以内で一致する (図が切れていない)
+//     寸法は書き出した SVG の viewBox × PNG の倍率 (既定 2 倍) と倍率 × 2px 以内で一致する (図が切れていない)
 //   - 書き出しても本文は 1 行も動かず、保存先の .puml は 1 バイトも変わらない
 //   - TICKET-primary-20261115-2240-wish: 保存先から開いた図の書き出しはダウンロードではなく図と同じフォルダに図の名前で
 //     書かれ (`{名前}.svg`・`{名前}.png`・`{名前}.transparent.png`)、下端の「名前 → 置き場 · N バイト · 新規 / 上書き」が実物と合う。
@@ -106,9 +106,10 @@ test('primary 手順2 (場面4) 保存先の一覧から 3 図を開き、SVG・
         H.annotate(testInfo, 'png', d.name + f.suffix + ' ' + w + 'x' + h);
         expect(w, d.name + f.suffix + '.png の幅').toBeGreaterThan(20);
         expect(h, d.name + f.suffix + '.png の高さ').toBeGreaterThan(20);
+        // TICKET-junior-20261123-1142-wish: PNG は SVG の寸法 × PNG の倍率 (何も選ばなければ 2 倍)。
         if (vb) {
-          expect(Math.abs(w - vb[0]), d.name + f.suffix + '.png の幅は SVG の viewBox どおり').toBeLessThanOrEqual(2);
-          expect(Math.abs(h - vb[1]), d.name + f.suffix + '.png の高さは SVG の viewBox どおり').toBeLessThanOrEqual(2);
+          expect(Math.abs(w - vb[0] * H.PNG_SCALE), d.name + f.suffix + '.png の幅は SVG の viewBox × 倍率').toBeLessThanOrEqual(2 * H.PNG_SCALE);
+          expect(Math.abs(h - vb[1] * H.PNG_SCALE), d.name + f.suffix + '.png の高さは SVG の viewBox × 倍率').toBeLessThanOrEqual(2 * H.PNG_SCALE);
         }
       }
     }

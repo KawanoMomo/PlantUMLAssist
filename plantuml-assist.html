@@ -851,6 +851,22 @@ html, body {
 /* TICKET-junior-20261122-1520-wish: 置き場の書き出しが今の本文より古いときだけ語で出す */
 #export-menu #export-dest-stale { color: var(--warning, #d19a66); white-space: normal; }
 #export-menu #export-dest-stale:empty { display: none; }
+/* TICKET-junior-20261123-1142-wish: PNG の大きさ (倍率) の行。押した倍率が凹む */
+#export-menu #export-png-scale {
+  border-top: 1px solid var(--border);
+  padding: 7px 14px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+#export-menu #export-png-scale .eps-opt {
+  display: inline-block; width: auto; padding: 1px 8px; margin-left: 4px;
+  border: 1px solid var(--border); border-radius: 4px; font-size: 11px; color: var(--text-primary);
+}
+#export-menu #export-png-scale .eps-opt[aria-pressed="true"] {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+#export-menu #export-png-scale-px:empty { display: none; }
 #export-dest-pick {
   position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000;
   display: flex; align-items: center; justify-content: center;
@@ -3389,6 +3405,12 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
         <button id="exp-png">PNG で書き出す</button>
         <button id="exp-png-transparent">PNG（透過背景）で書き出す</button>
         <button id="exp-clipboard">クリップボードにコピー</button>
+        <!-- TICKET-junior-20261123-1142-wish: PNG の大きさ (倍率)。PNG・透過 PNG・クリップボード・保存先の一覧のまとめての書き出しに
+             同じに効き、道具に 1 つだけ覚える (項目ではなく設定の行。選択肢は MA.pngScale.SCALES から作る) -->
+        <div id="export-png-scale" class="menu-note" role="group" aria-label="PNG の大きさ">
+          <span class="eps-head">PNG の大きさ:</span><span id="export-png-scale-opts"></span>
+          <div id="export-png-scale-px"></div>
+        </div>
         <!-- TICKET-primary-20261115-2240-wish: 保存先から開いた図の書き出しは保存先の中へ書く。書き出し先と前回書いた結果を読む行
              (項目ではない。保存先の無い図では出さない) -->
         <div id="export-dest" class="menu-note" hidden>
@@ -3922,6 +3944,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/folder-impact.js"></script>
 <script src="src/core/export-name.js"></script>
 <script src="src/core/export-dest.js"></script>
+<script src="src/core/png-scale.js"></script>
 <script src="src/core/svg-export.js"></script>
 <script src="src/core/rename-redo.js"></script>
 <script src="src/core/rename-seed.js"></script>

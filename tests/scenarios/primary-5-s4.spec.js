@@ -11,7 +11,7 @@
 //   - 出力フォルダのファイルは、一覧の行と過不足なく 1 対 1 (前回の残りは一覧に入らず「残り」に出る)
 //   - 取り違えが無い: 各ファイルの中身が一覧の行と合う。形式はファイルの先頭のバイト、寸法は読み直した値、
 //     図種は書き出したときの画面の図種と SVG の data-diagram-type、SVG の text はその図の本文の要素だけ、
-//     PNG の寸法は同じ図の SVG の viewBox に一番近い (2px 以内)、透過 PNG だけ隅が透明
+//     PNG の寸法は同じ図の SVG の viewBox × PNG の倍率 (既定 2 倍) に一番近い、透過 PNG だけ隅が透明
 //   - 3 枚とも 3 形式がそろい、どれも見える (線・文字があり、縁で切れない)
 //   - 一式を作っても本文は 1 行も動かず、保存先の .puml は 1 バイトも変わらない。描ける
 //   - 手数は手順 3 と同じ 1 枚 10 と書き出し先を替える 3、計 33 以内 (一覧づくりは画面の外の作業なので数えない)
@@ -172,12 +172,14 @@ test('primary 手順5 (場面4) 書き出した一式と一覧を置き、一覧
       expect(got.svgType, r.file + ' の SVG の図種 (data-diagram-type)').toBe(d.svgType);
       expect((got.texts || []).slice().sort(), r.file + ' の text はその図の本文の要素だけ').toEqual(d.texts.slice().sort());
     } else {
-      // PNG は同じ図の SVG の viewBox に一番近い寸法 (別の図の画像と取り違えていない)。
-      const dist = (s) => Math.abs(got.w - s.w) + Math.abs(got.h - s.h);
+      // PNG は同じ図の SVG の viewBox × PNG の倍率 (既定 2 倍。TICKET-junior-20261123-1142-wish) に一番近い寸法
+      // (別の図の画像と取り違えていない)。
+      const k = H.PNG_SCALE;
+      const dist = (s) => Math.abs(got.w - s.w * k) + Math.abs(got.h - s.h * k);
       const own = dist(svgOf[d.name]);
       H.annotate(testInfo, 'png', r.file + ' ' + r.size + ' own=' + own);
-      expect(Math.abs(got.w - svgOf[d.name].w), r.file + ' の幅は同じ図の SVG どおり').toBeLessThanOrEqual(2);
-      expect(Math.abs(got.h - svgOf[d.name].h), r.file + ' の高さは同じ図の SVG どおり').toBeLessThanOrEqual(2);
+      expect(Math.abs(got.w - svgOf[d.name].w * k), r.file + ' の幅は同じ図の SVG × 倍率').toBeLessThanOrEqual(2 * k);
+      expect(Math.abs(got.h - svgOf[d.name].h * k), r.file + ' の高さは同じ図の SVG × 倍率').toBeLessThanOrEqual(2 * k);
       for (const o of DOCS) {
         if (o.name !== d.name) expect(dist(svgOf[o.name]), r.file + ' は ' + o.name + ' の寸法より自分の図に近い').toBeGreaterThan(own);
       }

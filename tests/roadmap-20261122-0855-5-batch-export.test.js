@@ -69,9 +69,12 @@ describe('まとめて書き出す: 画面側の道 (src/app.js)', function() {
     expect(many).toContain('results.push(r); return step(i + 1);');
   });
   test('PNG は 1 枚ずつと同じく、透過でなければ白で塗ってから描く', function() {
+    // TICKET-junior-20261123-1142-wish: 1 枚ずつ・まとめての PNG は同じ _rasterSvgEl (倍率・白地) を通る。
     var png = slice(APP, 'function _svgTextToPngBlob', '\n// その図の本文');
-    expect(png).toContain('if (!transparent) {');
-    expect(png).toContain("ctx.fillStyle = '#ffffff';");
+    expect(png).toContain('_rasterSvgEl(s.el, s.w, s.h, transparent,');
+    var raster = slice(APP, 'function _rasterSvgEl', '\n// プレビューの図を PNG の canvas にする');
+    expect(raster).toContain('if (!transparent) {');
+    expect(raster).toContain("ctx.fillStyle = '#ffffff';");
   });
   test('一覧の印を付ける行に、形式の選択と「選んだ N 枚を書き出す」と結果の行がある', function() {
     var bar = slice(APP, 'function folderPickBar', 'function folderOpenButton');

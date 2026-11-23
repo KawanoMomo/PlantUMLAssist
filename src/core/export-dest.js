@@ -96,14 +96,15 @@ window.MA.exportDest = (function() {
   // slashPath(p) — 画面に出すパスの区切りを / に揃える (直下の図とサブフォルダの図で書き方を変えない)。
   function slashPath(p) { return _s(p).replace(/\\/g, '/'); }
 
-  // message(res, sub, folder) — 書いた直後に出す 1 行。名前・置き場・バイト数・新規 / 上書き。
+  // message(res, sub, folder, px) — 書いた直後に出す 1 行。名前・置き場・バイト数・新規 / 上書き。
+  // PNG は画素数と倍率 (px。「606×648 px (2 倍)」。TICKET-junior-20261123-1142-wish) を足す。
   // 全文の末尾の（）にディスク上のパスを付ける (下端の短い形では落ち、title と読み上げに残る)。
-  function message(res, sub, folder) {
+  function message(res, sub, folder, px) {
     var r = res || {};
     var rel = _s(r.rel);
     var name = rel.split('/').pop();
     return '書き出しました: ' + name + ' → ' + placeLabel(sub, folder) + ' · ' + Number(r.bytes || 0) + ' バイト · ' +
-      (r.existed ? '上書き' : '新規') + (r.path ? '（' + r.path + '）' : '');
+      (r.existed ? '上書き' : '新規') + (px ? ' · ' + _s(px) : '') + (r.path ? '（' + r.path + '）' : '');
   }
 
   // ── 保存先の一覧で印を付けた図をまとめて書き出す (TICKET-roadmap-20261122-0855-5) ──
