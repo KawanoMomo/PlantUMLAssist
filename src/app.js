@@ -909,11 +909,7 @@ function init() {
       var y = (e.clientY - rect.top) / z;
       var res = resolver(overlayElForHover, x, y) || _tailInsertRes();
       if (!res) return;
-      var insertCtx = {
-        getMmdText: function() { return mmdText; },
-        setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; },
-        onUpdate: function() { scheduleRefresh(); },
-      };
+      var insertCtx = _editCtx(false);
       // insertPicker を持つ module は、まず「何を挿入するか」
       // (メッセージ/note/alt/loop/activate/その他) のメニューを出す。
       // 持たない module は従来どおり単一種別のフォームを直接開く。
@@ -1155,11 +1151,7 @@ function init() {
       e.stopImmediatePropagation();
       e.preventDefault();
       if (window.MA.selection && window.MA.selection.clearSelection) window.MA.selection.clearSelection();
-      var insertCtx = {
-        getMmdText: function() { return mmdText; },
-        setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; },
-        onUpdate: function() { scheduleRefresh(); },
-      };
+      var insertCtx = _editCtx(false);
       _markBandPick(res);
       currentModule.showInsertPicker(insertCtx, res.line, res.position, _zoneHintOf(res));
       _placePickerAside(e.clientX);
@@ -1433,11 +1425,7 @@ function init() {
       // FEAT-012 / FEAT-017 と完全に共有しており、本経路のためのゆるめはしていない。
       if (!moduleHas('deleteSelectedLine')) return;
       e.preventDefault();
-      currentModule.deleteSelectedLine({
-        getMmdText: function() { return mmdText; },
-        setMmdText: function(s) { mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false; },
-        onUpdate: function() { scheduleRefresh(); },
-      }, cur.line);
+      currentModule.deleteSelectedLine(_editCtx(false), cur.line);
       return;
     }
 
@@ -2820,13 +2808,7 @@ function init() {
       }
       // 空欄: 行 (from) と列 (trigger) を入れた遷移追加フォームを開く。
       if (typeof currentModule.showAddTransitionModal !== 'function') return;
-      currentModule.showAddTransitionModal({
-        getMmdText: function() { return mmdText; },
-        setMmdText: function(s) {
-          mmdText = s; suppressSync = true; editorEl.value = s; suppressSync = false;
-        },
-        onUpdate: function() { scheduleRefresh(); },
-      }, currentParsed, td.getAttribute('data-state-id'), {
+      currentModule.showAddTransitionModal(_editCtx(false), currentParsed, td.getAttribute('data-state-id'), {
         trigger: td.getAttribute('data-trigger') === window.MA.stateTable.NO_TRIGGER
           ? '' : td.getAttribute('data-trigger'),
       });
@@ -10617,28 +10599,49 @@ function _applySelectionCarry() {
   else if (r.action === 'clear') window.MA.selection.clearSelection();
 }
 
-// TICKET-roadmap-20261123-0857-1: 右パネルの書き換えの直後に組み直した本文・選択・図種の控え。
-var _propsBuiltFor = null;
-function _propsKey() {
+// TICKET-roadmap-20261123-0857-1: 右パネルの書き換えの直後に組み直した本文・選択・図種の控え (MA.propsRebuild)。
+var _propsBuilt = window.MA.propsRebuild.tracker(function() {
   var sel = (window.MA.selection && window.MA.selection.getSelected()) || [];
   return { text: mmdText, sel: JSON.stringify(sel), module: currentModule };
-}
+});
 function _rebuildPropsNow() {
   try { _applySelectionCarry(); } catch (e) { _selCarry = null; }
   renderProps(currentParsed);
-  _propsBuiltFor = _propsKey();
+  _propsBuilt.markBuilt(true);
 }
-// refresh が右パネルを組み直すか。右パネルの書き換えの直後に同じ本文・選択・図種で組み直し済みなら組み直さない。
-function _propsNeedRebuild() {
-  var b = _propsBuiltFor;
-  _propsBuiltFor = null;
-  if (!b) return true;
-  var k = _propsKey();
-  return !(b.text === k.text && b.sel === k.sel && b.module === k.module);
+// refresh が右パネルを組み直すか。同じ本文・選択・図種で組み直し済みなら組み直さない (MA.propsRebuild.tracker)。
+function _propsNeedRebuild() { return _propsBuilt ? _propsBuilt.needRebuild() : true; }
+
+// 図種モジュールに渡す「本文を書き換える口」(右パネル・図の行間の挿入の窓・Delete キー・状態表の遷移追加の窓)。
+// 書き換えたら本文をその場で読み直し、右パネルもその場で今の読みから組み直す
+// (次の手が描き直し前の古い読み・古いフォームに対して働かない)。後から来る refresh は、
+// 本文と選択が変わっていなければ組み直さない (確定の直後に選んだ・打った欄を消さない)。MA.propsRebuild。
+// carrySelection: 右パネルの反映の後も直した要素 (同じ行) を選んだままにする (右パネルだけ。selection-carry)。
+function _editCtx(carrySelection) {
+  return window.MA.propsRebuild.makeCtx({
+    getText: function() { return mmdText; },
+    write: function(s) {
+      if (carrySelection) _noteSelectionCarry();
+      mmdText = s;
+      suppressSync = true;
+      editorEl.value = s;
+      suppressSync = false;
+    },
+    // Re-parse synchronously so any setSelected() that fires right
+    // after sees the updated structure (cross-ported from MermaidAssist PR #1 commit a4e8410).
+    reparse: function() {
+      if (currentModule && currentModule.parse) {
+        try { currentParsed = currentModule.parse(mmdText); } catch (e) { /* leave stale */ }
+      }
+    },
+    rebuildNow: _rebuildPropsNow,
+    schedule: scheduleRefresh,
+  });
 }
 
 function renderProps(parsed) {
   if (!parsed) parsed = currentParsed;
+  if (_propsBuilt) _propsBuilt.markBuilt(false);
   var sel = window.MA.selection.getSelected();
   updatePropsTabLabel(sel);
   // フォームが読めない記法の要素 (overlay-builder.addUnclaimed) は、
@@ -10664,28 +10667,7 @@ function renderProps(parsed) {
   // 繰り返し・手続きが作った部品の欄は読むだけ (本文を書き換えない)
   var _gen = (sel && sel.length) ? _generatedOfSelection(sel) : null;
   var _GP = window.MA.generatedPart;
-  var _ctx = {
-    getMmdText: function() { return mmdText; },
-    setMmdText: function(s) {
-      _noteSelectionCarry();
-      mmdText = s;
-      suppressSync = true;
-      editorEl.value = s;
-      suppressSync = false;
-      // Re-parse synchronously so any setSelected() that fires right
-      // after sees the updated structure. Without this, currentParsed
-      // stayed stale until the async refresh and caused selection
-      // look-ups to hit wrong elements (cross-ported from MermaidAssist
-      // PR #1 commit a4e8410).
-      if (currentModule && currentModule.parse) {
-        try { currentParsed = currentModule.parse(mmdText); } catch (e) { /* leave stale */ }
-      }
-    },
-    // 右パネルから本文を書き換えたら、右パネルはその場で今の本文の読みから組み直す
-    // (次の手が描き直し前の古い読み・古いフォームに対して働かない)。後から来る refresh は、
-    // 本文と選択が変わっていなければ組み直さない (確定の直後に選んだ・打った欄を消さない)。
-    onUpdate: function() { _rebuildPropsNow(); scheduleRefresh(); },
-  };
+  var _ctx = _editCtx(true);
   currentModule.renderProps(sel, parsed, propsEl, _gen && _GP ? _GP.guard(_ctx, _gen, _refuseGenerated) : _ctx);
   if (_gen && _GP) _GP.lock(propsEl, _gen);
 }
