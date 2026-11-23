@@ -950,6 +950,28 @@ def _atomic_write_text(path, text, encoding='utf-8', newline=None):
         pass
 
 
+def _text_bytes(text, encoding='utf-8', newline=None):
+    """`open(path, 'w', encoding=encoding, newline=newline)` が `text` を書いたときのバイト列。"""
+    if newline is None:
+        text = text.replace('\n', os.linesep)
+    elif newline not in ('', '\n'):
+        text = text.replace('\n', newline)
+    return text.encode(encoding)
+
+
+def _same_text_on_disk(path, text, encoding='utf-8', newline=None):
+    """TICKET-owner-20261124-0342-1: `text` を書いたときのバイトが、ディスクの `path` と 1 バイトも違わないか。
+
+    無変更の保存・自動保存・タブの切り替えが同じ中身の .puml を書き直して更新時刻だけを進めると、
+    更新時刻で比べる「書き出しが古い」(GET /export-file) が、直していない図の書き出しを古いと言う。
+    同じなら書かない (エディタの未変更保存と同じ)。書かなくてもディスクのバイトは書いた場合と同じ。
+    """
+    try:
+        return path.is_file() and path.read_bytes() == _text_bytes(text, encoding=encoding, newline=newline)
+    except OSError:
+        return False
+
+
 def _atomic_write_bytes(path, data):
     """`path` をバイト列で置き換える。zip は 1 バイトでも欠けると開けないので
     書き途中を見せない (BLK-primary-20260918-0249)。"""
@@ -2399,7 +2421,10 @@ class Handler(BaseHTTPRequestHandler):
             body_text = dsl.replace('\r\n', '\n') if newline else dsl
             if bom and not body_text.startswith('﻿'):
                 body_text = '﻿' + body_text
-            _atomic_write_text(file_path, body_text, newline=newline)
+            # TICKET-owner-20261124-0342-1: 中身が同じなら書かない (更新時刻を進めない)。
+            written = not _same_text_on_disk(file_path, body_text, newline=newline)
+            if written:
+                _atomic_write_text(file_path, body_text, newline=newline)
         except OSError as e:
             self._send_json(500, {'error': f'write failed: {e}'})
             return
@@ -2425,7 +2450,9 @@ class Handler(BaseHTTPRequestHandler):
                'savedAs': target, 'kind': new_kind,
                'savedKind': self._read_saved_kinds(save_dir).get(target, ''),
                # 書いたバイトの改行・文字コード (下端の 1 語)。保存先へは UTF-8 で書く。
-               'eol': _newline_name(newline), 'encoding': 'utf-8', 'bom': bom}
+               'eol': _newline_name(newline), 'encoding': 'utf-8', 'bom': bom,
+               # 中身が同じで .puml を書き直さなかったときは false (保存済みであることは変わらない)。
+               'written': written}
         if target != dt:
             out['renamedFrom'] = dt
             out['prevKind'] = prev_kind
