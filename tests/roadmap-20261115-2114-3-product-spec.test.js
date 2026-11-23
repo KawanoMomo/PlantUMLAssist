@@ -83,7 +83,26 @@ var V7_MUST_SCENARIOS = [
   'tests/scenarios/primary-3-s3.spec.js',              // 必須 3 行番号で 1 本を名指しする
   'tests/scenarios/junior-2-s4.spec.js',               // 必須 4 書き出しが古いかを読める
 ];
+// v8.0 の必須 1〜4 の scenario (roadmap/v8.0.md クライテリア 6。TICKET-roadmap-20261123-0857-3)。
+// 前書きが「図を続けて直して渡す順」(選んだまま → 続けて打つ → 書き出し → 置換の戻し) にこの順で名指しする。
+var V8_MUST_SCENARIOS = [
+  'tests/scenarios/primary-4-s1.spec.js',              // 必須 1 直した後も選んだまま
+  'tests/scenarios/roadmap-20261123-0857-1.spec.js',   // 必須 2 続けて打つ手が今の本文に働く
+  'tests/scenarios/roadmap-20261123-0857-2.spec.js',   // 必須 3 書き出しは今の本文の図
+  'tests/scenarios/roadmap-20261123-0226-1.spec.js',   // 必須 4 1 回の置換は 1 押しで全部戻る
+];
 var ALL_SCENES = null;
+// 「## 製品の約束」の節の箇条 (- で始まる行)。
+function promiseLines(text) {
+  var i = text.indexOf('\n## 製品の約束');
+  if (i < 0) return [];
+  var j = text.indexOf('\n## ', i + 5);
+  return text.slice(i, j < 0 ? text.length : j).split(/\r?\n/).filter(function(l) { return /^- /.test(l); });
+}
+// 操作と描き直しの順の約束: 手は描き直しの結果でなく今の本文を読む、と言う行。
+function orderPromise(lines) {
+  return lines.filter(function(l) { return l.indexOf('描き直し') >= 0 && l.indexOf('今の本文') >= 0; });
+}
 // 表の行を数えない所 (製品の約束・読み方の「画面の語」の表)。それ以外の場面の表の本文の行は全部、#N か版で始まる。
 function strayRows(stray) {
   return stray.filter(function(s) { return s.scene && s.scene !== '製品の約束' && s.scene !== '読み方'; })
@@ -149,15 +168,56 @@ describe('製品仕様書 docs/spec/product-spec.md', function() {
     expect(missingMust(S.rows, V6_SCENES, V6_MUST_SCENARIOS)).toEqual([]);
   });
 
-  test('表題と前書きは v7.0', function() {
-    expect(SPEC.split(/\r?\n/)[0]).toBe('# 製品仕様書 — PlantUMLAssist v7.0');
+  test('表題と前書きは v8.0', function() {
+    expect(SPEC.split(/\r?\n/)[0]).toBe('# 製品仕様書 — PlantUMLAssist v8.0');
   });
 
-  test('v7.0 の必須 1〜4 の scenario を指す行があり、前書きが 1 件の変更を渡す順に同じ 4 本を名指しする', function() {
+  test('v7.0 の必須 1〜4 の scenario を指す行がある (v8.0 で前書きを替えても行は残る)', function() {
     expect(missingMust(S.rows, ALL_SCENES, V7_MUST_SCENARIOS)).toEqual([]);
+  });
+
+  test('v8.0 の必須 1〜4 の scenario を指す v8.0 の行があり、前書きが続けて直して渡す順に同じ 4 本を名指しする', function() {
+    var v8rows = S.rows.filter(function(r) { return r.ver === 'v8.0'; });
+    expect(missingMust(v8rows, ALL_SCENES, V8_MUST_SCENARIOS)).toEqual([]);
     var pre = prefaceSpecs(SPEC);
-    expect(V7_MUST_SCENARIOS.filter(function(p) { return pre.indexOf(p) < 0; })).toEqual([]);
+    expect(pre).toEqual(V8_MUST_SCENARIOS);
     pre.forEach(function(p) { expect(p + ':' + existsInRepo(p)).toBe(p + ':true'); });
+  });
+
+  test('「製品の約束」に操作と描き直しの順の約束が 1 行あり、前からの 5 行も残る', function() {
+    var lines = promiseLines(SPEC);
+    expect(lines.length).toBe(6);
+    var order = orderPromise(lines);
+    expect(order.length).toBe(1);
+    expect(order[0]).toContain('**操作は今の本文に働く**');
+    expect(SPEC.slice(0, SPEC.indexOf('\n## ')).indexOf('操作は今の本文に働く') >= 0).toBe(true);
+  });
+
+  test('v7.0.0 以後の振る舞いの変更を票・コミットと並べた ECN-012 と、今の本文を読む判断の ADR ドラフトがある', function() {
+    var ecnPath = 'docs/ecn/ECN-012_v7.0.0-to-v8.0-behavior.md';
+    var ecn = fs.readFileSync(path.join(ROOT, ecnPath), 'utf8');
+    // v7.0.0 以後に master へ入った振る舞いの票 (v8.0 の必須 1〜4 を含む) が、マージのハッシュと並ぶ。
+    ['TICKET-junior-20261123-0742', 'TICKET-owner-20261123-0202-1', 'TICKET-owner-20261123-0842-1',
+      'TICKET-owner-20261123-0222-prune', 'TICKET-roadmap-20261123-0226-3', 'TICKET-roadmap-20261123-0226-4',
+      'TICKET-owner-20261123-0642-prune', 'TICKET-owner-20261123-0742-1', 'TICKET-primary-20261123-0810-wish',
+      'TICKET-owner-20261123-0842-2', 'TICKET-roadmap-20261123-0857-1', 'TICKET-roadmap-20261123-0857-2'].forEach(function(id) {
+      var line = ecn.split(/\r?\n/).filter(function(l) { return l.indexOf('| ' + id + ' |') >= 0; })[0] || '';
+      expect(id + ':' + /\|\s*[0-9a-f]{7}(\s[0-9a-f]{7})*\s*\|\s*$/.test(line)).toBe(id + ':true');
+    });
+    var adrPath = 'docs/adr/drafts/gui-ops-read-current-text.md';
+    var adr = fs.readFileSync(path.join(ROOT, adrPath), 'utf8');
+    expect(adr).toContain('未採番');
+    expect(adr).toContain('今の本文を読む');
+    expect(adr).toContain('共通部に寄せた所');
+    expect(adr).toContain('寄せられなかった所');
+    // ADR が名指しする共通部のファイルが実在する。
+    var m, re = /`(src\/core\/[^`]+\.js)`/g, srcs = [];
+    while ((m = re.exec(adr))) srcs.push(m[1]);
+    expect(srcs.length).toBeGreaterThanOrEqual(4);
+    srcs.forEach(function(p) { expect(p + ':' + existsInRepo(p)).toBe(p + ':true'); });
+    expect(SPEC).toContain(adrPath);
+    expect(SPEC).toContain(ecnPath);
+    expect(README).toContain(ecnPath);
   });
 
   test('全部の場面の表の行が数えられる (#N でも版でもない行が無い)', function() {
@@ -251,6 +311,14 @@ describe('突き合わせが変異で落ちる', function() {
     expect(missingMust(rows, ALL_SCENES, ['tests/scenarios/a.spec.js', 'tests/scenarios/b.spec.js'])).toEqual(['tests/scenarios/b.spec.js']);
     expect(prefaceSpecs('# T\n\n1. x (`tests/scenarios/a.spec.js`)\n\n## 開く\n\n`tests/scenarios/z.spec.js`')).toEqual(['tests/scenarios/a.spec.js']);
     expect(strayRows([{ scene: '読み方', line: '| `id` |' }, { scene: '開く', line: '| 新 | x |' }])).toEqual(['開く: | 新 | x |']);
+  });
+
+  test('v8.0: 約束の節の箇条だけを拾い、順の約束の行が無ければ 0 件', function() {
+    var t = '# T\n\n- 前書きの描き直しと今の本文\n\n## 製品の約束\n\n- **本文が正本**\n- **守り**\n\n## 読み方\n\n- 描き直しの前でも今の本文\n';
+    expect(promiseLines(t)).toEqual(['- **本文が正本**', '- **守り**']);
+    expect(orderPromise(promiseLines(t))).toEqual([]);
+    expect(orderPromise(['- **操作は今の本文に働く**。描き直しの結果でなく'])).toEqual(['- **操作は今の本文に働く**。描き直しの結果でなく']);
+    expect(promiseLines('# T\n\n## 読み方\n- x')).toEqual([]);
   });
 
   test('README の見出しを拾う', function() {
