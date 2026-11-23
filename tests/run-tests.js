@@ -53,6 +53,7 @@ const sourceFiles = [
   'src/core/outline.js',
   'src/core/select-at-line.js',
   'src/core/selection-carry.js',
+  'src/core/props-rebuild.js',
   'src/core/line-peek.js',
   'src/core/tail-memory.js',
   'src/core/tail-kind-chips.js',
