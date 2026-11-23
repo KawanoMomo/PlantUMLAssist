@@ -30,6 +30,12 @@ window.MA.fileMenuUi = (function() {
   function _dir() {
     try { return typeof window._wsFileDir === 'function' ? window._wsFileDir() : './autosave'; } catch (e) { return './autosave'; }
   }
+  // 保存先を決めていない間か (一覧と同じ saveTarget.listDir から決める。TICKET-owner-20261123-2222-1)。
+  function _unset() {
+    var ST = window.MA.saveTarget;
+    if (!ST || !ST.isUnset) return false;
+    try { return ST.isUnset(window.MA.autoSave ? window.MA.autoSave.getConfig() : null); } catch (e) { return false; }
+  }
   function toast(msg) {
     try { if (window.MA.toast) window.MA.toast.show(msg); } catch (e) {}
     try { if (typeof window.setSaveStatus === 'function') window.setSaveStatus(msg); } catch (e) {}
@@ -437,6 +443,8 @@ window.MA.fileMenuUi = (function() {
 
   // 「新しいフォルダ」: フォルダの行の下に名前の欄を出し、Enter で実際にフォルダを作る (Esc で取り消し)。
   function newFolder(folder) {
+    // 保存先を決めていない間は作らない (作っても画面のどこにも出ない既定のフォルダに増える)。
+    if (!(folder && folder.kind === 'sub') && _unset()) return Promise.resolve(false);
     var parentDir = (folder && folder.kind === 'sub') ? folder.dir : ((window.MA.filesPanel && window.MA.filesPanel.subRoot && window.MA.filesPanel.subRoot()) || _dir());
     var anchor = (folder && folder.kind === 'sub') ? folder.el : $('files-target-caret');
     var host = anchor && anchor.closest ? (anchor.closest('.files-target-row') || anchor) : anchor;
@@ -544,7 +552,7 @@ window.MA.fileMenuUi = (function() {
     } else {
       menuItems = ctx.type === 'file'
         ? FM().fileItems({ git: _isGit() })
-        : FM().folderItems({ kind: ctx.folder.kind });
+        : FM().folderItems({ kind: ctx.folder.kind, unset: _unset() });
     }
     menu.textContent = '';
     menu.setAttribute('data-menu-kind', ctx.type);

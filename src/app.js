@@ -479,10 +479,16 @@ function init() {
   })();
 
   // 上部バーのパンくずのフォルダ名。押したら設定を開く (保存先を変えられる)。
+  // TICKET-owner-20261123-2222-1: 保存先を決めていない間 (行が「ダウンロード」) は、⚙ 設定を挟まず
+  // 「保存先のフォルダを選ぶ」窓 (Import ▾・右クリック・Ctrl+K と同じ 1 つ) を開く。決めた後は今どおり設定を開く。
   (function setupTopSaveTarget() {
     var el = document.getElementById('top-save-target');
     if (!el) return;
     el.addEventListener('click', function() {
+      var ST = window.MA.saveTarget;
+      var cfg = null;
+      try { cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null; } catch (e) { cfg = null; }
+      if (ST && ST.isUnset && ST.isUnset(cfg)) { openChangeTarget(); return; }
       var btn = document.getElementById('btn-config');
       if (btn) btn.click();
     });

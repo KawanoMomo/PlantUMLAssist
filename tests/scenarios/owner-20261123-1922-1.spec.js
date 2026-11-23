@@ -62,10 +62,9 @@ test('既定の画面では、保存先に決めていないフォルダの図�
   expect((await S.listDir(page, DEF)).sort()).toEqual(['common', 'hand_seq']);
 
   // 保存先を決めると (窓のパスの欄 1 か所)、その保存先の図が並ぶ。
+  // TICKET-owner-20261123-2222-1: 未設定の行「ダウンロード」は ⚙ 設定を挟まず、保存先のフォルダを選ぶ窓を開く。
   await page.locator('#top-save-target').click();
-  await expect(page.locator('#cfg-modal')).toBeVisible();
-  await page.locator('#cfg-tab-autosave').click();
-  await page.locator('#cfg-file-dir-pick').click();
+  await expect(page.locator('#target-pick')).toHaveCount(1);
   const dir = S.dirFor(__filename);
   fs.rmSync(S.absDirFor(__filename), { recursive: true, force: true });
   fs.mkdirSync(S.absDirFor(__filename), { recursive: true });

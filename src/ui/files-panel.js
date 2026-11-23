@@ -527,13 +527,21 @@ window.MA.filesPanel = (function() {
       if (c0) c0.textContent = '';
       // TICKET-owner-20261123-1922-1: 保存先を決めていない間は図を並べず、節の中で理由を言う
       // (中央の一覧と同じ語。決める入口はこの節の右クリック「保存先のフォルダを選ぶ…」)。
+      // TICKET-owner-20261123-2222-1: 決める入口の語は title にしまわず、中央の一覧と同じ 2 行で見える字にする。
       var ST = window.MA.saveTarget;
       if (!_targetDir() && ST && ST.unsetHint) {
+        var h = ST.unsetHint();
         var hint = document.createElement('div');
         hint.className = 'files-empty files-target-unset';
         hint.id = 'files-target-unset';
-        hint.textContent = ST.unsetHint().text;
-        hint.title = ST.unsetHint().how;
+        var l1 = document.createElement('div');
+        l1.id = 'files-target-unset-text';
+        l1.textContent = h.text;
+        var l2 = document.createElement('div');
+        l2.id = 'files-target-unset-hint';
+        l2.textContent = h.how;
+        hint.appendChild(l1);
+        hint.appendChild(l2);
         host.appendChild(hint);
       }
       _syncTargetRow();

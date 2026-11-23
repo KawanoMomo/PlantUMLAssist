@@ -39,6 +39,14 @@ window.MA.saveTarget = (function() {
     return cfg.fileDir || './autosave';
   }
 
+  // TICKET-owner-20261123-2222-1: 保存先を決めていない間か。FILES の保存先節の操作 (右クリックの「新しいフォルダ」・
+  // 節の行「ダウンロード」を押したときに開く窓) は、一覧と同じこの 1 つ (listDir) から決める。
+  // 前は一覧だけが未設定を見分け、右クリックの「新しいフォルダ」は画面に出ない既定のフォルダに作り、
+  // 節の行は ⚙ 設定を開いて、保存先を決める窓まで手が 1 つ多かった。
+  function isUnset(cfg) {
+    return !listDir(cfg);
+  }
+
   // 保存先を決めていないとき、一覧の場所に出す案内 (図を並べない理由と、決める入口の語)。
   function unsetHint() {
     return {
@@ -87,7 +95,7 @@ window.MA.saveTarget = (function() {
     return {
       mode: 'download',
       text: '⬇ ダウンロード',
-      title: '保存先フォルダは未設定です。保存するとブラウザのダウンロードになります (押すと設定を開きます)',
+      title: '保存先フォルダは未設定です。保存するとブラウザのダウンロードになります (押すと「保存先のフォルダを選ぶ」窓が開きます)',
       configured: false,
     };
   }
@@ -137,7 +145,7 @@ window.MA.saveTarget = (function() {
       mode: 'download',
       folder: 'ダウンロード',
       folderTitle: '保存先フォルダは未設定です。保存するとブラウザのダウンロードになります'
-        + ' (押すと保存先を決められます)',
+        + ' (押すと「保存先のフォルダを選ぶ」窓が開き、保存先を決められます)',
       name: file,
       configured: false,
     };
@@ -189,6 +197,6 @@ window.MA.saveTarget = (function() {
       title: hm + ' に ' + target.dir + '/' + target.name + '.puml へ保存しました' };
   }
 
-  return { decide: decide, listDir: listDir, unsetHint: unsetHint, messageFor: messageFor, tailOf: tailOf, label: label,
+  return { decide: decide, listDir: listDir, isUnset: isUnset, unsetHint: unsetHint, messageFor: messageFor, tailOf: tailOf, label: label,
     saveButton: saveButton, breadcrumb: breadcrumb, saveState: saveState, savedFlash: savedFlash };
 })();

@@ -35,10 +35,8 @@ test('手順3 設定で保存先を変えると、上部バーの表示がその
   // 窓の欄 (パスを打つ所は窓の中の 1 か所) で決める。窓は実在するフォルダだけを保存先にする。
   fs.mkdirSync(S.absDirFor(__filename), { recursive: true });
   const DIR_TAIL = DIR.replace(/^\.\//, '');
+  // TICKET-owner-20261123-2222-1: 未設定の行「ダウンロード」は ⚙ 設定を挟まず、その窓を 1 押しで開く。
   await page.locator('#top-save-target').click();
-  await expect(page.locator('#cfg-modal')).toBeVisible();
-  await page.locator('#cfg-tab-autosave').click();
-  await page.locator('#cfg-file-dir-pick').click();
   await expect(page.locator('#target-pick')).toHaveCount(1);
   await page.locator('#target-pick-path').fill(DIR);
   await page.locator('#target-pick-ok').click();
