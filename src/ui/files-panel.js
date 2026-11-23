@@ -247,6 +247,8 @@ window.MA.filesPanel = (function() {
     });
     host.setAttribute('data-count', String(_subTree.dirs.length));
     _focusBack(host, keep);
+    // サブフォルダの図の行にも M・A の印 (読み直しで行が描き直るたびに付け直す)。
+    _gitMarks();
   }
 
   function secOpen(id) {

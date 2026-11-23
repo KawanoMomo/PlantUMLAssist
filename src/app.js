@@ -4793,6 +4793,13 @@ function _activeDocName() {
   return d ? d.name : '';
 }
 
+// GIT 節の「この図の履歴」と比較が引く図のフォルダ。サブフォルダの図はそのフォルダ
+// (保存先で引くと直下の同じ名前の図の履歴になる)、ほかは保存先。Git の状態 (変更の行) は保存先全体で読む。
+function _gitDocDir() {
+  var d = window.MA.workspace ? window.MA.workspace.getActive() : null;
+  return (d && d.sub && d.dir) ? d.dir : _wsFileDir();
+}
+
 // ── 変遷履歴 ─────────────────────────────
 // save-diff は「前回保存した 1 点」しか持たないので、A → B → A と書き換えが
 // 往復しても毎回「変わりました」としか出ず、往復そのものが見えなかった。
@@ -5797,7 +5804,7 @@ function renderSeniorGit() {
     ? window.fetch('/autosave-versions?dir=' + encodeURIComponent(_wsFileDir()) + '&type=' + encodeURIComponent(stem) + '&stamp=' + encodeURIComponent(c.version))
       .then(function(r) { return r.ok ? r.text() : null; })
       .catch(function() { return null; })
-    : window.fetch('/git-show?dir=' + encodeURIComponent(_wsFileDir()) + '&file=' + encodeURIComponent(stem)
+    : window.fetch('/git-show?dir=' + encodeURIComponent(_gitDocDir()) + '&file=' + encodeURIComponent(stem)
         + '&rev=' + encodeURIComponent(c.hash))
       .then(function(r) { return r.ok ? r.json() : null; })
       .then(function(d) { return d && typeof d.text === 'string' ? d.text : null; })
@@ -5895,6 +5902,7 @@ function setupSeniorGit() {
     current: function() { return _seniorGit ? { hash: _seniorGit.hash, name: _seniorGit.name } : null; },
     activeName: _activeDocName,
     fileDir: _wsFileDir,
+    docDir: _gitDocDir,
     workingText: function() { return mmdText; },
     refreshDiff: function() { if (_seniorGit && _seniorGit.text) renderSeniorGitDsl(); },
     diagramDiff: syncGitDiagramDiff,
