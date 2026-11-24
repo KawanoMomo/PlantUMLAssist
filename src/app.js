@@ -4570,14 +4570,7 @@ function renderTabs() {
       close.textContent = '×';
       close.addEventListener('click', function(ev) {
         ev.stopPropagation();
-        var wasActive = doc.id === window.MA.workspace.getActiveId();
-        if (wasActive) saveActiveDoc();
-        if (window.MA.sourceLock) { try { window.MA.sourceLock.release(doc.id); } catch (e) {} }
-        if (window.MA.workspace.close(doc.id)) {
-          // 閉じた図の履歴は持ち越さない (VS Code と同じ)。
-          if (window.MA.history && window.MA.history.forget) window.MA.history.forget(doc.id);
-          if (wasActive) applyActiveDoc(); else renderTabs();
-        }
+        requestCloseTab(doc.id);
       });
       el.appendChild(close);
     }
@@ -4608,6 +4601,123 @@ function renderTabs() {
   // design 10a: 選ばれているタブを「＋」「ツール ▾」の下に潜らせない。
   try { revealActiveTab(bar); } catch (e) {}
 }
+
+// ── タブの × (TICKET-owner-20261124-0822-2) ──────────────────
+// 未保存の図 (上部バーが「● 保存」になる図) は、閉じる前にアプリ内の窓で知らせて選ばせる。
+// 保存済み・見本のままの図は今どおり 1 押しで閉じる。判定は close-guard。
+function closeTabNow(id) {
+  var WS = window.MA.workspace;
+  if (!WS) return false;
+  var wasActive = id === WS.getActiveId();
+  if (wasActive) saveActiveDoc();
+  if (window.MA.sourceLock) { try { window.MA.sourceLock.release(id); } catch (e) {} }
+  if (!WS.close(id)) return false;
+  // 閉じた図の履歴は持ち越さない (VS Code と同じ)。
+  if (window.MA.history && window.MA.history.forget) window.MA.history.forget(id);
+  if (wasActive) applyActiveDoc(); else renderTabs();
+  return true;
+}
+
+function _closeNeedsAsk(id) {
+  var CG = window.MA.closeGuard;
+  var WS = window.MA.workspace;
+  if (!CG || !WS) return false;
+  var doc = null;
+  (WS.list() || []).forEach(function(d) { if (d && d.id === id) doc = d; });
+  if (!doc) return false;
+  try {
+    var SL = window.MA.sourceLock;
+    return CG.needsAsk({ status: docSaveStatus(id), dsl: doc.dsl, untouched: _isUntouchedDoc(doc),
+      asOpened: !!(SL && SL.isUnchanged && SL.isUnchanged(id, doc.dsl)) });
+  } catch (e) { return false; }
+}
+
+function requestCloseTab(id) {
+  var WS = window.MA.workspace;
+  if (!WS) return;
+  // 開いているタブは、打ったばかりの字も含めて判定する (保存先がある画面ではここで書き戻され、聞かずに閉じる)。
+  if (id === WS.getActiveId()) saveActiveDoc();
+  if (_closeNeedsAsk(id)) { openCloseConfirm(id); return; }
+  closeTabNow(id);
+}
+
+function _closeCloseConfirm() {
+  var m = document.getElementById('close-confirm');
+  if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+
+function openCloseConfirm(id) {
+  _closeCloseConfirm();
+  var CG = window.MA.closeGuard;
+  var WS = window.MA.workspace;
+  var doc = null;
+  (WS.list() || []).forEach(function(d) { if (d && d.id === id) doc = d; });
+  if (!CG || !doc) return null;
+  var ST = window.MA.saveTarget;
+  var fileName = window.MA.topStatus && window.MA.topStatus.fileName ? window.MA.topStatus.fileName(doc.name) : doc.name;
+  var mode = 'download';
+  try { if (ST) mode = ST.decide(_cfgForDoc(doc), doc, doc.name).mode; } catch (e) {}
+  if (_sourcePathOf(id)) mode = 'file';
+  var msg = CG.message(fileName, mode);
+  var m = document.createElement('div');
+  m.id = 'close-confirm';
+  m.setAttribute('role', 'alertdialog');
+  m.setAttribute('aria-modal', 'true');
+  m.setAttribute('aria-label', msg.title);
+  m.setAttribute('data-doc-id', id);
+  var box = document.createElement('div');
+  box.className = 'cc-box';
+  var h = document.createElement('div');
+  h.className = 'cc-title';
+  h.textContent = msg.title;
+  var body = document.createElement('div');
+  body.className = 'cc-body';
+  body.textContent = msg.body;
+  var row = document.createElement('div');
+  row.className = 'cc-row';
+  var first = null;
+  CG.choices().forEach(function(c) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('data-choice', c.id);
+    b.textContent = c.label;
+    b.addEventListener('click', function() { _onCloseChoice(id, c.id); });
+    row.appendChild(b);
+    if (!first) first = b;
+  });
+  box.appendChild(h); box.appendChild(body); box.appendChild(row);
+  m.appendChild(box);
+  // 窓の外 (暗い所) を押しても何もしない (やめると同じ)。
+  m.addEventListener('mousedown', function(e) { if (e.target === m) e.preventDefault(); });
+  document.body.appendChild(m);
+  if (first) first.focus();
+  return m;
+}
+
+function _onCloseChoice(id, choice) {
+  _closeCloseConfirm();
+  if (choice === 'discard') { closeTabNow(id); return; }
+  if (choice !== 'save') return;
+  var WS = window.MA.workspace;
+  // 保存は開いている図の本文で行う (saveFile と同じ経路・同じ書き先)。
+  if (WS && id !== WS.getActiveId()) switchToDoc(id);
+  if (!WS || id !== WS.getActiveId()) return;
+  var p = null;
+  try { p = saveFile(); } catch (e) { p = null; }
+  Promise.resolve(p).then(function(ok) {
+    // 書けなかったときはタブを残す (理由は保存の札が言う)。
+    if (ok) closeTabNow(id);
+  });
+}
+
+// 窓が開いている間の Esc は「やめる」と同じ (何もせず閉じる)。先に受けて止め、背後の Esc は動かさない。
+window.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape' || e.isComposing) return;
+  if (!document.getElementById('close-confirm')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  _closeCloseConfirm();
+}, true);
 
 // タブ列を横に送り、選ばれているタブを全部見える所に出す (もう見えていれば動かさない)。
 // 右端の「＋」「ツール ▾」は position: sticky で中身の上に貼り付くので、その幅を隠れる幅として差し引く。
@@ -9247,8 +9357,9 @@ function saveFile() {
             dir: doc.dir, sub: doc.sub };
   }
   // 手元から開いたファイルの上書き保存は、元のファイルへ戻す。
+  // 返り値は書けたかどうかの Promise (タブの × の「保存して閉じる」が、書けた回だけ閉じる)。
   if (doc && _sourcePathOf(doc.id)) {
-    writeBackToSource(doc).then(function(res) {
+    return writeBackToSource(doc).then(function(res) {
       var st = document.getElementById('status-save-result');
       if (st) st.setAttribute('data-source-write', res.ok ? 'ok' : 'error');
       if (res.ok) {
@@ -9260,8 +9371,8 @@ function saveFile() {
         setSaveStatus('⚠ 元のファイルに書けませんでした: ' + res.error);
         if (window.MA.toast) window.MA.toast.show('⚠ 元のファイルに書けませんでした: ' + res.error);
       }
+      return !!res.ok;
     });
-    return;
   }
   var cfg = null;
   try { cfg = window.MA.autoSave ? window.MA.autoSave.getConfig() : null; } catch (e) { cfg = null; }
@@ -9274,7 +9385,7 @@ function saveFile() {
 
   if (target.mode === 'file') {
     // saveActiveDoc() が既に書き出しているが、ここでは結果を待って利用者に伝える。
-    window.MA.workspace.saveToFile(_withSourceEol(doc), target.dir).then(function(ok) {
+    return window.MA.workspace.saveToFile(_withSourceEol(doc), target.dir).then(function(ok) {
       setSaveStatus(ST.messageFor(target, ok));
       if (ok) {
         _afterManualSave(doc, target, true);
@@ -9282,8 +9393,8 @@ function saveFile() {
         // (道付きの名前で名指しし、直下の同じ名前の図とは別の図として比べる。TICKET-roadmap-20261123-0226-4)
         runSaveSwapCheck(doc && doc.name, doc && doc.dsl, doc);
       }
+      return !!ok;
     });
-    return;
   }
 
   downloadBlob(target.name + '.puml', new Blob([mmdText], { type: 'text/plain' }));
@@ -9291,6 +9402,7 @@ function saveFile() {
   // ダウンロードした中身を前回保存版にする (書いたファイルと画面の印を食い違わせない)。
   if (doc) _afterManualSave({ id: doc.id, name: doc.name, diagramType: doc.diagramType, dsl: mmdText }, target, false);
   runSaveSwapCheck(doc && doc.name, doc && doc.dsl);
+  return Promise.resolve(true);
 }
 
 // ── 保存の入れ替わり検知 ──────────────────

@@ -297,6 +297,15 @@ html, body {
   box-shadow: 0 8px 24px rgba(0,0,0,0.35); font-size: 12px;
 }
 #files-ctx-menu[hidden] { display: none; }
+/* 未保存の図のタブを × で閉じる前の窓 (TICKET-owner-20261124-0822-2) */
+#close-confirm { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: flex-start; justify-content: center; padding-top: 18vh; background: rgba(0,0,0,0.35); }
+#close-confirm .cc-box { width: min(460px, 92vw); background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,0.45); font-size: 13px; }
+#close-confirm .cc-title { font-weight: 600; margin-bottom: 6px; word-break: break-all; }
+#close-confirm .cc-body { color: var(--text-secondary); font-size: 12px; margin-bottom: 10px; }
+#close-confirm .cc-row { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+#close-confirm .cc-row button { font: inherit; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer; }
+#close-confirm .cc-row button[data-choice="save"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+#close-confirm .cc-row button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* 保存先のフォルダを選ぶ窓 (FILES の右クリック・Import ▾・Ctrl+K・⚙ 設定の 4 つの入口が同じ語で開く) */
 #target-pick { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; background: rgba(0,0,0,0.35); }
 #target-pick .target-pick-box { width: min(520px, 92vw); background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,0.45); font-size: 13px; }
@@ -4037,6 +4046,7 @@ label.rel-opt:hover { background: var(--bg-tertiary); }
 <script src="src/core/props-renderer.js"></script>
 <script src="src/core/props-tab-label.js"></script>
 <script src="src/core/tab-reveal.js"></script>
+<script src="src/core/close-guard.js"></script>
 <script src="src/core/text-updater.js"></script>
 <script src="src/core/parser-utils.js"></script>
 <script src="src/core/svg-kind.js"></script>
