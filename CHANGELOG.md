@@ -1,3 +1,4 @@
+- TICKET-owner-20261124-0822-1: 右パネルの「名前 (id)」「表示名」「ステレオタイプ」に打って Enter を押すと「変更を反映」と同じに入る(class・component・state・usecase・sequence)。打ったまま図の別の要素を押す・欄の外へ離れたときも反映し、黙って捨てない。sequence の参加者のパネルにも同じ並びの「変更を反映」が出た。共通部は `src/ui/properties.js`
 - releaser: version 8.2.0
 - TICKET-owner-20261124-0422-3: 線・メッセージ・note の付いた要素(部品・アクター / ユースケース・参加者・状態・クラス)の「✕ 削除」は、6 図種で同じアプリ内の窓が一緒に消える本数を言い(「関係 1 本とnote 1 つも消えます」。シーケンスはメッセージ、状態は遷移)、Enter で要素と付いた行を消して図から要素が消える(Esc は何も変えない。Ctrl+Z 1 回で戻る)。図で要素を押して Delete キーでも同じ窓。ブラウザの確かめは出さない。共通部は `src/core/element-delete.js`
 - TICKET-owner-20261124-0422-2: 改名で参照の行を付け替えても、関係・メッセージのラベル(`:` の後)、1 行・複数行の note の本文、legend・title・区切り・alt / else 等の見出しの文、コメント行の同じ語は元のまま残る。付け替えるのは宣言・線の両端・note の対象の識別子だけ(sequence・class・component・usecase・state で共通の `dslUpdater.renameWithRefs`)
