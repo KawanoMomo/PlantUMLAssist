@@ -1,6 +1,6 @@
 'use strict';
 window.MA = window.MA || {};
-// sequence-activation-insert — BLK-human-20260912-0901
+// sequence-activation-insert —
 // activate / deactivate (実行中の帯) があるシーケンス図で、途中挿入の行を決める。
 //
 // それまでの挿入は「クリックした行の前 / 後」だけで行を決めていたので、
@@ -13,7 +13,7 @@ window.MA = window.MA || {};
 // deactivate がそのまま 1 行下がるので、帯の最後の要素になる。
 // 外側は deactivateLine + 1 (帯を飛び越した直後)。
 //
-// BLK-human-20260915-1204: 「帯の下を押したのに帯が伸びる」を直す。
+// 「帯の下を押したのに帯が伸びる」を直す。
 // DSL の行番号だけでは「帯の最後のメッセージの後」と「帯を抜けた先」が同じ行に見えるため、
 // プレビューの当たり判定 (帯の矩形の内/外) を resolve の第 4 引数 hint で受け取り、
 // hint.zone === 'outside' なら deactivate を残したままその後ろに入れる。

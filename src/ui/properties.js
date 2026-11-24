@@ -1,5 +1,10 @@
 'use strict';
 window.MA = window.MA || {};
+// 画面の語 (src/ui/terms.js) は HTML が先に読む。node の unit で require されたときは
+// 同じ window に語が無ければここで読む (TICKET-roadmap-20261115-2114-4)。
+if (!window.MA.terms && typeof require === 'function') {
+  try { var _termsPath = require.resolve('./terms.js'); delete require.cache[_termsPath]; require(_termsPath); } catch (e) {}
+}
 window.MA.properties = (function() {
   var state = {
     getMmdText: function() { return ''; },
@@ -54,11 +59,77 @@ window.MA.properties = (function() {
     return window.MA.htmlUtils.escHtml(s);
   };
 
+  // 欄の見出しは `for` で欄の id に結び付ける (TICKET-junior-20261116-0601)。見出しを押すと欄にフォーカスが移り、
+  // 見出しの語で欄を引ける (支援技術・Playwright の getByRole(…, { name }) )。見た目・欄の id は変えない。
+  function _for(id) { return ' for="' + escHtml(id) + '"'; }
+
+  // 文字を打つ欄 (本文・処理など textarea / 本文欄の部品) の見出し (TICKET-owner-20261116-1221-1)。
+  // 見出しは語だけにして `for` で欄に結び付け、Enter で確定する欄の打ち方の案内は見出しの外の 1 行に出す
+  // (見出しの語で欄を引ける。案内の字が欄の名前に混ざらない)。注釈の本文の見出しは 6 図種とも NOTE_BODY。
+  var ENTER_HINT = 'Enter で追加 / Shift+Enter で改行';
+  var NOTE_BODY = '本文';
+  function textLabelHtml(label, forId, opts) {
+    opts = opts || {};
+    return '<label' + _for(forId) + ' style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
+      (opts.enterHint
+        ? '<div class="field-hint" id="' + escHtml(forId) + '-hint" style="font-size:10px;color:var(--text-secondary);opacity:0.8;margin-bottom:2px;">' + ENTER_HINT + '</div>'
+        : '');
+  }
+
+  // 手で組んだ見出し (<label>…</label> の直後に欄) も欄に結び付ける共通の網 (TICKET-owner-20261116-1221-1)。
+  // for も中の欄も無い見出しの直後が文字・選ぶ欄なら、その欄に (id が無ければ振って) for を張る。
+  // 直後が本文欄の部品 (rich-label-editor) の入れ物なら、その中の textarea に張る。
+  // 直後が欄でない見出し (「末尾に追加」等の区切り) は触らない。見た目・並び・欄の値は変えない。
+  var _autoFieldSeq = 0;
+  function _isTextField(el) {
+    if (!el || !el.tagName) return false;
+    var tag = el.tagName.toUpperCase();
+    if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (tag !== 'INPUT') return false;
+    var t = String(el.getAttribute('type') || 'text').toLowerCase();
+    return /^(text|search|number|email|url|tel|password)$/.test(t);
+  }
+  function _rleTextarea(el) {
+    if (!el || !el.children) return null;
+    for (var i = 0; i < el.children.length; i++) {
+      var c = el.children[i];
+      if (c.classList && c.classList.contains('rle-textarea')) return c;
+    }
+    return null;
+  }
+  function linkFieldLabels(root) {
+    if (!root || !root.querySelectorAll) return 0;
+    var n = 0;
+    Array.prototype.forEach.call(root.querySelectorAll('label'), function(label) {
+      if (label.getAttribute('for') || label.id) return;
+      if (label.querySelector('input, select, textarea')) return;
+      var next = label.nextElementSibling;
+      var field = _isTextField(next) ? next : _rleTextarea(next);
+      if (!field) return;
+      if (field.getAttribute('aria-label') || field.getAttribute('aria-labelledby')) return;
+      if (field.labels && field.labels.length) return;
+      if (!field.id) field.id = (field !== next && next.id) ? next.id + '-text' : 'pua-field-' + (++_autoFieldSeq);
+      label.setAttribute('for', field.id);
+      n++;
+    });
+    return n;
+  }
+  // 右パネルは図種ごと・種別の切り替えごとに中身を描き直すので、描き直すたびに張り直す。
+  function watchFieldLabels(root) {
+    if (!root || root.__puaLabelWatch) return;
+    root.__puaLabelWatch = true;
+    linkFieldLabels(root);
+    if (typeof window.MutationObserver === 'function') {
+      new window.MutationObserver(function() { linkFieldLabels(root); })
+        .observe(root, { childList: true, subtree: true });
+    }
+  }
+
   // fieldHtml: standard text input field with label
   function fieldHtml(label, id, value, placeholder) {
     return '<div style="margin-bottom:8px;">' +
-      '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
-      '<input id="' + id + '" type="text" value="' + escHtml(value || '') + '" placeholder="' + escHtml(placeholder || '') + '" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;">' +
+      '<label' + _for(id) + ' style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
+      '<input id="' + id + '" type="text"' + (_isApplyFieldLabel(label) ? ' data-apply-field="1"' : '') + ' value="' + escHtml(value || '') + '" placeholder="' + escHtml(placeholder || '') + '" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;">' +
     '</div>';
   }
 
@@ -84,9 +155,10 @@ window.MA.properties = (function() {
         + (options[i].sub ? '<br><span style="font-size:9px;opacity:0.75;">' + escHtml(options[i].sub) + '</span>' : '')
         + '</button>';
     }
+    // ボタンの並びは label の for で指せないので、見出しに id を振り、並びを名前付きの group にする。
     return '<div style="margin-bottom:8px;">' +
-      '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
-      '<div id="' + id + '" style="display:flex;gap:3px;">' + btns + '</div>' +
+      '<label id="' + escHtml(id) + '-label" style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
+      '<div id="' + id + '" role="group" aria-labelledby="' + escHtml(id) + '-label" style="display:flex;gap:3px;">' + btns + '</div>' +
     '</div>';
   }
 
@@ -239,9 +311,9 @@ window.MA.properties = (function() {
         + '<span class="prop-rel-caret">' + (dirty ? '▴' : '▾') + '</span></button>' +
       '<div id="' + id + '"' + (dirty ? '' : ' hidden')
         + ' style="border:1px solid var(--border);border-radius:3px;padding:8px;margin-top:2px;">' +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">向き / Direction</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">' + escHtml(window.MA.terms.direction) + '</div>' +
         '<div id="' + id + '-dir" style="display:flex;gap:3px;margin-bottom:8px;">' + dirBtns + '</div>' +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">多重度 / Multiplicity</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">' + escHtml(window.MA.terms.multiplicity) + '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
           '<input id="' + id + '-mult-left" type="text" value="' + escHtml(o.leftMult || '') + '" placeholder="1"'
             + ' style="flex:1;min-width:0;background:var(--bg-tertiary);border:1px solid var(--border);'
@@ -251,7 +323,7 @@ window.MA.properties = (function() {
             + ' style="flex:1;min-width:0;background:var(--bg-tertiary);border:1px solid var(--border);'
             + 'color:var(--text-primary);padding:3px 6px;border-radius:3px;font-family:var(--font-mono);font-size:12px;">' +
         '</div>' +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">線の色 / Line color</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">' + escHtml(window.MA.terms.lineColor) + '</div>' +
         '<div id="' + id + '-colors" style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">' + swatches +
           '<span style="margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);">-[#red]&gt;</span>' +
         '</div>' +
@@ -270,7 +342,7 @@ window.MA.properties = (function() {
     '</div>';
   }
 
-  // colorPaletteHtml / bindColorPalette: BLK-builder-20260907-1306-2 (design 5d)。
+  // colorPaletteHtml / bindColorPalette:。
   // State のように「関係の設定」を丸ごとは持たないが色だけは畳んで置きたいところ用に、
   // 色見本の一列と、それを包む「その他… ▾」を切り出したもの。
   // 現在値が既定 (色なし) から外れていれば開いた状態で出す — 3c の流儀と同じ。
@@ -303,7 +375,7 @@ window.MA.properties = (function() {
         + '<span class="prop-color-caret">' + (dirty ? '▴' : '▾') + '</span></button>' +
       '<div id="' + id + '"' + (dirty ? '' : ' hidden')
         + ' style="border:1px solid var(--border);border-radius:3px;padding:8px;margin-top:2px;">' +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">' + escHtml(o.label || '色 / Color') + '</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">' + escHtml(o.label || window.MA.terms.color) + '</div>' +
         '<div style="display:flex;align-items:center;">' +
           colorSwatchesHtml(id, colors, current) +
           (o.notation ? '<span style="margin-left:auto;font-family:var(--font-mono);font-size:10px;'
@@ -337,7 +409,7 @@ window.MA.properties = (function() {
     }
   }
 
-  // linkNoteHtml / bindLinkNote: BLK-builder-20260907-1737-2 (design 4c)。
+  // linkNoteHtml / bindLinkNote:。
   // 「この線にノートを添える」は relationOptionsHtml の中にしか無かったので、
   // 「その他の設定」を丸ごとは持たない State の遷移でも同じことができるように切り出す。
   // チェックを外すとノートを消すところまで含めて 1 つの操作なので、
@@ -486,9 +558,20 @@ window.MA.properties = (function() {
     }
     var fontStyle = monoFont ? 'font-family:var(--font-mono);' : '';
     return '<div style="margin-bottom:8px;">' +
-      '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
+      '<label' + _for(id) + ' style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
       '<select id="' + id + '" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;' + fontStyle + '">' + opts + '</select>' +
     '</div>';
+  }
+
+  // 選択パネルの見出しは図種をまたいで「{種類} · N 行目」の 1 形
+  // (design 1a / 4a〜4c の「Class · 6 行目」「Transition · 4 行目」)。範囲を持つもの
+  // (境界・ブロック・囲み) は「2–5 行目」。文字だけ返す (囲む要素と色は各パネルが持つ)。
+  function lineHead(kind, line, endLine) {
+    var k = String(kind == null ? '' : kind);
+    var a = parseInt(line, 10), b = parseInt(endLine, 10);
+    var where = isNaN(a) ? '' : (!isNaN(b) && b > a ? a + '–' + b : String(a)) + ' 行目';
+    if (!where) return k;
+    return k ? k + ' · ' + where : where;
   }
 
   // panelHeaderHtml: title bar at top of single-element edit panel
@@ -532,186 +615,13 @@ window.MA.properties = (function() {
 
   // primaryButtonHtml: full-width accent button
   function primaryButtonHtml(id, label) {
-    return '<button id="' + id + '" style="width:100%;background:var(--accent);color:#fff;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:12px;">' + escHtml(label) + '</button>';
+    var T = window.MA.terms || {};
+    return '<button id="' + id + '"' + (T.apply && label === T.apply ? ' data-apply="1"' : '') + ' style="width:100%;background:var(--accent);color:#fff;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:12px;">' + escHtml(label) + '</button>';
   }
 
   // dangerButtonHtml: full-width red button (for delete actions)
   function dangerButtonHtml(id, label) {
     return '<button id="' + id + '" style="width:100%;background:var(--accent-red);color:#fff;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:12px;margin-top:8px;">' + escHtml(label) + '</button>';
-  }
-
-  // ── 名前帳 (BLK-junior-20260915-0406-wish) ───────────────────────────────
-  // 同じ部品の 6 図種に出てくる名前を、入力欄のすぐ下にチップで並べる。
-  // 押せばその欄が埋まるので、手順が「先輩の図を開いて名前を探して手で打つ」から
-  // 「一覧から選ぶ」に変わる。名前帳そのものは partVocab が 1 箇所で持つ。
-  //
-  // opts: { roles, limit, placeholder, vocab }
-  //   roles … 'method' か ['method','event']。その欄に入れてよい役割だけを出す
-  //   limit … 先に出す件数 (既定 10)。残りは「＋残り N」で開く
-  // ── 正式表記の登録簿 (BLK-reviewer-20260915-0506-wish) ─────────────────
-  // reviewer が 1 度決めた「揃える先」を、junior/primary が名前を打つ場所で出す。
-  // 型 (participant / class) の欄にだけ出す — 登録簿が持つのは部品名なので、
-  // メソッド名・状態名の欄に混ぜると、揃える先でないものを揃える先に見せる。
-  var REGISTRY_ROLES = ['type'];
-
-  function registryEntries(opts) {
-    var o = opts || {};
-    var NR = window.MA.nameRegistry;
-    if (!NR) return [];
-    if (o.registry === false) return [];
-    var want = Array.isArray(o.roles) ? o.roles : (o.roles ? [o.roles] : null);
-    // 役割の指定が無い欄 (名前そのものを打つ欄) にも出す。
-    if (want && !want.some(function(r) { return REGISTRY_ROLES.indexOf(r) >= 0; })) return [];
-    var reg = o.registry !== undefined && o.registry !== true ? o.registry : NR.current();
-    return NR.suggest(reg, '', 0);
-  }
-
-  function registryChips(opts) { return registryEntries(opts); }
-
-  function registryChip(e) {
-    var NR = window.MA.nameRegistry;
-    var title = NR ? NR.entryLine(e) : e.canonical;
-    return '<button type="button" class="vocab-chip registry-chip" data-name="' + escHtml(e.canonical) + '"'
-      + ' data-role="registry" data-insert="' + escHtml(e.canonical) + '"'
-      + ' title="' + escHtml('正式表記 / ' + title) + '">'
-      + '◎' + escHtml(e.canonical) + '</button>';
-  }
-
-  function vocabPickerHtml(id, opts) {
-    var o = opts || {};
-    var PV = window.MA.partVocab;
-    if (!PV) return '';
-    var vocab = o.vocab !== undefined ? o.vocab : PV.current();
-    var items = (vocab && vocab.items.length) ? PV.suggest(vocab, o.roles, {}) : [];
-    // BLK-reviewer-20260915-0506-wish: 登録簿の正式表記も同じ並びに出す。
-    // 名前帳はこの部品の図に「今ある」綴りなので、揃える先が決まっていても
-    // 図がまだ揺れたままなら揺れた綴りしか出ない。決まっている綴りは先に出す。
-    var regChips = registryChips(o);
-    if (!items.length && !regChips.length) return '';
-    var limit = o.limit == null ? 10 : (o.limit | 0);
-
-    // 欄に入る形。シーケンスの本文は呼び出しなので `Spi_Init()` まで入れる
-    // (チップを押した後に括弧だけ手で足す 1 手を残さない)。
-    function insertText(it) {
-      return (o.callSuffix && it.role === 'method') ? it.name + '()' : it.name;
-    }
-
-    function chip(it, hidden) {
-      return '<button type="button" class="vocab-chip" data-name="' + escHtml(it.name) + '"'
-        + ' data-role="' + escHtml(it.role) + '"'
-        + ' data-insert="' + escHtml(insertText(it)) + '"'
-        + (hidden ? ' data-rest="1" style="display:none;"' : '')
-        + ' title="' + escHtml(PV.roleLabel(it.role) + ' / ' + PV.sourceText(it)) + '">'
-        + escHtml(it.name) + '</button>';
-    }
-
-    var head = PV.summary(vocab);
-    var NR = window.MA.nameRegistry;
-    if (regChips.length && NR) {
-      head = (head ? head + ' / ' : '') + '正式表記 ' + regChips.length + ' 語';
-    }
-    var rest = items.length - limit;
-    return '<div id="' + escHtml(id) + '" class="vocab-picker" data-count="' + items.length + '"'
-      + ' data-registry="' + regChips.length + '"'
-      + ' style="margin:-4px 0 8px 0;">'
-      + '<div class="vocab-head" style="font-size:10px;color:var(--text-secondary);margin-bottom:3px;">'
-      + escHtml(head) + '</div>'
-      + '<div class="vocab-chips" style="display:flex;flex-wrap:wrap;gap:3px;">'
-      + regChips.map(function(e) { return registryChip(e); }).join('')
-      + items.map(function(it, i) { return chip(it, i >= limit); }).join('')
-      + (rest > 0
-        ? '<button type="button" class="vocab-more" style="font-size:11px;padding:1px 6px;'
-          + 'background:transparent;border:1px dashed var(--border);color:var(--text-secondary);'
-          + 'border-radius:3px;cursor:pointer;">＋残り ' + rest + '</button>'
-        : '')
-      + '</div>'
-      + '<div class="vocab-warn" style="font-size:10px;color:var(--accent-orange);margin-top:3px;"></div>'
-      + '</div>';
-  }
-
-  // BLK-junior-20260915-0606: 自由文の欄 (活動図のアクション本文) では、チップで
-  // 欄ごと置き換えると打ちかけの文が消える。カーソル位置に差し込み、続けて打てるようにする。
-  // 複数行をまとめて打つ欄では、選んだ名前が既に書いた行を巻き込まないのが要件。
-  function insertAtCaret(el, text) {
-    var v = String(el.value || '');
-    var s = el.selectionStart, e = el.selectionEnd;
-    if (typeof s !== 'number' || typeof e !== 'number') { el.value = v + text; return; }
-    el.value = v.slice(0, s) + text + v.slice(e);
-    var at = s + text.length;
-    try { el.setSelectionRange(at, at); } catch (err) {}
-    if (el.focus) el.focus();
-  }
-
-  // bindVocabPicker: チップを押したら targetId の欄を埋める。
-  // 欄に手で打った名前が名前帳と揺れていれば、その場で 1 行出す。
-  // target は id でも要素でもよい (rich-label-editor の textarea は id を持たない)。
-  // opts.insert === 'caret' なら置き換えずにカーソル位置へ差し込む。
-  function bindVocabPicker(id, target, onPick, opts) {
-    var box = document.getElementById(id);
-    if (typeof target === 'string') target = document.getElementById(target);
-    if (!box) return;
-    var warn = box.querySelector('.vocab-warn');
-    var PV = window.MA.partVocab;
-
-    function fire(el) {
-      if (!el) return;
-      var Evt = window.Event;
-      el.dispatchEvent(new Evt('input', { bubbles: true }));
-      el.dispatchEvent(new Evt('change', { bubbles: true }));
-    }
-
-    var NR = window.MA.nameRegistry;
-
-    function review() {
-      if (!warn) return;
-      var raw = target ? String(target.value || '') : '';
-      // 自由文の欄は複数行になる。欄ごと読むと「行の集まり」を 1 つの名前として
-      // 突き合わせてしまうので、いまカーソルが居る行だけを見る。
-      if (opts && opts.insert === 'caret' && raw.indexOf('\n') >= 0) {
-        var at = typeof target.selectionStart === 'number' ? target.selectionStart : raw.length;
-        var from = raw.lastIndexOf('\n', at - 1) + 1;
-        var to = raw.indexOf('\n', at);
-        raw = raw.slice(from, to < 0 ? raw.length : to);
-      }
-      var v = raw.trim().replace(/\(.*$/, '').trim();
-      // 登録簿は「人が決めた揃える先」なので、名前帳の推定より先に言う
-      // (両方が出ると、どちらに揃えるのかを読む側がまた決め直すことになる)。
-      var msg = NR ? NR.checkName(NR.current(), v) : '';
-      if (!msg && PV) msg = PV.checkName(PV.current(), v);
-      warn.textContent = msg;
-    }
-
-    var chips = box.querySelectorAll('.vocab-chip');
-    for (var i = 0; i < chips.length; i++) {
-      (function(btn) {
-        btn.style.cssText = 'font-size:11px;padding:1px 6px;background:var(--bg-tertiary);'
-          + 'border:1px solid var(--border);color:var(--text-primary);border-radius:3px;'
-          + 'cursor:pointer;font-family:var(--font-mono);' + (btn.style.cssText || '');
-        btn.addEventListener('click', function() {
-          var name = btn.getAttribute('data-name');
-          var text = btn.getAttribute('data-insert') || name;
-          if (target) {
-            if (opts && opts.insert === 'caret') insertAtCaret(target, text);
-            else target.value = text;
-            fire(target);
-          }
-          if (onPick) onPick(name, btn.getAttribute('data-role'));
-          review();
-        });
-      })(chips[i]);
-    }
-
-    var more = box.querySelector('.vocab-more');
-    if (more) {
-      more.addEventListener('click', function() {
-        var hidden = box.querySelectorAll('.vocab-chip[data-rest="1"]');
-        for (var j = 0; j < hidden.length; j++) hidden[j].style.display = '';
-        more.style.display = 'none';
-      });
-    }
-
-    if (target) target.addEventListener('input', review);
-    review();
   }
 
   // ── Event binding helpers ────────────────────────────────────────────────
@@ -771,12 +681,142 @@ window.MA.properties = (function() {
     });
   }
 
+  // 空のまま確定された欄の知らせ (TICKET-owner-20261123-0842-2)。欄は画面に無い語 (Alias / ID / Target) では
+  // 指さず、欄の見出しの語 (label[for]) で言う。6 図種で同じ文: 打つ欄は「「名前」を入れてください」、
+  // 選ぶ欄は「「付ける相手」を選んでください」。知らせの後は空だった欄に手を置く (探さずに打てる)。
+  function needFieldText(word, isSelect) {
+    return '「' + String(word || '').trim() + '」を' + (isSelect ? '選んでください' : '入れてください');
+  }
+  function _fieldWord(id) {
+    var lab = document.querySelector ? document.querySelector('label[for="' + id + '"]') : null;
+    // 見出しを for でなく {id}-label で結ぶ欄 (クラス図の関係の役割の欄) も同じ語で言う。
+    if (!lab) lab = document.getElementById(id + '-label');
+    var w = lab ? String(lab.textContent || '').trim() : '';
+    return w.replace(/\s*[（(]任意[）)]\s*$/, '');
+  }
+  function needField(id, fallbackWord) {
+    var el = document.getElementById(id);
+    var word = _fieldWord(id) || fallbackWord || '';
+    alert(needFieldText(word, !!(el && el.tagName === 'SELECT')));
+    if (el && typeof el.focus === 'function') { try { el.focus(); } catch (e) {} }
+  }
+  // 「末尾に追加」の関係・遷移・メッセージで相手 (To) を選ばずに確定したときの知らせ (TICKET-owner-20261123-2322-2)。
+  // 5 図種 (sequence・usecase・component・class・state) が同じこの 1 本を呼ぶ: 行は足さず、needField と同じ
+  // 欄の見出しの語で知らせて手をその欄に入れ、欄の下の補足の 1 行も同じ組み立て
+  // 「「{欄の見出し}」を選んでください ({その図種で効く選び方})」にする。
+  function needPickText(word, how) {
+    return needFieldText(word, true) + (how ? ' (' + String(how) + ')' : '');
+  }
+  function needPick(id, hintId, how, fallbackWord) {
+    var word = _fieldWord(id) || fallbackWord || '';
+    var hint = hintId ? document.getElementById(hintId) : null;
+    if (hint) hint.textContent = needPickText(word, how);
+    needField(id, fallbackWord);
+  }
+  // 名前 (id) を変えたら参照する行も付け替えるチェック (既定 on)。6 図種で同じ語・同じ場所
+  // (表示名の欄のすぐ下) に出し、改名は「変更を反映」1 つで宣言と参照の行を書く
+  // (TICKET-owner-20261124-0422-1。別ボタンは置かない)。
+  function renameRefsCheckHtml(id) {
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-primary);margin:8px 0;">' +
+      '<input id="' + id + '" type="checkbox" checked> ' + escHtml(window.MA.terms.renameRefs) + '</label>';
+  }
+  // チェックが画面に無いときは付け替える (既定 on と同じ)。
+  function renameRefsOn(id) {
+    var el = document.getElementById(id);
+    return el ? !!el.checked : true;
+  }
+
+  // ── 右パネルの欄の確定 (TICKET-owner-20261124-0822-1) ─────────────────────
+  // 「名前 (id)」「表示名」「ステレオタイプ」の欄 (data-apply-field) は 5 図種で同じ形で確定する:
+  //   - Enter は、その欄の後ろにある「変更を反映」(data-apply) を押したのと同じ
+  //   - 打って反映していない字があるまま欄を離れたとき (図の別の要素を押す・Tab で欄の外へ) も反映する
+  //     (黙って捨てない)。同じ組の欄・「変更を反映」・チェックへ移るときは反映しない (続けて打てる)
+  // 図種のモジュールは Enter・離れたときの処理を持たない。
+  function _isApplyFieldLabel(label) {
+    var T = window.MA.terms || {};
+    return !!label && (label === T.id || label === T.label || label === T.stereotype);
+  }
+  function _applyButtonFor(field) {
+    var root = document.getElementById('props-content') || document;
+    var btns = root.querySelectorAll('[data-apply]');
+    for (var i = 0; i < btns.length; i++) {
+      // 欄より後ろにある最初の「変更を反映」がその欄の組のボタン
+      if (field.compareDocumentPosition(btns[i]) & 4) return btns[i];
+    }
+    return null;
+  }
+  // 欄と同じ「変更を反映」に属する欄のどれかに、反映していない字があるか。
+  function _isDirty(field) {
+    if (!field) return false;
+    var btn = _applyButtonFor(field);
+    var root = document.getElementById('props-content') || document;
+    var fs = root.querySelectorAll('[data-apply-field]');
+    for (var i = 0; i < fs.length; i++) {
+      if (fs[i].value !== fs[i].defaultValue && _applyButtonFor(fs[i]) === btn) return true;
+    }
+    return false;
+  }
+  function applyField(field) {
+    if (!field || field._maApplied || field.isConnected === false) return false;
+    var btn = _applyButtonFor(field);
+    if (!btn || btn.disabled) return false;
+    var root = document.getElementById('props-content') || document;
+    var group = Array.prototype.filter.call(root.querySelectorAll('[data-apply-field]'), function(f) {
+      return _applyButtonFor(f) === btn;
+    });
+    // 押している間に欄が組み直されて離れても (focusout)、同じ字をもう一度反映しない
+    group.forEach(function(f) { f._maApplied = true; });
+    try { btn.click(); } finally {
+      group.forEach(function(f) { f._maApplied = false; f.defaultValue = f.value; });
+    }
+    return true;
+  }
+  function _applyFieldTarget(t) {
+    if (!t || !t.getAttribute || t.getAttribute('data-apply-field') !== '1') return null;
+    var root = document.getElementById('props-content');
+    if (!root || !root.contains(t)) return null;
+    return t;
+  }
+  function _onApplyKey(e) {
+    if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.defaultPrevented) return;
+    var f = _applyFieldTarget(e.target);
+    if (!f) return;
+    e.preventDefault();
+    if (_isDirty(f)) applyField(f);
+  }
+  function _onApplyLeave(e) {
+    var f = _applyFieldTarget(e.target);
+    if (!f || !_isDirty(f)) return;
+    var to = e.relatedTarget;
+    var root = document.getElementById('props-content');
+    if (to && root && root.contains(to) && to.matches
+      && to.matches('[data-apply-field], [data-apply], input[type="checkbox"]')) return;
+    applyField(f);
+  }
+  if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
+    document.addEventListener('keydown', _onApplyKey);
+    document.addEventListener('focusout', _onApplyLeave);
+  }
+
   return {
+    renameRefsCheckHtml: renameRefsCheckHtml,
+    renameRefsOn: renameRefsOn,
+    applyField: applyField,
     init: init,
+    needFieldText: needFieldText,
+    needField: needField,
+    needPickText: needPickText,
+    needPick: needPick,
     bindTextField: bindTextField,
     bindDateField: bindDateField,
     // HTML builders
     fieldHtml: fieldHtml,
+    textLabelHtml: textLabelHtml,
+    linkFieldLabels: linkFieldLabels,
+    watchFieldLabels: watchFieldLabels,
+    ENTER_HINT: ENTER_HINT,
+    NOTE_BODY: NOTE_BODY,
     selectFieldHtml: selectFieldHtml,
     segmentedFieldHtml: segmentedFieldHtml,
     arrowPickerHtml: arrowPickerHtml,
@@ -789,6 +829,7 @@ window.MA.properties = (function() {
     bindRelationOptions: bindRelationOptions,
     relationOptionsFor: relationOptionsFor,
     bindRelationOptionsFor: bindRelationOptionsFor,
+    lineHead: lineHead,
     panelHeaderHtml: panelHeaderHtml,
     sectionHeaderHtml: sectionHeaderHtml,
     sectionFooterHtml: sectionFooterHtml,
@@ -796,8 +837,6 @@ window.MA.properties = (function() {
     emptyListHtml: emptyListHtml,
     primaryButtonHtml: primaryButtonHtml,
     dangerButtonHtml: dangerButtonHtml,
-    vocabPickerHtml: vocabPickerHtml,
-    bindVocabPicker: bindVocabPicker,
     // Event helpers
     bindEvent: bindEvent,
     bindAllByClass: bindAllByClass,

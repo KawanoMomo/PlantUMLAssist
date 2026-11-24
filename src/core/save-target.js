@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // save-target — 「保存」が何をする操作なのかを 1 箇所で決める。
 //
-// BLK-primary-20260907-0823: 保存先ディレクトリを設定していても、上部バーの
+// 保存先ディレクトリを設定していても、上部バーの
 // 「保存」はブラウザのダウンロードしか起こさず、保存フォルダに .puml が
 // 作られなかった。保存先を設定して運用している間は、保存先へ書くのが
 // 「保存」であるべきで、フォルダ運用でないときだけダウンロードに落ちる。
@@ -21,13 +21,38 @@ window.MA.saveTarget = (function() {
   // ドキュメントは書けないのでダウンロードに落とす。黙って何も起きない状態を作らない。
   function decide(cfg, doc, fallbackName) {
     var name = (doc && doc.name) || '';
-    var backend = cfg && cfg.backend;
+    var dir = listDir(cfg);
     var canName = !!(window.MA.workspace && window.MA.workspace.isValidName)
       && window.MA.workspace.isValidName(name);
-    if (backend === 'file' && canName) {
-      return { mode: 'file', name: name, dir: (cfg && cfg.fileDir) || './autosave' };
+    if (dir && canName) {
+      return { mode: 'file', name: name, dir: dir };
     }
     return { mode: 'download', name: name || fallbackName || 'untitled' };
+  }
+
+  // TICKET-owner-20261123-1922-1: 保存先の一覧 (FILES の保存先節・中央の一覧) が読むフォルダ。
+  // 保存 (decide) が書くフォルダと同じ 1 つから決める。保存先を決めていない (保存がダウンロードの) ときは
+  // '' を返し、一覧は図を並べない。前は未設定でも既定の ./autosave を並べ、そこから開いた図の Ctrl+S・
+  // 書き出しはダウンロードになり、一覧のファイルは直らず、`!include` もそのフォルダを探さなかった。
+  function listDir(cfg) {
+    if (!cfg || cfg.backend !== 'file') return '';
+    return cfg.fileDir || './autosave';
+  }
+
+  // TICKET-owner-20261123-2222-1: 保存先を決めていない間か。FILES の保存先節の操作 (右クリックの「新しいフォルダ」・
+  // 節の行「ダウンロード」を押したときに開く窓) は、一覧と同じこの 1 つ (listDir) から決める。
+  // 前は一覧だけが未設定を見分け、右クリックの「新しいフォルダ」は画面に出ない既定のフォルダに作り、
+  // 節の行は ⚙ 設定を開いて、保存先を決める窓まで手が 1 つ多かった。
+  function isUnset(cfg) {
+    return !listDir(cfg);
+  }
+
+  // 保存先を決めていないとき、一覧の場所に出す案内 (図を並べない理由と、決める入口の語)。
+  function unsetHint() {
+    return {
+      text: '保存先のフォルダを決めていません。保存と書き出しはブラウザのダウンロードになります。',
+      how: '「保存先のフォルダを選ぶ…」(この節の右クリック・Import ▾・Ctrl+K)で決めると、そのフォルダの図がここに並び、Ctrl+S でその図に書きます。',
+    };
   }
 
   // 保存後にステータスバーへ出す 1 行。何が・どこに書かれたかを必ず言う。
@@ -49,7 +74,7 @@ window.MA.saveTarget = (function() {
     return (last === '.' || last === '..') ? d : last;
   }
 
-  // BLK-junior-20260907-2009: 保存先が既に覚えられていても、画面のどこにも
+  // 保存先が既に覚えられていても、画面のどこにも
   // 出ていないので「設定済みであること」に気づけず、図種を変えるたびに
   // ⚙設定 → ファイル → パス再入力 → OK を習慣で打ち直していた。
   // 上部バーに常時出す 1 語を返し、「もう設定されている」を見えるようにする。
@@ -70,12 +95,12 @@ window.MA.saveTarget = (function() {
     return {
       mode: 'download',
       text: '⬇ ダウンロード',
-      title: '保存先フォルダは未設定です。保存するとブラウザのダウンロードになります (押すと設定を開きます)',
+      title: '保存先フォルダは未設定です。保存するとブラウザのダウンロードになります (押すと「保存先のフォルダを選ぶ」窓が開きます)',
       configured: false,
     };
   }
 
-  // BLK-junior-20260913-0306: 保存だけが上部バーにボタンを持たず、Ctrl+K で
+  // 保存だけが上部バーにボタンを持たず、Ctrl+K で
   // 「ファイルを保存」と打つ経路しか無かった。一覧・覗く・書き出すはボタンを
   // 押せるのに、毎周必ず通る保存だけがコマンド名を思い出す手順になっていた。
   // 保存先の隣に常時出すボタンの文言を決める。押したときに何がどこへ書かれるかを
@@ -96,7 +121,7 @@ window.MA.saveTarget = (function() {
     };
   }
 
-  // BLK-human-20260923-1600 (design 9a): ファイル名が上部バーとアクティブタブの
+  // ファイル名が上部バーとアクティブタブの
   // 2 か所に出ていて、保存先は別のチップに分かれていた。上部バーは
   // 「{フォルダ} / {ファイル名}」のパンくず 1 本にし、フォルダ名を押すと保存先を
   // 変えられるようにする (保存先チップは無くす)。絵文字は使わず文字だけで出す。
@@ -120,7 +145,7 @@ window.MA.saveTarget = (function() {
       mode: 'download',
       folder: 'ダウンロード',
       folderTitle: '保存先フォルダは未設定です。保存するとブラウザのダウンロードになります'
-        + ' (押すと保存先を決められます)',
+        + ' (押すと「保存先のフォルダを選ぶ」窓が開き、保存先を決められます)',
       name: file,
       configured: false,
     };
@@ -155,6 +180,23 @@ window.MA.saveTarget = (function() {
     };
   }
 
-  return { decide: decide, messageFor: messageFor, tailOf: tailOf, label: label,
-    saveButton: saveButton, breadcrumb: breadcrumb, saveState: saveState };
+  // Ctrl+S / 「● 保存」を押した直後に、保存ボタンの隣へ数秒だけ出す 1 行。
+  // 下端の札は突合の結果も続くので読み落とす。押したその場所で「いつ・どこへ」を言う。
+  // when: Date (省略時は今)。返り値 { text, title }。target が無ければ null。
+  function savedFlash(target, when) {
+    if (!target) return null;
+    var d = (when instanceof Date) ? when : new Date();
+    var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+    var hm = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    if (target.mode === 'download') {
+      return { text: '✓ ' + hm + ' ' + target.name + '.puml をダウンロード',
+        title: hm + ' に ' + target.name + '.puml をダウンロードしました (ブラウザのダウンロードフォルダ)' };
+    }
+    var where = tailOf(target.dir);
+    return { text: '✓ ' + hm + ' ' + (where ? where + '/' : '') + target.name + '.puml に保存',
+      title: hm + ' に ' + target.dir + '/' + target.name + '.puml へ保存しました' };
+  }
+
+  return { decide: decide, listDir: listDir, isUnset: isUnset, unsetHint: unsetHint, messageFor: messageFor, tailOf: tailOf, label: label,
+    saveButton: saveButton, breadcrumb: breadcrumb, saveState: saveState, savedFlash: savedFlash };
 })();

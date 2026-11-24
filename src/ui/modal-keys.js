@@ -1,6 +1,6 @@
 'use strict';
 window.MA = window.MA || {};
-// BLK-owner-20260924-2232-4: 図の編集の窓と「末尾に追加」のフォームをキーボードだけで確定する。
+// 図の編集の窓と「末尾に追加」のフォームをキーボードだけで確定する。
 // 図種ごとに付けず、窓 (`{図種}-modal`) と末尾に追加 (`{図種}-tail-detail`) の形で 1 か所から当てる。
 //   窓: 入力欄・選択欄で Enter、どこでも Ctrl+Enter で `*-confirm` を押す。Esc で `*-cancel` を押す。
 //       本文欄 (rich-label-editor) の Enter は欄が出す rle-enter、Esc は rle-escape で受ける (Shift+Enter は改行)。
@@ -64,9 +64,9 @@ window.MA.modalKeys = (function() {
     var form = target && target.closest ? target.closest('[id$="-tail-detail"]') : null;
     return form ? visibleButton(form, '-tail-add') : null;
   }
-  // BLK-owner-20260925-0312-4: 末尾に追加の本文欄 (textarea) のうち data-enter="submit" のものは、
+  // 末尾に追加の本文欄 (textarea) のうち data-enter="submit" のものは、
   // Enter で確定・Shift+Enter で改行 (アクティビティの処理欄・注釈欄)。
-  // BLK-owner-20260930-0311-2: 注釈の本文欄 (`{図種}-tail-ntext`) は図種を問わずこの 1 か所で Enter 確定にする
+  // 注釈の本文欄 (`{図種}-tail-ntext`) は図種を問わずこの 1 か所で Enter 確定にする
   // (状態遷移・クラス・ユースケースは改行が入るだけで行が書かれなかった)。まとめて入れる欄は改行のまま。
   var TAIL_NOTE_AREA_RE = /-tail-ntext$/;
   function isTailEnterArea(el) {
@@ -75,7 +75,7 @@ window.MA.modalKeys = (function() {
     return TAIL_NOTE_AREA_RE.test(el.id || '') && !!(el.closest && el.closest('[id$="-tail-detail"]'));
   }
 
-  // BLK-owner-20260930-0311-2: 末尾に追加の欄のうち既定の値を持つもの (条件分岐の yes / no、枝の数 …) は、
+  // 末尾に追加の欄のうち既定の値を持つもの (条件分岐の yes / no、枝の数 …) は、
   // 押す・Tab で入ると値全体が選ばれた状態になり、打てば置き換わる (値の後ろに付け足して `yesyes` にならない)。
   // 既定のまま (value が描いたときの値と同じ) の欄だけ。打ちかけの欄はキャレットをそのまま置く。
   function isDefaultField(el) {
@@ -100,15 +100,187 @@ window.MA.modalKeys = (function() {
   function onTailBlur(e) {
     if (e.target && e.target._maSelectOnUp) e.target._maSelectOnUp = false;
   }
+  // 確定すると右パネルが描き直され、キャレットが BODY に落ちて次の 1 件を打つたびに
+  // 欄を押し直していた。確定の後に描き直された「末尾に追加」のフォームへキャレットを戻す。
+  // 戻す先は Enter を押した欄 (同じ id / 同じ本文欄)。ボタンを押して確定したときや、その欄が無くなったときは
+  // その種別の最初に打つ欄 (本文欄があれば本文、無ければ最初の文字欄)。
+  // 描き直されなかった確定 (必須が空で止めた・To を選ばせた) では動かさない (知らせた欄のキャレットを奪わない)。
+  var _pendingKey = null;
+  function _fieldKey(el) {
+    if (!el || !el.closest) return null;
+    var key = null;
+    var rle = el.closest('[id$="-rle"]');
+    if (rle && rle.id) key = { rle: rle.id };
+    else if (el.id) key = { id: el.id };
+    // 描き直しを待つ間に打った字 (確定した字の後ろに続けて打った分) を、描き直した欄へ持ち越すために覚える。
+    if (key && typeof el.value === 'string') { key.el = el; key.val = el.value; }
+    return key;
+  }
+  // 確定から描き直しまでの間に古い欄へ打った字。無ければ ''。
+  function _typedSince(key) {
+    if (!key || !key.el || typeof key.el.value !== 'string' || typeof key.val !== 'string') return '';
+    var now = key.el.value;
+    if (now.length <= key.val.length || now.indexOf(key.val) !== 0) return '';
+    return now.slice(key.val.length);
+  }
+  function _hiddenIn(el, form) {
+    for (var n = el; n && n !== form; n = n.parentNode) {
+      if (n.hidden) return true;
+      if (n.style && n.style.display === 'none') return true;
+    }
+    return false;
+  }
+  function firstTypingField(form) {
+    if (!form || !form.querySelectorAll) return null;
+    var rles = form.querySelectorAll('[id$="-rle"] textarea');
+    for (var r = 0; r < rles.length; r++) if (!_hiddenIn(rles[r], form)) return rles[r];
+    var list = form.querySelectorAll('input, textarea');
+    for (var i = 0; i < list.length; i++) {
+      var el = list[i];
+      if (el.disabled || el.readOnly) continue;
+      if (el.tagName === 'INPUT' && !TEXT_TYPES.test(String(el.type || 'text').toLowerCase())) continue;
+      if (el.tagName === 'INPUT' && /^(checkbox|radio)$/i.test(el.type || '')) continue;
+      if (_hiddenIn(el, form)) continue;
+      return el;
+    }
+    return null;
+  }
+  function _resolve(formId, key) {
+    var doc = typeof document !== 'undefined' ? document : null;
+    if (!doc) return null;
+    var el = null;
+    if (key && key.id) el = doc.getElementById(key.id);
+    else if (key && key.rle) {
+      var c = doc.getElementById(key.rle);
+      el = c ? c.querySelector('textarea') : null;
+    }
+    var form = doc.getElementById(formId);
+    if (el && form && !form.contains(el)) el = null;
+    return el || firstTypingField(form);
+  }
+  function refocusAfterAdd(form, key, opts) {
+    if (!form || !form.id) return;
+    var o = opts || {};
+    var doc = form.ownerDocument || document;
+    var formId = form.id;
+    var tries = 0;
+    var wait = o.wait || 50;
+    var limit = o.limit || 40;
+    var done = false;
+    // 描き直されていればキャレットを戻して true。まだなら false。
+    function attempt() {
+      var now = doc.getElementById(formId);
+      if (!now || now === form) return false;
+      var act = doc.activeElement;
+      // 描き直しの後に利用者が自分で別の欄へ移っていれば、そのまま。
+      if (act && act !== doc.body && act.tagName !== 'HTML' && now.contains && !now.contains(act)
+          && act.ownerDocument === doc && doc.body.contains(act)) return true;
+      var el = _resolve(formId, key);
+      var carry = _typedSince(key);
+      if (el && carry && !el.value) el.value = carry;
+      if (el && el !== act) {
+        try { el.focus(); } catch (e) { return true; }
+        try { var n = el.value ? el.value.length : 0; el.setSelectionRange(n, n); } catch (e2) {}
+      }
+      return true;
+    }
+    function poll() {
+      if (done) return;
+      tries++;
+      if (attempt()) { done = true; return; }
+      if (tries < limit) setTimeout(poll, wait);
+    }
+    // 右パネルは確定のその場で組み直す (MA.propsRebuild) ので、確定の処理が終わった直後 (次のキーより前) に 1 度見る。
+    // 組み直しが後から来る経路は、間を置いて見続ける。
+    if (typeof Promise === 'function') {
+      Promise.resolve().then(function() { if (!done && attempt()) done = true; });
+    }
+    setTimeout(poll, 0);
+  }
+  function onTailAddClick(e) {
+    var btn = e.target && e.target.closest ? e.target.closest('button[id$="-tail-add"]') : null;
+    if (!btn) return;
+    var form = btn.closest('[id$="-tail-detail"]');
+    var key = _pendingKey;
+    _pendingKey = null;
+    if (form) refocusAfterAdd(form, key);
+  }
+
   function onTailKey(e) {
     if (e.key !== 'Enter' || e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
     if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
     if (!isEnterField(e.target) && !isTailEnterArea(e.target)) return;
-    press(tailButton(e.target), e);
+    var btn = tailButton(e.target);
+    if (btn) _pendingKey = _fieldKey(e.target);
+    press(btn, e);
   }
   function onTailRle(e) {
     var btn = tailButton(e.target);
-    if (btn) btn.click();
+    if (!btn) return;
+    _pendingKey = _fieldKey(e.target);
+    btn.click();
+  }
+
+  // 窓が開いたら (中身を差し替えたときも) 手を窓の最初の欄に置く (TICKET-owner-20261122-0301-1)。
+  // 窓を開く経路は図種・種類ごとに別でも、ここ 1 か所で当てる。開いた側がもう窓の中の欄に手を置いていれば触らない。
+  // 置く先: 打てる欄 (本文欄があれば本文) → 選ぶ欄 → ボタン (種類を選ぶ一覧)。「キャンセル」には置かない。
+  function firstModalField(modal) {
+    var el = firstTypingField(modal);
+    if (el) return el;
+    var list = modal.querySelectorAll('select, button');
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (c.disabled || _hiddenIn(c, modal)) continue;
+      if (c.tagName === 'BUTTON' && /-cancel$/.test(c.id || '')) continue;
+      return c;
+    }
+    return null;
+  }
+  // 開いているか。図の編集の窓は style.display で開け閉めする。開くときに作って閉じるときに外す窓
+  // (#target-pick) は display を書かず CSS で出すので、文書に付いていて計算した display が none でなければ開いている。
+  function isShown(modal) {
+    if (isOpen(modal)) return true;
+    if (!modal || !modal.style || modal.style.display !== '') return false;
+    var doc = modal.ownerDocument || document;
+    if (!doc.body || !doc.body.contains(modal)) return false;
+    var W = doc.defaultView;
+    try { return !W || W.getComputedStyle(modal).display !== 'none'; } catch (e) { return true; }
+  }
+  function focusIntoModal(modal) {
+    if (!isShown(modal)) return false;
+    var doc = modal.ownerDocument || document;
+    var act = doc.activeElement;
+    if (act && act !== doc.body && modal.contains(act)) return false;
+    var el = firstModalField(modal);
+    if (!el) return false;
+    try { el.focus(); } catch (e) { return false; }
+    return doc.activeElement === el;
+  }
+  // TICKET-owner-20261124-0342-2: 図の編集の窓以外の窓 (「保存先のフォルダを選ぶ」・「この図の履歴」) を開く所が呼ぶ。
+  // その場で手を窓の最初の欄に置き、開いた操作の後始末 (右クリックのメニュー・Ctrl+K が閉じて手を元の行へ戻す) が
+  // 済んだ後にも、手が窓の外にあれば窓の中へ置き直す (窓の中に手があれば触らない)。
+  var SOON_WAITS = [0, 60, 200];
+  function focusModalSoon(modal) {
+    var placed = focusIntoModal(modal);
+    SOON_WAITS.forEach(function(ms) { setTimeout(function() { focusIntoModal(modal); }, ms); });
+    return placed;
+  }
+  // 手が窓の外 (背後のボタン・BODY) にあっても、Esc は開いている窓を保存せずに閉じる。
+  // 背後の選択を外す document の Esc には流さない (窓を閉じた後も選択はそのまま)。
+  function openModalOf(doc) {
+    for (var i = 0; i < EDIT_MODALS.length; i++) {
+      var m = doc.getElementById(EDIT_MODALS[i]);
+      if (isOpen(m)) return m;
+    }
+    return null;
+  }
+  function onDocEscape(e) {
+    if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    var doc = (e.target && e.target.ownerDocument) || document;
+    var modal = openModalOf(doc);
+    if (!modal || (e.target && e.target.nodeType === 1 && modal.contains(e.target))) return;
+    press(visibleButton(modal, '-cancel'), e);
   }
 
   function bindModal(modal) {
@@ -117,6 +289,11 @@ window.MA.modalKeys = (function() {
     modal.addEventListener('keydown', onModalKey);
     modal.addEventListener('rle-enter', onModalRle);
     modal.addEventListener('rle-escape', onModalRle);
+    var W = (modal.ownerDocument && modal.ownerDocument.defaultView) || (typeof window !== 'undefined' ? window : null);
+    if (W && typeof W.MutationObserver === 'function') {
+      new W.MutationObserver(function() { focusIntoModal(modal); })
+        .observe(modal, { attributes: true, attributeFilter: ['style'], childList: true, subtree: true });
+    }
   }
   function init(doc) {
     doc = doc || document;
@@ -125,10 +302,12 @@ window.MA.modalKeys = (function() {
     if (!doc._maTailKeys) {
       doc._maTailKeys = true;
       doc.addEventListener('keydown', onTailKey);
+      doc.addEventListener('keydown', onDocEscape);
       doc.addEventListener('rle-enter', onTailRle);
       doc.addEventListener('focusin', onTailFocus);
       doc.addEventListener('mouseup', onTailMouseUp, true);
       doc.addEventListener('focusout', onTailBlur);
+      doc.addEventListener('click', onTailAddClick, true);
     }
   }
 
@@ -138,5 +317,8 @@ window.MA.modalKeys = (function() {
   }
 
   return { init: init, bindModal: bindModal, EDIT_MODALS: EDIT_MODALS,
-    isTailEnterArea: isTailEnterArea, isDefaultField: isDefaultField };
+    isTailEnterArea: isTailEnterArea, isDefaultField: isDefaultField,
+    firstTypingField: firstTypingField, refocusAfterAdd: refocusAfterAdd,
+    firstModalField: firstModalField, focusIntoModal: focusIntoModal, focusModalSoon: focusModalSoon,
+    isShown: isShown, onDocEscape: onDocEscape };
 })();

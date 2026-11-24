@@ -4,7 +4,7 @@
 // 打ち直していた (2 図で keys=877)。行編集パネルで、直す行を選んでその行だけ
 // 打ち替えれば済むことを確認する。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, openLineEdit } = require('../helpers');
 
 const DMA_SEQ = [
   '@startuml',
@@ -45,7 +45,7 @@ async function typeDsl(page, text) {
 }
 
 async function openLinePanel(page) {
-  await page.locator('#btn-tab-lines').click();
+  await openLineEdit(page);
   await expect(page.locator('#lines-panel')).toHaveClass(/open/);
 }
 

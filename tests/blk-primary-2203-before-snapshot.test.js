@@ -98,7 +98,8 @@ describe('beforeSnapshot — 置換前の本文を図ごとに控える', () => 
 describe('compareView — 同じ図の変更前を並べる', () => {
   var DOCS = [
     { id: 'd1', name: 'spi_init_sequence', diagramType: 'plantuml-sequence', dsl: AFTER },
-    { id: 'd2', name: 'diagram1', diagramType: 'plantuml-class', dsl: '@startuml\nclass B\n@enduml' },
+    // 相手にできるのはこの図の版のタブだけ (TICKET-owner-20261115-2141-prune)。
+    { id: 'd2', name: 'spi_init_sequence@20261116-0700', diagramType: 'plantuml-sequence', dsl: '@startuml\nA -> B : y\n@enduml' },
   ];
   var SNAP = { name: 'spi_init_sequence', dsl: BEFORE, at: '2026-09-08T22:30:00.000Z',
     from: 'SpiDrv', to: 'Spi_Driver' };
@@ -108,7 +109,7 @@ describe('compareView — 同じ図の変更前を並べる', () => {
     expect(o[0].id).toBe(cv.BEFORE_ID);
     expect(o[0].isBefore).toBe(true);
     expect(o[0].name).toBe('spi_init_sequence (変更前)');
-    // 別の図の候補は消えない (今までどおり別の図とも並べられる)
+    // この図の版の候補は消えない
     expect(o.map(function(x) { return x.id; })).toEqual([cv.BEFORE_ID, 'd2']);
   });
 
@@ -141,7 +142,7 @@ describe('compareView — 同じ図の変更前を並べる', () => {
   test('見出しは「参照」ではなく「変更前」と言い切る', () => {
     var d = cv.doc(DOCS, cv.BEFORE_ID, 'd1', SNAP);
     expect(cv.headerLabel(d)).toBe('変更前: spi_init_sequence (sequence)');
-    expect(cv.headerLabel(DOCS[1])).toBe('参照: diagram1 (class)');
+    expect(cv.headerLabel(DOCS[1])).toBe('前の版: spi_init_sequence@20261116-0700 (sequence)');
   });
 
   test('pick は控えを既定で選ぶが、別の図を選んでいればそれを保つ', () => {

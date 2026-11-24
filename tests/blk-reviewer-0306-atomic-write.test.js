@@ -89,13 +89,13 @@ describe('保存フォルダの書き込みは読んでいる側に途中を見�
   test('.puml と .svg を書く窓口は write_text を直接使わない', () => {
     const src = require('fs').readFileSync(path.join(projectRoot, 'server.py'), 'utf8')
       .replace(/\r\n/g, '\n');
-    // 保存フォルダの図そのもの (GUI の外から読まれる) を書く 4 箇所。
+    // 保存フォルダの図そのもの (GUI の外から読まれる) を書く 3 箇所
+    // (提出物庫の _atomic_write_text(puml, dsl) は TICKET-owner-20261115-1828-prune で庫ごと外した)。
     // BLK-migrator-20260918-0349: 開いたときの改行で書けるよう newline を渡すので、
     // 呼び出しは 1 行に収まらなくなった。窓口が _atomic_write_text であることを見る。
     expect(src).toContain('_atomic_write_text(file_path,');
-    expect(src).toContain('_atomic_write_text(puml, dsl)');
     expect(src).toContain('_atomic_write_text(target, old)');
-    expect(src).toContain("_atomic_write_text(svg_path, svg + self._svg_stamp(puml_path), newline='')");
+    // 書き出した svg に印を足して書く窓口は TICKET-owner-20261123-0642-prune で外した。
     expect(/(file_path|puml|svg_path)\.write_text\(/.test(src)).toBe(false);
   });
 });

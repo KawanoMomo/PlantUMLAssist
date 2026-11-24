@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // git-ui — FILES ツリー下端の GIT 欄と「比較する相手を選ぶ」を結線する (design 10c)。
 //
-// BLK-human-20260923-1702: 保存先が Git リポジトリのときだけ GIT 欄を出し、
+// 保存先が Git リポジトリのときだけ GIT 欄を出し、
 // ブランチ・変更 (M / A / D)・コミットをそこで済ませる。「この図の履歴」の行の「比較」で
 // そのコミット時点の図が右の枠 (#senior-pane。読むだけのフォルダと同じ枠) に並ぶ。
 // 通信 (取得・送信) とブランチ切替は、ここのボタンを人が押したときだけ呼ぶ。
@@ -25,6 +25,9 @@ window.MA.gitUi = (function() {
   var pickTab = 'commits';
 
   function _dir() { var a = APP(); return a ? a.fileDir() : ''; }
+  // いま開いている図のフォルダ (サブフォルダの図はそのフォルダ、直下の図は保存先)。この図の履歴・比較が使う。
+  function _docDir() { var a = APP(); return (a && a.docDir) ? a.docDir() : _dir(); }
+  function _normDir(d) { return String(d || '').split(String.fromCharCode(92)).join('/').replace(/\/+$/, '').toLowerCase(); }
   function _name() { var a = APP(); return a ? String(a.activeName() || '') : ''; }
   function _stem(n) { return String(n || '').replace(/\.puml$/i, ''); }
 
@@ -74,7 +77,7 @@ window.MA.gitUi = (function() {
     soonTimer = window.setTimeout(function() { soonTimer = null; refresh(); }, 400);
   }
 
-  // BLK-owner-20260924-2157-prune: 保存先が Git のとき「この図の履歴」は GIT 節の 1 つ。
+  // 保存先が Git のとき「この図の履歴」は GIT 節の 1 つ。
   // server が上書きの手前に取った控え (以前は窓 #vt-modal だけが出していた) も読んで同じ一覧に混ぜる。
   function loadSaved(name) {
     var a = APP();
@@ -94,10 +97,11 @@ window.MA.gitUi = (function() {
     var gp = GP();
     var name = _stem(_name());
     if (!gp || !gp.visible(status)) { history = []; saved = []; renderHistory(); return Promise.resolve(false); }
-    if (!force && name === lastName) return Promise.resolve(true);
-    lastName = name;
+    var dir = _docDir();
+    // 同じ名前でもフォルダが違えば別の図 (直下の a とサブフォルダの a)。
+    if (!force && name + '|' + dir === lastName) return Promise.resolve(true);
+    lastName = name + '|' + dir;
     if (!name) { history = []; saved = []; renderHistory(); return Promise.resolve(true); }
-    var dir = _dir();
     return Promise.all([
       _getJson('/git-log?dir=' + encodeURIComponent(dir) + '&file=' + encodeURIComponent(name)),
       loadSaved(name),
@@ -173,7 +177,7 @@ window.MA.gitUi = (function() {
       return;
     }
     list.forEach(function(c) {
-      // BLK-builder-20260924-2344-3 (design 10c): 押すとその図を開く (M は最後のコミットと並べる)。
+      // 押すとその図を開く (M は最後のコミットと並べる)。
       // 開けない行 (D・保存先の外) は押せる見た目にしない。
       var op = gp.changeOpen ? gp.changeOpen(c) : null;
       var row = _el(op ? 'button' : 'div', 'git-change');
@@ -185,7 +189,7 @@ window.MA.gitUi = (function() {
       row.setAttribute('data-git-code', c.code);
       row.setAttribute('data-file', c.file);
       row.title = op ? op.title : c.file;
-      // design 10c (BLK-builder-20260924-1808-1): ツリーの行と同じ形。名前は拡張子なし、状態字は右。
+      // design 10c: ツリーの行と同じ形。名前は拡張子なし、状態字は右。
       row.appendChild(_el('span', 'git-change-name', gp.changeName(c)));
       row.appendChild(_el('span', 'git-code git-code-' + c.code, c.code));
       host.appendChild(row);
@@ -206,7 +210,7 @@ window.MA.gitUi = (function() {
     if (!host || !gp) return;
     host.textContent = '';
     var lab = $('git-history-head');
-    // design 10c (BLK-builder-20260924-1808-1): 見出しはどの図の履歴かを言う。件数は title に回す。
+    // design 10c: 見出しはどの図の履歴かを言う。件数は title に回す。
     var name = _stem(_name());
     var sv = savedName === name ? saved : [];
     var rows = timelineRows();
@@ -242,7 +246,7 @@ window.MA.gitUi = (function() {
       row.setAttribute('data-hash', c.hash);
       if (c.version) row.setAttribute('data-version-stamp', c.version);
       if (cur && cur.hash === c.hash) row.classList.add('is-compared');
-      // design 10c (BLK-builder-20260924-1835-1): 1 行 1 コミット。メッセージ・タグの札・右端に日付。
+      // design 10c: 1 行 1 コミット。メッセージ・タグの札・右端に日付。
       // 「比較」は行に手を置いた・キーで来たときに日付の位置へ出る (全部の行に枠を並べない)。
       // 控えの行は「控え」の札を持ち、手を置くと「比較」と「戻す」が出る。
       var hr = gp.historyRow(c);
@@ -283,32 +287,61 @@ window.MA.gitUi = (function() {
 
   // 変更の行を押した: ツリーの行を押したのと同じ道 (保存先の一覧の行) で開き、開き終えたら
   // M の図は「この図の履歴」の先頭 (最後のコミット) を右の枠に並べる。
-  function _waitActive(name, ms) {
+  // 開いている図が name か。dir を渡すとサブフォルダのその図 (フォルダも一致)、渡さなければ直下の図。
+  function _isActive(name, dir) {
+    if (_stem(_name()) !== name) return false;
+    var ws = window.MA.workspace;
+    var a = ws && ws.getActive ? ws.getActive() : null;
+    var isSub = !!(a && a.sub && a.dir);
+    if (!dir) return !isSub;
+    return isSub && _normDir(a.dir) === _normDir(dir);
+  }
+
+  function _waitActive(name, ms, dir) {
     return new Promise(function(done) {
       var until = Date.now() + (ms || 5000);
-      (function tick() {
-        if (_stem(_name()) === name) { done(true); return; }
+      (function poll() {
+        if (_isActive(name, dir)) { done(true); return; }
         if (Date.now() > until) { done(false); return; }
-        window.setTimeout(tick, 80);
+        window.setTimeout(poll, 80);
       })();
     });
+  }
+
+  // サブフォルダの図の行 (保存先から見た道と名前) から、ツリーが読んだそのフォルダの絶対パス。
+  function _subDirOf(rel, name) {
+    var FP = window.MA.filesPanel;
+    var list = (FP && FP.subFiles) ? FP.subFiles() : [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].rel === rel && list[i].name === name) return list[i].dir;
+    }
+    return '';
   }
 
   function openChange(c) {
     var gp = GP();
     var op = gp && gp.changeOpen ? gp.changeOpen(c) : null;
     if (!op) return Promise.resolve(false);
-    if (_stem(_name()) !== op.name) {
+    var subDir = '';
+    if (op.rel) {
+      // サブフォルダの図: ツリーのその図の行を押したのと同じ道 (openFromSubFolder) で開く。
+      subDir = _subDirOf(op.rel, op.name);
+      if (!subDir || typeof window.openFromSubFolder !== 'function') {
+        say(op.rel + '/' + op.name + ' が保存先の木に見つかりません', true);
+        return Promise.resolve(false);
+      }
+      if (!_isActive(op.name, subDir)) window.openFromSubFolder(op.name, subDir, { preview: true });
+    } else if (!_isActive(op.name)) {
       var q = (window.CSS && window.CSS.escape) ? window.CSS.escape(op.name) : op.name.replace(/(["\\])/g, '\\$1');
       var it = document.querySelector('#folder-panel .folder-item[data-file-name="' + q + '"]');
       if (!it) { say(op.name + ' が保存先の一覧に見つかりません', true); return Promise.resolve(false); }
       it.click();
     }
-    return _waitActive(op.name).then(function(ok) {
+    return _waitActive(op.name, 5000, subDir).then(function(ok) {
       if (!ok || !op.compare) return ok;
       return loadHistory(true).then(function() {
         var head = history[0];
-        if (!head || _stem(_name()) !== op.name) return false;
+        if (!head || !_isActive(op.name, subDir)) return false;
         return compareWith(head);
       });
     });
@@ -338,6 +371,14 @@ window.MA.gitUi = (function() {
     var rows = document.querySelectorAll('#files-panel .files-row[data-file-name], #files-panel .files-part-file[data-file-name]');
     Array.prototype.forEach.call(rows, function(r) {
       var m = gp.markOf(marks, r.getAttribute('data-file-name'));
+      if (m) r.setAttribute('data-git', m);
+      else r.removeAttribute('data-git');
+    });
+    // サブフォルダの図の行は、道と名前で引く (直下の同じ名前の図の印を付けない)。
+    var byPath = (gp.visible(status) && gp.marksByPath) ? gp.marksByPath(status) : {};
+    var subs = document.querySelectorAll('#files-panel .files-sub-file[data-file-name][data-sub-rel]');
+    Array.prototype.forEach.call(subs, function(r) {
+      var m = byPath[r.getAttribute('data-sub-rel') + '/' + _stem(r.getAttribute('data-file-name'))] || '';
       if (m) r.setAttribute('data-git', m);
       else r.removeAttribute('data-git');
     });
@@ -392,7 +433,7 @@ window.MA.gitUi = (function() {
     m.hidden = false;
     var gp = GP();
     if (anchor && anchor.getBoundingClientRect && gp && gp.pickerPlace) {
-      // design 10c (BLK-builder-20260924-1818-1): 窓は必ず画面の中。下に入りきらなければボタンの上へ開き、
+      // design 10c: 窓は必ず画面の中。下に入りきらなければボタンの上へ開き、
       // 入る高さまで縮めて一覧をスクロールさせる (FILES 下端の「相手を選ぶ…」から下へ開くと切れていた)。
       var p = gp.pickerPlace(anchor.getBoundingClientRect(), window.innerWidth, window.innerHeight);
       m.style.top = p.top != null ? p.top + 'px' : 'auto';
@@ -419,7 +460,7 @@ window.MA.gitUi = (function() {
     if (m) m.hidden = true;
   }
 
-  // tags: メッセージの横に置く札 (design 10c「初版 [v1.2]」。BLK-builder-20260924-2246-1)。
+  // tags: メッセージの横に置く札 (design 10c「初版 [v1.2]」。)。
   function _pickRow(title, meta, stat, onPick, hash, tags) {
     var b = _el('button', 'git-pick-row');
     b.type = 'button';
@@ -455,11 +496,6 @@ window.MA.gitUi = (function() {
     }
     var q = ($('git-pick-filter') || {}).value || '';
     list.textContent = '';
-    if (pickTab === 'folder') {
-      list.appendChild(_pickRow('読むだけのフォルダの同じ図', '別の保存フォルダの図を右に並べます', '',
-        function() { var a = APP(); if (a) a.openFolderCompare(); }));
-      return;
-    }
     if (pickTab === 'refs') {
       gp.refRows(refs, q).forEach(function(r) {
         list.appendChild(_pickRow((r.kind === 'tag' ? 'タグ ' : 'ブランチ ') + r.name, r.short + (r.current ? ' · 今のブランチ' : ''), '',
@@ -476,7 +512,7 @@ window.MA.gitUi = (function() {
     });
   }
 
-  // ── ツール ▾ の「この図の変遷」は、Git 管理下ではこの履歴を開く ─────────
+  // ── 「この図の履歴」(ファイルの右クリック・Ctrl+K) は、Git 管理下ではこの履歴を開く ─────────
   function showHistory() {
     var fp = window.MA.filesPanel;
     if (fp) { fp.setOpen(true); fp.setSec('git', true); }
@@ -529,16 +565,7 @@ window.MA.gitUi = (function() {
       var m = $('git-pick-modal');
       if (ev.key === 'Escape' && m && !m.hidden) { ev.preventDefault(); closePicker(); }
     });
-    // 「この図の変遷」は Git 管理下では履歴に置き換える (入口は残す)。
-    var vt = $('btn-tab-versions');
-    if (vt) {
-      vt.addEventListener('click', function(ev) {
-        if (!isRepo()) return;
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        showHistory();
-      }, true);
-    }
+    // 「この図の履歴」は Git 管理下では履歴に置き換える (app.js の openVersionHistory が isRepo を見て呼ぶ)。
     // 別のアプリで commit / checkout したときに追い付く (通信はしない。ローカルを読むだけ)。
     window.addEventListener('focus', function() { if (lastDir !== null) refreshSoon(); });
     if (body) body.setAttribute('data-git-ready', '1');

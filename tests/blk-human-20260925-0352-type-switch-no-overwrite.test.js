@@ -48,7 +48,6 @@ describe('自動保存: 見本・白紙のままの本文はディスクへ書�
       if (opts && opts.method === 'POST' && url === '/autosave') posts.push(JSON.parse(opts.body));
       return Promise.resolve({ ok: true, json: function() { return Promise.resolve({}); } });
     };
-    as.setFileGuard(null);
     as.setConfig({ backend: 'file', fileDir: '/test' });
     // app.js の解決器と同じ判定: 本文が白紙・骨だけなら書かない。
     as.setFileNameResolver(function(type, dsl) {

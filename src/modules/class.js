@@ -67,7 +67,7 @@ window.MA.modules.plantumlClass = (function() {
   );
   var ENUM_VALUE_RE = /^([A-Z_][A-Z0-9_]*)\s*;?\s*$/;
 
-  // BLK-migrator-20260918-0049: 実物の class 図にある struct / annotation も要素として読む
+  // 実物の class 図にある struct / annotation も要素として読む
   // (読まないと図には描かれるのに選択枠が 1 つも出ない)。
   var STRUCT_ANNOT_KW_RE = new RegExp(
     '^(struct|annotation)\\s+(?:"([^"]+)"\\s+as\\s+(' + ID_WITH_GENERICS + ')|(' + ID_WITH_GENERICS + ')(?:\\s+as\\s+"([^"]+)")?)\\s*(?:<<([^>]+)>>)?\\s*\\{?\\s*$'
@@ -83,7 +83,7 @@ window.MA.modules.plantumlClass = (function() {
     '^namespace\\s+(?:"([^"]+)"|(' + ID + '))\\s*\\{\\s*$'
   );
 
-  // BLK-builder-20260925-0654-3: note の相手はクラスのメンバー (`E::field1`) でもよく、
+  // note の相手はクラスのメンバー (`E::field1`) でもよく、
   // 後ろに色 (`#yellow`) や ステレオタイプ (`<<yellowNote>>`) が付く。
   // 組: 1 位置 / 2 クラス / 3 メンバー / 4 色・ステレオタイプ(先頭の空白込み) / 5 本文 (inline のみ)。
   // `E::field1 #yellow` を inline の `E` + 本文 `:field1 #yellow` と読まないよう、本文の `:` の次の `:` を拒む。
@@ -99,7 +99,7 @@ window.MA.modules.plantumlClass = (function() {
   );
   var END_NOTE_RE = /^end\s+note\s*$/i;
 
-  // BLK-migrator-20260918-0049: `hide Actuator fields` で隠れたメンバーは SVG に描かれない。
+  // `hide Actuator fields` で隠れたメンバーは SVG に描かれない。
   // 隠れた分を数えずに行を当てると、描かれているメンバーに 1 つ前のメンバーの行番号が付く。
   var HIDE_SHOW_RE = new RegExp(
     '^(hide|show)\\s+(?:(' + ID + ')\\s+)?(fields|attributes|methods|members)$',
@@ -109,7 +109,7 @@ window.MA.modules.plantumlClass = (function() {
   // Relation arrow tokens, longest first to avoid prefix matches
   var RELATION_RE = new RegExp(
     '^(' + ID_WITH_GENERICS + '|"[^"]+")\\s+' +
-    // BLK-builder-20260907-1050-2: 「その他の設定」の向きが作る `-->` / `<--` も関連として読む。
+    // 「その他の設定」の向きが作る `-->` / `<--` も関連として読む。
     // design 4a「内部クラス」: PlantUML の入れ子表記 `+--` も関連として読む。
     '(<\\|--|--\\|>|<\\|\\.\\.|\\.\\.\\|>|\\*-->|<--\\*|\\*--|--\\*|o-->|<--o|o--|--o|' +
     '\\+-->|<--\\+|\\+--|--\\+|' +
@@ -117,7 +117,7 @@ window.MA.modules.plantumlClass = (function() {
     '(' + ID_WITH_GENERICS + '|"[^"]+")(?:\\s*:\\s*(.+))?\\s*$'
   );
 
-  // BLK-builder-20260925-0305-1: 関連クラス `(A, B) . C` (C が A と B の関連を表すクラス)。
+  // 関連クラス `(A, B) . C` (C が A と B の関連を表すクラス)。
   // PlantUML は A→B の線を名前の無い中継点で割り、中継点から C へ点線を引く。
   var ASSOC_CLASS_RE = new RegExp(
     '^\\(\\s*(' + ID + '|"[^"]+")\\s*,\\s*(' + ID + '|"[^"]+")\\s*\\)\\s*(?:\\.{1,2}|-{1,2})\\s*(' + ID + '|"[^"]+")\\s*$'
@@ -431,7 +431,7 @@ window.MA.modules.plantumlClass = (function() {
     return result;
   }
 
-  // BLK-migrator-20260918-0049: `together { class TaskA }` のように同じクラスを 2 回宣言しても
+  // `together { class TaskA }` のように同じクラスを 2 回宣言しても
   // 図には 1 つしか描かれない。2 件の要素にすると同じ図形へ枠が二重に出て、
   // 押したとき本体 (メンバーを持つ方) ではなく先の空宣言が開く。同じ id は 1 件にまとめ、
   // 本体を持つ宣言の行を正とする。
@@ -453,7 +453,7 @@ window.MA.modules.plantumlClass = (function() {
     return el;
   }
 
-  // BLK-migrator-20260918-0049: `hide`/`show` を後から順に当てる。target 無しは全要素。
+  // `hide`/`show` を後から順に当てる。target 無しは全要素。
   // `fields`/`attributes` は属性、`methods` はメソッド、`members` は両方。
   function _applyHideShow(result) {
     var dirs = result.hideShow || [];
@@ -558,8 +558,9 @@ window.MA.modules.plantumlClass = (function() {
     return set;
   }
 
-  function normalizeIdInput(rawInput, parsed) {
-    return window.MA.idNormalizer.normalize(rawInput, _existingClassIdSet(parsed), 'C');
+  // text = 今の本文 (描き直し前の古い parsed で別名を重ねない)。
+  function normalizeIdInput(rawInput, parsed, text) {
+    return window.MA.idNormalizer.normalize(rawInput, _existingClassIdSet(parsed), 'C', text);
   }
 
   function addClass(text, id, label, stereotype, generics) {
@@ -579,7 +580,7 @@ window.MA.modules.plantumlClass = (function() {
     lines.forEach(function(l) { out = insertBeforeEnd(out, l); });
     return out;
   }
-  // 本文の継承・実現の書き方 (`親 <|-- 子` / `子 --|> 親`) の多い方 (BLK-owner-20260929-0351-1)。
+  // 本文の継承・実現の書き方 (`親 <|-- 子` / `子 --|> 親`) の多い方。
   function _rootFirstIn(text) {
     var R = window.MA.relationRoles;
     return !!(R && R.prefersRootFirst && R.prefersRootFirst(text));
@@ -716,14 +717,30 @@ window.MA.modules.plantumlClass = (function() {
     return lines.join('\n');
   }
 
+  // 属性は手書きで並べた属性の塊に入れる (TICKET-primary-20261116-0420-wish)。
+  // 本体に属性があれば最後の属性の直後、属性が無くメソッドがあれば最初のメソッドの直前、
+  // どちらも無ければ閉じ `}` の直前。字下げは隣になる行 (属性・メソッド) に合わせる。
+  function _attributeInsertAt(lines, classIdx, closeIdx) {
+    var lastAttr = -1, firstMethod = -1;
+    for (var i = classIdx + 1; i < closeIdx; i++) {
+      var t = lines[i].trim();
+      if (!t || t.charAt(0) === "'" || SEPARATOR_RE.test(t)) continue;
+      if (_matchMethod(t)) { if (firstMethod < 0) firstMethod = i; continue; }
+      if (t.indexOf('(') < 0 && _matchAttribute(t)) lastAttr = i;
+    }
+    if (lastAttr >= 0) return { idx: lastAttr + 1, indent: lines[lastAttr].match(/^(\s*)/)[1] };
+    if (firstMethod >= 0) return { idx: firstMethod, indent: lines[firstMethod].match(/^(\s*)/)[1] };
+    return { idx: closeIdx, indent: lines[classIdx].match(/^(\s*)/)[1] + '  ' };
+  }
+
   function addAttribute(text, classLineNum, visibility, name, type, isStatic) {
     text = ensureBlock(text, classLineNum);
     var lines = text.split('\n');
     var classIdx = classLineNum - 1;
     var closeIdx = _findClassEndLine(lines, classIdx);
     if (closeIdx < 0) return text;
-    var indent = lines[classIdx].match(/^(\s*)/)[1] + '  ';
-    lines.splice(closeIdx, 0, indent + fmtAttribute(visibility, name, type, isStatic));
+    var at = _attributeInsertAt(lines, classIdx, closeIdx);
+    lines.splice(at.idx, 0, at.indent + fmtAttribute(visibility, name, type, isStatic));
     return lines.join('\n');
   }
 
@@ -793,9 +810,11 @@ window.MA.modules.plantumlClass = (function() {
     else if (field === 'name') name = value;
     else if (field === 'type') type = value;
     else if (field === 'static') isStatic = !!value;
-    lines[idx] = indent + (am.typeFirst && type
+    var attrLine = indent + (am.typeFirst && type
       ? (visibility ? visibility + ' ' : '') + (isStatic ? '{static} ' : '') + type + ' ' + name
       : fmtAttribute(visibility, name, type, isStatic));
+    // 直した値以外の空白 (`baud  : uint16` の桁揃え) は元の行の字のまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = window.MA.dslUtils.keepLineSpacing(lines[idx], attrLine, [value]);
     return lines.join('\n');
   }
 
@@ -818,10 +837,12 @@ window.MA.modules.plantumlClass = (function() {
     else if (field === 'type') returnType = value;
     else if (field === 'static') { isStatic = !!value; if (isStatic) isAbstract = false; }
     else if (field === 'abstract') { isAbstract = !!value; if (isAbstract) isStatic = false; }
-    lines[idx] = indent + (mm.typeFirst && returnType
+    var methLine = indent + (mm.typeFirst && returnType
       ? (visibility ? visibility + ' ' : '') + (isStatic ? '{static} ' : (isAbstract ? '{abstract} ' : '')) +
         returnType + ' ' + name + '(' + (params || '') + ')'
       : fmtMethod(visibility, name, params, returnType, isStatic, isAbstract));
+    // 直した値以外の空白は元の行の字のまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = window.MA.dslUtils.keepLineSpacing(lines[idx], methLine, [value]);
     return lines.join('\n');
   }
 
@@ -881,67 +902,20 @@ window.MA.modules.plantumlClass = (function() {
     return lines.join('\n');
   }
 
-  // BLK-primary-20260930-0257: 「クラスを削除」の確かめる窓。ブラウザの confirm は note のことしか言わず、
+  // 「クラスを削除」の確かめる窓。ブラウザの confirm は note のことしか言わず、
   // Enter / Esc の約束も他の窓と違った。アプリの窓で、消える関係と note の数を先に言う (Enter で削除・Esc で取り消し)。
+  // 窓と消し方は 6 図種の共通部 (src/core/element-delete.js)。クラス図は窓の id に cl を使う。
   function _askDeleteClass(classId, ctx) {
     var plan = classDeletePlan(ctx.getMmdText(), classId);
     if (!plan) return;
-    var old = document.getElementById('cl-del-modal');
-    if (old && old.parentNode) old.parentNode.removeChild(old);
-    var back = document.activeElement;
-    var wrap = document.createElement('div');
-    wrap.id = 'cl-del-modal';
-    wrap.setAttribute('style', 'position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;');
-    var box = document.createElement('div');
-    box.setAttribute('role', 'dialog');
-    box.setAttribute('aria-modal', 'true');
-    box.setAttribute('aria-label', 'クラスを削除');
-    box.setAttribute('style', 'background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:6px;padding:14px 16px;min-width:300px;max-width:440px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,0.4);');
-    var msg = document.createElement('p');
-    msg.id = 'cl-del-message';
-    msg.setAttribute('style', 'margin:0 0 12px;line-height:1.6;');
-    msg.textContent = classDeleteMessage(classId, plan);
-    box.appendChild(msg);
-    var row = document.createElement('div');
-    row.setAttribute('style', 'display:flex;gap:8px;justify-content:flex-end;');
-    var cancel = document.createElement('button');
-    cancel.type = 'button';
-    cancel.id = 'cl-del-cancel';
-    cancel.textContent = '取り消し';
-    cancel.setAttribute('style', 'background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border);padding:5px 12px;border-radius:4px;font-size:12px;cursor:pointer;');
-    var ok = document.createElement('button');
-    ok.type = 'button';
-    ok.id = 'cl-del-confirm';
-    ok.textContent = '削除する';
-    ok.setAttribute('style', 'background:var(--accent-red);color:#fff;border:none;padding:5px 12px;border-radius:4px;font-size:12px;cursor:pointer;');
-    row.appendChild(cancel);
-    row.appendChild(ok);
-    box.appendChild(row);
-    wrap.appendChild(box);
-    document.body.appendChild(wrap);
-    function close() {
-      if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-      if (back && back.focus && back.isConnected !== false) { try { back.focus(); } catch (e) {} }
-    }
-    function doDelete() {
-      close();
-      window.MA.history.pushHistory();
-      ctx.setMmdText(deleteClassWithNotes(ctx.getMmdText(), classId));
-      window.MA.selection.clearSelection();
-      ctx.onUpdate();
-    }
-    ok.addEventListener('click', doDelete);
-    cancel.addEventListener('click', close);
-    wrap.addEventListener('click', function(e) { if (e.target === wrap) close(); });
-    wrap.addEventListener('keydown', function(e) {
-      if (e.isComposing) return;
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
-      if (e.key === 'Enter' && document.activeElement !== cancel) { e.preventDefault(); e.stopPropagation(); doDelete(); }
+    window.MA.elementDelete.ask({
+      prefix: 'cl', title: 'クラスを削除', ctx: ctx,
+      message: classDeleteMessage(classId, plan),
+      plan: plan,
     });
-    try { ok.focus(); } catch (e) {}
   }
 
-  // BLK-primary-20260930-0257: クラスを消すときに一緒に消える行。宣言 (本体の {} まで)・そのクラスへの note・
+  // クラスを消すときに一緒に消える行。宣言 (本体の {} まで)・そのクラスへの note・
   // そのクラスに繋がる関係の行。関係の行を残すと PlantUML がその名前のクラスを描き直し、消したクラスが図に残る
   // (1 枚のクラス図を「複製」して要らないクラスを消し、2 枚に分ける手順が成り立たなかった)。
   // 返り値: { ranges: [{start,end}] (降順), relations: 本数, notes: 個数 } / クラスが無ければ null。
@@ -1050,8 +1024,13 @@ window.MA.modules.plantumlClass = (function() {
     else if (field === 'swap') { var s = from; from = to; to = s; }
 
     // 多重度・線の色は種別やラベルの書き換えでは失われない (design 3c)。
-    lines[idx] = window.MA.relationOptions.applyDecorations(
-      indent + fmtRelation(kind, from, to, label, rootFirst), deco);
+    var relCore = fmtRelation(kind, from, to, label, rootFirst);
+    if (field === 'label') {
+      relCore = window.MA.dslUtils.keepRelationArrow(window.MA.relationOptions.readableLine(trimmed), relCore, RELATION_RE);
+    }
+    var relLine = window.MA.relationOptions.applyDecorations(indent + relCore, deco);
+    // 直した値以外の空白 (手で揃えた桁) は元の行の字のまま。両端を入れ替えたときは組み直したまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = field === 'swap' ? relLine : window.MA.dslUtils.keepLineSpacing(lines[idx], relLine, [value]);
     return lines.join('\n');
   }
 
@@ -1165,7 +1144,7 @@ window.MA.modules.plantumlClass = (function() {
     });
   }
 
-  // BLK-junior-20260909-0703-wish: 手本のクラス図で親を選んだまま、派生を 1 つ起こす。
+  // 手本のクラス図で親を選んだまま、派生を 1 つ起こす。
   // 親の宣言とメンバは原文のまま引き継ぎ (打ち直さない)、親が既に引いている関連は
   // 「同じ関連を引く」のチェックで派生にも引ける。埋めるのは名前と固有メンバだけ。
   function _showDeriveModal(element, parsedData, ctx) {
@@ -1234,7 +1213,7 @@ window.MA.modules.plantumlClass = (function() {
       if (pre) pre.textContent = CD.preview(text, parsedData, spec).join('\n');
       var v = CD.validate(text, parsedData, spec);
       var errEl = document.getElementById('cl-dv-errors');
-      // BLK-human-20260923-1330: errors は赤で止め、warnings は橙で出したまま追加は通す。
+      // errors は赤で止め、warnings は橙で出したまま追加は通す。
       if (errEl) errEl.innerHTML = spec.name ? window.MA.scaffoldNotice.html(v) : '';
       var btn = document.getElementById('cl-dv-confirm');
       if (btn) {
@@ -1261,7 +1240,7 @@ window.MA.modules.plantumlClass = (function() {
     if (nameEl && nameEl.focus) nameEl.focus();
   }
 
-  // BLK-junior-20260909-0703-wish: 選んだ矢印と同じ種類・同じラベルの関連をもう 1 本引く。
+  // 選んだ矢印と同じ種類・同じラベルの関連をもう 1 本引く。
   // 種類はこの矢印のものに固定なので、カードから選び直す手が要らない。
   function _showSameRelationModal(relation, parsedData, ctx) {
     var modal = document.getElementById('cl-sc-modal');
@@ -1395,7 +1374,7 @@ window.MA.modules.plantumlClass = (function() {
       '</div>';
     }
 
-    // BLK-junior-20260907-0823: 関連の元 / 先は、このモーダルで作る親・子と
+    // 関連の元 / 先は、このモーダルで作る親・子と
     // 図に既にあるクラスからの選択にする。名前を打ち直す手が要らず、
     // 「関連の元が未定義です」で確定できない状態にも落ちない。
     function namePickHtml(id) {
@@ -1416,9 +1395,6 @@ window.MA.modules.plantumlClass = (function() {
     var SECTION = 'font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 4px 0;';
     content.innerHTML = datalist +
       '<h3 style="margin:0 0 12px 0;color:var(--text-primary);">クラス構成をまとめて追加</h3>' +
-      // BLK-primary-20260929-2056-friction: 他の図種の一括欄と同じ「⧉ 他の図から取り込む」。開いているシーケンス図の参加者・受ける呼び出し、
-      // 状態遷移図のきっかけを、打ち直さずにクラス・メンバ・関連の欄へ入れる。
-      (window.MA.reuseModal ? window.MA.reuseModal.buttonHtml('cl-sc-reuse') : '') +
       '<div style="' + SECTION + '">親クラス (省略可)</div>' +
       '<div style="display:flex;gap:6px;margin-bottom:5px;align-items:center;">' +
         '<select id="cl-sc-pkind" style="' + INPUT + '">' +
@@ -1433,7 +1409,7 @@ window.MA.modules.plantumlClass = (function() {
       '<div id="cl-sc-rows">' + classRowHtml(0) + classRowHtml(1) + classRowHtml(2) + '</div>' +
       '<button id="cl-sc-add-row" style="font-size:11px;padding:3px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ クラスを追加</button>' +
       '<div style="' + SECTION + '">親以外の関連 (省略可)</div>' +
-      // BLK-junior-20260907-0823: 派生クラス図は子どうしの関連も一緒に引くので、
+      // 派生クラス図は子どうしの関連も一緒に引くので、
       // クラスの行と同じく最初から 3 行出す (「＋ 関連を追加」を押す手を省く)。
       '<div id="cl-sc-rel-rows">' + relRowHtml(0) + relRowHtml(1) + relRowHtml(2) + '</div>' +
       '<button id="cl-sc-add-rel" style="font-size:11px;padding:3px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">＋ 関連を追加</button>' +
@@ -1521,7 +1497,7 @@ window.MA.modules.plantumlClass = (function() {
       if (pre) pre.textContent = CS.preview(text, spec).join('\n');
       var v = CS.validate(spec, text);
       var errEl = document.getElementById('cl-sc-errors');
-      // BLK-human-20260923-1330: errors は赤で止め、warnings は橙で出したまま追加は通す。
+      // errors は赤で止め、warnings は橙で出したまま追加は通す。
       if (errEl) errEl.innerHTML = window.MA.scaffoldNotice.html(v);
       var confirmBtn = document.getElementById('cl-sc-confirm');
       if (confirmBtn) {
@@ -1555,7 +1531,7 @@ window.MA.modules.plantumlClass = (function() {
 
     function bindRelRow(j) {
       P.bindEvent('cl-sc-rlabel-' + j, 'input', refresh);
-      // 元 / 先はプルダウンなので change で拾う (BLK-junior-20260907-0823)。
+      // 元 / 先はプルダウンなので change で拾う。
       ['cl-sc-rfrom-' + j, 'cl-sc-rto-' + j, 'cl-sc-rkind-' + j].forEach(function(id) { P.bindEvent(id, 'change', refresh); });
       bindRemovable('cl-sc-rdel-' + j, '.cl-sc-rel-row', 'data-j', j);
     }
@@ -1588,84 +1564,6 @@ window.MA.modules.plantumlClass = (function() {
       refresh();
     });
 
-    // 取り込んだ候補を欄へ入れる。同じ名前の行があればそのメンバ欄に足し、無ければ空いている行 (無ければ新しい行) を使う。
-    // 親が空なら、同じ語尾の兄弟クラスがそろって継承している親を入れ、そのクラスは継承、ほかは「親と結ばない」にする。
-    function fillFromPicked(picked) {
-      var spec = window.MA.reusePicker.toClassSpec(picked);
-      var text = ctx.getMmdText();
-      var rowOf = function(name) {
-        var rows = content.querySelectorAll('.cl-sc-row');
-        var empty = null;
-        for (var i = 0; i < rows.length; i++) {
-          var k = rows[i].getAttribute('data-i');
-          var v = val('cl-sc-name-' + k).trim();
-          if (v === name) return k;
-          if (!v && empty === null) empty = k;
-        }
-        if (empty !== null) return empty;
-        var i2 = rowCount++;
-        document.getElementById('cl-sc-rows').insertAdjacentHTML('beforeend', classRowHtml(i2));
-        bindClassRow(i2);
-        return String(i2);
-      };
-      spec.classes.forEach(function(c) {
-        var k = rowOf(c.name);
-        var nameEl = document.getElementById('cl-sc-name-' + k);
-        var memEl = document.getElementById('cl-sc-mem-' + k);
-        nameEl.value = c.name;
-        var have = CS.parseMembers(memEl.value);
-        memEl.value = have.concat(c.members.filter(function(m) { return have.indexOf(m) < 0; })).join(', ');
-        var parentEl = document.getElementById('cl-sc-parent');
-        var sib = CS.siblingParent(text, c.name);
-        if (parentEl && !parentEl.value.trim() && sib) parentEl.value = sib;
-        var relEl = document.getElementById('cl-sc-rel-' + k);
-        if (relEl) relEl.value = (sib && parentEl && parentEl.value.trim() === sib) ? 'inheritance' : 'none';
-      });
-      spec.relations.forEach(function(r) {
-        refreshNamePickers();
-        var rrows = content.querySelectorAll('.cl-sc-rel-row');
-        var slot = null;
-        for (var j = 0; j < rrows.length; j++) {
-          var jk = rrows[j].getAttribute('data-j');
-          if (!val('cl-sc-rfrom-' + jk) && !val('cl-sc-rto-' + jk)) { slot = jk; break; }
-        }
-        if (slot === null) {
-          slot = String(relCount++);
-          document.getElementById('cl-sc-rel-rows').insertAdjacentHTML('beforeend', relRowHtml(slot));
-          bindRelRow(slot);
-          refreshNamePickers();
-        }
-        var fromEl = document.getElementById('cl-sc-rfrom-' + slot);
-        var toEl = document.getElementById('cl-sc-rto-' + slot);
-        [[fromEl, r.from], [toEl, r.to]].forEach(function(pair) {
-          if (!pair[0]) return;
-          if (!Array.prototype.some.call(pair[0].options, function(o) { return o.value === pair[1]; })) {
-            var o = document.createElement('option');
-            o.value = pair[1]; o.textContent = pair[1];
-            pair[0].appendChild(o);
-          }
-          pair[0].value = pair[1];
-        });
-        var kindEl = document.getElementById('cl-sc-rkind-' + slot);
-        if (kindEl) kindEl.value = 'association';
-      });
-      refresh();
-      var confirmBtn = document.getElementById('cl-sc-confirm');
-      if (confirmBtn && confirmBtn.focus) confirmBtn.focus();
-    }
-
-    P.bindEvent('cl-sc-reuse', 'click', function() {
-      var ws = window.MA.workspace;
-      var docs = ws && ws.list ? ws.list() : [];
-      var active = ws && ws.getActiveId ? ws.getActiveId() : null;
-      window.MA.reuseModal.open({
-        items: window.MA.reusePicker.classCandidates(docs, active, ctx.getMmdText()),
-        onPick: fillFromPicked,
-        hint: '選んだクラス・メソッド・関連がこの窓の欄に入ります (打ち直し不要)',
-        emptyText: '取り込めるシーケンス図・状態遷移図が開いていません (もう全部クラス図に有るときも空です)',
-      });
-    });
-
     function close() { modal.style.display = 'none'; content.innerHTML = ''; }
     P.bindEvent('cl-sc-cancel', 'click', close);
     P.bindEvent('cl-sc-confirm', 'click', function() {
@@ -1679,7 +1577,7 @@ window.MA.modules.plantumlClass = (function() {
     });
 
     refresh();
-    // BLK-junior-20260907-0823: 開いた直後は必ず親クラス名から打ち始めるので、
+    // 開いた直後は必ず親クラス名から打ち始めるので、
     // その欄に置きに行くクリックを省いて最初からフォーカスを載せる。
     var first = document.getElementById('cl-sc-parent');
     if (first && first.focus) first.focus();
@@ -1693,7 +1591,7 @@ window.MA.modules.plantumlClass = (function() {
     if (allOpts.length === 0) allOpts = [{ value: '', label: '（要素なし）' }];
 
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'cl-tail-kind', [
@@ -1705,17 +1603,13 @@ window.MA.modules.plantumlClass = (function() {
           { value: 'namespace', label: '名前空間 (namespace)' },
           { value: 'relation',  label: '関係' },
           { value: 'note',      label: '注釈 (note)' },
+          // 複数行をまとめて入れる入口は、他の図種と同じ種別チップ「まとめて」1 つ。
+          // 以前はフォームの下に「⌗ クラス構成をまとめて追加」ボタンを別に置いていた。中身 (親・派生・関連の窓) は同じ。
+          { value: 'bulk',      label: 'まとめて (複数行)' },
         ]) +
         '<div id="cl-tail-detail" style="margin-top:6px;"></div>' +
-      '</div>' +
-      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-        '<button id="cl-scaffold-open" style="width:100%;font-size:11px;padding:5px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⌗ クラス構成をまとめて追加</button>' +
       '</div>';
     propsEl.innerHTML = html;
-
-    P.bindEvent('cl-scaffold-open', 'click', function() {
-      _showScaffoldModal(parsedData, ctx);
-    });
 
 
     var renderTailDetail = function() {
@@ -1741,7 +1635,7 @@ window.MA.modules.plantumlClass = (function() {
           P.fieldHtml('表示名', 'cl-tail-label', '', '例: domain') +
           P.primaryButtonHtml('cl-tail-add', '+ 追加');
       } else if (kind === 'relation') {
-        // BLK-junior-20260908-1203: From/To のどちらが親かがフォームから読めず、
+        // From/To のどちらが親かがフォームから読めず、
         // 継承を逆向きに張ってしまう。種類ごとの呼び名を見出しに出し、
         // 「押すとこう入る」の 1 行と ⇄ 入替を添えて、追加する前に確かめられるようにする。
         html2 =
@@ -1756,7 +1650,10 @@ window.MA.modules.plantumlClass = (function() {
           ]) +
           _roleSelectHtml('cl-tail-from', 'from', 'association', allOpts) +
           '<button id="cl-tail-rswap" type="button" style="font-size:11px;padding:3px 10px;margin:0 0 8px;cursor:pointer;">⇄ 入替</button>' +
-          _roleSelectHtml('cl-tail-to', 'to', 'association', allOpts) +
+          // To は From と同じ要素を既定にしない (自分への線を黙って書かない)。
+          // 空欄から一覧で選ぶ。自分への関係は同じ要素を選んだときだけ書く。
+          _roleSelectHtml('cl-tail-to', 'to', 'association',
+            [{ value: '', label: TAIL_TO_BLANK, selected: true }].concat(allOpts)) +
           '<div id="cl-tail-rpreview" style="margin-bottom:8px;padding:4px 6px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);background:var(--bg-tertiary);border-radius:3px;word-break:break-all;"></div>' +
           P.fieldHtml('ラベル', 'cl-tail-rlabel', '', '任意') +
           P.primaryButtonHtml('cl-tail-add', '+ 追加');
@@ -1772,13 +1669,29 @@ window.MA.modules.plantumlClass = (function() {
             { value: 'bottom', label: 'Bottom' },
           ]) +
           '<div style="margin-bottom:6px;">' +
-            '<label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">本文 (Enter で追加 / Shift+Enter で改行)</label>' +
+            P.textLabelHtml(P.NOTE_BODY, 'cl-tail-ntext', { enterHint: true }) +
             '<textarea id="cl-tail-ntext" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;"></textarea>' +
           '</div>' +
           P.primaryButtonHtml('cl-tail-add', '+ 追加');
+      } else if (kind === 'bulk') {
+        html2 =
+          '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;">' +
+            '親クラス・派生クラス (メンバ付き)・関連を 1 つの窓で並べて、1 回で入れます</div>' +
+          P.primaryButtonHtml('cl-scaffold-open', '⌗ クラス構成をまとめて追加…');
       }
       detailEl.innerHTML = html2;
+      if (kind === 'bulk') {
+        P.bindEvent('cl-scaffold-open', 'click', function() {
+          _showScaffoldModal(parsedData, ctx);
+        });
+        return;
+      }
       if (kind === 'relation') {
+        // 確定後も関係の種類と From を保つ (次の 1 本は To だけ選べば足せる)。
+        if (window.MA.tailMemory) {
+          window.MA.tailMemory.bindSelect('cl-tail-rkind');
+          window.MA.tailMemory.bindSelect('cl-tail-from');
+        }
         window.MA.relationKindCards.mountForSelect('cl-tail-rkind', 'class');
         _bindRelationRoles(ctx);
       }
@@ -1789,8 +1702,8 @@ window.MA.modules.plantumlClass = (function() {
         var k = document.getElementById('cl-tail-kind').value;
         if (k === 'class' || k === 'interface' || k === 'abstract') {
           var rawAl = document.getElementById('cl-tail-alias').value;
-          var normCl = normalizeIdInput(rawAl, parsedData);
-          if (!normCl.valid) { alert('Alias 必須'); return; }
+          var normCl = normalizeIdInput(rawAl, parsedData, ctx.getMmdText());
+          if (!normCl.valid) { P.needField('cl-tail-alias'); return; }
           var rawLbl = document.getElementById('cl-tail-label').value.trim();
           var lbl = rawLbl || normCl.label;
           var st = document.getElementById('cl-tail-stereo').value.trim() || null;
@@ -1803,8 +1716,8 @@ window.MA.modules.plantumlClass = (function() {
           out = GP.applyAdd('class', 'cl-tail', parsedData.groups, t, out);
         } else if (k === 'enum') {
           var rawAl2 = document.getElementById('cl-tail-alias').value;
-          var normEn = normalizeIdInput(rawAl2, parsedData);
-          if (!normEn.valid) { alert('Alias 必須'); return; }
+          var normEn = normalizeIdInput(rawAl2, parsedData, ctx.getMmdText());
+          if (!normEn.valid) { P.needField('cl-tail-alias'); return; }
           var valsStr = document.getElementById('cl-tail-values').value;
           var vals = valsStr.split(/\r?\n/).map(function(s) { return s.trim(); }).filter(function(s) { return s; });
           window.MA.history.pushHistory();
@@ -1812,7 +1725,7 @@ window.MA.modules.plantumlClass = (function() {
           out = GP.applyAdd('class', 'cl-tail', parsedData.groups, t, out);
         } else if (k === 'package' || k === 'namespace') {
           var lbl3 = document.getElementById('cl-tail-label').value.trim();
-          if (!lbl3) { alert('Label 必須'); return; }
+          if (!lbl3) { P.needField('cl-tail-label'); return; }
           window.MA.history.pushHistory();
           out = k === 'package' ? addPackage(t, lbl3) : addNamespace(t, lbl3);
           // 作った直後の境界を次の「追加する位置」にする (続けて中身を足せる)。
@@ -1820,15 +1733,24 @@ window.MA.modules.plantumlClass = (function() {
         } else if (k === 'relation') {
           var fr = document.getElementById('cl-tail-from').value;
           var to = document.getElementById('cl-tail-to').value;
-          if (!fr || !to) { alert('From/To 必須 (先に要素を追加)'); return; }
+          if (!fr) { alert('From/To 必須 (先に要素を追加)'); return; }
+          if (!to) {
+            // 5 図種で同じ共通部 (TICKET-owner-20261123-2322-2)。欄の見出しは関係の種類で替わる (もう一方 (To) 等)。
+            P.needPick('cl-tail-to', 'cl-tail-rpreview', '一覧で選ぶ', 'To');
+            return;
+          }
           var rkind = document.getElementById('cl-tail-rkind').value;
-          // 上の欄は矢の根元 (継承なら子)。記法の左右へ直して書く (BLK-owner-20260929-0351-1)。
+          if (window.MA.tailMemory) {
+            window.MA.tailMemory.setField('cl-tail-rkind', rkind);
+            window.MA.tailMemory.setField('cl-tail-from', fr);
+          }
+          // 上の欄は矢の根元 (継承なら子)。記法の左右へ直して書く。
           var mEnds = _toModel(rkind, fr, to);
           window.MA.history.pushHistory();
           out = addRelation(t, rkind, mEnds.from, mEnds.to, document.getElementById('cl-tail-rlabel').value.trim() || null);
         } else if (k === 'note') {
           var ntg = document.getElementById('cl-tail-ntarget').value;
-          if (!ntg) { alert('Target 必須'); return; }
+          if (!ntg) { P.needField('cl-tail-ntarget'); return; }
           var npos = document.getElementById('cl-tail-npos').value;
           var ntext = document.getElementById('cl-tail-ntext').value || '';
           window.MA.history.pushHistory();
@@ -1840,7 +1762,16 @@ window.MA.modules.plantumlClass = (function() {
     };
     document.getElementById('cl-tail-kind').addEventListener('change', renderTailDetail);
     // design 2b: 種別はチップ 1 クリックで決める。値の持ち主は上の select のまま。
-    window.MA.tailKindChips.mount('cl-tail-kind');
+    var chipsEl = window.MA.tailKindChips.mount('cl-tail-kind');
+    // チップ「まとめて」を押すと、その場でクラス構成の窓を開く (当たっているチップの押し直しでも開く)。
+    // 描き直し (確定のあと・前回の種別を覚えていたとき) と ← → での移動では開かない。
+    if (chipsEl) chipsEl.addEventListener('click', function(e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.prop-seg') : null;
+      if (!btn || btn.getAttribute('data-value') !== 'bulk') return;
+      var modal = document.getElementById('cl-sc-modal');
+      if (modal && modal.style.display === 'flex') return;
+      _showScaffoldModal(parsedData, ctx);
+    });
     renderTailDetail();
   }
 
@@ -1853,7 +1784,7 @@ window.MA.modules.plantumlClass = (function() {
   ];
 
   // 種別トグル: 押した種別へ宣言のキーワードを差し替える (id・表示名・本体は残る)。
-  // BLK-builder-20260924-1320-2 (design 4a): 押したあとも同じクラスを選んだまま、新しい種別のパネルで続けて直せる
+  // 押したあとも同じクラスを選んだまま、新しい種別のパネルで続けて直せる
   // (選択は種別を型に持つので、新しい種別で選び直す)。enum のパネルからも同じ手で戻せる。
   function _bindKindToggle(element, propsEl, ctx) {
     Array.prototype.forEach.call(propsEl.querySelectorAll('.cl-kind-btn'), function(b) {
@@ -1872,7 +1803,7 @@ window.MA.modules.plantumlClass = (function() {
   }
 
   function _kindToggleHtml(current) {
-    var html = '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">種別 / Kind</div>' +
+    var html = '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + window.MA.terms.kind + '</div>' +
                '<div id="cl-kind-toggle" style="display:flex;gap:3px;margin-bottom:8px;flex-wrap:wrap;">';
     _KINDS.forEach(function(k) {
       var on = k.kind === current;
@@ -1894,7 +1825,7 @@ window.MA.modules.plantumlClass = (function() {
     { value: '~', label: '~ pkg' },
   ];
 
-  // BLK-builder-20260924-1252-4 (design 4a): メンバー 1 行の見出し。可視性は記号を色で分け
+  // メンバー 1 行の見出し。可視性は記号を色で分け
   // (PlantUML の図の印と同じ: + 緑・− 赤・# 橙・~ 青)、シグネチャは可視性と修飾を除いた形で出す。
   var _VIS_MARK = {
     '+': { mark: '+', color: 'var(--accent-green, #3fb950)', title: 'public' },
@@ -1933,7 +1864,7 @@ window.MA.modules.plantumlClass = (function() {
   }
 
   function _visToggleHtml(idPrefix, current) {
-    var html = '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">可視性 / Visibility</div>' +
+    var html = '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">可視性</div>' +
                '<div class="cl-vis-toggle" data-vis-for="' + idPrefix + '" style="display:flex;gap:3px;margin-bottom:6px;">';
     _VIS.forEach(function(v) {
       var on = v.value === current;
@@ -1967,11 +1898,11 @@ window.MA.modules.plantumlClass = (function() {
     });
   }
 
-  // ── design 4a「関係を追加」(BLK-builder-20260924-1245-2) ─────────────────
+  // ── design 4a「関係を追加」 ─────────────────
   // 選んだクラスを一端にして、その場で関係を 1 本引く。選択を外して追加ペインの
   // Relation へ行き From を選び直す・Shift で 2 つ選ぶ、の遠回りをさせない。
   //
-  // 選んだクラスは、どの種類でも矢の根元 (From) になる (BLK-owner-20260929-0351-1)。
+  // 選んだクラスは、どの種類でも矢の根元 (From) になる。
   // 継承・実現なら子 (実装クラス)、それ以外は使う側・全体側。
   // ⇄ で入れ替えた向きは、種類を選び直しても保つ。
   var _relAdd = { openFor: null, kind: 'association', swapped: false, other: '' };
@@ -2080,7 +2011,7 @@ window.MA.modules.plantumlClass = (function() {
     refresh();
   }
 
-  // BLK-builder-20260924-1305-2 (design 4a):「Class · 6 行目」の見出しと、選んだクラスの名前。
+  // 「Class · 6 行目」の見出しと、選んだクラスの名前。
   function _selHeadHtml(kindWord, element) {
     var H = window.MA.htmlUtils;
     var name = element.label || element.id;
@@ -2100,27 +2031,24 @@ window.MA.modules.plantumlClass = (function() {
                   : element.kind === 'abstract' ? 'Abstract Class'
                   : 'Class';
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-        // BLK-builder-20260924-1305-2 (design 4a): 見出しは「Class · 6 行目」と、その下に選んだクラスの名前。
+        // 見出しは「Class · 6 行目」と、その下に選んだクラスの名前。
         _selHeadHtml(kindLabel, element) +
         // design 4a「種別 / Kind」: 宣言のキーワードをその場で切り替える
         _kindToggleHtml(element.kind) +
-        P.fieldHtml('名前 (id)', 'cl-edit-id', element.id) +
-        // BLK-reviewer-20260915-0506-wish: クラス名を打つのはここ。登録簿の
-        // 正式表記を欄の下に出し、揺れた綴りならその場で揃える先を言う。
-        P.vocabPickerHtml('cl-edit-id-vocab', { roles: ['type'] }) +
-        P.fieldHtml('表示名', 'cl-edit-label', element.label || '') +
-        P.fieldHtml('ステレオタイプ', 'cl-edit-stereo', element.stereotype || '', '例: entity') +
-        P.primaryButtonHtml('cl-edit-apply', '変更を反映') +
-        ' ' + P.primaryButtonHtml('cl-rename-refs', '名前の変更を関係の行にも反映') +
+        P.fieldHtml(window.MA.terms.id, 'cl-edit-id', element.id) +
+        P.fieldHtml(window.MA.terms.label, 'cl-edit-label', element.label || '') +
+        P.renameRefsCheckHtml('cl-edit-rename-refs') +
+        P.fieldHtml(window.MA.terms.stereotype, 'cl-edit-stereo', element.stereotype || '', '例: entity') +
+        P.primaryButtonHtml('cl-edit-apply', window.MA.terms.apply) +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
           '<button id="cl-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
           '<button id="cl-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
         '</div>' +
-        // BLK-junior-20260909-0703-wish: 手本の親を選んだまま派生を 1 つ起こす。
+        // 手本の親を選んだまま派生を 1 つ起こす。
         '<button id="cl-derive-open" style="width:100%;margin-top:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">⬇ この親から派生を 1 つ作る</button>' +
-        // BLK-owner-20260923-2332-2: 選んだクラスを境界の中へ移す / 外へ出す。
+        // 選んだクラスを境界の中へ移す / 外へ出す。
         GP.editFieldHtml('cl-edit', parsedData.groups, element.line) +
       '</div>';
 
@@ -2137,7 +2065,7 @@ window.MA.modules.plantumlClass = (function() {
         var isSel = mi === focusIdx;
         var rowCls = isSel ? 'cl-member-row cl-member-selected' : 'cl-member-row';
         var rowStyle = isSel ? 'background:var(--accent-bg, rgba(0,128,255,0.15));padding:4px;border-radius:3px;' : 'padding:2px;';
-        // BLK-builder-20260924-1252-4 (design 4a): 閉じた行は「可視性の記号・シグネチャ・編集」。
+        // 閉じた行は「可視性の記号・シグネチャ・編集」。
         // 並べ替えと削除は開いた行の中に置く (閉じた行から確かめ無しに消えない)。
         var parts = memberRowParts(m);
         rows += '<div class="' + rowCls + '" data-member-idx="' + mi + '" data-member-kind="' + m.kind + '" style="' + rowStyle + 'font-size:11px;margin-bottom:2px;">' +
@@ -2170,7 +2098,7 @@ window.MA.modules.plantumlClass = (function() {
                       '<pre id="cl-mem-preview-' + mi + '" style="margin:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:3px;padding:5px 6px;font-family:var(--font-mono),Consolas,monospace;font-size:11px;color:var(--text-primary);white-space:pre-wrap;word-break:break-all;min-height:15px;">' +
                         window.MA.htmlUtils.escHtml(String(srcLine).trim()) + '</pre>' +
                     '</div>' +
-                    '<div style="margin-top:6px;">' + P.primaryButtonHtml('cl-mem-update-' + mi, '更新') + '</div>' +
+                    '<div style="margin-top:6px;">' + P.primaryButtonHtml('cl-mem-update-' + mi, window.MA.terms.apply) + '</div>' +
                     '<div style="margin-top:6px;display:flex;gap:6px;">' +
                       '<button type="button" id="cl-mem-up-' + mi + '" data-line="' + m.line + '" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
                       '<button type="button" id="cl-mem-down-' + mi + '" data-line="' + m.line + '" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:4px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
@@ -2190,9 +2118,9 @@ window.MA.modules.plantumlClass = (function() {
                '</div>' + rows;
     }
 
-    html += _memberSectionHtml('attribute', '属性 / Attributes', 'cl-add-attr') +
+    html += _memberSectionHtml('attribute', '属性', 'cl-add-attr') +
             '<div id="cl-add-attr-form" style="display:none;margin-top:6px;"></div></div>' +
-            _memberSectionHtml('method', 'メソッド / Methods', 'cl-add-method') +
+            _memberSectionHtml('method', 'メソッド', 'cl-add-method') +
             '<div id="cl-add-method-form" style="display:none;margin-top:6px;"></div></div>';
 
     // design 4a: 細かい指定は「その他」に畳む。よく使う 属性 / メソッド を上に残し、
@@ -2248,19 +2176,17 @@ window.MA.modules.plantumlClass = (function() {
             '<button id="cl-add-note-btn" style="margin-top:4px;">＋ ノートを添える</button>' +
           '</div>' +
           // design 4a: 削除はパネルの末尾に「クラスを削除」。
-          '<button id="cl-delete" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">クラスを削除</button>';
+          '<button id="cl-delete" data-el-delete="1" data-el-id="' + window.MA.htmlUtils.escHtml(element.id) + '" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">' + window.MA.terms.del + '</button>';
 
     propsEl.innerHTML = html;
     GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx, element.id);
 
     _bindRelAdd(element, parsedData, propsEl, ctx);
 
-    // BLK-junior-20260909-0703-wish: 選んでいるクラスを親にして派生を 1 つ起こす。
+    // 選んでいるクラスを親にして派生を 1 つ起こす。
     P.bindEvent('cl-derive-open', 'click', function() {
       _showDeriveModal(element, parsedData, ctx);
     });
-
-    P.bindVocabPicker('cl-edit-id-vocab', 'cl-edit-id');
 
     P.bindEvent('cl-edit-apply', 'click', function() {
       window.MA.history.pushHistory();
@@ -2279,24 +2205,16 @@ window.MA.modules.plantumlClass = (function() {
       var genEl = document.getElementById('cl-edit-generics');
       var genStr = genEl ? genEl.value.trim() : (element.generics || []).join(',');
       var newGen = genStr ? genStr.split(',').map(function(s) { return s.trim(); }) : null;
-      if (newId !== element.id) t = updateClass(t, element.line, 'id', newId);
+      // 改名は宣言の行と、名前を識別子として持つ行 (関係の両端・note の対象) を 1 回で書く。
+      if (newId !== element.id) {
+        t = window.MA.dslUpdater.renameDecl(t, element.line, element.id, newId,
+          function(s) { return updateClass(s, element.line, 'id', newId); }, P.renameRefsOn('cl-edit-rename-refs'));
+      }
       if (newLabel !== element.label) t = updateClass(t, element.line, 'label', newLabel);
       if (newStereo !== element.stereotype) t = updateClass(t, element.line, 'stereotype', newStereo);
       var oldGen = (element.generics || []).join(',');
       if (genStr !== oldGen) t = updateClass(t, element.line, 'generics', newGen);
       ctx.setMmdText(t);
-      ctx.onUpdate();
-    });
-    P.bindEvent('cl-rename-refs', 'click', function() {
-      var rawNewId = document.getElementById('cl-edit-id').value.trim();
-      if (!rawNewId || rawNewId === element.id) { alert('Alias を変更してから実行してください'); return; }
-      // renameWithRefs rewrites references, so we MUST end up with an ASCII
-      // alias (otherwise refs become unparseable). Normalize first.
-      var freshParsed = parse(ctx.getMmdText());
-      var refsNorm = window.MA.idNormalizer.normalize(rawNewId, _existingClassIdSet(freshParsed), 'C');
-      var newId = refsNorm.valid ? refsNorm.id : rawNewId;
-      window.MA.history.pushHistory();
-      ctx.setMmdText(renameWithRefs(ctx.getMmdText(), element.id, newId));
       ctx.onUpdate();
     });
     _bindKindToggle(element, propsEl, ctx);
@@ -2529,14 +2447,15 @@ window.MA.modules.plantumlClass = (function() {
     var P = window.MA.properties;
     var GP = window.MA.groupPlace;
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         _selHeadHtml('Enum', element) +
-        // BLK-builder-20260924-1320-2 (design 4a): enum にしたあとも種別の欄から戻せる。
+        // enum にしたあとも種別の欄から戻せる。
         _kindToggleHtml(element.kind) +
-        P.fieldHtml('名前 (id)', 'cl-edit-id', element.id) +
-        P.fieldHtml('ステレオタイプ', 'cl-edit-stereo', element.stereotype || '') +
-        P.primaryButtonHtml('cl-edit-apply', '変更を反映') +
+        P.fieldHtml(window.MA.terms.id, 'cl-edit-id', element.id) +
+        P.renameRefsCheckHtml('cl-edit-rename-refs') +
+        P.fieldHtml(window.MA.terms.stereotype, 'cl-edit-stereo', element.stereotype || '') +
+        P.primaryButtonHtml('cl-edit-apply', window.MA.terms.apply) +
         GP.editFieldHtml('cl-edit', parsedData.groups, element.line) +
       '</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;">' +
@@ -2547,7 +2466,7 @@ window.MA.modules.plantumlClass = (function() {
     });
     html += P.fieldHtml('新しい値', 'cl-add-val-name', '', '例: PURPLE') +
             P.primaryButtonHtml('cl-add-val', '+ Value 追加') +
-            '</div>' + '<button id="cl-delete" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">クラスを削除</button>';
+            '</div>' + '<button id="cl-delete" data-el-delete="1" data-el-id="' + window.MA.htmlUtils.escHtml(element.id) + '" style="width:100%;margin-top:10px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:12px;cursor:pointer;">' + window.MA.terms.del + '</button>';
     propsEl.innerHTML = html;
     GP.bindEdit('cl-edit', parsedData.groups, element.line, ctx, element.id);
     _bindKindToggle(element, propsEl, ctx);
@@ -2557,7 +2476,10 @@ window.MA.modules.plantumlClass = (function() {
       var t = ctx.getMmdText();
       var newId = document.getElementById('cl-edit-id').value.trim();
       var newStereo = document.getElementById('cl-edit-stereo').value.trim() || null;
-      if (newId !== element.id) t = updateClass(t, element.line, 'id', newId);
+      if (newId !== element.id) {
+        t = window.MA.dslUpdater.renameDecl(t, element.line, element.id, newId,
+          function(s) { return updateClass(s, element.line, 'id', newId); }, P.renameRefsOn('cl-edit-rename-refs'));
+      }
       if (newStereo !== element.stereotype) t = updateClass(t, element.line, 'stereotype', newStereo);
       ctx.setMmdText(t);
       ctx.onUpdate();
@@ -2580,8 +2502,11 @@ window.MA.modules.plantumlClass = (function() {
     });
   }
 
-  // 関係の From/To を「親/子」「全体/部分」のように呼ぶ (BLK-junior-20260908-1203)。
+  // 関係の From/To を「親/子」「全体/部分」のように呼ぶ。
   // 呼び名の表は relation-roles が持ち、ここは見出しと 1 行の下書きに使うだけ。
+  // 追加フォームの To の空欄 (From と同じ要素を既定にしない)。
+  var TAIL_TO_BLANK = '（一覧で相手を選ぶ）';
+
   function _roleSelectHtml(id, side, kind, opts) {
     var esc = window.MA.htmlUtils.escHtml;
     var optsHtml = '';
@@ -2610,6 +2535,7 @@ window.MA.modules.plantumlClass = (function() {
       var k = kindEl.value;
       if (fromLabel) fromLabel.textContent = window.MA.relationRoles.fieldLabel(k, 'from');
       if (toLabel) toLabel.textContent = window.MA.relationRoles.fieldLabel(k, 'to');
+      if (prevEl && !toEl.value) { prevEl.textContent = 'To を一覧で選ぶと、ここに書く行が出ます'; return; }
       if (prevEl) prevEl.textContent = window.MA.relationRoles.preview(k, fromEl.value, toEl.value,
         ctx && ctx.getMmdText ? _rootFirstIn(ctx.getMmdText()) : false);
     }
@@ -2619,6 +2545,7 @@ window.MA.modules.plantumlClass = (function() {
     var swap = document.getElementById('cl-tail-rswap');
     if (swap) {
       swap.addEventListener('click', function() {
+        if (!toEl.value) return;
         var tmp = fromEl.value;
         fromEl.value = toEl.value;
         toEl.value = tmp;
@@ -2634,22 +2561,22 @@ window.MA.modules.plantumlClass = (function() {
     var RR = window.MA.relationRoles;
     var uiEnds = RR.toUi(relation.kind, relation.from, relation.to);
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(P.lineHead('Relation', relation.line)) + '</label>' +
         // design 3c: 関係の種類は記法ではなく「UML 名称 + 意味の説明」のカードで選ぶ
         RC.cardsHtml('cl-rel-card', RC.kindsOf('class'), relation.kind) +
-        // BLK-junior-20260908-1203: 追加フォームと同じ呼び名で出す。既にある関係を
+        // 追加フォームと同じ呼び名で出す。既にある関係を
         // 直すときも、親子のどちらを触っているかが見出しから読める。
-        // BLK-owner-20260929-0351-1: 上の欄は矢の根元 (継承なら子)。追加フォームと同じ順。
+        // 上の欄は矢の根元 (継承なら子)。追加フォームと同じ順。
         P.fieldHtml(RR.fieldLabel(relation.kind, 'from'), 'cl-rel-from', uiEnds.from) +
         '<button id="cl-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
         P.fieldHtml(RR.fieldLabel(relation.kind, 'to'), 'cl-rel-to', uiEnds.to) +
-        P.fieldHtml('Label', 'cl-rel-label', relation.label || '') +
+        P.fieldHtml(window.MA.terms.edgeLabel, 'cl-rel-label', relation.label || '') +
         P.relationOptionsFor('cl-rel-more', ctx.getMmdText(), relation.line) +
-        P.primaryButtonHtml('cl-rel-apply', '変更を反映') +
+        P.primaryButtonHtml('cl-rel-apply', window.MA.terms.apply) +
         ' <button id="cl-rel-delete" type="button" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
-        // BLK-junior-20260909-0703-wish: 手本の矢印から種類を選び直さずに同じ関連を引く。
+        // 手本の矢印から種類を選び直さずに同じ関連を引く。
         '<button id="cl-rel-same" type="button" style="width:100%;margin-top:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">⇢ この関連と同じものを引く</button>' +
       '</div>';
     propsEl.innerHTML = html;
@@ -2716,7 +2643,7 @@ window.MA.modules.plantumlClass = (function() {
     var P = window.MA.properties;
     var html =
       '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (target: ' + note.targetId + ', L' + note.line + ')</div>' +
-      // BLK-human-20260916-0900: 置いた後でも対象と上下の順を変えられる (シーケンス図と揃える)。
+      // 置いた後でも対象と上下の順を変えられる (シーケンス図と揃える)。
       P.selectFieldHtml('対象 (Target)', 'cl-note-target', (parsedData.elements || []).filter(function(e) { return e.id; }).map(function(e) {
         return { value: e.id, label: e.id, selected: e.id === note.targetId };
       })) +
@@ -2733,7 +2660,7 @@ window.MA.modules.plantumlClass = (function() {
         '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
         '<textarea id="cl-note-text" style="width:100%;min-height:80px;">' + (note.text || '').replace(/[<>&]/g, '') + '</textarea>' +
       '</div>' +
-      P.primaryButtonHtml('cl-note-update', '更新') +
+      P.primaryButtonHtml('cl-note-update', window.MA.terms.apply) +
       P.primaryButtonHtml('cl-note-delete', '✕ 削除');
     propsEl.innerHTML = html;
 
@@ -2770,19 +2697,18 @@ window.MA.modules.plantumlClass = (function() {
   function _renderGroupReadOnly(group, parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
-        (group.kind === 'namespace' ? 'NAMESPACE' : 'PACKAGE') +
-        ' (L' + group.startLine + '-' + group.endLine + ')</label>' +
-        P.fieldHtml('Label', 'cl-grp-label', group.label) +
-        P.primaryButtonHtml('cl-grp-apply', '変更を反映') +
+        window.MA.htmlUtils.escHtml(P.lineHead(group.kind === 'namespace' ? '境界 (namespace)' : '境界', group.startLine, group.endLine)) + '</label>' +
+        P.fieldHtml(window.MA.terms.label, 'cl-grp-label', group.label) +
+        P.primaryButtonHtml('cl-grp-apply', window.MA.terms.apply) +
         ' <button id="cl-grp-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 境界削除</button>' +
       '</div>';
     propsEl.innerHTML = html;
     P.bindEvent('cl-grp-apply', 'click', function() {
       var newLabel = document.getElementById('cl-grp-label').value.trim();
-      if (!newLabel) { alert('Label 必須'); return; }
+      if (!newLabel) { P.needField('cl-grp-label'); return; }
       window.MA.history.pushHistory();
       var lines = ctx.getMmdText().split('\n');
       var openIdx = group.startLine - 1;
@@ -2829,7 +2755,7 @@ window.MA.modules.plantumlClass = (function() {
           { value: 'nested',         label: 'Nested (+--, outer +-- inner)' },
           { value: 'dependency',     label: 'Dependency (..>)' },
         ]) +
-        P.fieldHtml('Label', 'cl-conn-label', '', '任意') +
+        P.fieldHtml(window.MA.terms.edgeLabel, 'cl-conn-label', '', '任意') +
         P.primaryButtonHtml('cl-conn-create', '+ Connect') +
       '</div>';
 
@@ -2842,7 +2768,7 @@ window.MA.modules.plantumlClass = (function() {
     }
     P.bindEvent('cl-conn-swap', 'click', _doSwap);
 
-    // From は矢の根元 (BLK-owner-20260929-0351-1)。実現ではインターフェースが矢じり (To) の側。
+    // From は矢の根元。実現ではインターフェースが矢じり (To) の側。
     P.bindEvent('cl-conn-kind', 'change', function() {
       var k = document.getElementById('cl-conn-kind').value;
       if (k !== 'implementation') return;
@@ -2926,7 +2852,7 @@ window.MA.modules.plantumlClass = (function() {
         return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
       }
 
-      // BLK-builder-20260925-0654-3: メンバーを指す note の「tips」。g.entity / g.link の外にある
+      // メンバーを指す note の「tips」。g.entity / g.link の外にある
       // 吹き出しの <path> の直後に折り返し角の <path> (4 点) が続き、その後ろに本文の <text> が並ぶ。
       // 枠は吹き出しの箱だけに取る (メンバーへ伸びる尖りの 1 点は x・y とも 1 回しか出ないので外す)。
       function _memberNoteTips(root) {
@@ -2990,7 +2916,7 @@ window.MA.modules.plantumlClass = (function() {
 
       var usedG = [];
       (parsedData.elements || []).forEach(function(el) {
-        // BLK-migrator-20260918-0049: package / namespace の中の要素は `BSW..GpioDriver` /
+        // package / namespace の中の要素は `BSW..GpioDriver` /
         // `App.MainTask` のように修飾名で描かれる。末尾が `.{id}` のものがちょうど 1 つならそれ。
         var g = OB.findEntityByName(svgEl, el.id);
         if (!g) return;
@@ -3023,7 +2949,7 @@ window.MA.modules.plantumlClass = (function() {
             for (var si = 0; si < seps.length; si++) if (seps[si] <= k) n++;
             return k + n;
           };
-          // BLK-migrator-20260918-0049: `hide ... fields` で隠したメンバーは描かれない。
+          // `hide ... fields` で隠したメンバーは描かれない。
           // 描かれているものだけを順に当て、data-id / data-line は元の並びの番号を保つ。
           var shown = [];
           el.members.forEach(function(m, k) { if (!m.hidden) shown.push({ m: m, i: k }); });
@@ -3053,7 +2979,7 @@ window.MA.modules.plantumlClass = (function() {
       });
 
       // package + namespace
-      // BLK-migrator-20260923-1909: 並び順でなく開始行・表示名で当てる。
+      // 並び順でなく開始行・表示名で当てる。
       var packages = (parsedData.groups || []);
       var pkgGroups = OB.matchClusters(svgEl, packages);
       for (var pi = 0; pi < packages.length; pi++) {
@@ -3068,13 +2994,13 @@ window.MA.modules.plantumlClass = (function() {
             try { pbb = pg.getBBox(); } catch (e) { pbb = null; }
           }
           if (!pbb || !(pbb.width > 0)) continue;
-          OB.addRect(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
+          OB.addContainer(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
             'data-type': 'package', 'data-id': packages[pi].id, 'data-line': packages[pi].startLine,
-          });
+          }, pg);
           matched.package++;
           continue;
         }
-        OB.addRect(overlayEl,
+        OB.addContainer(overlayEl,
           (parseFloat(pkgRect.getAttribute('x')) || 0) - 2,
           (parseFloat(pkgRect.getAttribute('y')) || 0) - 2,
           (parseFloat(pkgRect.getAttribute('width')) || 0) + 4,
@@ -3082,13 +3008,13 @@ window.MA.modules.plantumlClass = (function() {
             'data-type': 'package',
             'data-id': packages[pi].id,
             'data-line': packages[pi].startLine,
-          });
+          }, pg);
         matched.package++;
       }
 
       // relations
       var relations = parsedData.relations || [];
-      // BLK-migrator-20260923-1909: 線は書かれた行で当てる。並び順で当てていたので、パーサが
+      // 線は書かれた行で当てる。並び順で当てていたので、パーサが
       // 読めない線 (`<|-` など) が 1 本あるだけで以後の関係の枠が隣の線にずれた。
       var linkGroups = OB.matchLinksByLine(svgEl, relations);
       for (var ri = 0; ri < relations.length; ri++) {
@@ -3097,7 +3023,7 @@ window.MA.modules.plantumlClass = (function() {
         usedG.push(lg);
         var lineEl = lg.querySelector('line, path');
         if (!lineEl) continue;
-        // BLK-human-20260912-2130: ラベル (contains) や多重度 (1 / 0..*) も
+        // ラベル (contains) や多重度 (1 / 0..*) も
         // 同じ関係の当たり判定に入れる。どれを押しても同じ関係が選べる。
         var relAttrs2 = {
           'data-type': 'relation',
@@ -3105,7 +3031,7 @@ window.MA.modules.plantumlClass = (function() {
           'data-line': relations[ri].line,
           'data-relation-kind': relations[ri].kind,
         };
-        // BLK-builder-20260925-0305-1: 中継点で割れた残りの線 (矢じりの側) も同じ関係の 1 つの枠にする。
+        // 中継点で割れた残りの線 (矢じりの側) も同じ関係の 1 つの枠にする。
         var lgParts = (linkGroups.parts && linkGroups.parts[ri]) || [];
         lgParts.forEach(function(pg) { usedG.push(pg); });
         if (!OB.addLinkRects(overlayEl, lgParts.length ? [lg].concat(lgParts) : lg, relAttrs2, 8)) {
@@ -3116,7 +3042,7 @@ window.MA.modules.plantumlClass = (function() {
         matched.relation++;
       }
 
-      // BLK-builder-20260925-0305-1: 関連クラス `(A, B) . C` の点線 (中継点 → C) に、その行を指す枠を置く。
+      // 関連クラス `(A, B) . C` の点線 (中継点 → C) に、その行を指す枠を置く。
       // 置かないと点線は行の無い <g> のまま残り、指しても枠が出ない (smetana の SVG は線に行を付けない)。
       (parsedData.assocClasses || []).forEach(function(ac) {
         if (!OB.junctionBetween) return;
@@ -3133,13 +3059,13 @@ window.MA.modules.plantumlClass = (function() {
         }, 8);
       });
 
-      // Notes: BLK-migrator-20260918-0049 — note は今の PlantUML では折り返し角を持つ
+      // Notes: — note は今の PlantUML では折り返し角を持つ
       // `<path>` を含む `g.entity` として描かれる (5 点 `<polygon>` ではない)。
       // polygon だけを探していたので、どの図でも note に枠が 1 つも出なかった。
       // どの要素にも取られなかった `g.entity` を文書順に note へ当て、
       // それで数が合わないときだけ旧来の 5 点 polygon を見る。
       var notes = parsedData.notes || [];
-      // BLK-builder-20260925-0654-3: メンバーを指す note (`note right of E::field1`) は、PlantUML が
+      // メンバーを指す note (`note right of E::field1`) は、PlantUML が
       // クラスの横に「tips」として描き、`g.entity` に入らない裸の <path> 2 本 (吹き出し + 折り返し角) と
       // その後ろの <text> になる。これを先に当て、残りを従来どおり g.entity / 5 点 polygon に当てる。
       var memberNotes = notes.filter(function(n) { return !!n.member; });
@@ -3181,7 +3107,7 @@ window.MA.modules.plantumlClass = (function() {
         var noteGroups = Array.prototype.filter.call(
           svgEl.querySelectorAll('g.entity'), function(ge) {
             if (usedG.indexOf(ge) >= 0) return false;
-            // BLK-migrator-20260926-1116: 本文の Creole (箇条書きの点 = rect / ellipse、表の罫線) が
+            // 本文の Creole (箇条書きの点 = rect / ellipse、表の罫線) が
             // 入っても紙の外形 (折り返し角の path) で note と見分ける。
             if (OB.notePaperBox && OB.notePaperBox(ge)) return true;
             return !!ge.querySelector('path') &&
@@ -3217,11 +3143,11 @@ window.MA.modules.plantumlClass = (function() {
         }
       }
 
-      // BLK-migrator-20260923-1909: フォームが読めない記法 (`abstract X` / circle / diamond / 題 …) にも
+      // フォームが読めない記法 (`abstract X` / circle / diamond / 題 …) にも
       // 書かれた行を指す枠を置く。
       OB.addUnclaimed(svgEl, overlayEl, usedG, null, dslText);
 
-      // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
+      // 小さい当たり判定を手前に。共通実装 (src/core)
       OB.raiseSmallestLast(overlayEl);
 
       return { matched: matched, unmatched: {} };

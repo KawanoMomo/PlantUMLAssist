@@ -258,5 +258,10 @@ test('手順9.5 シーケンス図: 参加者は続けて足せ、メッセー�
   await S.typeDsl(page, SEQ);
   await page.waitForTimeout(600);
   expect(await kindOf(page, 'seq')).toBe('message');
-  await expect(page.locator('#seq-tail-from')).toHaveValue('App');
+  // 既定に戻る = 開いた直後と同じ形 (TICKET-owner-20261123-1922-2): 前の図の覚え (SpiRegs) は持ち込まず、
+  // From は本文の最後のメッセージ (App -> Spi_Driver) の送り先、To は空欄 (自己メッセージを既定にしない)。
+  await expect(page.locator('#seq-tail-from')).toHaveValue('Spi_Driver');
+  await expect(page.locator('#seq-tail-to')).toHaveValue('');
+  // 覚えからではなく本文から決めたことを案内が言う (覚えなら「直前の送り先」)。
+  await expect(page.locator('#seq-tail-endpoint-note')).toContainText('本文の最後のメッセージの送り先 Spi_Driver');
 });

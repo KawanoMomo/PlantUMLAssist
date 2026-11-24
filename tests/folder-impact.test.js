@@ -26,6 +26,8 @@ function files() {
     { name: 'plantuml-sequence', dsl: seq('SpiDrv') },
   ];
 }
+// 前の版が保存先に置いた役の宣言 (実データ / テンプレ) を渡されても、もう読まない
+// (TICKET-owner-20261122-1140-prune)。
 var ROLES = { 'plantuml-sequence': { role: 'template' }, spi: { role: 'data' } };
 
 function merged() { return fi.merge(openDocs(), files(), ROLES); }
@@ -40,12 +42,8 @@ describe('folderImpact.merge', function() {
     expect(rows[1].open).toBe(false);
   });
 
-  test('role はフォルダの宣言から付く', function() {
-    var byName = {};
-    merged().forEach(function(r) { byName[r.name] = r; });
-    expect(byName.spi.role).toBe('data');
-    expect(byName['plantuml-sequence'].role).toBe('template');
-    expect(byName.adc.role).toBe('unset');
+  test('行は役を持たない (保存先の宣言を読まない)', function() {
+    merged().forEach(function(r) { expect('role' in r).toBe(false); });
   });
 
   test('壊れた入力で落ちない', function() {
@@ -65,13 +63,13 @@ describe('folderImpact.preview / summarize', function() {
     expect(s.unopenedHitDocs).toBe(2);
   });
 
-  test('テンプレは数えるが置換の的にはしない', function() {
+  test('ヒットした図は全部が置換の的 (前にテンプレと宣言された図も外さない)', function() {
     var s = fi.summarize(fi.preview(merged(), 'SpiDrv'));
-    expect(s.templateHitDocs).toBe(1);
-    expect(s.applyDocs).toBe(2);
-    expect(s.applyTotal).toBe(4);
+    expect('templateHitDocs' in s).toBe(false);
+    expect(s.applyDocs).toBe(3);
+    expect(s.applyTotal).toBe(6);
     var names = fi.applyTargets(merged(), 'SpiDrv').map(function(r) { return r.name; });
-    expect(names).toEqual(['diagram1', 'spi']);
+    expect(names).toEqual(['diagram1', 'spi', 'plantuml-sequence']);
   });
 
   test('置換前が空なら 0 件 (全図を的にしない)', function() {
@@ -87,11 +85,12 @@ describe('folderImpact.preview / summarize', function() {
     expect(fi.summaryText(s)).toBe('4 枚を調べて出現なし');
   });
 
-  test('要約は未オープンの枚数とテンプレ除外を書く', function() {
+  test('要約は未オープンの枚数を書き、テンプレ除外は書かない', function() {
     var text = fi.summaryText(fi.summarize(fi.preview(merged(), 'SpiDrv')));
     expect(text).toContain('4 枚中 3 枚に 6 件');
-    expect(text).toContain('未オープン 2 枚');
-    expect(text).toContain('テンプレ 1 枚は置換しない');
+    // 語は一覧の札と同じ「開いていない」(TICKET-owner-20261123-0742-1)
+    expect(text).toContain('開いていない 2 枚');
+    expect(text).not.toContain('テンプレ');
   });
 
   test('壊れた入力で落ちない', function() {

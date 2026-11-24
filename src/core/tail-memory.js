@@ -1,5 +1,5 @@
 'use strict';
-// BLK-primary-20260923-2312-friction —「末尾に追加」フォームの前回の選択を覚えておく。
+// —「末尾に追加」フォームの前回の選択を覚えておく。
 //
 // 確定するたびに右ペインが描き直され、種別チップは図種の既定 (状態 / アクター /
 // メッセージ) に、親・From・関係の種類は先頭に戻っていた。遷移 4 本・子状態 6 つを
@@ -112,6 +112,53 @@ window.MA.tailMemory = (function() {
     return { from: t || f, to: '' };
   }
 
+  // シーケンス図を開いた直後・タブを替えた直後・白紙で参加者を足した直後
+  // (確定の覚えも選んだ行も無いとき) の From / To。
+  // 前は From・To とも先頭の参加者で始まり、本文だけ打って Enter を押すと選んでいない自己メッセージ
+  // (`Ctl -> Ctl`) が入った (TICKET-owner-20261123-1922-2)。確定した後と同じ形にそろえ、
+  // From は本文の最後のメッセージの送り先 (図の参加者に限る。無ければ先頭の参加者)、To は空欄。
+  // source: 'last' (最後のメッセージの送り先) / 'first' (先頭の参加者) / 'none' (参加者が居ない)。
+  function openMessageEnds(participantIds, messages) {
+    var ids = (participantIds || []).map(function(v) { return v == null ? '' : String(v); });
+    var msgs = (messages || []).filter(function(m) { return !!m; }).map(function(m, i) { return { m: m, i: i }; });
+    // 本文の行の順 (line が無ければ並びの順) で最後のメッセージを探す。
+    msgs.sort(function(a, b) {
+      var la = typeof a.m.line === 'number' ? a.m.line : -1;
+      var lb = typeof b.m.line === 'number' ? b.m.line : -1;
+      return la !== lb ? la - lb : a.i - b.i;
+    });
+    for (var k = msgs.length - 1; k >= 0; k--) {
+      var to = msgs[k].m.to == null ? '' : String(msgs[k].m.to);
+      if (to && ids.indexOf(to) >= 0) return { from: to, to: '', source: 'last' };
+    }
+    if (ids.length && ids[0]) return { from: ids[0], to: '', source: 'first' };
+    return { from: '', to: '', source: 'none' };
+  }
+
+  // 「末尾に追加」の To を埋める手のうち、今効くものだけを言う語。
+  // armed (図の参加者を押すと To に入る間 = 確定の後かフォームの欄に触れた後) だけ「図の参加者を押す」を言う。
+  // 開いた直後の図の参加者の押下は参加者を選ぶ手のままなので、その間は一覧で選ぶ手だけを言う
+  // (案内どおり押しても To に入らない時間を作らない。TICKET-owner-20261123-2322-1)。
+  function toPickHint(armed) {
+    return armed ? 'To は図の参加者を押すか選んでください' : 'To は一覧で選んでください';
+  }
+  // To の欄の空欄の行の語 (toPickHint と同じ手を言う)。
+  function toPickPlaceholder(armed) {
+    return armed ? '（図の参加者を押すか選ぶ）' : '（一覧から選ぶ）';
+  }
+
+  // openMessageEnds の出どころを 1 行で言う (From の欄の値と同じ名前を出す)。
+  // armed は toPickHint と同じ (省くと開いた直後 = 押す手がまだ効かない間)。
+  function openMessageNote(ends, labelOf, armed) {
+    var e = ends || {};
+    if (!e.from) return '';
+    var l = typeof labelOf === 'function' ? labelOf(e.from) : null;
+    var name = String(l || e.from);
+    var head = e.source === 'last' ? '本文の最後のメッセージの送り先 ' + name + ' から続けます。'
+      : '先頭の参加者 ' + name + ' から始めます。';
+    return head + toPickHint(!!armed);
+  }
+
   return {
     sync: sync,
     setKeyFn: setKeyFn,
@@ -126,5 +173,9 @@ window.MA.tailMemory = (function() {
     hasOption: hasOption,
     bindSelect: bindSelect,
     nextMessageEnds: nextMessageEnds,
+    openMessageEnds: openMessageEnds,
+    openMessageNote: openMessageNote,
+    toPickHint: toPickHint,
+    toPickPlaceholder: toPickPlaceholder,
   };
 })();

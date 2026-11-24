@@ -1,12 +1,12 @@
 'use strict';
 window.MA = window.MA || {};
 
-// state-tx-entry — 状態遷移を「続けて」入れるための判断 (BLK-human-20260923-2000)。
+// state-tx-entry — 状態遷移を「続けて」入れるための判断。
 //
 // 状態機械の設計では遷移を 1 図に 10〜30 本入れる。1 本ごとにフォームが初期状態へ戻り、
 // トリガは毎回手打ち、遷移先は図から選べず、続けて入れられなかった。
 // ここは DOM を触らずに、
-//   - 候補 (この図の遷移で使ったトリガ・ガード・アクションと、同じ部品のシーケンス図のメッセージ名)
+//   - 候補 (この図の遷移で使ったトリガ・ガード・アクション)
 //   - 候補の絞り込み (打ち始めで絞る)
 //   - 次の 1 本の from (直前の to / 直前と同じ)
 //   - 書き込む位置 (同じ from の遷移の並びの末尾。無ければ同じ階層の遷移の末尾)
@@ -91,7 +91,7 @@ window.MA.stateTxEntry = (function() {
   }
 
   // parsed: この図 (入れ子の子状態の遷移も parse に入っている)。
-  // extraTriggers: 同じ部品のシーケンス図のメッセージ名・名前帳など (後ろに足す)。
+  // extraTriggers: 呼び出し側が足したい名前 (後ろに足す)。画面は今の図の中の名前だけを使い、渡さない。
   function candidates(parsed, extraTriggers) {
     var tm = {}, to = [], gm = {}, go = [], am = {}, ao = [];
     ((parsed && parsed.transitions) || []).forEach(function(tr) {
@@ -139,6 +139,44 @@ window.MA.stateTxEntry = (function() {
     if (mode === 'same') return _s(lastFrom);
     if (_s(lastTo) === '[*]') return _s(lastFrom);
     return _s(lastTo);
+  }
+
+  // 開いた直後・タブを替えた直後 (選んだ状態も確定の覚えも無いとき) の From。
+  // 前は一覧の先頭の `[*]` で始まり、To だけ選んで足すと選んでいない開始の遷移
+  // (`[*] --> Stop`) が入った (TICKET-owner-20261123-2322-3)。sequence の openMessageEnds と同じ形で、
+  // 本文の行の順で最後の遷移の行き先から続ける。行き先が終了 `[*]` (と履歴 `[H]`) ならその遷移の始点
+  // (nextFrom と同じ考え)。両端とも状態でない遷移は飛ばして前の遷移を見る。
+  // resolve(name, scope) は書かれた端を選択肢の値 (入れ子は `Parent.Child`) にする口 (省くと書かれたまま)。
+  // 返り値 { from, source }。source: 'last' (最後の遷移の行き先) / 'lastEnd' (行き先が終了なので始点) / 'none'。
+  var _HIST_RE = /\[H\*?\]$/;
+  function _isStateEnd(v) { var s = _s(v).trim(); return !!s && s !== '[*]' && !_HIST_RE.test(s); }
+  function openFrom(transitions, resolve) {
+    var res = typeof resolve === 'function' ? resolve : function(n) { return n; };
+    var trs = (transitions || []).filter(function(tr) { return !!tr; }).map(function(tr, i) { return { tr: tr, i: i }; });
+    trs.sort(function(a, b) {
+      var la = typeof a.tr.line === 'number' ? a.tr.line : -1;
+      var lb = typeof b.tr.line === 'number' ? b.tr.line : -1;
+      return la !== lb ? la - lb : a.i - b.i;
+    });
+    for (var k = trs.length - 1; k >= 0; k--) {
+      var tr = trs[k].tr;
+      if (_isStateEnd(tr.to)) return { from: _s(res(_s(tr.to).trim(), tr.scope)), source: 'last' };
+      if (_isStateEnd(tr.from)) return { from: _s(res(_s(tr.from).trim(), tr.scope)), source: 'lastEnd' };
+    }
+    return { from: '', source: 'none' };
+  }
+
+  // openFrom の出どころを 1 行で言う (From の欄の値と同じ名前を出す)。To を選ぶ手の案内を続ける。
+  var PICK_TO_HINT = '図で遷移先の状態を押してください (同じ状態を押すと自己遷移)';
+  function openFromNote(ends, labelOf) {
+    var e = ends || {};
+    if (!e.from) return '';
+    var l = typeof labelOf === 'function' ? labelOf(e.from) : null;
+    var name = _s(l || e.from);
+    var head = e.source === 'lastEnd'
+      ? '本文の最後の遷移の始点 ' + name + ' から続けます。'
+      : '本文の最後の遷移先 ' + name + ' から続けます。';
+    return head + PICK_TO_HINT;
   }
 
   // ── 書き込む位置 ─────────────────────────────────────────────────────
@@ -223,6 +261,9 @@ window.MA.stateTxEntry = (function() {
     candidates: candidates,
     filter: filter,
     nextFrom: nextFrom,
+    openFrom: openFrom,
+    openFromNote: openFromNote,
+    PICK_TO_HINT: PICK_TO_HINT,
     insert: insert,
     countLabel: countLabel,
   };

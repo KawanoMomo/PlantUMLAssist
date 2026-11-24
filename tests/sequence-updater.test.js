@@ -691,7 +691,7 @@ describe('seq wrap form (FEAT-114)', function() {
     if (w && w.MA && !w.MA.properties) {
       var fs = require('fs'), path = require('path');
       var root = path.resolve(__dirname, '..');
-      ['src/core/html-utils.js', 'src/ui/properties.js'].forEach(function(rel) {
+      ['src/core/html-utils.js', 'src/ui/terms.js', 'src/ui/properties.js'].forEach(function(rel) {
         var code = fs.readFileSync(path.join(root, rel), 'utf-8');
         new Function('window', 'document', code)(w, w.document);
       });

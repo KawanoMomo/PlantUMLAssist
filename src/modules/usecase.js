@@ -76,8 +76,9 @@ window.MA.modules.plantumlUsecase = (function() {
     return set;
   }
 
-  function normalizeIdInput(rawInput, parsed, prefix) {
-    return window.MA.idNormalizer.normalize(rawInput, _existingUsecaseIdSet(parsed), prefix || 'U');
+  // text = 今の本文 (描き直し前の古い parsed で別名を重ねない)。
+  function normalizeIdInput(rawInput, parsed, prefix, text) {
+    return window.MA.idNormalizer.normalize(rawInput, _existingUsecaseIdSet(parsed), prefix || 'U', text);
   }
 
   function addActor(text, id, label) { return insertBeforeEnd(text, fmtActor(id, label || id)); }
@@ -86,7 +87,7 @@ window.MA.modules.plantumlUsecase = (function() {
     var open = fmtPackage(label, notation);
     return insertBeforeEnd(insertBeforeEnd(text, open), '}');
   }
-  // 本文の汎化の書き方 (`親 <|-- 子` / `子 --|> 親`) の多い方に揃えて書く (BLK-owner-20260929-0351-1)。
+  // 本文の汎化の書き方 (`親 <|-- 子` / `子 --|> 親`) の多い方に揃えて書く。
   function _rootFirstIn(text) {
     var R = window.MA.relationRoles;
     return !!(R && R.prefersRootFirst && R.prefersRootFirst(text));
@@ -200,7 +201,8 @@ window.MA.modules.plantumlUsecase = (function() {
     for (i = 0; i < ops.length; i++) {
       var o = ops[i];
       if (o.op !== 'actor' && o.op !== 'usecase') continue;
-      var norm = window.MA.idNormalizer.normalize(o.id, taken, o.op === 'actor' ? 'A' : 'U');
+      // parsed は描き直し前で古いことがあるので、今の本文に出ている別名も避ける。
+      var norm = window.MA.idNormalizer.normalize(o.id, taken, o.op === 'actor' ? 'A' : 'U', out);
       if (!norm.valid) continue;
       idMap[o.id] = norm.id;
       taken[norm.id] = true;
@@ -292,8 +294,13 @@ window.MA.modules.plantumlUsecase = (function() {
     else if (field === 'swap') { var sw1 = from; from = to; to = sw1; }
 
     // 多重度・線の色は種別やラベルの書き換えでは失われない (design 3c)。
-    lines[idx] = window.MA.relationOptions.applyDecorations(
-      indent + fmtRelation(kind, from, to, lbl, rootFirst), deco);
+    var relCore = fmtRelation(kind, from, to, lbl, rootFirst);
+    if (field === 'label') {
+      relCore = DU.keepRelationArrow(window.MA.relationOptions.readableLine(trimmed), relCore, RELATION_RE);
+    }
+    var relLine = window.MA.relationOptions.applyDecorations(indent + relCore, deco);
+    // 直した値以外の空白 (手で揃えた桁) は元の行の字のまま。両端を入れ替えたときは組み直したまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = field === 'swap' ? relLine : window.MA.dslUtils.keepLineSpacing(lines[idx], relLine, [value]);
     return lines.join('\n');
   }
 
@@ -466,130 +473,6 @@ window.MA.modules.plantumlUsecase = (function() {
     });
   }
 
-  // BLK-junior-20260909-0403-wish: シーケンス図からアクター・ユースケース候補。
-  // 判断は core/usecase-source.js に置き、ここは並べて選ばせるだけ。
-  // アクターとユースケースを 1 枚の一覧に混ぜず 2 段に分けるのは、
-  // 「誰が使うか」と「何をするか」が別の問いだから — 混ぜると選ぶ側が読み分ける。
-  function _renderSourceCandidates(parsedData, ctx) {
-    var US = window.MA.usecaseSource;
-    var P = window.MA.properties;
-    var esc = window.MA.htmlUtils.escHtml;
-    var sumEl = document.getElementById('uc-src-summary');
-    var bodyEl = document.getElementById('uc-src-body');
-    if (!US || !sumEl || !bodyEl) return;
-
-    var ws = window.MA.workspace;
-    var docs = (ws && ws.list) ? ws.list() : [];
-    var activeId = (ws && ws.getActiveId) ? ws.getActiveId() : null;
-    var dsl = ctx.getMmdText();
-
-    var subjOpts0 = US.subjects(docs, activeId);
-    if (!subjOpts0.length) {
-      sumEl.textContent = '同じ部品のシーケンス図がまだありません';
-      sumEl.setAttribute('data-actors', '0');
-      sumEl.setAttribute('data-usecases', '0');
-      bodyEl.innerHTML = '';
-      return;
-    }
-
-    // 起点になる部品。既定は今の図の名前と語が重なるもの。選び直したら引き直す。
-    var activeName = '';
-    for (var di = 0; di < docs.length; di++) {
-      if (docs[di] && docs[di].id === activeId) activeName = docs[di].name || '';
-    }
-    var hint = activeName + ' ' + ((parsedData && parsedData.meta && parsedData.meta.title) || '');
-    var subjEl0 = document.getElementById('uc-src-subject');
-    var subject = (subjEl0 && subjEl0.value) || US.defaultSubject(docs, activeId, hint);
-    var res = US.candidates(dsl, docs, activeId, subject);
-
-    sumEl.textContent = US.summaryText(res);
-    sumEl.setAttribute('data-actors', String(res.actors.length));
-    sumEl.setAttribute('data-usecases', String(res.usecases.length));
-
-    var rowsAll = res.actors.concat(res.usecases);
-    var subjOpts = subjOpts0.map(function(s) {
-      return { value: s.id, label: s.label, selected: s.id === subject };
-    });
-
-    function rowHtml(r) {
-      var i = rowsAll.indexOf(r);
-      return '<label class="uc-src-row" data-src-key="' + esc(r.key) + '" data-src-kind="' + esc(r.kind) + '"'
-        + ' style="display:flex;align-items:flex-start;gap:6px;padding:3px 4px;border-radius:3px;cursor:pointer;">'
-        + '<input type="checkbox" class="uc-src-check" data-i="' + i + '" style="margin-top:2px;">'
-        + '<span style="flex:1;">'
-          + '<span style="font-size:12px;color:var(--text-primary);">' + esc(r.name) + '</span>'
-          + '<span style="display:block;font-size:10px;color:var(--text-secondary);line-height:1.4;">'
-            + esc(r.why) + '</span>'
-        + '</span>'
-      + '</label>';
-    }
-
-    function section(title, list, emptyText, id) {
-      return '<div style="margin-top:6px;">'
-        + '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + title + '</div>'
-        + '<div id="' + id + '" style="max-height:150px;overflow-y:auto;border:1px solid var(--border);'
-          + 'border-radius:3px;padding:4px;">'
-        + (list.length ? list.map(rowHtml).join('')
-            : '<div style="font-size:10px;color:var(--text-secondary);">' + emptyText + '</div>')
-        + '</div></div>';
-    }
-
-    bodyEl.innerHTML =
-      P.selectFieldHtml('部品 (起点)', 'uc-src-subject', subjOpts) +
-      section('アクター候補 — 誰が使うか', res.actors, '候補はすべて図にあります', 'uc-src-actors') +
-      section('ユースケース候補 — 何をするか', res.usecases, '候補はすべて図にあります', 'uc-src-usecases') +
-      P.primaryButtonHtml('uc-src-add', '+ 選んだ候補を追加') +
-      '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
-        'アクターと、そのアクターが呼んでいるユースケースを一緒に選ぶと関連の線も引かれます</div>';
-
-    P.bindEvent('uc-src-subject', 'change', function() {
-      _renderSourceCandidates(parsedData, ctx);
-    });
-
-    P.bindEvent('uc-src-add', 'click', function() {
-      var picks = [];
-      var checks = document.querySelectorAll('#uc-src-body .uc-src-check');
-      for (var i = 0; i < checks.length; i++) {
-        if (checks[i].checked) picks.push(rowsAll[Number(checks[i].getAttribute('data-i'))]);
-      }
-      if (!picks.length) { alert('追加する候補を選んでください'); return; }
-      var block = US.blockFor(picks);
-      var t = ctx.getMmdText();
-      var out = addBulk(t, block, parsedData);
-      if (out === t) { alert('追加できる行がありません'); return; }
-      window.MA.history.pushHistory();
-      ctx.setMmdText(out);
-      ctx.onUpdate();
-    });
-  }
-
-  // BLK-junior-20260909-0403: ひな形は「白紙 (新規タブのサンプルのまま)」に置く
-  // ものなので、既に描き始めている図では黙って捨てない。3 件以上の要素があるときだけ
-  // 確認する (サンプルの actor User / usecase Login は白紙とみなす)。
-  function _bindStarter(parsedData, ctx) {
-    var P = window.MA.properties;
-    var DS = window.MA.driverUsecaseStarter;
-    var inputEl = document.getElementById('uc-starter-subject');
-    var hintEl = document.getElementById('uc-starter-hint');
-    if (!DS || !inputEl || !hintEl) return;
-    var refresh = function() {
-      hintEl.textContent = DS.summary(DS.plan(inputEl.value));
-    };
-    inputEl.addEventListener('input', refresh);
-    refresh();
-
-    P.bindEvent('uc-starter-add', 'click', function() {
-      var plan = DS.plan(inputEl.value);
-      if (!plan) { alert('題材名を入れてください (例: GPIO)'); return; }
-      var count = (parsedData.elements || []).length;
-      if (count >= 3 && !window.confirm('今の図の ' + count + ' 件を、'
-        + plan.display + ' ドライバのひな形で置き換えます。よろしいですか')) return;
-      window.MA.history.pushHistory();
-      ctx.setMmdText(DS.dsl(inputEl.value));
-      ctx.onUpdate();
-    });
-  }
-
   function _renderNoSelection(parsedData, propsEl, ctx) {
     var P = window.MA.properties;
     var GP = window.MA.groupPlace;
@@ -598,7 +481,7 @@ window.MA.modules.plantumlUsecase = (function() {
     var usecases = elements.filter(function(e) { return e.kind === 'usecase'; });
 
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
         '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'uc-tail-kind', [
@@ -611,36 +494,10 @@ window.MA.modules.plantumlUsecase = (function() {
         ]) +
         '<div id="uc-tail-detail" style="margin-top:6px;"></div>' +
       '</div>' +
-      // BLK-junior-20260909-0403-wish: 同じ部品のシーケンス図から、誰が使うか
-      // (アクター) と何をするか (ユースケース) の候補を出す。白紙から考えて
-      // 一括入力欄に打つ代わり。
-      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
-          'シーケンス図から候補</label>' +
-        '<div id="uc-src-summary" style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;"></div>' +
-        '<div id="uc-src-body"></div>' +
-      '</div>' +
-      // BLK-junior-20260909-0403: 手本になる図が 1 枚も無いところから始まる場面。
-      // ドライバのユースケース図は題材が替わっても骨格が同じなので、題材名 1 語で
-      // 下書きを作る (アクター・ユースケース・関連の 15 行を打ち直させない)。
-      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' +
-          '白紙から: ドライバのひな形</label>' +
-        P.fieldHtml('題材名', 'uc-starter-subject', '', '例: GPIO / UART / CAN') +
-        '<div id="uc-starter-hint" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px;line-height:1.5;"></div>' +
-        P.primaryButtonHtml('uc-starter-add', '＋ ひな形を作る') +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
-          '開発者・RTOS と、初期化 / ピンモード設定 / 読み取り / 書き込み / 割り込み設定 / 割り込み通知 の下書きです。' +
-          '要らない行はそのまま消して使えます</div>' +
-      '</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;color:var(--text-secondary);font-size:11px;">' +
         'DSL エディタで行をクリックすると編集パネルが開きます (v0.5.0 で SVG クリック対応予定)' +
       '</div>';
     propsEl.innerHTML = html;
-
-    _bindStarter(parsedData, ctx);
-
-    _renderSourceCandidates(parsedData, ctx);
 
 
     // 末尾追加 detail switcher
@@ -649,7 +506,7 @@ window.MA.modules.plantumlUsecase = (function() {
       var detailEl = document.getElementById('uc-tail-detail');
       // 表示名と識別子がずれている要素は「ラベル (id)」で出す。日本語を打つと
       // 識別子は自動採番されるので、プルダウンの表示が DSL のどの行を指すのか
-      // 併記しないと選び直すときに確信が持てない (BLK-junior-20260908-0630)。
+      // 併記しないと選び直すときに確信が持てない。
       var AH = window.MA.aliasHint;
       var actorOpts = actors.map(function(a) { return { value: a.id, label: AH.optionLabel(a.id, a.label) }; });
       var usecaseOpts = usecases.map(function(u) { return { value: u.id, label: AH.optionLabel(u.id, u.label) }; });
@@ -703,7 +560,10 @@ window.MA.modules.plantumlUsecase = (function() {
             { value: 'extend',         label: 'Extend (..> <<extend>>)' },
           ]) +
           P.selectFieldHtml(_fieldLabel('association', 'from'), 'uc-tail-from', allOpts) +
-          P.selectFieldHtml(_fieldLabel('association', 'to'), 'uc-tail-to', allOpts) +
+          // To は From と同じ要素を既定にしない (一覧で選ぶ。自分への線は選んだときだけ)。
+          P.selectFieldHtml(_fieldLabel('association', 'to'), 'uc-tail-to',
+            [{ value: '', label: '（一覧で相手を選ぶ）', selected: true }].concat(allOpts)) +
+          '<div id="uc-tail-rhint" role="status" style="font-size:10px;color:var(--text-secondary);margin:-4px 0 6px 0;"></div>' +
           P.fieldHtml('ラベル', 'uc-tail-rlabel', '', 'association のみ任意') +
           P.primaryButtonHtml('uc-tail-add', '+ 追加');
       } else if (kind === 'note') {
@@ -717,13 +577,12 @@ window.MA.modules.plantumlUsecase = (function() {
             { value: 'top',    label: 'Top' },
             { value: 'bottom', label: 'Bottom' },
           ]) +
-          '<label style="display:block;font-size:10px;color:var(--text-secondary);">本文 (Enter で追加 / Shift+Enter で改行)</label>' +
+          P.textLabelHtml(P.NOTE_BODY, 'uc-tail-ntext', { enterHint: true }) +
           '<textarea id="uc-tail-ntext" style="width:100%;min-height:60px;font-family:inherit;font-size:12px;"></textarea>' +
           P.primaryButtonHtml('uc-tail-add', '+ 追加');
       } else if (kind === 'bulk') {
         html =
           '<label style="display:block;font-size:10px;color:var(--text-secondary);">要素と関係を 1 行 1 件で</label>' +
-          window.MA.reuseModal.buttonHtml('uc-tail-reuse') +
           '<textarea id="uc-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
           P.primaryButtonHtml('uc-tail-add', '+ まとめて追加') +
           '<div id="uc-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
@@ -731,7 +590,7 @@ window.MA.modules.plantumlUsecase = (function() {
             'A --&gt; B : label / A ..&gt; B(include) / A ..&gt; B : extend / A &lt;|-- B。空行は無視されます</div>';
       }
       detailEl.innerHTML = html;
-      // BLK-primary-20260923-2312-friction: 関係を続けて足すとき、種類と From は前回選んだまま
+      // 関係を続けて足すとき、種類と From は前回選んだまま
       // (次の 1 本は To を選ぶだけ)。カードは select の値で描くので、戻してから載せる。
       if (kind === 'relation' && window.MA.tailMemory) {
         window.MA.tailMemory.bindSelect('uc-tail-rkind');
@@ -752,31 +611,29 @@ window.MA.modules.plantumlUsecase = (function() {
       }
       if (kind === 'actor') bindAliasHint('A');
       else if (kind === 'usecase') bindAliasHint('U');
-      // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
-      window.MA.reuseModal.bindButton('uc-tail-reuse', 'plantuml-usecase', 'uc-tail-bulk');
 
       P.bindEvent('uc-tail-add', 'click', function() {
         var t = ctx.getMmdText();
         var out = t;
         if (kind === 'actor') {
           var rawAl = document.getElementById('uc-tail-alias').value;
-          var normAc = normalizeIdInput(rawAl, parsedData, 'A');
-          if (!normAc.valid) { alert('Alias 必須'); return; }
+          var normAc = normalizeIdInput(rawAl, parsedData, 'A', ctx.getMmdText());
+          if (!normAc.valid) { P.needField('uc-tail-alias'); return; }
           var rawLbl = document.getElementById('uc-tail-label').value.trim();
           window.MA.history.pushHistory();
           out = addActor(t, normAc.id, rawLbl || normAc.label);
           out = GP.applyAdd('usecase', 'uc-tail', parsedData.groups, t, out);
         } else if (kind === 'usecase') {
           var rawAl2 = document.getElementById('uc-tail-alias').value;
-          var normUc = normalizeIdInput(rawAl2, parsedData, 'U');
-          if (!normUc.valid) { alert('Alias 必須'); return; }
+          var normUc = normalizeIdInput(rawAl2, parsedData, 'U', ctx.getMmdText());
+          if (!normUc.valid) { P.needField('uc-tail-alias'); return; }
           var rawLbl2 = document.getElementById('uc-tail-label').value.trim();
           window.MA.history.pushHistory();
           out = addUsecase(t, normUc.id, rawLbl2 || normUc.label);
           out = GP.applyAdd('usecase', 'uc-tail', parsedData.groups, t, out);
         } else if (kind === 'package') {
           var lbl = document.getElementById('uc-tail-label').value.trim();
-          if (!lbl) { alert('Label 必須'); return; }
+          if (!lbl) { P.needField('uc-tail-label'); return; }
           window.MA.history.pushHistory();
           var notaEl = document.getElementById('uc-tail-notation');
           out = addPackage(t, lbl, notaEl ? notaEl.value : 'package');
@@ -785,7 +642,12 @@ window.MA.modules.plantumlUsecase = (function() {
         } else if (kind === 'relation') {
           var fr = document.getElementById('uc-tail-from').value;
           var to = document.getElementById('uc-tail-to').value;
-          if (!fr || !to) { alert('From/To 必須 (先に actor/usecase を追加)'); return; }
+          if (!fr) { alert('From/To 必須 (先に actor/usecase を追加)'); return; }
+          if (!to) {
+            // 5 図種で同じ共通部 (TICKET-owner-20261123-2322-2)。
+            P.needPick('uc-tail-to', 'uc-tail-rhint', '一覧で選ぶ', '終点 (To)');
+            return;
+          }
           var rkind = document.getElementById('uc-tail-rkind').value;
           if (window.MA.tailMemory) {
             window.MA.tailMemory.setField('uc-tail-rkind', rkind);
@@ -796,7 +658,7 @@ window.MA.modules.plantumlUsecase = (function() {
           out = addRelation(t, rkind, ucEnds.from, ucEnds.to, document.getElementById('uc-tail-rlabel').value.trim());
         } else if (kind === 'note') {
           var ntarget = document.getElementById('uc-tail-ntarget').value;
-          if (!ntarget) { alert('Target 必須 (先に actor/usecase を追加)'); return; }
+          if (!ntarget) { P.needField('uc-tail-ntarget'); return; }
           window.MA.history.pushHistory();
           out = addNote(t, ntarget,
             document.getElementById('uc-tail-npos').value,
@@ -824,7 +686,7 @@ window.MA.modules.plantumlUsecase = (function() {
     var P = window.MA.properties;
     var esc = window.MA.htmlUtils.escHtml;
     propsEl.innerHTML =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Note (L' + note.line + ')</div>' +
+      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' + esc(P.lineHead('Note', note.line)) + '</div>' +
       '<div style="margin-bottom:6px;font-size:11px;"><b>Target:</b> ' + esc(note.targetId) +
         ' <span style="color:var(--text-secondary);">(付け替えは削除して追加)</span></div>' +
       P.selectFieldHtml('Position', 'uc-note-pos', [
@@ -836,7 +698,7 @@ window.MA.modules.plantumlUsecase = (function() {
       '<label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label>' +
       '<textarea id="uc-note-text" style="width:100%;min-height:70px;font-family:inherit;font-size:12px;">' +
         esc(note.text || '') + '</textarea>' +
-      P.primaryButtonHtml('uc-note-update', '更新') +
+      P.primaryButtonHtml('uc-note-update', window.MA.terms.apply) +
       P.primaryButtonHtml('uc-note-delete', '✕ 削除');
 
     P.bindEvent('uc-note-update', 'click', function() {
@@ -862,21 +724,19 @@ window.MA.modules.plantumlUsecase = (function() {
     var P = window.MA.properties;
     var GP = window.MA.groupPlace;
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + element.kind.toUpperCase() + ' (L' + element.line + ')</label>' +
-        P.fieldHtml('Alias (id)', 'uc-edit-id', element.id) +
-        P.fieldHtml('Label', 'uc-edit-label', element.label) +
-        P.primaryButtonHtml('uc-edit-apply', '変更を反映') +
-        '<div style="margin-top:6px;">' +
-          P.primaryButtonHtml('uc-rename-refs', '名前を変えたら関係の行も付け替える') +
-        '</div>' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(P.lineHead(element.kind.charAt(0).toUpperCase() + element.kind.slice(1), element.line)) + '</label>' +
+        P.fieldHtml(window.MA.terms.id, 'uc-edit-id', element.id) +
+        P.fieldHtml(window.MA.terms.label, 'uc-edit-label', element.label) +
+        P.renameRefsCheckHtml('uc-edit-rename-refs') +
+        P.primaryButtonHtml('uc-edit-apply', window.MA.terms.apply) +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
           '<button id="uc-move-up" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↑ 上へ</button>' +
           '<button id="uc-move-down" style="flex:1;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">↓ 下へ</button>' +
-          '<button id="uc-delete" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
+          '<button id="uc-delete" data-el-delete="1" data-el-id="' + window.MA.htmlUtils.escHtml(element.id) + '" style="flex:0 0 60px;background:var(--accent-red);color:#fff;border:none;padding:6px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         '</div>' +
-        // BLK-owner-20260923-2332-2: 選んだ要素を境界の中へ移す / 外へ出す。
+        // 選んだ要素を境界の中へ移す / 外へ出す。
         GP.editFieldHtml('uc-edit', parsedData.groups, element.line) +
       '</div>';
 
@@ -932,20 +792,13 @@ window.MA.modules.plantumlUsecase = (function() {
         ? renameNorm.label
         : rawNewLabel;
       var fn = element.kind === 'actor' ? updateActor : updateUsecase;
-      if (newId !== element.id) t = fn(t, element.line, 'id', newId);
+      // 改名は宣言の行と、名前を識別子として持つ行 (関係の両端・note の対象) を 1 回で書く。
+      if (newId !== element.id) {
+        t = window.MA.dslUpdater.renameDecl(t, element.line, element.id, newId,
+          function(s) { return fn(s, element.line, 'id', newId); }, P.renameRefsOn('uc-edit-rename-refs'));
+      }
       if (newLabel !== element.label) t = fn(t, element.line, 'label', newLabel);
       ctx.setMmdText(t);
-      ctx.onUpdate();
-    });
-    P.bindEvent('uc-rename-refs', 'click', function() {
-      var rawNewId = document.getElementById('uc-edit-id').value.trim();
-      if (!rawNewId || rawNewId === element.id) { alert('Alias を変更してから実行してください'); return; }
-      var freshParsed = parse(ctx.getMmdText());
-      var pfx2 = element.kind === 'actor' ? 'A' : 'U';
-      var refsNorm = window.MA.idNormalizer.normalize(rawNewId, _existingUsecaseIdSet(freshParsed), pfx2);
-      var newId = refsNorm.valid ? refsNorm.id : rawNewId;
-      window.MA.history.pushHistory();
-      ctx.setMmdText(renameWithRefs(ctx.getMmdText(), element.id, newId));
       ctx.onUpdate();
     });
     P.bindEvent('uc-move-up', 'click', function() {
@@ -959,11 +812,34 @@ window.MA.modules.plantumlUsecase = (function() {
       ctx.onUpdate();
     });
     P.bindEvent('uc-delete', 'click', function() {
-      if (!confirm('この行を削除しますか？')) return;
-      window.MA.history.pushHistory();
-      ctx.setMmdText(deleteLine(ctx.getMmdText(), element.line));
-      window.MA.selection.clearSelection();
-      ctx.onUpdate();
+      // 宣言の行だけを消すと関係・note の行が元の名前でアクターを描き直す。付いた行も一緒に、本数を言う窓で消す。
+      var text = ctx.getMmdText();
+      var plan = elementDeletePlan(text, element.id);
+      if (!plan) return;
+      window.MA.elementDelete.ask({
+        prefix: 'uc', title: '削除', ctx: ctx, plan: plan,
+        message: window.MA.elementDelete.message(element.kind === 'actor' ? 'アクター' : 'ユースケース', element.id, plan, '関係'),
+      });
+    });
+  }
+
+  // 要素を消すときに一緒に消える行: 宣言・その要素に繋がる関係・その要素を対象に持つ note。
+  // 返り値は MA.elementDelete.plan の形 / 要素が無ければ null。
+  function elementDeletePlan(text, id) {
+    var parsed = parse(text);
+    var elt = null;
+    for (var i = 0; i < parsed.elements.length; i++) {
+      if (parsed.elements[i].id === id) { elt = parsed.elements[i]; break; }
+    }
+    if (!elt) return null;
+    var rels = [];
+    parsed.relations.forEach(function(r) {
+      if (r.from === id || r.to === id) rels.push({ start: r.line, end: r.line });
+    });
+    return window.MA.elementDelete.plan({
+      decl: elt.implicit ? [] : [{ start: elt.line, end: elt.line }],
+      relations: rels,
+      notes: window.MA.elementDelete.notesOf(text, id),
     });
   }
 
@@ -972,18 +848,18 @@ window.MA.modules.plantumlUsecase = (function() {
     var RC = window.MA.relationKindCards;
     var uiEnds = _uiToModel(relation.kind, relation.from, relation.to);   // 入れ替えは対称
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">RELATION (L' + relation.line + ')</label>' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(P.lineHead('Relation', relation.line)) + '</label>' +
         // design 3c: 関係の種類は記法ではなく「UML 名称 + 意味の説明」のカードで選ぶ
         RC.cardsHtml('uc-rel-card', RC.kindsOf('usecase'), relation.kind) +
-        // BLK-owner-20260929-0351-1: 上の欄は矢の根元 (汎化なら子)。
+        // 上の欄は矢の根元 (汎化なら子)。
         P.fieldHtml(relation.kind === 'generalization' ? _fieldLabel('generalization', 'from') : 'From', 'uc-rel-from', uiEnds.from) +
         '<button id="uc-rel-swap" type="button" style="font-size:11px;padding:4px 10px;margin:4px 0;cursor:pointer;">⇄ From/To 入替</button>' +
         P.fieldHtml(relation.kind === 'generalization' ? _fieldLabel('generalization', 'to') : 'To', 'uc-rel-to', uiEnds.to) +
-        P.fieldHtml('Label', 'uc-rel-label', relation.label) +
+        P.fieldHtml(window.MA.terms.edgeLabel, 'uc-rel-label', relation.label) +
         P.relationOptionsFor('uc-rel-more', ctx.getMmdText(), relation.line) +
-        P.primaryButtonHtml('uc-rel-apply', '変更を反映') +
+        P.primaryButtonHtml('uc-rel-apply', window.MA.terms.apply) +
         '<div style="margin-top:8px;">' +
           '<button id="uc-delete" style="background:var(--accent-red);color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✕ 削除</button>' +
         '</div>' +
@@ -1040,17 +916,18 @@ window.MA.modules.plantumlUsecase = (function() {
 
   function _renderGroupReadOnly(pkg, parsedData, propsEl, ctx) {
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PACKAGE (L' + pkg.startLine + '-' + pkg.endLine + ')</label>' +
-        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Label: ' + window.MA.htmlUtils.escHtml(pkg.label || '') + '</div>' +
+        // 見出しは「境界 · 2–5 行目」、欄名は日本語。
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">' + window.MA.htmlUtils.escHtml(window.MA.properties.lineHead('境界', pkg.startLine, pkg.endLine)) + '</label>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">名前: ' + window.MA.htmlUtils.escHtml(pkg.label || '') + '</div>' +
         // design 5d: 表記を後から差し替える (中身と閉じ括弧はそのまま)
         window.MA.properties.selectFieldHtml('表記', 'uc-grp-notation',
           window.MA.groupNotation.notationsFor('plantuml-usecase').map(function(n) {
             return { value: n.id, label: n.label + ' — ' + n.hint, selected: n.id === (pkg.notation || 'package') };
           })) +
         window.MA.properties.primaryButtonHtml('uc-grp-notation-apply', '表記を変更') +
-        '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;">v0.3.0: ラベル変更 / 範囲指定 wrap は v0.5.0 で対応</div>' +
+        '<div style="font-size:10px;color:var(--text-secondary);margin-top:8px;">名前を変えるときは、テキストの ' + pkg.startLine + ' 行目を直す。</div>' +
       '</div>';
     propsEl.innerHTML = html;
     window.MA.properties.bindEvent('uc-grp-notation-apply', 'click', function() {
@@ -1085,7 +962,7 @@ window.MA.modules.plantumlUsecase = (function() {
     function ends() { return RA.orient(selData, swapped); }
 
     propsEl.innerHTML =
-      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">関係を追加 / Add relation</div>' +
+      '<div style="margin-bottom:12px;font-size:11px;color:var(--text-secondary);">' + window.MA.terms.addRelation + '</div>' +
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
         '<div class="rel-ends">' +
           '<span class="rel-end"><span class="rel-end-cap">From</span>' +
@@ -1094,7 +971,7 @@ window.MA.modules.plantumlUsecase = (function() {
           '<span class="rel-end"><span class="rel-end-cap">To</span>' +
             '<strong id="uc-conn-to">' + esc(nameOf(selData[1])) + '</strong></span>' +
         '</div>' +
-        '<div class="rel-section-cap">関係の種類 / Relation</div>' +
+        '<div class="rel-section-cap">' + window.MA.terms.relationKind + '</div>' +
         '<div id="uc-conn-kinds" class="rel-opts">' + RA.optionsHtml('usecase', 'uc-conn', kind) + '</div>' +
         P.fieldHtml('ラベル / Label（任意）', 'uc-conn-label', '', '任意') +
         '<div class="rel-section-cap">追加される行</div>' +
@@ -1184,6 +1061,7 @@ window.MA.modules.plantumlUsecase = (function() {
     moveLineDown: moveLineDown,
     setTitle: setTitle,
     renameWithRefs: renameWithRefs,
+    elementDeletePlan: elementDeletePlan,
     renderProps: renderProps,
     capabilities: {
       overlaySelection: true,  // Phase B Task 9 で actor/usecase 対応
@@ -1247,7 +1125,7 @@ window.MA.modules.plantumlUsecase = (function() {
         return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
       }
 
-      // BLK-migrator-20260924-0012: 当て方は PlantUML が SVG に残す要素情報 (data-qualified-name /
+      // 当て方は PlantUML が SVG に残す要素情報 (data-qualified-name /
       // data-source-line) を先に使う (class / component / state と同じ部品)。パッケージの中の要素は
       // `Restaurant.UC1` の修飾名で描かれ、`:User:` / `(Use)` / `"表示名" as (X)` の略記はパーサが
       // 読めないことがある。名前 → 書かれた行 の順に当て、どれにも当たらない要素・線・題・凡例も
@@ -1316,11 +1194,11 @@ window.MA.modules.plantumlUsecase = (function() {
           height: parseFloat(pkgRect.getAttribute('height')) || 0,
         } : OB.extractUnionBBox(g, 'text, line, polygon, polyline, path, rect, ellipse');
         if (!pbb) continue;
-        OB.addRect(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
+        OB.addContainer(overlayEl, pbb.x - 2, pbb.y - 2, pbb.width + 4, pbb.height + 4, {
           'data-type': 'package',
           'data-id': packages[pi].id,
           'data-line': packages[pi].startLine,
-        });
+        }, g);
       }
 
       // relation: <g class="link">。書かれた行で当てる (読めない線があっても以後がずれない)
@@ -1334,7 +1212,7 @@ window.MA.modules.plantumlUsecase = (function() {
         if (!lineEl) continue;
         claimed.push(lg);
         relN++;
-        // BLK-human-20260912-2130: 線・矢じり・ラベル (<<include>> 等) をまとめて
+        // 線・矢じり・ラベル (<<include>> 等) をまとめて
         // 1 つの当たり判定にする
         var ucRelAttrs = {
           'data-type': 'relation',
@@ -1342,7 +1220,7 @@ window.MA.modules.plantumlUsecase = (function() {
           'data-line': relations[ri].line,
           'data-relation-kind': relations[ri].kind,
         };
-        // BLK-builder-20260925-0305-1: 中継点で割れた残りの線も同じ関係の 1 つの枠にする。
+        // 中継点で割れた残りの線も同じ関係の 1 つの枠にする。
         var lgParts = (linkGroups.parts && linkGroups.parts[ri]) || [];
         lgParts.forEach(function(pg) { claimed.push(pg); });
         if (!OB.addLinkRects(overlayEl, lgParts.length ? [lg].concat(lgParts) : lg, ucRelAttrs, 8)) {
@@ -1355,7 +1233,7 @@ window.MA.modules.plantumlUsecase = (function() {
       // フォームが読めない記法の要素・線・題・凡例にも、書かれた行を指す枠を置く
       OB.addUnclaimed(svgEl, overlayEl, claimed, null, dslText);
 
-      // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
+      // 小さい当たり判定を手前に。共通実装 (src/core)
       OB.raiseSmallestLast(overlayEl);
 
       return {

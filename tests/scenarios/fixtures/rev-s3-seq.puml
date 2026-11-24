@@ -1,0 +1,21 @@
+@startuml
+' レビュー用 通信手順(同名ラベルあり)
+skinparam sequenceMessageAlign center
+skinparam shadowing false
+
+participant Ctl
+participant CtlMon
+participant Bus
+participant Dev
+
+' --- 起動 ---
+Ctl -> Bus : Open()
+    ' 字下げは手で揃えたもの
+    Bus -> Dev : Open()
+CtlMon -> Bus : Open()
+' --- 読み ---
+Ctl -> Bus : Read()
+CtlMon -> Bus : Read()
+Bus --> Ctl : done
+Bus --> CtlMon : done
+@enduml

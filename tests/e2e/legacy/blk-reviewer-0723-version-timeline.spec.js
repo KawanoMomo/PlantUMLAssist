@@ -1,6 +1,6 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('../helpers');
+const { gotoApp, openVersionHistory } = require('../helpers');
 
 // BLK-reviewer-20260908-0723-wish: 1 図の中身が保存のたびにどう変わったかを通しで見る。
 // 単発 diff では「変わりました」としか出ず、A → B → A の往復に気付けなかった。
@@ -28,7 +28,7 @@ test.describe('BLK-reviewer-20260908-0723-wish: 変遷履歴', () => {
   test('⟲ 変遷 から、その図の版が新しい順に並ぶ', async ({ page }) => {
     const name = await page.evaluate(() => window.MA.workspace.getActive().name);
     await pushVersions(page, name, [A, B]);
-    await page.locator('#btn-tab-versions').click();
+    await openVersionHistory(page);
     await expect(page.locator('#vt-modal')).toBeVisible();
 
     await expect(page.locator('.vt-row')).toHaveCount(2);
@@ -46,7 +46,7 @@ test.describe('BLK-reviewer-20260908-0723-wish: 変遷履歴', () => {
   test('A → B → A の往復に印が付き、戻り先の版を名指しする', async ({ page }) => {
     const name = await page.evaluate(() => window.MA.workspace.getActive().name);
     await pushVersions(page, name, [A, B, A]);
-    await page.locator('#btn-tab-versions').click();
+    await openVersionHistory(page);
 
     await expect(page.locator('.vt-row')).toHaveCount(3);
     const top = page.locator('.vt-row[data-vt-rev="3"]');
@@ -59,7 +59,7 @@ test.describe('BLK-reviewer-20260908-0723-wish: 変遷履歴', () => {
   test('往復した版だけに絞れる', async ({ page }) => {
     const name = await page.evaluate(() => window.MA.workspace.getActive().name);
     await pushVersions(page, name, [A, B, A]);
-    await page.locator('#btn-tab-versions').click();
+    await openVersionHistory(page);
     await page.locator('#vt-only-revisit').check();
     await page.waitForTimeout(200);
     await expect(page.locator('.vt-row')).toHaveCount(1);
@@ -70,25 +70,24 @@ test.describe('BLK-reviewer-20260908-0723-wish: 変遷履歴', () => {
     await expect(page.locator('.vt-row')).toHaveCount(3);
   });
 
-  test('往復があるとボタンの見出しがそれを言う (開かなくても気付ける)', async ({ page }) => {
+  // タブ列の ⟲ 変遷 のボタン (見出しに往復の数) は TICKET-owner-20261123-0222-prune で外した。往復の数は窓の見出しで読む。
+  test('往復があると、この図の履歴の見出しがそれを言う', async ({ page }) => {
     const name = await page.evaluate(() => window.MA.workspace.getActive().name);
-    await expect(page.locator('#btn-tab-versions')).toContainText('変遷');
     await pushVersions(page, name, [A, B, A]);
     await page.evaluate(() => window.MA.workspace.updateActive({}));
-    await page.evaluate(() => { if (window.renderVersionBadge) window.renderVersionBadge(); });
-    await page.locator('#btn-tab-versions').click();
+    await openVersionHistory(page);
     await expect(page.locator('#vt-summary')).toContainText('往復 1 回');
   });
 
   test('履歴がまだ無い図では、そう言う', async ({ page }) => {
-    await page.locator('#btn-tab-versions').click();
+    await openVersionHistory(page);
     await expect(page.locator('#vt-empty')).toContainText('この図の履歴はまだありません');
   });
 
   test('この図の履歴を消すと空になり、閉じられる', async ({ page }) => {
     const name = await page.evaluate(() => window.MA.workspace.getActive().name);
     await pushVersions(page, name, [A, B]);
-    await page.locator('#btn-tab-versions').click();
+    await openVersionHistory(page);
     await expect(page.locator('.vt-row')).toHaveCount(2);
     await page.locator('#vt-forget').click();
     await page.waitForTimeout(200);
@@ -101,7 +100,7 @@ test.describe('BLK-reviewer-20260908-0723-wish: 変遷履歴', () => {
     const name = await page.evaluate(() => window.MA.workspace.getActive().name);
     await pushVersions(page, name, [A, B, A]);
     await pushVersions(page, 'other.puml', [A, B]);
-    await page.locator('#btn-tab-versions').click();
+    await openVersionHistory(page);
     await expect(page.locator('#vt-summary')).toContainText('往復 1 回');
 
     await page.locator('#vt-file').selectOption('other.puml');

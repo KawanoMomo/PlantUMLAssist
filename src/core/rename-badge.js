@@ -2,7 +2,6 @@
 window.MA = window.MA || {};
 
 // rename-badge — 部品名の統一が済んでいるかを、下端のバッジ 1 つで言う
-// (BLK-primary-20260914-1006-friction)。
 //
 // 過去の置換の組とその残存件数は ⇄ 一括置換のパネルにある (rename-redo) が、
 // それを読むにはパネルを開く手数が要る。「今日の統一は済んでいるか」を
@@ -37,7 +36,7 @@ window.MA.renameBadge = (function() {
       remaining: pend.reduce(function(a, r) { return a + (Number(r.remaining) || 0); }, 0),
       docs: pend.reduce(function(a, r) { return a + (Number(r.remainingDocs) || 0); }, 0),
       next: pend.length ? { from: pend[0].from, to: pend[0].to } : null,
-      // 組ごとの状態 (BLK-primary-20260917-0123-friction)。「済」だけでは
+      // 組ごとの状態。「済」だけでは
       // 確かめたい組が済んだ組の中にあるかが分からず、結局パネルを開いていた。
       list: list.map(function(r) {
         return { from: r.from, to: r.to, state: r.state, remaining: Number(r.remaining) || 0 };

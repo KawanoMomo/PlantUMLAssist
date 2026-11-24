@@ -15,7 +15,7 @@ async function openClassDiagram(page) {
 test.describe('BLK-junior-20260907-0823 クラス構成の一括追加の手数', () => {
   test('関連の行は最初から 3 行あり「＋ 関連を追加」を押さずに済む', async ({ page }) => {
     await openClassDiagram(page);
-    await page.locator('#cl-scaffold-open').click();
+    await page.locator('#cl-tail-kind-chip-bulk').click();
     await expect(page.locator('#cl-sc-modal')).toBeVisible();
     await expect(page.locator('.cl-sc-row')).toHaveCount(3);
     await expect(page.locator('.cl-sc-rel-row')).toHaveCount(3);
@@ -23,7 +23,7 @@ test.describe('BLK-junior-20260907-0823 クラス構成の一括追加の手数'
 
   test('関連の元 / 先は打ち込みではなく選択で、いま作っている名前が出る', async ({ page }) => {
     await openClassDiagram(page);
-    await page.locator('#cl-scaffold-open').click();
+    await page.locator('#cl-tail-kind-chip-bulk').click();
     await page.locator('#cl-sc-parent').fill('UartDrv');
     await page.locator('#cl-sc-name-0').fill('UartDrvLin');
     await page.waitForTimeout(100);
@@ -37,7 +37,7 @@ test.describe('BLK-junior-20260907-0823 クラス構成の一括追加の手数'
 
   test('名前を打ち直すと選択肢も追従し、選んだ相手は残る', async ({ page }) => {
     await openClassDiagram(page);
-    await page.locator('#cl-scaffold-open').click();
+    await page.locator('#cl-tail-kind-chip-bulk').click();
     await page.locator('#cl-sc-parent').fill('UartDrv');
     await page.locator('#cl-sc-name-0').fill('UartDrvLin');
     await page.locator('#cl-sc-name-1').fill('UartDrvSci');
@@ -64,7 +64,7 @@ test.describe('BLK-junior-20260907-0823 クラス構成の一括追加の手数'
     const fill = async (sel, v) => { clicks++; keys += v.length; await page.locator(sel).fill(v); };
     const pick = async (sel, v) => { clicks++; await page.locator(sel).selectOption(v); };
 
-    await click('#cl-scaffold-open');
+    await click('#cl-tail-kind-chip-bulk');
     // 開いた直後は親クラス名にフォーカスが載っているので、そこへ置きに行く
     // クリックは要らない (打つだけ)。
     await expect(page.locator('#cl-sc-parent')).toBeFocused();

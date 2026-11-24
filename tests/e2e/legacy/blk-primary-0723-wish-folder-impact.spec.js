@@ -4,9 +4,11 @@
 // 何件あるかが分からない。仕様変更が全図に及んだかを確かめるには、結局
 // 15 枚を 1 枚ずつ開き直して目で見るしかなかった。
 // 保存フォルダの全ファイルを先に数え、ヒットした図・しなかった図を一覧で出し、
-// 置換もその一覧 (テンプレを除く) に当たることを確認する。
+// 置換もその一覧に当たることを確認する。
+// 保存先の「テンプレ」宣言で的から外す分岐は TICKET-owner-20261122-1140-prune で外した
+// (plantuml-p0723-tpl は前ならテンプレと宣言できた図。今は他の図と同じく的に入る)。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, saveDirFor } = require('../helpers');
+const { gotoApp, saveDirFor, openBulkRename } = require('../helpers');
 
 const DIR = saveDirFor(__filename);
 
@@ -56,17 +58,6 @@ async function clearDir(page) {
   }, DIR);
 }
 
-// テンプレ宣言 (_roles.json)。テンプレは数えるが置換の的から外れる。
-async function declareTemplate(page, name) {
-  await page.evaluate(async (a) => {
-    await fetch('/file-roles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dir: a.dir, roles: { [a.name]: { role: 'template' } } }),
-    });
-  }, { name, dir: DIR });
-}
-
 async function typeDsl(page, text) {
   await page.evaluate((t) => {
     const ed = /** @type {HTMLTextAreaElement} */ (document.getElementById('editor'));
@@ -77,7 +68,7 @@ async function typeDsl(page, text) {
 }
 
 async function openRename(page, from, to) {
-  await page.locator('#btn-tab-rename').click();
+  await openBulkRename(page);
   await expect(page.locator('#rename-panel')).toHaveClass(/open/);
   await expect(page.locator('#rename-folder-head')).toHaveAttribute('data-loading', '0');
   if (from != null) await page.locator('#rename-from').fill(from);
@@ -90,7 +81,6 @@ test.describe('BLK-primary-0723-wish 開いていない図も含めた置換の�
     await bootWithDir(page);
     await clearDir(page);
     for (const name of Object.keys(FILES)) await putFile(page, name, FILES[name]);
-    await declareTemplate(page, 'plantuml-p0723-tpl');
     await page.waitForTimeout(300);
     await bootWithDir(page);
     await typeDsl(page, seq('SpiDrv'));
@@ -104,10 +94,10 @@ test.describe('BLK-primary-0723-wish 開いていない図も含めた置換の�
     // 開いているタブ 1 枚しか見えていなかったところを、保存フォルダごと数える。
     // (アプリが同梱テンプレを保存フォルダに置くので、枚数は「4 枚以上」で見る)
     expect(Number(await head.getAttribute('data-files'))).toBeGreaterThanOrEqual(5);
-    // 開いていない spi / can / テンプレの 3 枚が、開き直さずに数に入る。
+    // 開いていない spi / can / tpl の 3 枚が、開き直さずに数に入り、全部が置換の的。
     expect(Number(await head.getAttribute('data-unopened-hit-docs'))).toBeGreaterThanOrEqual(3);
-    await expect(head).toContainText('未オープン');
-    await expect(head).toContainText('テンプレ 1 枚は置換しない');
+    await expect(head).toContainText('開いていない');   // 語は一覧の札と同じ (TICKET-owner-20261123-0742-1)
+    await expect(head).not.toContainText('テンプレ');
   });
 
   test('ヒットした図が先に並び、当たらなかった図も一覧に残る', async ({ page }) => {
@@ -119,8 +109,8 @@ test.describe('BLK-primary-0723-wish 開いていない図も含めた置換の�
     // 先頭は開いているタブ (ヒットあり)。ヒット 0 は後ろにしか出ない。
     await expect(rows.first()).not.toHaveAttribute('data-count', '0');
     const tpl = page.locator('#rename-folder .folder-row[data-doc-name="plantuml-p0723-tpl"]');
-    await expect(tpl).toHaveAttribute('data-target', '0');
-    await expect(tpl).toContainText('テンプレ (置換しない)');
+    await expect(tpl).toHaveAttribute('data-target', '1');
+    await expect(tpl).not.toContainText('テンプレ');
     await expect(page.locator('#rename-folder .folder-row[data-doc-name="P0723_spi"]'))
       .toHaveAttribute('data-count', '2');
   });
@@ -132,13 +122,13 @@ test.describe('BLK-primary-0723-wish 開いていない図も含めた置換の�
     await page.locator('#btn-rename-apply').click();
     // 「置換しました」が出るまで待つ (押した直後はまだ置換前の予告が出ている)
     await expect(summary).toContainText('置換しました');
-    await expect(summary).toContainText('未オープン');
+    await expect(summary).toContainText('開いていない');
     expect(Number(await summary.getAttribute('data-applied-unopened'))).toBeGreaterThanOrEqual(2);
     expect(await readFile(page, 'P0723_spi')).toContain('Spi_Driver');
     expect(await readFile(page, 'P0723_can')).toContain('Spi_Driver');
     expect(await readFile(page, 'P0723_spi')).not.toContain('participant SpiDrv\n');
-    // テンプレは触らない (テンプレ汚染を一括置換から出さない)
-    expect(await readFile(page, 'plantuml-p0723-tpl')).toContain('SpiDrv');
+    // 前ならテンプレと宣言できた図も、ヒットしたので同じく直る (全図適用)
+    expect(await readFile(page, 'plantuml-p0723-tpl')).toContain('Spi_Driver');
     // 当たらなかった図も無傷
     expect(await readFile(page, 'P0723_adc')).toBe(FILES.P0723_adc);
   });

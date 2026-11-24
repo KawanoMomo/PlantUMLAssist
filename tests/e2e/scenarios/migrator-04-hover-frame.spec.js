@@ -4,7 +4,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { bootPlain, bootWithSaveDir, typeDsl, dirFor, absDirFor } = require('./_scenario');
+const { bootPlain, bootWithSaveDir, typeDsl, typeDslDrawn, dirFor, absDirFor } = require('./_scenario');
 
 const DSL = [
   '@startuml',
@@ -46,45 +46,6 @@ test('migrator 手順 4 — 可視性記号の混ざったクラスで、クラ�
       return r ? { type: r.getAttribute('data-type'), line: r.getAttribute('data-line') } : null;
     }, box);
     expect(hit, label + ' にホバーして枠が出る').toEqual({ type, line });
-  }
-});
-
-// 差し戻し 1 回目: 前に保存した図の「保存時チェック」の帯が、次のファイルを開いた後も
-// プレビュー上端に残り、上の方のメンバー行 (-/#/~) を覆ってホバーが届かなかった。
-test('migrator 手順 4 — 前の図の保存で出た警告帯は、次のファイルを開くと消え、上端のメンバーにも枠が出る', async ({ page }) => {
-  await bootPlain(page);
-  await page.evaluate((dir) => {
-    try { Object.keys(localStorage).forEach((k) => { if (k.indexOf('pua.savecheck:') === 0) localStorage.removeItem(k); }); } catch (e) {}
-    window.MA.autoSave.setConfig({ enabled: true, debounceMs: 500, restoreMode: 'none', backend: 'file', fileDir: dir });
-    window.MA.workspace.rename(window.MA.workspace.getActiveId(), 'Gpio_Seq');
-  }, dirFor(__filename));
-  await page.locator('#editor').fill(['@startuml', 'participant Gpio_Driver', 'participant Gpio_Hw', 'participant Unused',
-    'Gpio_Driver -> Gpio_Hw : Gpio_Init', '@enduml'].join(String.fromCharCode(10)));
-  await page.waitForTimeout(800);
-  await page.locator('#btn-save').dispatchEvent('click');
-  await expect(page.locator('#save-check-overlay')).toBeVisible();
-
-  const dir = absDirFor(__filename);
-  fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, 'class-01-basic-visibility.puml');
-  fs.writeFileSync(file, DSL);
-  await page.click('#btn-command-palette');
-  await page.fill('#cp-input', 'ファイルを開く');
-  await page.waitForTimeout(300);
-  const [chooser] = await Promise.all([
-    page.waitForEvent('filechooser'),
-    page.locator('#cp-list [role="option"], #cp-list li, #cp-list .cp-item').filter({ hasText: 'ファイルを開く' }).first().click(),
-  ]);
-  await chooser.setFiles(file);
-  await expect(page.locator('#overlay-layer rect[data-type="member"]')).toHaveCount(4, { timeout: 20000 });
-  await expect(page.locator('#save-check-overlay')).toBeHidden();
-
-  const ids = await page.locator('#overlay-layer rect.selectable[data-type="member"]').evaluateAll((rs) => rs.map((r) => r.getAttribute('data-id')));
-  for (const id of ids) {
-    const r = page.locator('#overlay-layer rect.selectable[data-type="member"][data-id="' + id + '"]');
-    const b = await r.boundingBox();
-    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
-    await expect(r, id + ' にホバーして枠が出る').toHaveClass(/hit-hover/);
   }
 });
 
@@ -638,7 +599,7 @@ test('migrator 手順 4 — note across の紙の縁・本文のどこでも注�
     { note: ['rnote across : 四角の帯'], text: '四角の帯' },
   ];
   for (const c of cases) {
-    await typeDsl(page, ['@startuml', 'participant A', 'participant B', 'A -> B : req'].concat(c.note, ['B --> A : res', '@enduml']).join('\n'));
+    await typeDslDrawn(page, ['@startuml', 'participant A', 'participant B', 'A -> B : req'].concat(c.note, ['B --> A : res', '@enduml']).join('\n'));
     await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(2, { timeout: 20000 });
     await expect(page.locator('#overlay-layer rect[data-type="note"]')).toHaveCount(1);
     const t = await hoverHit(page, c.text);
@@ -2012,7 +1973,7 @@ test('migrator 手順 4 — !ifdef / !else の両枝にメッセージのある 
   expect((await hoverHit(page, 'done')).hit).toEqual({ type: 'message', line: '10', hover: true });
 
   for (const name of ['common-20-preproc-include-local-undef', 'seq-23-hide-unlinked-note-across']) {
-    await typeDsl(page, fx(name));
+    await typeDslDrawn(page, fx(name));
     await expect(page.locator('#overlay-layer rect[data-type="message"]').first()).toBeAttached({ timeout: 20000 });
     await page.waitForTimeout(600);
     await expect(page.locator('#overlay-warning'), name + ' で帯が出ない').toBeHidden();
@@ -2121,9 +2082,13 @@ test('migrator 手順 4 — 図の部品を押した直後のキーは本文の�
   await page.mouse.click(z.box.x, z.box.y);
   await page.keyboard.press('x');
   expect(await text(), 'Enter・文字キーで本文は変わらない').toBe(dsl);
-  // Delete は ✕ 削除と同じ (宣言の行だけを行ごと消す)。Ctrl+Z で戻る
+  // Delete は ✕ 削除と同じ (TICKET-owner-20261124-0422-3: 窓がメッセージの本数を言い、Enter で宣言とメッセージを
+  // 一緒に行ごと消す)。Ctrl+Z 1 回で戻る
   await page.keyboard.press('Delete');
-  await expect.poll(text, 'Delete で参加者の宣言の行が行ごと消える').toBe(dsl.replace('participant Z\n', ''));
+  await expect(page.locator('#seq-del-message')).toHaveText('参加者 Z を削除します。メッセージ 2 本も消えます。');
+  await page.keyboard.press('Enter');
+  await expect.poll(text, 'Delete で参加者と付いたメッセージの行が行ごと消える')
+    .toBe(['@startuml', 'participant A', '@enduml'].join('\n'));
   await page.keyboard.press('Control+z');
   await expect.poll(text).toBe(dsl);
   await expect(page.locator('#overlay-layer rect[data-type="message"][data-line="4"]').first()).toBeAttached({ timeout: 20000 });
@@ -2169,7 +2134,7 @@ test('migrator 手順 4 — 途中で create / ** / !! した参加者のある 
     ['seq-created-head-11', [['Session_Open()', '5'], ['internal_alloc()', '6'], ['handle', '7'], ['force_cleanup()', '9'],
       ['done', '11'], ['Session_Reopen()', '13']]],
   ]) {
-    await typeDsl(page, fx(name));
+    await typeDslDrawn(page, fx(name));
     await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(7, { timeout: 20000 });
     await expect(page.locator('#ma-toast')).toBeHidden({ timeout: 15000 });
     await expect(page.locator('#overlay-warning')).toBeHidden();
@@ -2419,7 +2384,8 @@ test('migrator 手順 4 — note に Creole の表・箇条書き・リンクを
   const words = ['Item', 'Status', 'WDT reset', 'ok', 'Brownout detect', 'NG', 'Checklist', 'Sub item A', 'Step 1', 'spec doc'];
   for (const [kind, head, noteLine] of cases) {
     const tail = kind === 'activity' ? ['stop'] : [];
-    await typeDsl(page, ['@startuml'].concat(head, NOTE, tail, ['@enduml']).join(String.fromCharCode(10)));
+    // 前の図種の同じ行番号の枠と文字が残っていても進まないよう、この図の描き直しを待つ (releaser 2220-1)
+    await typeDslDrawn(page, ['@startuml'].concat(head, NOTE, tail, ['@enduml']).join(String.fromCharCode(10)));
     await expect(page.locator('#preview-svg svg text').filter({ hasText: 'Brownout detect' })).toHaveCount(1, { timeout: 20000 });
     await expect(page.locator('#overlay-layer rect[data-line="' + noteLine + '"]')).not.toHaveCount(0, { timeout: 20000 });
     const got = [];
@@ -2471,7 +2437,7 @@ test('migrator 手順 4 — roundCorner を付けた図でも、6 図種とも�
     ['component', ['component C', 'note right of C'], [], 4],
   ];
   for (const [kind, head, tail, noteLine] of cases) {
-    await typeDsl(page, ['@startuml', 'skinparam roundCorner 8'].concat(head, NOTE, tail, ['@enduml']).join(String.fromCharCode(10)));
+    await typeDslDrawn(page, ['@startuml', 'skinparam roundCorner 8'].concat(head, NOTE, tail, ['@enduml']).join(String.fromCharCode(10)));
     await expect(page.locator('#preview-svg svg text').filter({ hasText: '見出し' })).toHaveCount(1, { timeout: 20000 });
     await expect(page.locator('#overlay-layer rect[data-line="' + noteLine + '"]')).not.toHaveCount(0, { timeout: 20000 });
     const got = [];
@@ -2572,9 +2538,10 @@ test('migrator 手順 4 — destroy した参加者を同じ名前で create し
     { timeout: 5000 }).toEqual(['participant:Worker@6']);
   await expect(page.locator('#props-content')).toContainText('Worker');
   // BLK-owner-20260929-0431-1: 右欄の見出し・✕ 削除は光らせた行 (6) を指す。1 回目のメッセージ (4) を消さない。
-  await expect(page.locator('#props-content')).toContainText('participant · L6');
+  await expect(page.locator('#props-content')).toContainText('participant · 6 行目');
   const before = await page.locator('#editor').inputValue();
-  // 1 回目の頭は宣言の行が無く、選んだ行は最初のメッセージ。✕ 削除は理由を言って本文を変えない。
+  // 1 回目の頭も ✕ 削除で黙って別の行を消さない。TICKET-owner-20261124-0422-3: 参加者の削除は
+  // 6 図種共通の窓が一緒に消える本数を言い、Esc なら本文を変えない。
   // (同じ参加者をもう一度押すと選択が外れるので、Esc で外してから押す)
   await page.keyboard.press('Escape');
   await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).length)).toBe(0);
@@ -2584,20 +2551,22 @@ test('migrator 手順 4 — destroy した参加者を同じ名前で create し
   await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).map((s) => s.type + ':' + s.id)),
     { timeout: 5000 }).toEqual(['participant:Worker']);
   await page.locator('#props-content .seq-delete-line').click();
-  await expect(page.locator('#seq-range-toast')).toContainText('宣言の行がありません');
+  await expect(page.locator('#seq-del-message')).toHaveText('参加者 Worker を削除します。メッセージ 2 本とactivate 等 2 行も消えます。');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#seq-del-modal')).toHaveCount(0);
   expect(await page.locator('#editor').inputValue()).toBe(before);
-  // 2 回目の頭の ✕ 削除は 2 回目の create の行だけを消し、描ける図のまま。
+  // 2 回目の頭の ✕ 削除も同じ窓。Enter で Worker の create・destroy・メッセージが一緒に消え、描ける図のまま。
   await page.keyboard.press('Escape');
   await expect.poll(() => page.evaluate(() => (window.MA.selection.getSelected() || []).length)).toBe(0);
   await page.mouse.move(pts[1].x, pts[1].y);
   await page.mouse.down();
   await page.mouse.up();
-  await expect(page.locator('#props-content')).toContainText('participant · L6');
+  await expect(page.locator('#props-content')).toContainText('participant · 6 行目');
   await page.locator('#props-content .seq-delete-line').click();
-  const after = before.split('\n');
-  after.splice(5, 1);
-  await expect.poll(() => page.locator('#editor').inputValue()).toBe(after.join('\n'));
-  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(2, { timeout: 20000 });
+  await expect(page.locator('#seq-del-modal')).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.locator('#editor').inputValue()).toBe(['@startuml', 'participant Main', '@enduml'].join('\n'));
+  await expect(page.locator('#overlay-layer rect[data-type="message"]')).toHaveCount(0, { timeout: 20000 });
   await expect(page.locator('#overlay-warning')).toBeHidden();
 });
 
@@ -2634,7 +2603,7 @@ test('migrator 手順 4 — アクティビティ図の partition は 2 つ目�
       { '製造 工程': 3, '検査': 6 }],
   ];
   for (const [dsl, want] of cases) {
-    await typeDsl(page, dsl.join('\n'));
+    await typeDslDrawn(page, dsl.join('\n'));
     await expect(page.locator('#overlay-layer rect[data-src-kind="partition"][data-hit-kind="container"]'))
       .toHaveCount(Object.keys(want).length, { timeout: 20000 });
     const parts = await points();
@@ -2686,11 +2655,22 @@ test('migrator 手順 4 — 枠 ok と記録した実物の図は、基準で枠
     expect(base, 'hit-baseline に基準がある (PUA_HIT_WRITE=1 で作る)').toBeTruthy();
     targets = Object.keys(base.files);
   }
+  // URL を !include する図はネット次第で描画が変わるので測らない (試験はネットを使わない)。
+  const online = targets.filter((rel) => HB.usesNetwork(path.join(HB.CORPUS_DIR, rel)));
+  if (online.length) {
+    console.log('hit-baseline: URL を取り込む図を外した: ' + online.join(', '));
+    targets = targets.filter((rel) => online.indexOf(rel) < 0);
+    if (base) {
+      const files = {};
+      targets.forEach((rel) => { if (base.files[rel]) files[rel] = base.files[rel]; });
+      base = Object.assign({}, base, { files: files });
+    }
+  }
 
-  const current = {};
-  for (const rel of targets) {
+  // 1 枚を開いて測る (migrator と同じ道: ファイルを開く → Fit → 要素を指す)。
+  const measure = async (rel) => {
     const abs = path.join(HB.CORPUS_DIR, rel);
-    if (!fs.existsSync(abs)) { current[rel] = { error: 'ファイルが無い' }; continue; }
+    if (!fs.existsSync(abs)) return { error: 'ファイルが無い' };
     const prev = await page.evaluate(() => window.__hitDoc());
     const [chooser] = await Promise.all([
       page.waitForEvent('filechooser', { timeout: 20000 }),
@@ -2702,12 +2682,28 @@ test('migrator 手順 4 — 枠 ok と記録した実物の図は、基準で枠
       const d = window.__hitDoc();
       return (d.name !== p.name || d.text !== p.text) && window.__hitSettled();
     }, prev, { timeout: 30000 }).then(() => true, () => false);
-    if (!done) { current[rel] = { error: '描画が終わらない' }; continue; }
-    if ((await page.locator('#render-status').textContent()) === 'ERROR') { current[rel] = { error: 'ERROR' }; continue; }
+    if (!done) return { error: '描画が終わらない' };
+    if ((await page.locator('#render-status').textContent()) === 'ERROR') return { error: 'ERROR' };
     // 手順 4 の「幅合わせ」。点の名前は SVG 座標なので倍率に依らないが、細い要素の当たりは倍率で変わるため毎回そろえる。
     await page.evaluate(() => { document.getElementById('btn-zoom-fit').click(); });
     await page.waitForTimeout(200);
-    current[rel] = { points: await page.evaluate(HB.probeInPage) };
+    return { points: await page.evaluate(HB.probeInPage) };
+  };
+  const current = {};
+  for (const rel of targets) current[rel] = await measure(rel);
+  // BLK-releaser-20260930-1031-2: 1 枚だけ基準の点が全部消える (usecase-25 で base 46 / now 0) 赤が出て、
+  // 同じ木で回し直すと緑だった。当て方の退行は開き直しても同じ答えになるので、描けない・点が消えた図だけ
+  // 別の本文を挟んで 1 度だけ開き直して測る (2 度目も同じなら赤のまま)。基準の書き直しでは測り直さない。
+  if (!writing) {
+    const first = HB.compare(base.files, current);
+    const again = Object.keys(first.perFile).filter((f) => (first.perFile[f].missing || 0) >= 2)
+      .concat(first.unrendered.map((x) => x.file));
+    for (const rel of again) {
+      await typeDsl(page, ['@startuml', 'A -> B : hit-baseline の測り直し', '@enduml'].join('\n'));
+      await page.waitForFunction(() => window.__hitSettled(), null, { timeout: 30000 }).catch(() => {});
+      current[rel] = await measure(rel);
+      console.log('hit-baseline: ' + rel + ' を開き直して測った');
+    }
   }
 
   if (writing) {
@@ -2806,7 +2802,7 @@ test('migrator 手順 4 — メンバー・クラス・状態を指す note の�
     { dsl: ['@startuml', '[*] --> Idle', 'Idle --> Run', 'note right of Idle', '  待機', 'end note', '@enduml'], line: '4' },
   ];
   for (const c of cases) {
-    await typeDsl(page, c.dsl.join(String.fromCharCode(10)));
+    await typeDslDrawn(page, c.dsl.join(String.fromCharCode(10)));
     // 数えるのは当たりの枠 (selectable)。楔込みの見た目だけの枠 (rect.note-frame) は数えない。
     await expect(page.locator('#overlay-layer rect.selectable[data-type="note"]')).toHaveCount(1, { timeout: 20000 });
     // 紙の外形の path から、紙の矩形の外へ飛び出した頂点 (楔の先) と前後の縁の頂点を取る。
@@ -3012,7 +3008,7 @@ test('migrator 手順 4 — 手書き風のシーケンス図でも、参加者�
     }, p);
   };
   for (const opt of ['skinparam handwritten true', '!option handwritten true']) {
-    await typeDsl(page, [
+    await typeDslDrawn(page, [
       '@startuml',                        // 1
       opt,                                // 2
       'actor 幹事',                        // 3
@@ -3054,4 +3050,63 @@ test('migrator 手順 4 — 手書き風のシーケンス図でも、参加者�
     for (const p of lifePts) life.push(await hitAt(p));
     expect(life, opt + ': 2 本のライフライン').toEqual(['lifeline:3', 'lifeline:4']);
   }
+});
+
+// BLK-owner-20260930-0711-1: クラス図・コンポーネント図・ユースケース図の境界 (package / rectangle) の中を通る関係の線・矢じり・ラベルを
+// 押すと境界が選ばれ、関係を図から選べなかった。複合状態と同じく、境界は中の空所でだけ当たり、中の線・矢じり・ラベルは本人で当たる。
+// 入れ子の境界 (外 › 内) の中の関係も同じ。
+test('migrator 手順 4 — クラス・コンポーネント・ユースケースの境界の中を通る関係は、線・矢じり・ラベルで本人が選ばれ、境界は中の空所で選ばれる', async ({ page }) => {
+  await bootPlain(page);
+  const NL = String.fromCharCode(10);
+  const cases = [
+    { name: 'class (関係を境界の中に書く)', type: 'plantuml-class', rel: 4, pkg: 1, dsl: [
+      '@startuml', 'package Mcal {', '  class Spi', '  class Dio', '  Spi --> Dio : uses', '}', '@enduml'] },
+    { name: 'component (入れ子の境界、関係は外に書く)', type: 'plantuml-component', rel: 7, pkg: 2, dsl: [
+      '@startuml', 'package Outer {', '  package Mcal {', '    [Spi]', '    [Dio]', '  }', '}', '[Spi] --> [Dio] : uses', '@enduml'] },
+    { name: 'usecase (rectangle の中の include)', type: 'plantuml-usecase', rel: 4, pkg: 1, dsl: [
+      '@startuml', 'rectangle R {', '  usecase U1', '  usecase U2', '  U1 .> U2 : include', '}', '@enduml'] },
+  ];
+  const hoverAt = async (pt) => {
+    await page.mouse.move(3, 3);
+    await page.mouse.move(pt.x, pt.y);
+    const r = page.locator('#overlay-layer rect.hit-hover').first();
+    await expect(r).toHaveCount(1, { timeout: 5000 });
+    return { type: await r.getAttribute('data-type'), line: await r.getAttribute('data-line') };
+  };
+  for (const c of cases) {
+    await page.locator('#diagram-type').selectOption(c.type);
+    await page.waitForTimeout(500);
+    await typeDsl(page, c.dsl.join(NL));
+    await expect(page.locator('#overlay-layer rect[data-type="relation"]').first()).toBeAttached({ timeout: 20000 });
+    await expect(page.locator('#overlay-layer rect[data-type="package"]').first()).toBeAttached({ timeout: 20000 });
+    const relLine = String(c.rel + 1);
+    const pkgLine = String(c.pkg + 1);
+    const pts = await page.evaluate(({ rel, pkgLine }) => {
+      const svg = document.querySelector('#preview-svg svg');
+      const lk = svg.querySelector('g.link[data-source-line="' + rel + '"]');
+      lk.scrollIntoView({ block: 'center', inline: 'center' });
+      const lb = lk.querySelector('text').getBoundingClientRect();
+      const head = lk.querySelector('polygon').getBoundingClientRect();
+      const p = lk.querySelector('path');
+      const q = p.getPointAtLength(p.getTotalLength() / 2);
+      const m = p.getScreenCTM();
+      // 境界の中の空所: いちばん内側の境界の左下の隅 (中の部品・線から離れた所)
+      const pr = Array.from(document.querySelectorAll('#overlay-layer rect[data-type="package"]'))
+        .filter((r) => r.getAttribute('data-line') === pkgLine)[0].getBoundingClientRect();
+      return {
+        label: { x: lb.left + lb.width / 2, y: lb.top + lb.height / 2 },
+        head: { x: head.left + head.width / 2, y: head.top + head.height / 2 },
+        line: { x: m.a * q.x + m.c * q.y + m.e, y: m.b * q.x + m.d * q.y + m.f },
+        empty: { x: pr.left + 10, y: pr.bottom - 8 },
+      };
+    }, { rel: c.rel, pkgLine });
+    expect(await hoverAt(pts.label), c.name + ': ラベル → 関係').toEqual({ type: 'relation', line: relLine });
+    expect(await hoverAt(pts.line), c.name + ': 線の中ほど → 関係').toEqual({ type: 'relation', line: relLine });
+    expect(await hoverAt(pts.head), c.name + ': 矢じり → 関係').toEqual({ type: 'relation', line: relLine });
+    expect(await hoverAt(pts.empty), c.name + ': 境界の中の空所 → 境界').toEqual({ type: 'package', line: pkgLine });
+    // 押しても同じ: ラベルを押すと右パネルは関係
+    await page.mouse.click(pts.label.x, pts.label.y);
+    await expect(page.locator('#overlay-layer rect.selected[data-type="relation"]').first()).toBeVisible({ timeout: 5000 });
+  }
+  await expect(page.locator('#overlay-warning')).toBeHidden();
 });

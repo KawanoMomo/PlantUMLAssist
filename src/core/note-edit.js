@@ -3,7 +3,7 @@ window.MA = window.MA || {};
 
 // note-edit — 置いた注釈の「位置・対象・上下の順」を GUI から変えるための純関数。
 //
-// BLK-human-20260916-0900: note を置いたあとプレビューで選んでも、文章しか直せず
+// note を置いたあとプレビューで選んでも、文章しか直せず
 // 場所 (left of / right of / over と対象参加者) を動かせなかった。複数行の
 // `note ... end note`・`hnote`/`rnote`・色付き note はシーケンス図のパーサが
 // 拾っておらず、選ぶことすらできなかった。
@@ -16,11 +16,11 @@ window.MA.noteEdit = (function() {
   // `note|hnote|rnote  位置  対象[, 対象]  [#色]  [: 本文]`
   var SEQ_HEAD_RE = /^(note|hnote|rnote)\s+(left of|right of|over)\s+(.+?)\s*(#[0-9A-Za-z]+)?\s*(?::\s*(.*))?$/i;
   var SEQ_END_RE = /^end\s*(note|hnote|rnote)\s*$/i;
-  // BLK-migrator-20260923-1409: 直前のメッセージに付ける注釈 (`note right` / `note left : 本文`)。
+  // 直前のメッセージに付ける注釈 (`note right` / `note left : 本文`)。
   // 対象の参加者を書かない。実物の図 (AWS の構成図など) はこの形を多く使い、読めないと
   // 注釈の枠が出ない。`left of X` とは `of` の有無で見分ける。
   var SEQ_ATTACHED_RE = /^(note|hnote|rnote)\s+(left|right)\s*(#[0-9A-Za-z]+)?\s*(?::\s*(.*))?$/i;
-  // BLK-migrator-20260929-0459: 全参加者にまたがる注釈 (`note across : 本文` / `hnote across #色` … `end note`)。
+  // 全参加者にまたがる注釈 (`note across : 本文` / `hnote across #色` … `end note`)。
   // 対象の参加者を書かない。読めないと注釈の要素が作られず、描かれた紙に枠が出なかった。
   // 位置 `across` は読んだまま保ち、本文・色を直しても書き換えない (位置の選択肢には足さない)。
   var SEQ_ACROSS_RE = /^(note|hnote|rnote)\s+across\b\s*(#[0-9A-Za-z]+)?\s*(?::\s*(.*))?$/i;

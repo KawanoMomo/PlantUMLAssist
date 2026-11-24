@@ -42,15 +42,10 @@ describe('並べる入口は「レビュー」に別項目として並ばない'
     expect(ids).not.toContain('dp-review');
   });
 
-  test('覗く・基準の図の指摘は残るが、呼び名から「見比べる」が外れる', function() {
-    // BLK-owner-20260924-1836-prune: 覗く窓の入口は FILES「読むだけ」の右クリックへ移し、ツール ▾ からは案内 1 行に落とした。
-    expect(TM.labelOf('btn-tab-peek')).toBe('このフォルダの図を調べる…');
-    expect(TM.labelOf('btn-tab-review')).toBe('基準の図との指摘');
-    ['btn-tab-peek', 'btn-tab-review'].forEach(function(id) {
-      expect(/見比べる/.test(TM.labelOf(id))).toBe(false);
-      // タブ列のボタンなので、今まで通り畳める (入口が消えてはいない)。
-      expect(TM.isFoldable(id)).toBe(true);
-    });
+  test('覗く窓・基準の図の指摘はメニューに無い', function() {
+    // 覗く窓 (btn-tab-peek) と基準の図の指摘 (btn-tab-review) は TICKET-owner-20261115-2141-prune で外した。
+    expect(TM.labelOf('btn-tab-peek')).toBe(null);
+    expect(TM.labelOf('btn-tab-review')).toBe(null);
   });
 
   test('「レビュー」に「見比べる / 並べて見る」を名乗る項目は残らない', function() {
@@ -65,10 +60,6 @@ describe('メニューに載らない id は、畳む数にも入らない', fun
   test('メニューから外れた入口は menuIds に出ない', function() {
     expect(TM.menuIds().indexOf('dp-review')).toBe(-1);
     expect(TM.menuIds().indexOf('btn-tab-compare')).toBe(-1);
-  });
-
-  test('モーダルの中のものは畳む対象に数えない', function() {
-    expect(TM.isFoldable('dp-review')).toBe(false);
   });
 
   test('知らない id は opener を連れていない', function() {

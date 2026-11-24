@@ -40,7 +40,7 @@ describe('save-diff — 保存フォルダへ直接書いた図の基準', () =>
     expect(SD.markIfAbsent('', BEFORE)).toBe(null);
   });
 
-  test('countBetween: 外から渡した基準と比べられる (書き込み履歴の回を基準にする)', () => {
+  test('countBetween: 外から渡した基準と比べられる', () => {
     expect(SD.countBetween(BEFORE, AFTER)).toEqual({ added: 1, removed: 1 });
     expect(SD.countBetween(BEFORE, BEFORE)).toEqual({ added: 0, removed: 0 });
     // 基準が無いときは全行が追加 (従来の changedLines と同じ答えにする)。

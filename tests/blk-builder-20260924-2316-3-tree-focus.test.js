@@ -88,11 +88,10 @@ describe('行の目印 (design 10b)', function() {
 });
 
 describe('描き直してもフォーカスを同じ行に戻す (design 10b)', function() {
-  test('部品のフォルダの図: 押した行が作り直されても、新しい同じ行にフォーカスがある', function() {
+  test('保存先の図: 押した行が作り直されても、新しい同じ行にフォーカスがある', function() {
     var W = boot();
     try {
       var d = W.document;
-      d.querySelector('#files-parts .files-part-head').click();   // SPI を開く
       var old = d.querySelector('#files-parts .files-part-file[data-file-name="spi_class"]');
       old.focus();
       expect(d.activeElement).toBe(old);
@@ -116,7 +115,7 @@ describe('描き直してもフォーカスを同じ行に戻す (design 10b)', 
     } finally { restore(); }
   });
 
-  test('読むだけのフォルダの図: 比較中が変わって描き直されても同じ図の行にフォーカスがある', function() {
+  test('読むだけのフォルダの図: フォルダの図の数が変わって描き直されても同じ図の行にフォーカスがある', function() {
     var W = boot();
     try {
       var d = W.document;
@@ -124,13 +123,14 @@ describe('描き直してもフォーカスを同じ行に戻す (design 10b)', 
         { name: 'junior', path: 'D:/pd/junior', files: 3, current: true },
         { name: 'senior', path: 'D:/pd/senior', files: 2, current: false },
       ];
-      W.compareReadonlyFolder = function() {};
+      var DIRS2 = [DIRS[0], { name: 'senior', path: 'D:/pd/senior', files: 3, current: false }];
+      W.showReadonlyFile = function() {};
       W.MA.filesPanel.setSec('readonly', true);   // 読むだけの節は既定で畳んである
-      W.MA.filesPanel.renderReadonly(DIRS, '');
+      W.MA.filesPanel.renderReadonly(DIRS);
       d.querySelector('#files-ro-list .files-ro-folder[data-ro-name="senior"]').click();
       var old = d.querySelector('.files-ro-file[data-file-name="spi_state"]');
       old.focus();
-      W.MA.filesPanel.renderReadonly(DIRS, 'D:/pd/senior');
+      W.MA.filesPanel.renderReadonly(DIRS2);
       var now = d.querySelector('.files-ro-file[data-file-name="spi_state"]');
       expect(now).not.toBe(old);
       expect(d.activeElement).toBe(now);
@@ -141,7 +141,7 @@ describe('描き直してもフォーカスを同じ行に戻す (design 10b)', 
     var W = boot();
     try {
       var d = W.document;
-      d.querySelector('#files-parts .files-part-head').click();
+      d.querySelector('#files-parts .files-part-file[data-file-name="spi_state"]').focus();
       var input = d.getElementById('outside');
       input.focus();
       W.MA.filesPanel.refresh();
@@ -149,14 +149,13 @@ describe('描き直してもフォーカスを同じ行に戻す (design 10b)', 
     } finally { restore(); }
   });
 
-  test('畳んだ部品の中の行には戻さない (見えない行にフォーカスを置かない)', function() {
+  // 部品のフォルダ (畳める見出し) は TICKET-owner-20261116-0321-prune で外した。保存先の行ごと畳んだときも戻さない。
+  test('畳んだ保存先の中の行には戻さない (見えない行にフォーカスを置かない)', function() {
     var W = boot();
     try {
       var d = W.document;
-      var head = d.querySelector('#files-parts .files-part-head');
-      head.click();   // 開く
       d.querySelector('#files-parts .files-part-file[data-file-name="spi_state"]').focus();
-      head.click();   // 畳む (覚えた開閉で描き直すと畳んだまま)
+      W.MA.filesPanel.setTargetParts(false);   // 保存先の下を畳む
       W.MA.filesPanel.renderParts();
       expect(d.activeElement.classList.contains('files-part-file')).toBe(false);
     } finally { restore(); }

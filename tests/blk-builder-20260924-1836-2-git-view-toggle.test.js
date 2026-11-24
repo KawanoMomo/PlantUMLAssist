@@ -1,21 +1,21 @@
 'use strict';
 // BLK-builder-20260924-1836-2 (design 10c): コミットと並べている比較の枠の見出しは
-// 「差分だけ / 並べて比較」の 2 択 (据え置く / 1 回だけ と同じ形)。既定は並べて比較。
+// 「差分だけ / 全体」の 2 択 (据え置く / 1 回だけ と同じ形)。既定は全体。
 var fs = require('fs');
 var path = require('path');
 var ROOT = path.join(__dirname, '..');
 var html = fs.readFileSync(path.join(ROOT, 'plantuml-assist.html'), 'utf-8');
 var app = fs.readFileSync(path.join(ROOT, 'src', 'app.js'), 'utf-8');
 
-describe('差分だけ / 並べて比較 (plantuml-assist.html)', function() {
+describe('差分だけ / 全体 (plantuml-assist.html)', function() {
   var m = /<span id="senior-git-view"[^>]*>([\s\S]*?)<\/span>/.exec(html);
-  test('2 つの押しボタンが 1 つの組に並ぶ (差分だけ → 並べて比較)', function() {
+  test('2 つの押しボタンが 1 つの組に並ぶ (差分だけ → 全体)', function() {
     expect(!!m).toBe(true);
     var labels = [];
     m[1].replace(/<button[^>]*>([^<]*)<\/button>/g, function(_, t) { labels.push(t); return _; });
-    expect(labels).toEqual(['差分だけ', '並べて比較']);
+    expect(labels).toEqual(['差分だけ', '全体']);
   });
-  test('既定は並べて比較が押されている', function() {
+  test('既定は全体が押されている', function() {
     expect(/id="senior-git-sbs"[^>]*aria-pressed="true"/.test(m[1])).toBe(true);
     expect(/id="senior-git-diffonly"[^>]*aria-pressed="false"/.test(m[1])).toBe(true);
   });

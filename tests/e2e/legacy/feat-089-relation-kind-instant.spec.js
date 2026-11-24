@@ -8,22 +8,29 @@
 // 併せて即時反映の履歴 1 step 性 ([AC-2]) を実機で判定する。
 // LOOP-437: AC タグは本ファイル内で一意。状態変化の主張は操作前の値との差を必ずアサートする。
 const { test, expect } = require('@playwright/test');
-const { gotoApp, getEditorText } = require('../helpers');
+const { gotoApp, getEditorText, switchTypeWithSample } = require('../helpers');
 
 async function selectFirstRelation(page) {
   await gotoApp(page);
-  await page.locator('#diagram-type').selectOption('plantuml-component');
-  await page.waitForTimeout(2500);
+  // アプリは前回の図を開き直すので、component の見本 (WebApp -() IAuth) を置き、描画と選択枠を待つ。
+  await switchTypeWithSample(page, 'plantuml-component');
   var relRect = page.locator('#overlay-layer rect[data-type="relation"]').first();
+  // 見本の前に開いていた図の枠が残っている間は押さない。関係の枠が張られ、プレビューの
+  // 拡大率の合わせ込み (Fit) が落ち着くまで待つ。
+  await relRect.waitFor({ state: 'attached', timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(800);
   if (await relRect.count() === 0) return false;
-  await relRect.click();
+  // 関係の線は細い当たり (path.link-hit、同じ関係の data-id) が枠の rect より手前にあるので、
+  // 実マウスで枠の真ん中を押す (rect への locator.click は手前の当たりに遮られて待ち続ける)。
+  var relBox = await relRect.boundingBox();
+  await page.mouse.click(relBox.x + relBox.width / 2, relBox.y + relBox.height / 2);
   await page.waitForTimeout(300);
   return (await page.locator('.co-rel-card').count()) > 0;
 }
 
 test.describe('FEAT-089: relation の種別は選んだ時点で確定する', () => {
   test('[AC-1] 種別カードを押すと「変更を反映」を押さずに DSL の矢印記法が変わる', async ({ page }) => {
-    if (!await selectFirstRelation(page)) test.skip();
+    expect(await selectFirstRelation(page), '関係を押すと種別カードが出る').toBe(true);
     var before = await getEditorText(page);
     expect(before).toContain('-()');
     await page.locator('.co-rel-card[data-value="dependency"]').click();
@@ -34,7 +41,7 @@ test.describe('FEAT-089: relation の種別は選んだ時点で確定する', (
   });
 
   test('[AC-2] 即時反映は Ctrl+Z 1 回で元に戻る (履歴 1 step)', async ({ page }) => {
-    if (!await selectFirstRelation(page)) test.skip();
+    expect(await selectFirstRelation(page), '関係を押すと種別カードが出る').toBe(true);
     var before = await getEditorText(page);
     await page.locator('.co-rel-card[data-value="dependency"]').click();
     await page.waitForTimeout(800);
@@ -46,7 +53,7 @@ test.describe('FEAT-089: relation の種別は選んだ時点で確定する', (
   });
 
   test('[AC-3] 種別変更の直後に「変更を反映」を押しても種別が二重に適用されない', async ({ page }) => {
-    if (!await selectFirstRelation(page)) test.skip();
+    expect(await selectFirstRelation(page), '関係を押すと種別カードが出る').toBe(true);
     var before = await getEditorText(page);
     await page.locator('.co-rel-card[data-value="dependency"]').click();
     await page.waitForTimeout(800);

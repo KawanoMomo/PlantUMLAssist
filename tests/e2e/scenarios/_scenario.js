@@ -25,10 +25,12 @@ async function reopenApp(page) {
   await page.evaluate((k) => { try { window.localStorage.removeItem(k); } catch (e) {} }, KEEP_KEY);
 }
 
+// 台本の場面は利用者の初回と同じタブ列 (図のタブ・＋・ツール ▾) で開く (TICKET-owner-20261116-0340-1)。
+// タブ列の切り替え (畳む / 畳まない) は TICKET-owner-20261123-0222-prune で外したので、gotoApp はいつも既定で開く。
+const DEFAULT_TAB_BAR = {};
+
 // 保存先を設定済みにして開く (junior 手順 3・primary が毎回している状態)。
-// opts はそのまま gotoApp へ渡す。`{ foldedTools: true }` を渡すと helper が
-// 畳み方の設定に触らないので、アプリ自身の既定 (design 7a/7b) がそのまま出る
-// (仕様と現在値を突き合わせる手順 11 は、helper の都合を既定と読み違えてはいけない)。
+// opts は既定のタブ列の上に重ねて gotoApp へ渡す。
 async function bootWithSaveDir(page, dir, opts) {
   await page.addInitScript((d) => {
     try {
@@ -39,13 +41,13 @@ async function bootWithSaveDir(page, dir, opts) {
       }));
     } catch (e) {}
   }, dir);
-  await gotoApp(page, opts);
+  await gotoApp(page, Object.assign({}, DEFAULT_TAB_BAR, opts || {}));
 }
 
 // 保存先を未設定 (ダウンロード) のまま開く。
 async function bootPlain(page) {
   await page.addInitScript(() => { try { window.localStorage.clear(); } catch (e) {} });
-  await gotoApp(page);
+  await gotoApp(page, DEFAULT_TAB_BAR);
 }
 
 // 保存先をまだ決めていない状態 (= 保存するとダウンロードになる)。
@@ -60,7 +62,7 @@ async function bootDownloadMode(page, prevDir) {
       }));
     } catch (e) {}
   }, prevDir || './autosave');
-  await gotoApp(page);
+  await gotoApp(page, DEFAULT_TAB_BAR);
 }
 
 // 保存フォルダに図を置く / 読む / 消す (ペルソナの前周までの成果物に相当)。
@@ -137,47 +139,16 @@ async function openFolderItem(page, name, opts) {
   await page.waitForTimeout(900);
 }
 
-// BLK-owner-20260924-1836-prune: 隣の保存フォルダを覗く窓は、FILES「読むだけ」のそのフォルダの行の
-// 右クリック「このフォルダの図を調べる…」で、そのフォルダを開いた状態で出る (窓の中でフォルダを選ばない)。
-async function peekFolder(page, dirName) {
-  const head = page.locator('#files-sec-readonly');
-  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
-  const row = page.locator('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"]');
-  await row.waitFor();
-  await row.click({ button: 'right' });
-  await page.locator('#files-ctx-menu [data-action="peek"]').click();
-  await page.waitForSelector('#peek-modal');
-  await page.waitForFunction((n) => {
-    const b = document.getElementById('peek-dir-name');
-    return b && b.textContent === n;
-  }, dirName);
-}
-
-// FILES「読むだけ」のフォルダを右クリック →「並べて比較」で比較中にする (相手のフォルダを選ぶ道はこの 1 本。
-// BLK-owner-20260924-2135-prune)。参照ペインの増分の取り込みも、このフォルダを相手にする。
-async function compareFolder(page, dirName) {
-  const head = page.locator('#files-sec-readonly');
-  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
-  const row = page.locator('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"]');
-  await row.waitFor();
-  await row.click({ button: 'right' });
-  await page.locator('#files-ctx-menu [data-action="compare"]').click();
-  await page.waitForSelector('#files-panel .files-ro-folder[data-ro-name="' + dirName + '"][data-comparing="1"]');
-}
-
-// 一覧から開いた図は錠がかかっている。直す目的で開いたときは「このファイルを書き換える」を選ぶ。
-// 錠は最初の書き戻しの直前に一度だけ聞くので、1 文字足して問いを出してから答える。
+// 一覧から開いた図は、開いたときの本文のままの間は書き戻さない (読むだけの回)。直す目的で開いたときは
+// 1 行足して戻し、以後の書き戻しが本文に関わらずそのファイルへ入る状態にする (確認の窓は出ない)。
+// 開くのに使った中央の保存先の一覧は閉じて図に戻る (窓があった頃は、窓のボタンを押すと一覧が閉じていた)。
 async function overwriteOpenedFile(page) {
   const current = await page.locator('#editor').inputValue();
   await typeDsl(page, current + "\n' review");
   await page.waitForTimeout(900);
-  const modal = page.locator('#source-lock-modal');
-  if (await modal.isVisible().catch(() => false)) {
-    await page.locator('#source-lock-overwrite').click();
-    await page.waitForTimeout(1200);
-  }
   await typeDsl(page, current);
   await page.waitForTimeout(600);
+  await closeFolderList(page);
 }
 
 // エディタに DSL を流し込む (ペルソナが GUI で書き上げた状態の代わり)。
@@ -188,6 +159,19 @@ async function typeDsl(page, text) {
     ed.dispatchEvent(new Event('input'));
   }, text);
   await page.waitForTimeout(400);
+}
+
+// 本文を流し込み、その本文の図が描き直されるまで待つ (1 枚の画面で図を次々に替える試験用)。
+// 負荷が高いと 400ms では描き直しが届かず、前の図の文字・枠 (同じ行番号の枠) を新しい図のものと取り違えて
+// 前の図の note を押していた。前の SVG に印を付け、印の無い SVG が出るのを待つ (枠は同じ処理の中で作り直される)。
+// 描けない本文 (前の図が残る) と、前と同じ本文 (描き直さない) には使わない。
+async function typeDslDrawn(page, text, timeout = 20000) {
+  await page.evaluate(() => {
+    const s = document.querySelector('#preview-svg > svg');
+    if (s) s.setAttribute('data-test-prev', '1');
+  });
+  await typeDsl(page, text);
+  await page.waitForSelector('#preview-svg > svg:not([data-test-prev])', { state: 'attached', timeout });
 }
 
 async function renameActive(page, name) {
@@ -215,6 +199,27 @@ async function exportVia(page, itemId, timeout) {
   const dl = page.waitForEvent('download', { timeout: timeout || 20000 }).catch(() => null);
   await page.locator('#' + itemId).click();
   return dl;
+}
+
+// TICKET-primary-20261115-2240-wish: 保存先から開いた図の書き出しは、ダウンロードではなく保存先の中へ書かれる。
+// Export ▾ から 1 項目を選び、画面の下端に出た「書き出しました: 名前 → 置き場 · N バイト · 新規 / 上書き」を待って
+// { path, bytes, existed, msg } を返す (path はディスク上のファイル。中身はそこを読む)。download は来ない。
+async function exportToFolder(page, itemId, timeout) {
+  const st = page.locator('#status-save-result');
+  const before = Number((await st.getAttribute('data-export-seq')) || 0);
+  await page.locator('#btn-export').click();
+  await page.waitForSelector('#export-menu', { state: 'visible' });
+  await page.locator('#' + itemId).click();
+  await page.waitForFunction((n) => {
+    const el = document.getElementById('status-save-result');
+    return el && Number(el.getAttribute('data-export-seq') || 0) > n;
+  }, before, { timeout: timeout || 20000 });
+  return st.evaluate((el) => ({
+    path: el.getAttribute('data-export-path') || '',
+    bytes: Number(el.getAttribute('data-export-bytes') || 0),
+    existed: el.getAttribute('data-export-existed') === '1',
+    msg: el.getAttribute('data-full') || el.textContent || '',
+  }));
 }
 
 // ペルソナが毎周使っている GPIO の図 (junior/primary の persona-data の形をそのまま縮めたもの)。
@@ -381,7 +386,7 @@ module.exports = {
   PRIMARY_DOCS, docFor,
   dirFor, absDirFor, bootWithSaveDir, bootPlain, bootDownloadMode, reopenApp,
   putDoc, readDoc, listDir, clearDir, clearTickets,
-  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, peekFolder, compareFolder, typeDsl, renameActive, runCommand, exportVia,
+  openFolder, closeFolderList, openFolderItem, overwriteOpenedFile, typeDsl, typeDslDrawn, renameActive, runCommand, exportVia, exportToFolder,
   GPIO_STATE, GPIO_SEQ, IRQ_SEQ_FOLDED_DASH,
   messageClickPoints, selectedMessageLine, expectMessageHitUniform,
 };

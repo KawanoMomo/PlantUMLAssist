@@ -37,6 +37,7 @@ test.describe('UC-6: polish (要求 ID 命名見直し / renameWithRefs)', () =>
   });
 
   test.describe('γ: workflow completion', () => {
+    // 改名は「変更を反映」1 つで宣言と参照の行を書く (TICKET-owner-20261124-0422-1。別ボタンは外した)。
     test('renameWithRefs is single operation (one button click triggers it)', async ({ page }) => {
       await gotoApp(page);
       await switchTypeWithSample(page, 'plantuml-usecase');
@@ -53,11 +54,13 @@ test.describe('UC-6: polish (要求 ID 命名見直し / renameWithRefs)', () =>
         return;
       }
       await idField.fill('Admin');
-      await page.locator('#uc-rename-refs').click();
+      await expect(page.locator('#uc-edit-rename-refs')).toBeChecked();
+      await page.locator('#uc-edit-apply').click();
       await page.waitForTimeout(300);
       var t = await getEditorText(page);
-      expect(t).toContain('actor Admin');
+      expect(t).toMatch(/actor (?:"User" as )?Admin\b/);
       expect(t).toContain('Admin --> Login');
+      expect(t).not.toMatch(/^\s*User\s*-->/m);
     });
 
     test('rename preserves Undo (history.pushHistory called)', async ({ page }) => {

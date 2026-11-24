@@ -6,12 +6,12 @@ window.MA.modules.plantumlState = (function() {
   var RP = window.MA.regexParts;
   var DU = window.MA.dslUtils;
   var OB = window.MA.overlayBuilder;
-  // BLK-migrator-20260929-1155: PlantUML は状態の名前に日本語 (`待機` / `子A`) をそのまま書ける。
+  // PlantUML は状態の名前に日本語 (`待機` / `子A`) をそのまま書ける。
   // ASCII の識別子しか読まないと、日本語名の状態に繋がる遷移が 1 本も読めず、遷移の枠・状態欄の数が落ちていた。
   // シーケンス図の参加者 (sequence.js の MSG_RE_FROM) と同じく、U+0080 以降の文字も名前の文字として読む。
   var ID = '[A-Za-z_\\u0080-\\uFFFF][A-Za-z0-9_\\u0080-\\uFFFF]*';
 
-  // BLK-builder-20260907-1306-2 (design 5d): 状態行の色 (`state Foo #red`) を読む。
+  // 状態行の色 (`state Foo #red`) を読む。
   // 色はステレオタイプの後・`{` の前に置く (PlantUML の並び)。
   // 6 = 色 (`#` を除いた中身)、7 = composite の `{`。
   var STATE_RE = new RegExp(
@@ -28,25 +28,27 @@ window.MA.modules.plantumlState = (function() {
     return set;
   }
 
-  function normalizeIdInput(rawInput, parsed) {
-    return window.MA.idNormalizer.normalize(rawInput, _existingIdSet(parsed), 'S');
+  // text = 今の本文。追加フォームの parsedData は描き直しが届くまで古いので、
+  // 続けて足すと前に足した別名を数え損ねる (3 つとも `as S1` になる)。今の本文からも数える。
+  function normalizeIdInput(rawInput, parsed, text) {
+    return window.MA.idNormalizer.normalize(rawInput, _existingIdSet(parsed), 'S', text);
   }
 
-  // BLK-builder-20260907-1306-2 (design 5d): 遷移行の線の色 (`A -[#red]-> B`) を読む。
+  // 遷移行の線の色 (`A -[#red]-> B`) を読む。
   // 1 = from、2 = 矢印 (色は _trColor で読む)、3 = to、4 = ラベル。
-  // BLK-migrator-20260923-2312: 実物の図は `->` / `--->` / `-up->` / `-[#red,dashed]->` や、
+  // 実物の図は `->` / `--->` / `-up->` / `-[#red,dashed]->` や、
   // 行き先に `<<exitPoint>>` を添えた書き方も使う。どれも同じ 1 本の遷移として読む。
   // 矢印 = 線 1 本以上 + 向き (up/down/left/right とその略) + 色・線種の [] + 矢じり。矢印を丸ごと 2 番に取り、色はそこから読む。
-  // BLK-migrator-20260929-2003: 書式 `[…]` の読みは regex-parts の ARROW_STYLE 1 か所 (sequence・class 系と同じ)。
+  // 書式 `[…]` の読みは regex-parts の ARROW_STYLE 1 か所 (sequence・class 系と同じ)。
   // 置き方の指示の前にも後ろにも置ける (`-[#red]up->` / `-up[dashed]->`)。
   var _TR_STYLE = '(?:' + ((window.MA.regexParts && window.MA.regexParts.ARROW_STYLE) || '\\[[^\\]\\r\\n]*\\]') + ')?';
   var TR_ARROW = '(-+' + _TR_STYLE + '(?:(?:up|down|left|right|u|d|l|r)(?=[-\\[]))?' + _TR_STYLE + '-*>)';
   function _trColor(arrow) { return window.MA.regexParts.arrowStyleColor(arrow); }
-  // BLK-owner-20260923-2332-1: 端は `親.子` と修飾した名前でも書ける (他ツールや手書きの図にある記法。
+  // 端は `親.子` と修飾した名前でも書ける (他ツールや手書きの図にある記法。
   // PlantUML は入れ子の子として描く)。書き換えはせず、読む側 (状態遷移表・遷移一覧・件数) が同じ状態として引く。
   var QID = ID + '(?:\\.' + ID + ')*';
   var TRANSITION_RE = new RegExp(
-    // BLK-human-20260923-2001: 履歴 `[H]` / `[H*]` と親を名指す `親[H]` も端に書ける。
+    // 履歴 `[H]` / `[H*]` と親を名指す `親[H]` も端に書ける。
     '^(\\[\\*\\]|\\[H\\*?\\]|' + QID + '(?:\\[H\\*?\\])?)\\s*' + TR_ARROW + '\\s*(\\[\\*\\]|\\[H\\*?\\]|' + QID + '(?:\\[H\\*?\\])?)(?:\\s*<<[^>]+>>)?(?:\\s*:\\s*(.*))?\\s*$'
   );
 
@@ -67,7 +69,7 @@ window.MA.modules.plantumlState = (function() {
   );
   var END_NOTE_RE = /^end\s+note\s*$/i;
 
-  // design 5d「UML 要素の網羅一覧」State 行の「その他パレット」:
+  // 状態遷移図の「その他」パレット (design 5d):
   // fork / join、入口・出口ポイント、並行領域。いずれも PlantUML では
   // ステレオタイプ付きの state (と複合状態の中の `--`) として書く。
   var PSEUDO_KIND_BY_STEREOTYPE = {
@@ -176,7 +178,7 @@ window.MA.modules.plantumlState = (function() {
           id: qid,
           label: slabel,
           stereotype: stereotype,
-          // BLK-builder-20260925-2010-1: 書かれたままの字 (大文字小文字も)。欄に無いステレオタイプを「更新」で消さないために持つ。
+          // 書かれたままの字 (大文字小文字も)。欄に無いステレオタイプを「更新」で消さないために持つ。
           stereotypeRaw: sm[5] ? sm[5].trim() : null,
           color: scolor,
           parentId: parentId,
@@ -206,7 +208,7 @@ window.MA.modules.plantumlState = (function() {
           guard: parts.guard,
           action: parts.action,
           line: lineNum,
-          // BLK-human-20260923-2001: どの複合状態の中に書かれた遷移か (最上位は null)。
+          // どの複合状態の中に書かれた遷移か (最上位は null)。
           // `[*]` はこの中の開始・終了を指し、子の名前はこの中で引く。
           scope: openCompositeStack.length > 0 ? openCompositeStack[openCompositeStack.length - 1].id : null,
         });
@@ -265,7 +267,7 @@ window.MA.modules.plantumlState = (function() {
     return result;
   }
 
-  // BLK-builder-20260925-2010-1: 右パネルのステレオタイプ欄。欄に無いステレオタイプ (<<end>> / <<inputPin>> / 利用者の <<MyType>> …) は
+  // 右パネルのステレオタイプ欄。欄に無いステレオタイプ (<<end>> / <<inputPin>> / 利用者の <<MyType>> …) は
   // 書かれたままの字を選択肢に足して選んでおく。(none) に見せて「更新」で消すと、名前を直しただけで図が別物になる。
   // design 5d: fork / join / 入口・出口ポイントも同じ 1 つの欄で選べる。深い履歴は PlantUML の書き方 `<<history*>>`。
   var STEREO_CHOICES = [
@@ -298,7 +300,7 @@ window.MA.modules.plantumlState = (function() {
     return v || null;
   }
 
-  // BLK-builder-20260925-2010-1: 入れ子の状態の ID 欄は `親.子` の形で出る。直さずに「更新」を押すと `.` を含む字が
+  // 入れ子の状態の ID 欄は `親.子` の形で出る。直さずに「更新」を押すと `.` を含む字が
   // ASCII の ID と見なされず、ラベルに `親.子` が入って ID が S1 に付け替わり、遷移がつながらない別の状態になっていた。
   // 欄の字が自分の親の名前で始まっていれば、その後ろ (宣言行に書かれている名前) を ID として読む。
   function idFieldToWrite(st, rawId, parsed) {
@@ -366,7 +368,7 @@ window.MA.modules.plantumlState = (function() {
     return insertBeforeEnd(text, fmtTransition(from, to, trigger, guard, action));
   }
 
-  // BLK-human-20260923-2001: 開始・終了・履歴を「どこの」ものかを選んで足す。
+  // 開始・終了・履歴を「どこの」ものかを選んで足す。
   // scope は複合状態の id (最上位は '')。PlantUML は `[*]` を書かれた { } の中の開始・終了と読み、
   // 履歴は `親[H]` / `親[H*]` で親を名指す。
   function pseudoScopeOptions(parsed) {
@@ -441,7 +443,7 @@ window.MA.modules.plantumlState = (function() {
     return { text: lines.join('\n') };
   }
 
-  // BLK-human-20260923-2001: 状態遷移表の行 id (`P.A` / `[*]` / `[*]@P`) から遷移を足す。
+  // 状態遷移表の行 id (`P.A` / `[*]` / `[*]@P`) から遷移を足す。
   // 入れ子の子どうし・親の中の開始は、その親の `{ … }` の中に素の名前で書く
   // (最上位に `P.A --> P.B` と書くと PlantUML は別の状態を作る)。親の外へ出る遷移は最上位に書く。
   function addTransitionScoped(text, parsed, fromRow, to, trigger, guard, action) {
@@ -477,7 +479,7 @@ window.MA.modules.plantumlState = (function() {
     }
     return insertBeforeEnd(text, formatted);
   }
-  // BLK-junior-20260907-0443: state と transition をまとめて末尾に追加する。
+  // state と transition をまとめて末尾に追加する。
   // 1 件ずつのフォーム (種類選択 → 入力 → 追加ボタン) だと state4 + transition6 で
   // クリックが 10 を超え、結局 DSL を手書きすることになっていた。他図種
   // (usecase / component / class / activity) と同じ「一括 (複数行)」の流儀に揃える。
@@ -541,7 +543,8 @@ window.MA.modules.plantumlState = (function() {
       var o = ops[i];
       if (o.op !== 'state') continue;
       if (taken[o.id]) { idMap[o.id] = o.id; continue; }
-      var norm = window.MA.idNormalizer.normalize(o.id, taken, 'S');
+      // parsed は描き直し前で古いことがあるので、今の本文に出ている別名も避ける。
+      var norm = window.MA.idNormalizer.normalize(o.id, taken, 'S', out);
       if (!norm.valid) continue;
       idMap[o.id] = norm.id;
       taken[norm.id] = true;
@@ -592,7 +595,7 @@ window.MA.modules.plantumlState = (function() {
     var id, label, stereotype, labelExplicit;
     if (m[2] !== undefined) { id = m[2]; label = m[1]; labelExplicit = true; }
     else { id = m[3]; label = m[4] !== undefined ? m[4] : m[3]; labelExplicit = m[4] !== undefined; }
-    // BLK-builder-20260925-2010-1: 書き換えないステレオタイプは書かれたままの字で残す (小文字に畳むと `<<MyType>>` の表示が変わる)。
+    // 書き換えないステレオタイプは書かれたままの字で残す (小文字に畳むと `<<MyType>>` の表示が変わる)。
     stereotype = m[5] ? m[5].trim() : null;
     // 色は ID / ラベル / ステレオタイプの書き換えでは失われない (design 3c と同じ扱い)。
     var color = m[6] || '';
@@ -604,7 +607,9 @@ window.MA.modules.plantumlState = (function() {
     if (fields.label != null) label = fields.label;
     if (fields.stereotype !== undefined) stereotype = fields.stereotype;
     var openBrace = hasBlock ? ' {' : '';
-    lines[idx] = indent + fmtState(id, label, stereotype, color) + openBrace;
+    // CRLF の図では行末の \r を残す (宣言の行だけ改行コードが LF に替わらない)。
+    var cr = /\r$/.test(lines[idx]) ? '\r' : '';
+    lines[idx] = indent + fmtState(id, label, stereotype, color) + openBrace + cr;
     return lines.join('\n');
   }
 
@@ -628,9 +633,9 @@ window.MA.modules.plantumlState = (function() {
     if (fields.guard !== undefined) parts.guard = fields.guard;
     if (fields.action !== undefined) parts.action = fields.action;
     var outLine = fmtTransition(from, to, parts.trigger, parts.guard, parts.action, color);
-    // BLK-migrator-20260923-2312: 色を変えない書き換えでは、元の矢印 (`->` / `-up->` 等) と
+    // 色を変えない書き換えでは、元の矢印 (`->` / `-up->` 等) と
     // 行き先の `<<exitPoint>>` を残す (トリガを直しただけで線の向きや種類が変わらない)。
-    // BLK-migrator-20260929-2003: 色を替える書き換えも元の矢印に色だけを当て、同じ `[]` の bold・dashed や向きを残す。
+    // 色を替える書き換えも元の矢印に色だけを当て、同じ `[]` の bold・dashed や向きを残す。
     var keepArrow = fields.color === undefined ? m[2] : window.MA.regexParts.setArrowStyleColor(m[2], color);
     if (keepArrow !== (color ? '-[#' + color + ']->' : '-->')) {
       outLine = outLine.replace(/ -(?:\[#[A-Za-z0-9]+\])?-> /, ' ' + keepArrow + ' ');
@@ -640,7 +645,9 @@ window.MA.modules.plantumlState = (function() {
       var colon = outLine.indexOf(' : ');
       outLine = colon >= 0 ? outLine.slice(0, colon) + stm[1] + outLine.slice(colon) : outLine + stm[1];
     }
-    lines[idx] = indent + outLine;
+    // 直した値の字だけを置き換え、矢印の前後・`:` の前後の空白 (手で揃えた桁) は元の行の字のまま (TICKET-owner-20261122-0720-1)。
+    lines[idx] = window.MA.dslUtils.keepLineSpacing(lines[idx], indent + outLine,
+      [fields.from, fields.to, fields.trigger, fields.guard, fields.action]);
     return lines.join('\n');
   }
 
@@ -831,36 +838,34 @@ window.MA.modules.plantumlState = (function() {
     return lineNum;
   }
 
-  function deleteStateWithRefs(text, stateId) {
+  // 状態を消すときに一緒に消える行 (宣言・その状態に出入りする遷移と添えた note on link・その状態への note)。
+  // 返り値は MA.elementDelete.plan の形 (6 図種の共通部) / 状態が無ければ null。
+  function stateDeletePlan(text, stateId) {
     var parsed = parse(text);
     var elt = null;
     for (var i = 0; i < parsed.states.length; i++) {
       if (parsed.states[i].id === stateId) { elt = parsed.states[i]; break; }
     }
-    if (!elt) return text;
-    var ranges = [];
-    ranges.push({ start: elt.line, end: elt.endLine && elt.endLine > elt.line ? elt.endLine : elt.line });
+    if (!elt) return null;
+    var decl = [{ start: elt.line, end: elt.endLine && elt.endLine > elt.line ? elt.endLine : elt.line }];
+    var rels = [], notes = [];
     var srcLines = text.split('\n');
     parsed.transitions.forEach(function(tr) {
       if (tr.from === stateId || tr.to === stateId) {
         // 遷移に添えたノート (`note on link`) は遷移の一部。行き先を失った
-        // ノートが残らないよう、同じ範囲で消す (BLK-builder-20260907-1737-2)。
-        ranges.push({ start: tr.line, end: _linkNoteEndLine(srcLines, tr.line) });
+        // ノートが残らないよう、同じ範囲で消す。
+        rels.push({ start: tr.line, end: _linkNoteEndLine(srcLines, tr.line) });
       }
     });
     parsed.notes.forEach(function(n) {
-      if (n.targetId === stateId) {
-        ranges.push({ start: n.line, end: n.endLine });
-      }
+      if (n.targetId === stateId) notes.push({ start: n.line, end: n.endLine });
     });
-    ranges.sort(function(a, b) { return b.start - a.start; });
-    var lines = text.split('\n');
-    ranges.forEach(function(r) {
-      var startIdx = r.start - 1;
-      var endIdx = r.end - 1;
-      lines.splice(startIdx, endIdx - startIdx + 1);
-    });
-    return lines.join('\n');
+    return window.MA.elementDelete.plan({ decl: decl, relations: rels, notes: notes });
+  }
+
+  function deleteStateWithRefs(text, stateId) {
+    var plan = stateDeletePlan(text, stateId);
+    return plan ? window.MA.elementDelete.apply(text, plan) : text;
   }
 
   function _detectCompositeRects(svgEl, ents) {
@@ -886,7 +891,7 @@ window.MA.modules.plantumlState = (function() {
     OB.syncDimensions(svgEl, overlayEl);
     while (overlayEl.firstChild) overlayEl.removeChild(overlayEl.firstChild);
 
-    // BLK-migrator-20260923-2312: 枠の置き場所は SVG の要素情報 (状態・複合状態・開始終了の
+    // 枠の置き場所は SVG の要素情報 (状態・複合状態・開始終了の
     // data-qualified-name、遷移の data-source-line、fork/join・入口出口は遷移の端) から決める。
     // DSL の宣言数と SVG の図形数を突き合わせないので、宣言の無い状態・並行領域・choice・
     // `->` の遷移が混ざっても他の枠は落ちない。判断は src/core/state-svg-map.js。
@@ -964,24 +969,24 @@ window.MA.modules.plantumlState = (function() {
         console.warn('[state.buildOverlay] transition arrow mismatch: model=' + transitions.length + ' svg=' + arrowHeads.length);
       }
     }
-    // 4. Notes: BLK-migrator-20260930-0157: 宣言の並び順で SVG の note と組にしない (読めない note が 1 つあると全部の枠が落ちた)。
+    // 4. Notes: 宣言の並び順で SVG の note と組にしない (読めない note が 1 つあると全部の枠が落ちた)。
     // note 自身の data-source-line・紙の外形・接続線で、全図種共通の 1 か所 (overlay-builder の addNoteFrames) で当てる。
-    // BLK-migrator-20260926-1116: 範囲は紙の外形 (中の Creole の表・箇条書きの点を範囲にしない)。
+    // 範囲は紙の外形 (中の Creole の表・箇条書きの点を範囲にしない)。
     if (OB.addNoteFrames) OB.addNoteFrames(svgEl, overlayEl, dslText, parsedData.notes || []);
 
-    // BLK-migrator-20260923-2312: 図の題 (title) にも本文の行を指す枠を置く (class / component と同じ)。
+    // 図の題 (title) にも本文の行を指す枠を置く (class / component と同じ)。
     // 題にホバーしても何も出ない / 下の複合状態の枠が出る、をやめる。
-    // BLK-migrator-20260925-0932: 題に加え header / footer / caption も全図種共通の 1 か所 (addDocumentChrome) で当てる。
+    // 題に加え header / footer / caption も全図種共通の 1 か所 (addDocumentChrome) で当てる。
     if (OB.addDocumentChrome) {
       OB.addDocumentChrome(svgEl, overlayEl, null,
         { startUmlLine: (parsedData && parsedData.meta && parsedData.meta.startUmlLine) || 1 });
     }
 
-    // BLK-human-20260912-2130: 小さい当たり判定を手前に。共通実装 (src/core)
+    // 小さい当たり判定を手前に。共通実装 (src/core)
     OB.raiseSmallestLast(overlayEl);
   }
 
-  // BLK-human-20260923-2001: SVG の開始・終了の qualified-name から { kind, scope } を読む。
+  // SVG の開始・終了の qualified-name から { kind, scope } を読む。
   // ".start." → 最上位の開始、"Idle..end.Idle" → Idle の中の終了。読めなければ null。
   function pseudoFromQualifiedName(qn, cls) {
     var m = /\.(start|end)\.(.*)$/.exec(String(qn || ''));
@@ -990,7 +995,7 @@ window.MA.modules.plantumlState = (function() {
     return { kind: kind, scope: m ? m[2] : '' };
   }
 
-  // BLK-human-20260923-2001: 選んだ開始・終了の scope と、それに触れる遷移を出す。
+  // 選んだ開始・終了の scope と、それに触れる遷移を出す。
   function _renderPseudoEdit(sel, parsedData, propsEl, ctx) {
     var H = window.MA.htmlUtils;
     var P = window.MA.properties;
@@ -1000,7 +1005,7 @@ window.MA.modules.plantumlState = (function() {
     var scope = at >= 0 ? sel.id.slice(at + 1) : '';
     var states = parsedData.states || [];
     var where = scope ? (STb ? STb.rowLabel(scope, states) : scope) + ' の中' : '最上位 (図全体)';
-    // BLK-builder-20260925-2015-3: 遷移の端に書いた履歴 (`[H]` / `Comp[H*]`) の丸も同じ欄で見せる。
+    // 遷移の端に書いた履歴 (`[H]` / `Comp[H*]`) の丸も同じ欄で見せる。
     var isHist = kind === 'history' || kind === 'historyDeep';
     var SM = window.MA.stateSvgMap;
     var histOf = function(end, t) {
@@ -1043,7 +1048,7 @@ window.MA.modules.plantumlState = (function() {
   function renderProps(selData, parsedData, propsEl, ctx) {
     if (!propsEl) return;
     _txLast = { parsedData: parsedData, propsEl: propsEl, ctx: ctx };
-    // BLK-primary-20260923-2312-friction: 図種・タブが替わっていたら「末尾に追加」の覚えを捨てる
+    // 図種・タブが替わっていたら「末尾に追加」の覚えを捨てる
     // (捨てると onReset で続けて入れる回も閉じる)。
     if (window.MA.tailMemory) window.MA.tailMemory.sync();
     // 遷移や注記を選んだら、続けて入れる回は閉じる (図の状態を押すのは回の中で受ける)。
@@ -1062,7 +1067,7 @@ window.MA.modules.plantumlState = (function() {
     propsEl.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">複数選択は未対応 (State)</div>';
   }
 
-  // ── 遷移を続けて入れる (BLK-human-20260923-2000) ─────────────────────────
+  // ── 遷移を続けて入れる ─────────────────────────
   // 状態機械の設計では遷移を 1 図に 10〜30 本入れる。1 本ごとにフォームが初期状態に戻り、
   // トリガは毎回手打ち、遷移先は図から選べなかった。遷移フォームを「回」として開いたままにし、
   // 確定後も from = 直前の to (切替で直前と同じ) で次へ進む。遷移先は図の状態を押して選ぶ
@@ -1071,7 +1076,7 @@ window.MA.modules.plantumlState = (function() {
               vals: { trig: '', guard: '', act: '' } };
   var _txLast = null;
   var _txCaptureBound = false;
-  // BLK-primary-20260923-2312-friction: 続けて入れる回は「図種 + タブ」ごと。タブを替えたら
+  // 続けて入れる回は「図種 + タブ」ごと。タブを替えたら
   // 前のタブの From を持ち込まない (種別チップの覚えと同じ切れ目で閉じる)。
   if (window.MA.tailMemory) {
     window.MA.tailMemory.onReset(function() {
@@ -1146,23 +1151,6 @@ window.MA.modules.plantumlState = (function() {
       _tx.note = '';
       _txRerender();
     }, true);
-  }
-
-  // 同じ部品のシーケンス図のメッセージ名 (開いているタブから)。
-  function _txSeqNames() {
-    var WS = window.MA.workspace;
-    var FT = window.MA.fileTree;
-    var TX = window.MA.stateTxEntry;
-    if (!WS || !WS.list || !TX) return [];
-    var active = WS.getActive ? WS.getActive() : null;
-    var part = FT && active ? FT.partOf(active.name) : '';
-    var out = [];
-    WS.list().forEach(function(d) {
-      if (!d || String(d.diagramType || '') !== 'plantuml-sequence') return;
-      if (part && FT && FT.partOf(d.name) !== part) return;
-      TX.messageNames(d.dsl).forEach(function(n) { out.push(n); });
-    });
-    return out;
   }
 
   // 候補の出る入力欄。打ち始めで絞り、↑↓ で選んで Enter で入れる。
@@ -1250,17 +1238,18 @@ window.MA.modules.plantumlState = (function() {
       .map(function(s) { return { value: s.id, label: s.label || s.id }; });
 
     var html =
-      // design 7a / 2b (BLK-builder-20260924-1829-4): 英語の図種名の行は出さない (図種は左レールと HUD が言う)
+      // design 7a / 2b: 英語の図種名の行は出さない (図種は左レールと HUD が言う)
       '<div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;">' +
-        // design 4c: 置く場所を選べるようになったので、見出しは「末尾」を名乗らない。
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">追加 / Add</label>' +
+        // 見出しは 6 図種で同じ「末尾に追加」(台帳の名前)。
+        // 途中に入れるときは、この見出しの下の「追加する位置」で選ぶ。
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">末尾に追加</label>' +
         P.selectFieldHtml('種類', 'st-tail-kind', [
-          // BLK-owner-20260925-0312-3: 「子状態」は「状態」+ 追加する位置「{親} の中」と同じ行を書くので畳んだ
+          // 「子状態」は「状態」+ 追加する位置「{親} の中」と同じ行を書くので畳んだ
           // (入れ子を作る入口を「追加する位置」1 つにする。Ctrl+K の「子状態」「入れ子」はここへ連れてくる)。
           { value: 'state', label: '状態 (state)', selected: true },
           { value: 'composite', label: '複合状態 (state … { })' },
           { value: 'transition', label: '遷移 (-->)' },
-          // BLK-human-20260923-2001: どこの開始・終了・履歴かを選んで足す
+          // どこの開始・終了・履歴かを選んで足す
           { value: 'pseudo', label: '開始・終了・履歴 ([*] / [H])' },
           { value: 'note', label: '注釈 (note)' },
           { value: 'bulk', label: 'まとめて (複数行)' },
@@ -1281,7 +1270,7 @@ window.MA.modules.plantumlState = (function() {
               });
             }).join('')) +
       P.sectionFooterHtml() +
-      // BLK-primary-20260908-1403: レビュー指摘「この 4 遷移を 1 遷移にまとめる」を
+      // レビュー指摘「この 4 遷移を 1 遷移にまとめる」を
       // 当てる口。始点と終点を選ぶだけで、途中の状態の宣言ごと 1 本に畳む。
       _collapseSectionHtml(parsedData) +
       '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
@@ -1289,7 +1278,7 @@ window.MA.modules.plantumlState = (function() {
       '</div>';
     propsEl.innerHTML = html;
     // 続けて入れる回の途中なら、描き直しても遷移のフォームのまま (初期状態に戻さない)。
-    // BLK-owner-20260926-0550-2: 種別チップは覚えた種別 (回を閉じた直後は「状態」) を戻すので、
+    // 種別チップは覚えた種別 (回を閉じた直後は「状態」) を戻すので、
     // 覚えの方も「遷移」にしておく (でないと「→ ここから遷移」の道だけ「状態」のフォームに戻る)。
     if (_tx.open) {
       var kindSel = document.getElementById('st-tail-kind');
@@ -1316,7 +1305,7 @@ window.MA.modules.plantumlState = (function() {
     // (遷移とノートは相手の行が決まるので位置を選ばせる意味がない)。
     // composite に「この遷移の途中」は出さない — 中身の無い箱を遷移の間に
     // 挟んでも、そのあと必ず中を作る手が要る。
-    // BLK-owner-20260925-0312-3: 親は「Run の中」「Run › Busy の中」と名前で並べ、このプルダウン 1 つで
+    // 親は「Run の中」「Run › Busy の中」と名前で並べ、このプルダウン 1 つで
     // 選び終える。選んだ位置は確定しても保ち (図種・タブを替えたときだけ既定に戻る)、図で状態を
     // 選んだあとはその状態の中が既定になる (覚えは tailMemory の 'st-tail-where')。
     var SI = window.MA.stateInsert;
@@ -1367,12 +1356,27 @@ window.MA.modules.plantumlState = (function() {
           placeHtml('composite') +
           P.primaryButtonHtml('st-tail-add', '+ 追加');
       } else if (kind === 'transition') {
-        // BLK-human-20260923-2000: 開いたままの回。from は直前の to、to は図の状態を押して選ぶ。
-        if (!_tx.open) { _tx.open = true; _tx.pick = 'to'; _tx.to = ''; _bindTxCapture(); }
+        // 開いたままの回。from は直前の to、to は図の状態を押して選ぶ。
+        var opening = !_tx.open;
+        if (opening) { _tx.open = true; _tx.pick = 'to'; _tx.to = ''; _bindTxCapture(); }
         // 入れ子の子は `親 / 子` で出す。表の「親 / （開始）」の行から開いたときは、その開始を From に足す。
         var STl = window.MA.stateTable;
-        // BLK-builder-20260924-1202-b2-2: 遷移にだけ出る (宣言の無い) 状態も候補に入れる。
+        // 遷移にだけ出る (宣言の無い) 状態も候補に入れる。
         var txOpts = [{ value: '[*]', label: '[*] (initial/final)' }].concat(_endOptions(parsedData));
+        // 開いた直後・タブを替えた直後 (選んだ状態も確定の覚えも無い) は、From を本文の最後の遷移の行き先
+        // (行き先が終了ならその始点) から始め、案内がその名前を言う。一覧の先頭の `[*]` で始めると
+        // To だけ選んで足したとき選んでいない開始の遷移が入る (TICKET-owner-20261123-2322-3)。
+        var TXo = window.MA.stateTxEntry;
+        if (opening && !_tx.from && TXo && TXo.openFrom) {
+          var openEnds = TXo.openFrom(parsedData.transitions, function(n, sc) {
+            return STl ? STl.resolveEnd(n, sc, allStates) : n;
+          });
+          var inOpts = txOpts.some(function(o) { return o.value === openEnds.from; });
+          if (openEnds.from && inOpts) {
+            _tx.from = openEnds.from;
+            _tx.note = TXo.openFromNote(openEnds, function(id) { return STl ? STl.rowLabel(id, allStates) : id; });
+          }
+        }
         var fromBase = txOpts.slice();
         if (_tx.from && String(_tx.from).indexOf('[*]@') === 0) {
           fromBase.unshift({ value: _tx.from, label: STl ? STl.rowLabel(_tx.from, allStates) : _tx.from });
@@ -1392,11 +1396,9 @@ window.MA.modules.plantumlState = (function() {
           P.selectFieldHtml('始点 (From)', 'st-tail-from', fromOpts) +
           '<button id="st-tx-pick-from" type="button" style="font-size:10px;padding:2px 8px;margin:-2px 0 6px 0;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">図で From を選び直す</button>' +
           P.selectFieldHtml('終点 (To)', 'st-tail-to', toOpts) +
-          P.fieldHtml('きっかけ / trigger', 'st-tail-trig', '', '例: start') +
-          P.vocabPickerHtml('st-tail-trig-vocab', { roles: ['method', 'event'] }) +
-          P.fieldHtml('条件 / guard', 'st-tail-guard', '', '例: retry > 3') +
-          P.fieldHtml('実行する処理 / action', 'st-tail-act', '', '例: log()') +
-          P.vocabPickerHtml('st-tail-act-vocab', { roles: ['method'] }) +
+          P.fieldHtml('きっかけ', 'st-tail-trig', '', '例: start') +
+          P.fieldHtml('条件', 'st-tail-guard', '', '例: retry > 3') +
+          P.fieldHtml('実行する処理', 'st-tail-act', '', '例: log()') +
           _previewBoxHtml('st-tail-preview') +
           P.selectFieldHtml('次の 1 本の From', 'st-tx-next-mode', [
             { value: 'to', label: '直前の遷移先から', selected: _tx.mode !== 'same' },
@@ -1425,12 +1427,11 @@ window.MA.modules.plantumlState = (function() {
             { value: 'right', label: 'Right', selected: true },
             { value: 'left', label: 'Left' }
           ]) +
-          '<div style="margin-bottom:6px;"><label style="display:block;font-size:10px;color:var(--text-secondary);">本文 (Enter で追加 / Shift+Enter で改行)</label><textarea id="st-tail-ntext" style="width:100%;min-height:50px;"></textarea></div>' +
+          '<div style="margin-bottom:6px;">' + P.textLabelHtml(P.NOTE_BODY, 'st-tail-ntext', { enterHint: true }) + '<textarea id="st-tail-ntext" style="width:100%;min-height:50px;"></textarea></div>' +
           P.primaryButtonHtml('st-tail-add', '+ 追加');
       } else if (kind === 'bulk') {
         html2 =
           '<label style="display:block;font-size:10px;color:var(--text-secondary);">state と遷移を 1 行 1 件で</label>' +
-          window.MA.reuseModal.buttonHtml('st-tail-reuse') +
           '<textarea id="st-tail-bulk" style="width:100%;min-height:90px;font-family:inherit;font-size:12px;"></textarea>' +
           P.primaryButtonHtml('st-tail-add', '+ まとめて追加') +
           '<div id="st-tail-bulk-hint" style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">' +
@@ -1458,12 +1459,10 @@ window.MA.modules.plantumlState = (function() {
           '</div>';
       }
       detailEl.innerHTML = html2;
-      // BLK-owner-20260925-0312-3: 位置は確定しても前回のまま (子を続けて足すのに選び直さない)。
+      // 位置は確定しても前回のまま (子を続けて足すのに選び直さない)。
       if ((kind === 'state' || kind === 'composite') && window.MA.tailMemory) {
         window.MA.tailMemory.bindSelect('st-tail-where');
       }
-      // 一括欄は「既に他の図にある行」を打ち直させないためのボタンを持つ。
-      window.MA.reuseModal.bindButton('st-tail-reuse', 'plantuml-state', 'st-tail-bulk');
       renderWhereDetail();
       P.bindEvent('st-tail-where', 'change', renderWhereDetail);
 
@@ -1471,7 +1470,7 @@ window.MA.modules.plantumlState = (function() {
         var addPseudo = function(stereo, fallbackPrefix) {
           var raw = document.getElementById('st-other-id').value;
           if (!raw || !raw.trim()) raw = fallbackPrefix;
-          var norm = normalizeIdInput(raw, parsedData);
+          var norm = normalizeIdInput(raw, parsedData, ctx.getMmdText());
           if (!norm.valid) { alert('名前 必須'); return; }
           var t0 = ctx.getMmdText();
           var out0 = addState(t0, norm.id, norm.label, stereo);
@@ -1526,10 +1525,8 @@ window.MA.modules.plantumlState = (function() {
           preview: 'st-tail-preview', from: 'st-tail-from', to: 'st-tail-to',
           trigger: 'st-tail-trig', guard: 'st-tail-guard', action: 'st-tail-act',
         });
-        P.bindVocabPicker('st-tail-trig-vocab', 'st-tail-trig', tailPreview);
-        P.bindVocabPicker('st-tail-act-vocab', 'st-tail-act', tailPreview);
         var TXc = window.MA.stateTxEntry;
-        var cands = TXc ? TXc.candidates(parsedData, _txSeqNames()) : { triggers: [], guards: [], actions: [] };
+        var cands = TXc ? TXc.candidates(parsedData) : { triggers: [], guards: [], actions: [] };
         var confirm = function() {
           var addBtn = document.getElementById('st-tail-add');
           if (addBtn) addBtn.click();
@@ -1584,12 +1581,12 @@ window.MA.modules.plantumlState = (function() {
         var whereTarget = whereP.mode === 'inside' ? whereP.target : (tgtEl ? tgtEl.value : '');
         if (k === 'state') {
           var rawId = document.getElementById('st-tail-id').value;
-          var normSt = normalizeIdInput(rawId, parsedData);
-          if (!normSt.valid) { alert('ID 必須'); return; }
+          var normSt = normalizeIdInput(rawId, parsedData, ctx.getMmdText());
+          if (!normSt.valid) { window.MA.properties.needField('st-tail-id'); return; }
           var stereoEl = document.getElementById('st-tail-stereo');
           var st = (stereoEl && stereoEl.value) || null;
           if (where.indexOf('region:') === 0) {
-            // BLK-migrator-20260925-1332: 空の並行領域へ置く (PlantUML が落ちる図が描けるようになる)。
+            // 空の並行領域へ置く (PlantUML が落ちる図が描けるようになる)。
             out = SI.insertIntoRegion(t, where.slice(7), fmtState(normSt.id, normSt.label || normSt.id, st));
             if (out === t) { alert('その並行領域はもう空ではありません'); return; }
           } else if (where === 'transition') {
@@ -1604,8 +1601,8 @@ window.MA.modules.plantumlState = (function() {
           }
         } else if (k === 'composite') {
           var rawCid = document.getElementById('st-tail-id').value;
-          var normC = normalizeIdInput(rawCid, parsedData);
-          if (!normC.valid) { alert('ID 必須'); return; }
+          var normC = normalizeIdInput(rawCid, parsedData, ctx.getMmdText());
+          if (!normC.valid) { window.MA.properties.needField('st-tail-id'); return; }
           if (where.indexOf('region:') === 0) {
             var headR = (normC.label && normC.label !== normC.id)
               ? 'state "' + normC.label + '" as ' + normC.id + ' {'
@@ -1631,11 +1628,11 @@ window.MA.modules.plantumlState = (function() {
           var to = document.getElementById('st-tail-to').value;
           if (!to) {
             _tx.pick = 'to';
-            var hint = document.getElementById('st-tx-hint');
-            if (hint) hint.textContent = '遷移先を選んでください (図の状態を押すか、To で選ぶ)';
+            // 5 図種で同じ共通部 (TICKET-owner-20261123-2322-2): 欄の見出しの語で知らせ、手は To に入る。
+            window.MA.properties.needPick('st-tail-to', 'st-tx-hint', '図の状態を押すか、一覧で選ぶ', '終点 (To)');
             return;
           }
-          // BLK-human-20260923-2000: 同じ from の遷移の並びの末尾に入れる (@enduml 直前に散らさない)。
+          // 同じ from の遷移の並びの末尾に入れる (@enduml 直前に散らさない)。
           var TXa = window.MA.stateTxEntry;
           var txRes = TXa.insert(t, parsedData, fr, to,
             document.getElementById('st-tail-trig').value || null,
@@ -1666,7 +1663,7 @@ window.MA.modules.plantumlState = (function() {
           out = res.text;
         } else if (k === 'note') {
           var tg = document.getElementById('st-tail-target').value;
-          if (!tg) { alert('Target 必須'); return; }
+          if (!tg) { window.MA.properties.needField('st-tail-target'); return; }
           out = addNote(t, tg, document.getElementById('st-tail-pos').value, document.getElementById('st-tail-ntext').value);
         } else if (k === 'bulk') {
           var block = document.getElementById('st-tail-bulk').value;
@@ -1692,7 +1689,7 @@ window.MA.modules.plantumlState = (function() {
     renderTailDetail();
   }
 
-  // ── 遷移をまとめる (BLK-primary-20260908-1403) ────────────────────────────
+  // ── 遷移をまとめる ────────────────────────────
   // 「Idle→Configured→SrcDstSet→DmaReqEnabled→Transferring_Active の 4 遷移を
   // 1 遷移 (Dma_Configure) にまとめる」というレビュー指摘を当てる口が無く、
   // state 3 行 + 遷移 4 行を DSL エディタで選び直して打ち直していた。
@@ -1707,7 +1704,7 @@ window.MA.modules.plantumlState = (function() {
     var from = starts[0].value;
     var ends = SC.endOptions(parsedData, from);
     return '<div id="st-collapse" style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px;">' +
-      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">遷移をまとめる / Collapse</label>' +
+      '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">遷移をまとめる</label>' +
       '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;">' +
         '1 本道に並んだ遷移を 1 本に畳みます (途中の状態の宣言も消えます)。</div>' +
       P.selectFieldHtml('始点', 'st-cl-from', starts.map(function(o) {
@@ -1818,7 +1815,7 @@ window.MA.modules.plantumlState = (function() {
   // 表からも右パネルからも同じフォームが出るように、既存のモーダルへ prefill を
   // 足しただけにしてある。
   function showAddTransitionModal(ctx, parsedData, fromId, prefill) {
-    // BLK-human-20260923-2000: 表の空欄からも、右パネルの同じ「続けて入れる」フォームを
+    // 表の空欄からも、右パネルの同じ「続けて入れる」フォームを
     // 行 (from) と列 (trigger) を入れた状態で開く。遷移先は図の状態を押すか To で選ぶ。
     if (!_txLast) { _showAddTransitionModal(fromId, parsedData, ctx, prefill); return; }
     _txLast = { parsedData: parsedData, propsEl: _txLast.propsEl, ctx: _txLast.ctx };
@@ -1832,7 +1829,7 @@ window.MA.modules.plantumlState = (function() {
     var P = window.MA.properties;
     var STb = window.MA.stateTable;
     // 入れ子の子は `親 / 子` で出す (同じ名前の子が別の親にいても取り違えない)。
-    // BLK-builder-20260924-1202-b2-2: 遷移にだけ出る (宣言の無い) 状態も行き先に選べる。
+    // 遷移にだけ出る (宣言の無い) 状態も行き先に選べる。
     var stateOptsWithPseudo = [{ value: '[*]', label: '[*] (終了)' }].concat(_endOptions(parsedData));
     var fromText = STb ? STb.rowLabel(fromId, parsedData.states || []) : fromId;
     content.innerHTML =
@@ -1896,7 +1893,7 @@ window.MA.modules.plantumlState = (function() {
         (fromId ? ' — ' + esc(fromId) + ' から' : '') + '</h3>' +
       P.fieldHtml('分岐 (choice) 状態の名前', 'st-br-id', '', '例: AnomalyCheck') +
       (fromId ? P.fieldHtml('分岐に入るトリガー', 'st-br-trigger', '', '例: Fault') : '') +
-      // BLK-junior-20260907-0803: 枝ごとに 3 欄をクリックして回ると手数が枝の本数に比例する。
+      // 枝ごとに 3 欄をクリックして回ると手数が枝の本数に比例する。
       // 1 行 1 枝でまとめて打てる欄を上に置き、下の行はその結果として自動で並ぶ。
       '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin:10px 0 4px 0;">枝をまとめて入力 (1 行 1 枝)</div>' +
       '<textarea id="st-br-bulk" rows="4" placeholder="重大 -> Error / notify&#10;軽微 -> Idle" ' +
@@ -1982,7 +1979,7 @@ window.MA.modules.plantumlState = (function() {
       }
       var v = SB.validate(spec, text);
       var errEl = document.getElementById('st-br-errors');
-      // BLK-human-20260923-1330: errors は赤で止め、warnings は橙で出したまま追加は通す。
+      // errors は赤で止め、warnings は橙で出したまま追加は通す。
       if (errEl) errEl.innerHTML = window.MA.scaffoldNotice.html(v);
       var confirmBtn = document.getElementById('st-br-confirm');
       if (confirmBtn) {
@@ -2043,7 +2040,7 @@ window.MA.modules.plantumlState = (function() {
     if (first && first.focus) first.focus();
   }
 
-  // BLK-migrator-20260923-2312: `state X` の宣言が無く遷移の中にだけ書かれた状態 (実物の図に多い)。
+  // `state X` の宣言が無く遷移の中にだけ書かれた状態 (実物の図に多い)。
   // 枠は出るので、選んだら何も出ないのではなく、その状態に触れる遷移の行を出す。
   function _renderUndeclaredState(sel, parsedData, propsEl) {
     var H = window.MA.htmlUtils;
@@ -2066,7 +2063,7 @@ window.MA.modules.plantumlState = (function() {
       if (parsedData.states[i].id === sel.id) { st = parsedData.states[i]; break; }
     }
     if (!st) { _renderUndeclaredState(sel, parsedData, propsEl); return; }
-    // BLK-owner-20260925-0312-3: 図で状態を選んだら、追加フォームの「追加する位置」の既定をその状態の中にする
+    // 図で状態を選んだら、追加フォームの「追加する位置」の既定をその状態の中にする
     // (選んでから Esc で追加フォームへ戻り、そのまま子を足せる)。
     if (window.MA.tailMemory && window.MA.stateChild && window.MA.stateChild.canHaveChild(st)) {
       window.MA.tailMemory.setField('st-tail-where', window.MA.stateInsert.insideValue(st.id));
@@ -2090,9 +2087,9 @@ window.MA.modules.plantumlState = (function() {
       }
       moveIntoHtml =
         '<div style="margin-top:4px;font-size:11px;display:flex;align-items:center;gap:4px;">' +
-          '<span style="color:var(--text-secondary);">Move into:</span>' +
+          '<span style="color:var(--text-secondary);">入れる先の複合状態:</span>' +
           '<select id="st-move-target" style="flex:1;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:11px;">' + moveOpts + '</select>' +
-          '<button id="st-move-into" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">Move</button>' +
+          '<button id="st-move-into" style="font-size:11px;padding:3px 8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">移す</button>' +
         '</div>';
     }
     var moveOutHtml = '';
@@ -2102,21 +2099,21 @@ window.MA.modules.plantumlState = (function() {
 
     var doDisplay = (st.do || '').replace(/\\n/g, '\n');
     var html =
-      '<div style="margin-bottom:8px;font-size:11px;color:var(--text-secondary);">' +
-      (st.stereotype ? st.stereotype + ' ' : '') + 'State (L' + st.line + ')</div>' +
-      P.fieldHtml('ID', 'st-id', st.id) +
-      // BLK-junior-20260915-0406-wish: 状態名も同じ部品の他の図と揃える。
-      P.vocabPickerHtml('st-id-vocab', { roles: ['state'] }) +
-      P.fieldHtml('ラベル', 'st-label', st.label || '') +
-      P.selectFieldHtml('ステレオタイプ', 'st-stereo', stereoOptions(st)) +
-      // BLK-human-20260915-1206: 入れ子の中の状態を選んだとき、どの親の中に
+      // 見出しは遷移・クラスと同じ「{種類} · N 行目」、欄名は日本語。
+      '<div id="st-sel-head" style="font-size:10px;color:var(--accent);margin-bottom:8px;font-weight:bold;">' +
+      window.MA.htmlUtils.escHtml((st.stereotype ? st.stereotype + ' ' : '') + P.lineHead('State', st.line)) + '</div>' +
+      P.fieldHtml(window.MA.terms.id, 'st-id', st.id) +
+      P.fieldHtml(window.MA.terms.label, 'st-label', st.label || '') +
+      P.renameRefsCheckHtml('st-rename-refs') +
+      P.selectFieldHtml(window.MA.terms.stereotype, 'st-stereo', stereoOptions(st)) +
+      // 入れ子の中の状態を選んだとき、どの親の中に
       // 居るかが「Parent: Outer」だけでは孫の代で読み取れない。根から並べる。
       '<div style="font-size:11px;margin:4px 0;color:var(--text-secondary);">居場所: ' +
         window.MA.htmlUtils.escHtml(window.MA.stateChild.placeText(parsedData, st.id)) +
         ' <span style="opacity:.7;">(' +
         window.MA.htmlUtils.escHtml(window.MA.stateChild.breadcrumbText(parsedData, st.id)) +
         ')</span></div>' +
-      // BLK-human-20260915-1206: 子状態を足す入口。中身を持たない状態でも
+      // 子状態を足す入口。中身を持たない状態でも
       // その場で `{ }` に開くので、「まず composite に変換」を知らなくてよい。
       (window.MA.stateChild.canHaveChild(st)
         ? '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
@@ -2130,7 +2127,7 @@ window.MA.modules.plantumlState = (function() {
         : '') +
       // Behaviors section (StableState style: entry/exit single-line, do multi-line)
       '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
-        '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">Behaviors</div>' +
+        '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">状態内の動作 (entry / do / exit)</div>' +
         '<div style="margin-bottom:5px;">' +
           '<input id="st-entry" placeholder="entry" value="' + window.MA.htmlUtils.escHtml(st.entry || '') + '" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:Consolas,monospace;font-size:11px;">' +
         '</div>' +
@@ -2141,10 +2138,10 @@ window.MA.modules.plantumlState = (function() {
           '<input id="st-exit" placeholder="exit" value="' + window.MA.htmlUtils.escHtml(st.exit || '') + '" style="width:100%;box-sizing:border-box;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:4px 6px;border-radius:3px;font-family:Consolas,monospace;font-size:11px;">' +
         '</div>' +
       '</div>' +
-      // BLK-builder-20260907-1306-2 (design 5d): 色は常時表示にせず「その他… ▾」に畳む。
+      // 色は常時表示にせず「その他… ▾」に畳む。
       P.colorPaletteHtml('st-more', {
         title: 'その他（色）… ',
-        label: '色 / Color',
+        label: window.MA.terms.color,
         notation: 'state X #red',
         colors: colors(),
         current: st.color || '',
@@ -2158,7 +2155,7 @@ window.MA.modules.plantumlState = (function() {
       moveOutHtml +
       '<button id="st-add-tx" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;" title="次に図で押した状態への遷移を入れます (同じ状態を押すと自己遷移)">→ ここから遷移</button>' +
       '<button id="st-add-branch" style="font-size:11px;padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;margin-top:4px;display:block;">⑂ 分岐 (choice) を追加</button>' +
-      P.primaryButtonHtml('st-update', '更新');
+      P.primaryButtonHtml('st-update', window.MA.terms.apply);
     if (related.length > 0) {
       html += '<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">' +
               '<div style="font-size:10px;color:var(--accent);font-weight:bold;margin-bottom:4px;">この状態に出入りする遷移</div>';
@@ -2178,11 +2175,12 @@ window.MA.modules.plantumlState = (function() {
     }
     html +=
       '<div style="margin-top:10px;display:flex;gap:6px;">' +
-      P.primaryButtonHtml('st-delete', '✕ 削除 (出入りする遷移も消す)') +
+      P.primaryButtonHtml('st-delete', window.MA.terms.del) +
       '</div>';
     propsEl.innerHTML = html;
-
-    P.bindVocabPicker('st-id-vocab', 'st-id');
+    // 図で状態を押した選択の Delete キーは、この「✕ 削除」と同じ窓に通す (app.js が data-el-delete を押す)。
+    var stDelBtn = propsEl.querySelector('#st-delete');
+    if (stDelBtn) { stDelBtn.setAttribute('data-el-delete', '1'); stDelBtn.setAttribute('data-el-id', st.id); }
 
     P.bindEvent('st-update', 'click', function() {
       window.MA.history.pushHistory();
@@ -2193,16 +2191,28 @@ window.MA.modules.plantumlState = (function() {
       var freshParsed = parse(ctx.getMmdText());
       var renameNorm = idFieldToWrite(st, rawId, freshParsed);
       var newId = renameNorm.id;
-      var newLabel = (renameNorm.id !== renameNorm.label) ? renameNorm.label : rawLabel;
+      // 表示名の欄が開いたときの字のまま (表示名の無い宣言では名前と同じ字) なら、表示名は書かない
+      // (TICKET-owner-20261124-0822-3。打っていない表示名を宣言に書き足さない。component・usecase と同じ)。
+      var newLabel = (renameNorm.id !== renameNorm.label) ? renameNorm.label
+        : (rawLabel === (st.label || '') ? null : rawLabel);
       var src = ctx.getMmdText();
-      var out = updateState(src, st.line, {
+      var declFields = {
         id: newId,
         label: newLabel,
         stereotype: stereoToWrite(st, document.getElementById('st-stereo').value)
-      });
+      };
       // Apply Behaviors. Use the (possibly renamed) id.
       var bareId = newId.indexOf('.') >= 0 ? newId.split('.').pop() : newId;
       var oldBareId = st.id.indexOf('.') >= 0 ? st.id.split('.').pop() : st.id;
+      // 改名は宣言の行と、名前を識別子として持つ行 (遷移の両端・note の対象・entry/do/exit の行) を
+      // 1 回で書く (TICKET-owner-20261124-0422-1。他の 5 図種と同じ共通の口)。
+      var out = window.MA.dslUpdater.renameDecl(src, st.line, oldBareId, bareId,
+        function(s) { return updateState(s, st.line, declFields); }, P.renameRefsOn('st-rename-refs'));
+      // 表示名の無い宣言の改名は共通の口が名前の字だけを替える (更新関数を通らない)。打った表示名・選び直した
+      // ステレオタイプはその後で書く。
+      if (oldBareId !== bareId && (declFields.label != null || declFields.stereotype !== undefined)) {
+        out = updateState(out, st.line, { label: declFields.label, stereotype: declFields.stereotype });
+      }
       // If state id was renamed, clean up orphan description lines under the
       // old bare id first to avoid leaving stale entry/do/exit lines pointing
       // to a now-nonexistent identifier.
@@ -2227,13 +2237,15 @@ window.MA.modules.plantumlState = (function() {
       ctx.onUpdate();
     });
     P.bindEvent('st-delete', 'click', function() {
-      if (!confirm('この state と紐付く transition / note も削除します。続行しますか？')) return;
-      window.MA.history.pushHistory();
-      ctx.setMmdText(deleteStateWithRefs(ctx.getMmdText(), st.id));
-      window.MA.selection.clearSelection();
-      ctx.onUpdate();
+      // 6 図種で同じ窓: 一緒に消える遷移と note の本数を先に言う (Enter で削除・Esc で取り消し)。
+      var plan = stateDeletePlan(ctx.getMmdText(), st.id);
+      if (!plan) return;
+      window.MA.elementDelete.ask({
+        prefix: 'st', title: '削除', ctx: ctx, plan: plan,
+        message: window.MA.elementDelete.message('状態', st.id, plan, '遷移'),
+      });
     });
-    // BLK-human-20260915-1206: 親を選んで子を足す 1 手。名前を空で押しても
+    // 親を選んで子を足す 1 手。名前を空で押しても
     // 迷わないように、その場で空いている名前 (Sub / Sub2 …) を当てる。
     P.bindEvent('st-add-child', 'click', function() {
       var el = document.getElementById('st-child-id');
@@ -2290,7 +2302,7 @@ window.MA.modules.plantumlState = (function() {
         ctx.onUpdate();
       });
     }
-    // BLK-human-20260923-2000: 「ここから遷移」。次に図で押した状態が遷移先になる (2 クリックで 1 本)。
+    // 「ここから遷移」。次に図で押した状態が遷移先になる (2 クリックで 1 本)。
     P.bindEvent('st-add-tx', 'click', function() {
       _txLast = { parsedData: parsedData, propsEl: propsEl, ctx: ctx };
       _tx.count = 0;
@@ -2311,7 +2323,7 @@ window.MA.modules.plantumlState = (function() {
     });
   }
 
-  // BLK-owner-20260923-2332-1: 遷移の端 (書かれたままの名前) を、候補の値 (状態の id) に引き直す。
+  // 遷移の端 (書かれたままの名前) を、候補の値 (状態の id) に引き直す。
   // `{ }` の中の素の名前も、最上位の `親.子` も、同じ状態の id になる。
   function _endValue(name, scope, states) {
     var n = String(name == null ? '' : name);
@@ -2340,7 +2352,7 @@ window.MA.modules.plantumlState = (function() {
     return same > 1 ? v : bare;
   }
 
-  // BLK-builder-20260924-1202-b2-2: 遷移の端の候補 ({ value: 状態の id, label: `親 / 子` })。
+  // 遷移の端の候補 ({ value: 状態の id, label: `親 / 子` })。
   // `state` 宣言のある状態に、遷移にだけ出てくる状態 (`Idle --> Running` だけで導入された Idle /
   // Running) を足す。集め方は状態遷移表の行と同じ (rowStates) で、行き先にしか出ない状態も拾う。
   // 開始・終了 (`[*]`) と履歴 (`[H]` / `親[H]`) は状態ではないので入れない (呼ぶ側が足す)。
@@ -2371,10 +2383,10 @@ window.MA.modules.plantumlState = (function() {
       if (parsedData.transitions[i].id === sel.id) { tr = parsedData.transitions[i]; break; }
     }
     if (!tr) { propsEl.innerHTML = ''; return; }
-    // BLK-owner-20260923-2332-1: 候補は追加フォーム・状態遷移表と同じく `親 / 子` で並べ、
+    // 候補は追加フォーム・状態遷移表と同じく `親 / 子` で並べ、
     // 書かれた端 (`Standby` / `Idle.Standby`) はどちらも同じ状態の候補を選んだ形で開く。
     var allStates = parsedData.states || [];
-    // BLK-builder-20260924-1202-b2-2: 候補には遷移にだけ出る状態 (宣言の無い Idle / Running) も入れる。
+    // 候補には遷移にだけ出る状態 (宣言の無い Idle / Running) も入れる。
     var stateOptsWithPseudo = [{ value: '[*]', label: '[*]' }].concat(_endOptions(parsedData));
     // 今の端が候補に無い書き方 (`親[H]` など) でも、その値のまま開く (開いて「更新」だけで端を変えない)。
     function withCurrent(opts, written) {
@@ -2387,33 +2399,29 @@ window.MA.modules.plantumlState = (function() {
     var toOpts = withCurrent(stateOptsWithPseudo, tr.to)
       .map(function(o) { return _selectedOpt(o, _endValue(tr.to, tr.scope, allStates)); });
     var html =
-      // BLK-builder-20260924-1305-2 (design 4c): 見出しは「Transition · 4 行目」と、その下に「Idle → Running」。
+      // 見出しは「Transition · 4 行目」と、その下に「Idle → Running」。
       '<div id="st-tr-head" style="font-size:10px;color:var(--accent);margin-bottom:2px;font-weight:bold;">Transition · ' + tr.line + ' 行目</div>' +
       '<div id="st-tr-name" style="font-size:14px;font-weight:bold;color:var(--text-primary);margin-bottom:8px;word-break:break-all;">' +
         window.MA.htmlUtils.escHtml(String(tr.from) + ' → ' + String(tr.to)) + '</div>' +
       P.selectFieldHtml('From', 'st-tr-from', fromOpts) +
       '<button id="st-tr-swap" title="From と To を入れ替える" style="width:100%;font-size:11px;padding:3px 8px;margin-bottom:8px;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);border-radius:3px;cursor:pointer;">⇄ 向きを入れ替え</button>' +
       P.selectFieldHtml('To', 'st-tr-to', toOpts) +
-      P.fieldHtml('きっかけ / trigger', 'st-tr-trig', tr.trigger || '', '例: start') +
-      // BLK-junior-20260915-0406-wish: きっかけの綴りは同じ部品のシーケンス図と
-      // 揃っていなければならない。名前帳から選べば、先輩の図を別に開かずに揃う。
-      P.vocabPickerHtml('st-tr-trig-vocab', { roles: ['method', 'event'] }) +
-      P.fieldHtml('条件 / guard', 'st-tr-guard', tr.guard || '', '例: retry > 3') +
-      P.fieldHtml('実行する処理 / action', 'st-tr-act', tr.action || '', '例: log()') +
-      P.vocabPickerHtml('st-tr-act-vocab', { roles: ['method'] }) +
+      P.fieldHtml('きっかけ', 'st-tr-trig', tr.trigger || '', '例: start') +
+      P.fieldHtml('条件', 'st-tr-guard', tr.guard || '', '例: retry > 3') +
+      P.fieldHtml('実行する処理', 'st-tr-act', tr.action || '', '例: log()') +
       _previewBoxHtml('st-tr-preview') +
-      // BLK-builder-20260907-1306-2 (design 5d): 線の色も「その他… ▾」に畳む。
+      // 線の色も「その他… ▾」に畳む。
       P.colorPaletteHtml('st-tr-more', {
         title: 'その他（線の色）… ',
-        label: '線の色 / Line color',
+        label: window.MA.terms.lineColor,
         notation: '-[#red]->',
         colors: colors(),
         current: tr.color || '',
       }) +
-      // BLK-builder-20260924-1252-2 (design 4c):「状態を追加 / Add state」と「追加する位置」。
+      // 「状態を追加 / Add state」と「追加する位置」。
       // 中身は _bindTrAddState が描く (種類で位置の候補が変わる)。
       '<div id="st-tr-addstate" style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:8px;"></div>' +
-      // BLK-builder-20260907-1737-2 (design 4c):「この遷移にノートを添える」。
+      // 「この遷移にノートを添える」。
       // UseCase / Component / Class の関係には 3c で入っているのに、遷移だけ
       // `note on link` を DSL に手で書くしかなかった。
       P.linkNoteHtml('st-tr-note', {
@@ -2421,7 +2429,7 @@ window.MA.modules.plantumlState = (function() {
         note: window.MA.relationOptions.noteAt(ctx.getMmdText(), tr.line) || '',
         placeholder: '例: リトライ上限を超えた場合のみ',
       }) +
-      P.primaryButtonHtml('st-tr-update', '更新') +
+      P.primaryButtonHtml('st-tr-update', window.MA.terms.apply) +
       P.primaryButtonHtml('st-tr-delete', '✕ 削除');
     propsEl.innerHTML = html;
     _bindTrAddState(tr, parsedData, ctx);
@@ -2437,8 +2445,6 @@ window.MA.modules.plantumlState = (function() {
       trigger: 'st-tr-trig', guard: 'st-tr-guard', action: 'st-tr-act',
     });
 
-    P.bindVocabPicker('st-tr-trig-vocab', 'st-tr-trig', refreshPreview);
-    P.bindVocabPicker('st-tr-act-vocab', 'st-tr-act', refreshPreview);
 
     P.bindEvent('st-tr-swap', 'click', function() {
       var fromEl = document.getElementById('st-tr-from');
@@ -2478,7 +2484,7 @@ window.MA.modules.plantumlState = (function() {
     });
   }
 
-  // ── 遷移の端の状態に 動作・並行領域・色を付ける (BLK-builder-20260924-2350-1, design 4c「その他… ▾」) ──
+  // ── 遷移の端の状態に 動作・並行領域・色を付ける (design 4c「その他… ▾」) ──
   // 遷移にだけ出る状態 (`state` 宣言の無い Idle / Running) は状態を選んでも動作や色を書き込めず、
   // DSL に `Running : entry / …` を手で書くしかなかった。選んだ遷移の From / To を相手にして足す。
   function transitionEndOptions(parsed, tr) {
@@ -2554,11 +2560,11 @@ window.MA.modules.plantumlState = (function() {
     return { text: text, line: '', reason: '' };
   }
 
-  // ── 遷移を選んだまま状態を足す (BLK-builder-20260924-1252-2, design 4c) ──────
+  // ── 遷移を選んだまま状態を足す (design 4c) ──────
   // 以前は「Idle と Running の間に状態を挟む」のに、選択を外して追加タブで State →
   // 追加する位置「この遷移の途中」→ 挟む遷移を一覧から選び直す必要があった。
   // いま選んでいる遷移を相手にして、種類・名前・位置だけで足す。足したらその状態を選ぶ。
-  // BLK-builder-20260924-2341-1: design 4c の残りの 履歴 / 開始 / 終了 と「その他… ▾」
+  // design 4c の残りの 履歴 / 開始 / 終了 と「その他… ▾」
   // (並行状態 fork・join / 入口・出口ポイント) も同じ場所から足す。開始・終了・履歴は相手が遷移で決まるので
   // 名前と位置を聞かず、書かれる 1 行を先に見せる。
   var _trAddKind = 'state';
@@ -2575,7 +2581,7 @@ window.MA.modules.plantumlState = (function() {
     { value: 'join', label: '並行状態 join', base: 'Join' },
     { value: 'entryPoint', label: '入口ポイント', base: 'In' },
     { value: 'exitPoint', label: '出口ポイント', base: 'Out' },
-    // BLK-builder-20260924-2350-1: 状態を足すのではなく、遷移の端の状態に付けるもの。
+    // 状態を足すのではなく、遷移の端の状態に付けるもの。
     { value: 'behavior', label: '状態内の動作', act: true, btn: '＋ 動作を追加' },
     { value: 'region', label: '並行領域に分ける', act: true, btn: '＋ 区切りを足す' },
     { value: 'look', label: '状態の色・ステレオタイプ', act: true, btn: '＋ 色・ステレオタイプを付ける' },
@@ -2635,7 +2641,7 @@ window.MA.modules.plantumlState = (function() {
         ' style="display:' + (otherOpen ? 'flex' : 'none') + ';flex-wrap:wrap;gap:4px;margin:-2px 0 8px;padding:6px;border:1px solid var(--border);border-radius:3px;">' +
         TR_ADD_OTHER.map(function(k) { return chipHtml(k, k.value === _trAddKind); }).join('') + '</div>';
       var head =
-        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">状態を追加 / Add state</label>' +
+        '<label style="display:block;font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:bold;">状態を追加</label>' +
         '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">種類</label>' +
         '<div id="st-tr-add-kind" style="display:flex;flex-wrap:wrap;gap:4px;">' + chips + '</div></div>' + otherRow;
 
@@ -2781,7 +2787,7 @@ window.MA.modules.plantumlState = (function() {
       if (!where) return;
       var raw = (document.getElementById('st-tr-add-id') || {}).value || '';
       var norm = String(raw).trim()
-        ? normalizeIdInput(raw, parsedData)
+        ? normalizeIdInput(raw, parsedData, ctx.getMmdText())
         : { valid: true, id: window.MA.stateChild.uniqueChildId(parsedData, _baseName()), label: '' };
       if (!norm.valid) { alert('名前を入れてください'); return; }
       var t = ctx.getMmdText();
@@ -2818,11 +2824,11 @@ window.MA.modules.plantumlState = (function() {
       P.selectFieldHtml('Position', 'st-note-pos', [
         { value: 'right', label: 'Right', selected: note.position === 'right' },
         { value: 'left', label: 'Left', selected: note.position === 'left' },
-        // BLK-migrator-20260930-0157: 書かれた位置 (note top / bottom of 複合状態) を選んだまま見せる (right に見せて書き換えない)。
+        // 書かれた位置 (note top / bottom of 複合状態) を選んだまま見せる (right に見せて書き換えない)。
         { value: 'top', label: 'Top', selected: note.position === 'top' },
         { value: 'bottom', label: 'Bottom', selected: note.position === 'bottom' }
       ]) +
-      // BLK-human-20260916-0900: 置いた後でも対象と上下の順を変えられる (シーケンス図と揃える)。
+      // 置いた後でも対象と上下の順を変えられる (シーケンス図と揃える)。
       (note.targetId ? P.selectFieldHtml('対象 (Target)', 'st-note-target', (parsedData.states || []).map(function(s) {
         return { value: s.id, label: s.id, selected: s.id === note.targetId };
       })) : '') +
@@ -2830,7 +2836,7 @@ window.MA.modules.plantumlState = (function() {
         '<button id="st-note-up" type="button" style="font-size:11px;padding:2px 8px;cursor:pointer;">↑ 上へ</button>' +
         '<button id="st-note-down" type="button" style="font-size:11px;padding:2px 8px;cursor:pointer;">↓ 下へ</button></div>' +
       '<div style="margin-bottom:6px;"><label style="display:block;font-size:10px;color:var(--text-secondary);">Text</label><textarea id="st-note-text" style="width:100%;min-height:80px;">' + H.escHtml(note.text || '') + '</textarea></div>' +
-      P.primaryButtonHtml('st-note-update', '更新') +
+      P.primaryButtonHtml('st-note-update', window.MA.terms.apply) +
       P.primaryButtonHtml('st-note-delete', '✕ 削除');
     propsEl.innerHTML = html;
 
@@ -2953,7 +2959,7 @@ window.MA.modules.plantumlState = (function() {
     renderDetail();
     P.bindEvent('st-mod-kind', 'change', renderDetail);
 
-    // BLK-owner-20260923-2332-prune: シーケンス図の挿入メニューと同じく Esc で閉じる。
+    // シーケンス図の挿入メニューと同じく Esc で閉じる。
     function onKey(ev) {
       if (ev.key === 'Escape' && modal.style.display !== 'none') { ev.preventDefault(); close(); }
     }
@@ -2969,8 +2975,8 @@ window.MA.modules.plantumlState = (function() {
       var out = t;
       if (k === 'state') {
         var id = (document.getElementById('st-mod-id') || {}).value || '';
-        var modNorm = normalizeIdInput(id, parsed);
-        if (!modNorm.valid) { alert('ID 必須'); return; }
+        var modNorm = normalizeIdInput(id, parsed, ctx.getMmdText());
+        if (!modNorm.valid) { window.MA.properties.needField('st-mod-id', '名前'); return; }
         out = addStateAtLine(t, line, position, modNorm.id, null, modNorm.label);
       } else {
         out = addTransitionAtLine(t, line, position,
@@ -3035,6 +3041,7 @@ window.MA.modules.plantumlState = (function() {
     moveStateOutOfComposite: moveStateOutOfComposite,
     deleteNode: deleteNode,
     deleteStateWithRefs: deleteStateWithRefs,
+    stateDeletePlan: stateDeletePlan,
     resolveInsertLine: resolveInsertLine,
     showInsertForm: showInsertForm,
     showAddTransitionModal: showAddTransitionModal,

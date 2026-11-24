@@ -84,7 +84,7 @@ window.MA.richLabelEditor = (function() {
     return '<div class="rle-color-panel" hidden'
       + ' style="position:absolute;z-index:10;top:100%;left:0;margin-top:2px;padding:8px;'
       + 'background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;">'
-      + '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;">文字色 / Text color</div>'
+      + '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;">文字色</div>'
       + '<div style="display:flex;gap:4px;align-items:center;">' + swatches + '</div>'
       + recentHtml
       + '<button type="button" class="rle-color-clear" style="display:block;width:100%;margin-top:8px;'
@@ -116,7 +116,7 @@ window.MA.richLabelEditor = (function() {
         colorPanelHtml(recent) +
       '</div>' +
       '<textarea class="rle-textarea" style="width:100%;min-height:60px;background:var(--bg-tertiary);border:1px solid var(--border);border-top:none;color:var(--text-primary);padding:6px;border-radius:0 0 3px 3px;font-family:var(--font-mono);font-size:12px;resize:vertical;box-sizing:border-box;">' + escHtml(initialValue || '') + '</textarea>' +
-      // BLK-owner-20260923-2332-prune: 見え方の欄は白い 1 行欄に見え、本文の欄が 2 つあると
+      // 見え方の欄は白い 1 行欄に見え、本文の欄が 2 つあると
       // 読まれていた。打てない欄だと分かる形 (見出し付き・破線の枠) にし、空の間は出さない。
       '<div class="rle-preview-wrap"' + (String(initialValue || '').trim() ? '' : ' hidden') + ' style="margin-top:6px;">' +
         '<div class="rle-preview-caption" style="font-size:10px;color:var(--text-secondary);margin-bottom:2px;">図での見え方</div>' +
@@ -125,6 +125,15 @@ window.MA.richLabelEditor = (function() {
 
     var ta = container.querySelector('.rle-textarea');
     var preview = container.querySelector('.rle-preview');
+    // 本文の欄を見出しに結び付ける (TICKET-owner-20261116-1221-1)。入れ物に id があれば欄は `{入れ物}-text`、
+    // 入れ物の直前の見出し (<label>) が欄を指していなければここを指させる (見出しを押すと欄に移り、見出しの語で欄を引ける)。
+    if (container.id) {
+      ta.id = container.id + '-text';
+      var head = container.previousElementSibling;
+      if (head && head.tagName && head.tagName.toUpperCase() === 'LABEL' && !head.getAttribute('for') && !head.id) {
+        head.setAttribute('for', ta.id);
+      }
+    }
 
     var previewWrap = container.querySelector('.rle-preview-wrap');
     function refreshPreview() {
@@ -133,7 +142,7 @@ window.MA.richLabelEditor = (function() {
     }
 
     // onChange への出力も getValue() と同じ正規化を通す (実改行 → literal \n)。
-    // BLK-owner-20260924-2232-4: 確定する値の末尾の空白・改行は書かない。
+    // 確定する値の末尾の空白・改行は書かない。
     function normalized() { return ta.value.replace(/\s+$/, '').replace(/\n/g, '\\n'); }
     var lastCommitted = null;
     // Bug 2+5: input (毎 keystroke) は preview のみ更新 (パネル再描画なし)。
@@ -150,7 +159,7 @@ window.MA.richLabelEditor = (function() {
     });
     ta.addEventListener('keydown', function(e) {
       if (e.isComposing) return;
-      // BLK-owner-20260924-2232-4: 1 行で足りる本文欄は Enter で確定、Shift+Enter で改行 (\n)。
+      // 1 行で足りる本文欄は Enter で確定、Shift+Enter で改行 (\n)。
       // 改行は上の ↵ ボタンでも入れられる。Tab は次の欄へ移る (空白を入れない = ブラウザの既定)。
       if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();

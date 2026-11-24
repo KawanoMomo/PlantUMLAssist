@@ -1,0 +1,14 @@
+@startuml
+title SPI 初期化シーケンス
+' 手で整えた図。字下げとコメントは道具に崩させない
+participant App
+participant SpiDrv
+participant SpiDrvMon
+participant Hw
+
+App -> SpiDrv : Spi_Init()
+  SpiDrv -> Hw : WriteReg(CTRL)
+  Hw --> SpiDrv : ack
+SpiDrvMon -> SpiDrv : watch()
+SpiDrv --> App : E_OK
+@enduml

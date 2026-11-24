@@ -115,6 +115,66 @@ test.describe('FEAT-116: Alt+↑ / Alt+↓ による DSL エディタの行移�
     expect(await getEditorText(page)).toBe(before);
   });
 
+  // TICKET-junior-20261122-1001-wish: 複数行を選んで Alt+↑ / Alt+↓ を押すと、選んだ行の塊がまとめて動き、
+  // 選択は塊に付いていく。差分は塊と入れ替わった 1 行だけで、Ctrl+Z 1 回で元のバイト列に戻る。
+  async function selectLines(page, from, to) {
+    await page.locator('#editor').evaluate((el, r) => {
+      el.focus();
+      var lines = el.value.split('\n');
+      var s = lines.slice(0, r[0] - 1).join('\n').length + (r[0] > 1 ? 1 : 0);
+      var e = lines.slice(0, r[1]).join('\n').length;
+      el.setSelectionRange(s, e);
+    }, [from, to]);
+  }
+  async function selectedText(page) {
+    return page.locator('#editor').evaluate((el) => el.value.substring(el.selectionStart, el.selectionEnd));
+  }
+
+  test('[複数行] 3 行を選んで Alt+↑ 1 回で塊ごと 1 行上へ動き、Ctrl+Z 1 回で戻る', async ({ page }) => {
+    await setup(page);
+    const before = await getEditorText(page);
+    const b = before.split('\n');
+    // 7〜9 行目 (System -> DB / DB --> System / System --> User) を選ぶ。
+    await selectLines(page, 7, 9);
+    const sel = await selectedText(page);
+    expect(sel).toBe(b.slice(6, 9).join('\n'));
+    await page.keyboard.press('Alt+ArrowUp');
+    await page.waitForTimeout(900);
+    const a = (await getEditorText(page)).split('\n');
+    expect(a.length).toBe(b.length);
+    // 差分は塊と、塊の下へ回った 6 行目 (User -> System) だけ。
+    expect(a.slice(5, 8)).toEqual(b.slice(6, 9));
+    expect(a[8]).toBe(b[5]);
+    for (let i = 0; i < 5; i++) expect(a[i]).toBe(b[i]);
+    for (let i = 9; i < b.length; i++) expect(a[i]).toBe(b[i]);
+    // 選択は動かした塊に付いていく
+    expect(await selectedText(page)).toBe(sel);
+    await page.locator('#editor').focus();
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(900);
+    expect(await getEditorText(page)).toBe(before);
+  });
+
+  test('[複数行] 3 行を選んで Alt+↓ で塊ごと 1 行下へ。1 行目に掛かる塊の Alt+↑ は動かない', async ({ page }) => {
+    await setup(page);
+    const before = await getEditorText(page);
+    const b = before.split('\n');
+    await selectLines(page, 2, 4);
+    const sel = await selectedText(page);
+    await page.keyboard.press('Alt+ArrowDown');
+    await page.waitForTimeout(700);
+    const a = (await getEditorText(page)).split('\n');
+    expect(a[1]).toBe(b[4]);
+    expect(a.slice(2, 5)).toEqual(b.slice(1, 4));
+    expect(await selectedText(page)).toBe(sel);
+    // 端: 1 行目を含む塊の Alt+↑ は本文を 1 バイトも変えない
+    const now = await getEditorText(page);
+    await selectLines(page, 1, 3);
+    await page.keyboard.press('Alt+ArrowUp');
+    await page.waitForTimeout(400);
+    expect(await getEditorText(page)).toBe(now);
+  });
+
   // (b) 回帰ガード。実装前から PASS することを想定している (E5 の分類を run ログ / IMPL に明記済み)。
   test('[AC-7] 既存の Tab / Shift+Tab インデントが回帰しない', async ({ page }) => {
     await setup(page);

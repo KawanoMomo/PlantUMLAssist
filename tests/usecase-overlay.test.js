@@ -123,7 +123,8 @@ describe('usecase.buildOverlay — package + relation', function() {
       groups: [{ kind: 'package', id: '__pkg_0', label: 'Pkg', startLine: 2, endLine: 5 }],
     };
     ucMod.buildOverlay(src, parsed, ov);
-    var pkgs = ov.querySelectorAll('rect[data-type="package"]');
+    // BLK-owner-20260930-0711-1: 境界は中の空所 (container) 1 つと、4 辺の帯・見出しの札 (framebelt) で当たる
+    var pkgs = ov.querySelectorAll('rect[data-type="package"][data-hit-kind="container"]');
     expect(pkgs.length).toBe(1);
     expect(pkgs[0].getAttribute('data-id')).toBe('__pkg_0');
   });

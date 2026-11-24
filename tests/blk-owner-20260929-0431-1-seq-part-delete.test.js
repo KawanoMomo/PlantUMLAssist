@@ -17,9 +17,9 @@ var loadErrors = [];
   'src/core/html-utils.js', 'src/core/dsl-utils.js', 'src/core/note-edit.js', 'src/core/regex-parts.js',
   'src/core/id-normalizer.js', 'src/core/line-resolver.js', 'src/core/formatter-interface.js',
   'src/core/dsl-updater.js', 'src/core/props-renderer.js', 'src/core/text-updater.js',
-  'src/core/parser-utils.js', 'src/core/history.js', 'src/core/selection.js',
+  'src/core/parser-utils.js', 'src/core/history.js', 'src/core/selection.js', 'src/core/element-delete.js',
   'src/core/label-colors.js',
-  'src/ui/properties.js', 'src/ui/rich-label-editor.js', 'src/core/sequence-participant-zone.js', 'src/modules/sequence.js',
+  'src/ui/terms.js', 'src/ui/properties.js', 'src/ui/rich-label-editor.js', 'src/core/sequence-participant-zone.js', 'src/modules/sequence.js',
 ].forEach(function(rel) {
   var code = fs.readFileSync(path.join(ROOT, rel), 'utf-8');
   try {
@@ -113,22 +113,51 @@ describe('BLK-owner-20260929-0431-1: participantOwnsLine / participantLineGuard'
   });
 });
 
-describe('BLK-owner-20260929-0431-1: 宣言の行が無い参加者の ✕ 削除は本文を変えない', function() {
-  test('暗黙の参加者: メッセージの行を消さず、理由を言う', function() {
+// TICKET-owner-20261124-0422-3: 参加者の ✕ 削除は、宣言の行だけでなくメッセージ・note・activate 等の付いた行も
+// 6 図種共通の窓 (#seq-del-modal) で本数を言ってから一緒に消す。宣言の行が無い参加者も黙って別の行を消さない
+// (窓が消える本数を言い、「削除する」まで本文を変えない)。
+function modalText() {
+  var m = W.document.getElementById('seq-del-message');
+  return m ? m.textContent : '';
+}
+function confirmModal() {
+  var ok = W.document.getElementById('seq-del-confirm');
+  if (!ok) throw new Error('seq-del-confirm not shown');
+  ok.click();
+}
+function cancelModal() {
+  var c = W.document.getElementById('seq-del-cancel');
+  if (c) c.click();
+}
+
+describe('BLK-owner-20260929-0431-1 / TICKET-owner-20261124-0422-3: 宣言の行が無い参加者の ✕ 削除は窓が本数を言う', function() {
+  test('暗黙の参加者: 押しただけでは本文を変えず、窓がメッセージの本数を言う。削除するで参加者の行が全部消える', function() {
     start(IMPLICIT);
     var p = selectPart('B', 2);
     btn(p, 'seq-delete-line').click();
     expect(text).toBe(IMPLICIT);
-    expect(/「B」には宣言の行がありません/.test(toastText())).toBe(true);
+    expect(modalText()).toBe('参加者 B を削除します。メッセージ 2 本も消えます。');
+    confirmModal();
+    expect(text).toBe(['@startuml', '@enduml'].join('\n'));
   });
 
-  test('create で作った参加者 (頭は最初のメッセージの行): create 直後のメッセージを消さず、描ける本文のまま', function() {
+  test('取り消しなら何も変えない', function() {
+    start(IMPLICIT);
+    btn(selectPart('B', 2), 'seq-delete-line').click();
+    cancelModal();
+    expect(text).toBe(IMPLICIT);
+    expect(W.document.getElementById('seq-del-modal')).toBe(null);
+  });
+
+  test('create で作った参加者: create の行とメッセージを一緒に消し、描ける本文のまま', function() {
     start(CREATED);
     var p = selectPart('Worker', 5);
     btn(p, 'seq-delete-line').click();
     expect(text).toBe(CREATED);
+    expect(modalText()).toBe('参加者 Worker を削除します。メッセージ 2 本も消えます。');
+    confirmModal();
+    expect(text).toBe(['@startuml', 'participant Main', 'Main -> Main : start', '@enduml'].join('\n'));
     expect(createFollowedByMessage(text)).toBe(true);
-    expect(/宣言の行がありません/.test(toastText())).toBe(true);
   });
 
   test('暗黙の参加者の ↑↓ もメッセージの行を動かさない', function() {
@@ -146,42 +175,61 @@ describe('BLK-owner-20260929-0431-1: 見出し・削除は選んで光らせた�
   test('create し直した 2 回目の頭: 見出しは 2 回目の create の行 (L7)', function() {
     start(RECREATED);
     var p = selectPart('Worker', 7);
-    expect(/participant · L7/.test(p.textContent)).toBe(true);
+    expect(/participant · 7 行目/.test(p.textContent)).toBe(true);
     expect(btn(p, 'seq-delete-line').getAttribute('data-line')).toBe('7');
     expect(btn(p, 'seq-move-up').getAttribute('data-line')).toBe('7');
   });
 
-  test('2 回目の頭の ✕ 削除は 2 回目の create の行だけを消し、1 回目のメッセージは残る', function() {
+  test('create し直した参加者の ✕ 削除は、2 回の create・destroy・メッセージを一緒に消し、描ける本文になる', function() {
     start(RECREATED);
     var p = selectPart('Worker', 7);
     btn(p, 'seq-delete-line').click();
-    var want = RECREATED.split('\n');
-    want.splice(6, 1);
-    expect(text).toBe(want.join('\n'));
-    expect(text.indexOf('Main -> Worker : run(job1)') >= 0).toBe(true);
+    expect(modalText()).toBe('参加者 Worker を削除します。メッセージ 4 本とactivate 等 1 行も消えます。');
+    confirmModal();
+    expect(text).toBe(['@startuml', 'participant Main', '@enduml'].join('\n'));
     expect(createFollowedByMessage(text)).toBe(true);
   });
 
-  test('宣言のある参加者は今までどおり宣言の行だけを消す', function() {
+  test('宣言のある参加者: 宣言とメッセージを一緒に消し、Ctrl+Z 1 回で全部戻る', function() {
     start(DECLARED);
     var p = selectPart('Alice', 2);
-    expect(/participant · L2/.test(p.textContent)).toBe(true);
+    expect(/participant · 2 行目/.test(p.textContent)).toBe(true);
     btn(p, 'seq-delete-line').click();
-    expect(text).toBe(['@startuml', 'participant Bob', 'Alice -> Bob : hi', '@enduml'].join('\n'));
+    expect(modalText()).toBe('参加者 Alice を削除します。メッセージ 1 本も消えます。');
+    confirmModal();
+    expect(text).toBe(['@startuml', 'participant Bob', '@enduml'].join('\n'));
+    W.MA.history.undo();
+    expect(text).toBe(DECLARED);
   });
 
-  test('create participant で宣言した参加者は、その行を消しても描ける本文になる', function() {
+  test('create participant で宣言した参加者も、宣言とメッセージを一緒に消す', function() {
     start(CREATE_DECL);
     var p = selectPart('Worker', 3);
     btn(p, 'seq-delete-line').click();
-    expect(text).toBe(['@startuml', 'participant Main', 'Main -> Worker : run', '@enduml'].join('\n'));
+    confirmModal();
+    expect(text).toBe(['@startuml', 'participant Main', '@enduml'].join('\n'));
     expect(createFollowedByMessage(text)).toBe(true);
+  });
+
+  test('note over の対象と activate の行も一緒に消える。線の無い参加者は窓を出さず 1 行だけ消す', function() {
+    var T = ['@startuml', 'participant Ctl', 'participant Sub', 'participant Solo', 'Ctl -> Sub : req', 'activate Sub',
+      'note over Ctl, Sub : both', 'note over Sub', '  long', 'end note', 'deactivate Sub', '@enduml'].join('\n');
+    start(T);
+    btn(selectPart('Sub', 3), 'seq-delete-line').click();
+    expect(modalText()).toBe('参加者 Sub を削除します。メッセージ 1 本とnote 2 つとactivate 等 2 行も消えます。');
+    confirmModal();
+    expect(text).toBe(['@startuml', 'participant Ctl', 'participant Solo', '@enduml'].join('\n'));
+    start(T);
+    btn(selectPart('Solo', 4), 'seq-delete-line').click();
+    expect(W.document.getElementById('seq-del-modal')).toBe(null);
+    expect(text.split('\n').indexOf('participant Solo')).toBe(-1);
+    expect(text.split('\n').length).toBe(T.split('\n').length - 1);
   });
 
   test('選択に行が無いときは参加者の行で描く (従来の見え方を保つ)', function() {
     start(DECLARED);
     var propsEl = W.document.getElementById('props');
     SEQ.renderProps([{ type: 'participant', id: 'Bob' }], SEQ.parseSequence(text), propsEl, ctx);
-    expect(/participant · L3/.test(propsEl.textContent)).toBe(true);
+    expect(/participant · 3 行目/.test(propsEl.textContent)).toBe(true);
   });
 });

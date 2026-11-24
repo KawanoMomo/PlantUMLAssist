@@ -45,22 +45,154 @@ window.MA.dslUpdater = (function() {
     return lines.join('\n');
   }
 
+  // 行の塊 [startLine, endLine] (1 始まり・両端を含む) をまとめて 1 行上 / 下へ動かす
+  // (TICKET-junior-20261122-1001-wish。DSL エディタで複数行を選んで Alt+↑ / Alt+↓)。
+  // 塊の隣の 1 行が塊の反対側へ回るだけで、ほかの行と改行コード (CRLF / LF) は変えない。
+  // 端 (上なら 1 行目、下なら最終行に塊が掛かる) や範囲外では入力をそのまま返す。
+  function _splitKeepEol(text) {
+    var eol = text.indexOf('\r\n') >= 0 ? '\r\n' : '\n';
+    return { lines: text.split(eol), eol: eol };
+  }
+  function moveLinesUp(text, startLine, endLine) {
+    var sp = _splitKeepEol(text), lines = sp.lines;
+    var s = startLine - 1, e = endLine - 1;
+    if (s <= 0 || e < s || e >= lines.length) return text;
+    var above = lines[s - 1];
+    lines.splice(s - 1, 1);
+    lines.splice(e, 0, above);
+    return lines.join(sp.eol);
+  }
+  function moveLinesDown(text, startLine, endLine) {
+    var sp = _splitKeepEol(text), lines = sp.lines;
+    var s = startLine - 1, e = endLine - 1;
+    if (s < 0 || e < s || e >= lines.length - 1) return text;
+    var below = lines[e + 1];
+    lines.splice(e + 1, 1);
+    lines.splice(s, 0, below);
+    return lines.join(sp.eol);
+  }
+
+  // 改名で参照する行を付け替える。付け替えるのは識別子の位置 (宣言・線の両端・`note … of X` /
+  // `note over X` の対象) だけで、利用者が書いた文の字は 1 バイトも変えない (TICKET-owner-20261124-0422-2):
+  //   - コメント行・引用符の中
+  //   - 行のラベルの区切り `:` の後 (関係・メッセージのラベル、1 行の note の本文、状態の説明)。
+  //     ユースケース図のアクターの短い書き方 `:User:` は識別子なので区切りと見なさない
+  //   - 複数行の note / legend / ref / title・header・footer・caption の本文
+  //   - 文だけの行 (title 等の 1 行、`== … ==`・`... … ...`、alt / else / loop 等の見出し)
+  var _RWR_Q = '\u0001', _RWR_A = '\u0002';
+  // 見出しの語で始まっても、矢印を持つ行 (`group --> X` のように語を名前にした関係) は文の行と見なさない。
+  var _RWR_TEXT_LINE = /^\s*(?:(?:title|header|footer|caption|newpage)\b.*\S|==.*==\s*$|\.\.\..*\.\.\.\s*$|(?:alt|else|opt|loop|par|par2|break|critical|group)\b(?!.*(?:-+>|<-+|\.\.+>|<\.\.+|--|\.\.)))/i;
+  function _rwrBlockEnd(line, masked) {
+    var t = masked.trim();
+    var m = /^([rh]?note)\b/i.exec(t);
+    if (m) {
+      if (masked.indexOf(':') >= 0 || line.indexOf('"') >= 0) return null;
+      return /^\s*end\s*[rh]?note\b/i;
+    }
+    if (/^legend\b/i.test(t)) return /^\s*end\s*legend\b/i;
+    if (/^ref\s+over\b/i.test(t) && masked.indexOf(':') < 0) return /^\s*end\s*ref\b/i;
+    m = /^(title|header|footer|caption)\s*$/i.exec(t);
+    if (m) return new RegExp('^\\s*end\\s*' + m[1] + '\\b', 'i');
+    return null;
+  }
   function renameWithRefs(text, oldId, newId) {
     if (!oldId || !newId || oldId === newId) return text;
     var escaped = DU.escapeForRegex(oldId);
     var pattern = new RegExp('\\b' + escaped + '\\b', 'g');
+    var blockEnd = null;
     return text.split('\n').map(function(line) {
+      if (blockEnd) {
+        if (blockEnd.test(line)) blockEnd = null;
+        return line;
+      }
       if (DU.isPlantumlComment(line)) return line;
-      var quoted = [];
-      var stripped = line.replace(/"[^"]*"/g, function(m) {
+      var quoted = [], actors = [];
+      var masked = line.replace(/"[^"]*"/g, function(m) {
         quoted.push(m);
-        return '' + (quoted.length - 1) + '';
+        return _RWR_Q + (quoted.length - 1) + _RWR_Q;
+      }).replace(/(^|[\s\-.<>(])(:[^:\s\u0001][^:\u0001]*:)(?=\s|$|[\-.<>)])/g, function(_, pre, tok) {
+        actors.push(tok);
+        return pre + _RWR_A + (actors.length - 1) + _RWR_A;
       });
-      var replaced = stripped.replace(pattern, newId);
-      return replaced.replace(/(\d+)/g, function(_, idx) {
-        return quoted[parseInt(idx, 10)];
-      });
+      var end = _rwrBlockEnd(line, masked);
+      if (end) {
+        blockEnd = end;
+        if (!/^\s*[rh]?note\b|^\s*ref\b/i.test(masked)) return line;
+      }
+      if (_RWR_TEXT_LINE.test(masked)) return line;
+      // ラベルの区切り: 最初の `:` (`::` の名前空間は区切りにしない)。
+      var cut = -1;
+      for (var i = 0; i < masked.length; i++) {
+        if (masked.charAt(i) !== ':') continue;
+        if (masked.charAt(i + 1) === ':') { i++; continue; }
+        cut = i; break;
+      }
+      var head = cut >= 0 ? masked.slice(0, cut) : masked;
+      var tail = cut >= 0 ? masked.slice(cut) : '';
+      var restore = function(s, renameActors) {
+        return s.replace(/\u0002(\d+)\u0002/g, function(_, idx) {
+          var tok = actors[parseInt(idx, 10)];
+          return renameActors ? tok.replace(pattern, newId) : tok;
+        }).replace(/\u0001(\d+)\u0001/g, function(_, idx) {
+          return quoted[parseInt(idx, 10)];
+        });
+      };
+      return restore(head.replace(pattern, newId), true) + restore(tail, false);
     }).join('\n');
+  }
+
+  // 右パネルの「変更を反映」で名前 (id) を変えたときの共通の口 (TICKET-owner-20261124-0422-1)。
+  // 宣言の行 (declLine, 1 始まり) は図種の更新関数 updateDecl(text) -> text が書き換え (表示名・
+  // ステレオタイプ・色の書き方は図種の流儀のまま)、withRefs なら宣言の行の外で oldId を識別子として
+  // 持つ行 (遷移・関係の両端、`note … of X` など) を newId に付け替える。行の数は変えないので
+  // declLine はどちらの順でも同じ行を指す。宣言の行が更新関数で変わらない (宣言の無い要素で
+  // declLine が関係の行を指す等) ときは、その行も参照として付け替える (要素が 2 つに割れない)。
+  // CRLF の図で、図種の更新関数が宣言の行の末尾の \r を落としたら戻す (その行だけ LF に替わらない)。
+  function _keepCr(before, after, idx) {
+    var b = before.split('\n'), a = after.split('\n');
+    if (a.length !== b.length || idx < 0 || idx >= b.length) return after;
+    if (/\r$/.test(b[idx]) && !/\r$/.test(a[idx])) { a[idx] += '\r'; return a.join('\n'); }
+    return after;
+  }
+  // 表示名を書いていない宣言 (`component Bus`・`[Bus]`・`actor User`・`usecase (Login)`・`state Idle #pink`) は、
+  // 名前の字だけを替えた行を返す (宣言の形・ステレオタイプ・色・`{` はそのまま)。表示名のある宣言 (`"…"`・`as`) や
+  // 名前が識別子として出てこない行は null (図種の更新関数に任せる)。TICKET-owner-20261124-0822-3:
+  // 以前は図種の更新関数が前の名前を表示名に据えて `component "Bus" as Bus2` と書き、図は前の名前のまま描かれた。
+  function _bareDeclRename(line, oldId, newId) {
+    if (line == null || String(line).indexOf('"') >= 0) return null;
+    var s = String(line);
+    if (DU.isPlantumlComment(s)) return null;
+    var head = s.replace(/:[^:\s][^:]*:/g, ' ');   // `:User:` の形のアクターは名前そのもの
+    var cut = head.search(/:(?!:)/);
+    if (cut >= 0) head = head.slice(0, cut);
+    if (/\bas\b/i.test(head)) return null;
+    var out = renameWithRefs(s, oldId, newId);
+    return out === s ? null : out;
+  }
+
+  function renameDecl(text, declLine, oldId, newId, updateDecl, withRefs) {
+    var renamed = (oldId && newId && oldId !== newId);
+    var idx = (declLine | 0) - 1;
+    if (renamed) {
+      var all = text.split('\n');
+      var bare = (idx >= 0 && idx < all.length) ? _bareDeclRename(all[idx], oldId, newId) : null;
+      if (bare != null) {
+        var base = withRefs ? renameWithRefs(text, oldId, newId).split('\n') : all;
+        if (base.length === all.length) {
+          base[idx] = bare;
+          return base.join('\n');
+        }
+      }
+    }
+    if (!renamed || !withRefs) return _keepCr(text, updateDecl(text), idx);
+    var lines = text.split('\n');
+    if (idx < 0 || idx >= lines.length) return renameWithRefs(updateDecl(text), oldId, newId);
+    var refs = renameWithRefs(text, oldId, newId).split('\n');
+    refs[idx] = lines[idx];
+    var outside = refs.join('\n');
+    var out = updateDecl(outside);
+    if (out === outside) return renameWithRefs(text, oldId, newId);
+    return _keepCr(outside, out, idx);
   }
 
   // FEAT-180 (resolves HFR-041): 既存の skinparam 行をすべて取り除き、
@@ -97,7 +229,10 @@ window.MA.dslUpdater = (function() {
     insertBeforeEnd: insertBeforeEnd,
     moveLineUp: moveLineUp,
     moveLineDown: moveLineDown,
+    moveLinesUp: moveLinesUp,
+    moveLinesDown: moveLinesDown,
     renameWithRefs: renameWithRefs,
+    renameDecl: renameDecl,
     applySkinparamPreset: applySkinparamPreset,
   };
 })();

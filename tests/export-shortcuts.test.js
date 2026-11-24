@@ -68,7 +68,7 @@ describe('export-shortcuts — Export メニューのキー割り当て (design 
   // BLK-builder-20260907-1403-4: 一覧の行は割り当ての差し替え先を指すため id を持つ。
   test('shortcutRows: 設定のショートカット一覧と同じ形 ({id, keys, desc}) で渡せる', () => {
     expect(ES.shortcutRows()).toEqual([
-      { id: 'exp-svg', keys: 'Ctrl+Shift+S', desc: 'SVG として保存' },
+      { id: 'exp-svg', keys: 'Ctrl+Shift+S', desc: 'SVG で書き出す' },
       { id: 'exp-clipboard', keys: 'Ctrl+Shift+C', desc: 'クリップボードにコピー' },
     ]);
   });

@@ -44,7 +44,6 @@ describe('自動保存が「どこまで届いたか」を残す', function() {
       return Promise.resolve({ ok: true, json: function() { return Promise.resolve({}); } });
     };
     as.setFileNameResolver(null);
-    as.setFileGuard(null);
   });
 
   test('ファイルへ書いた回は where=file と書き先の名前が残る', function() {
@@ -58,28 +57,28 @@ describe('自動保存が「どこまで届いたか」を残す', function() {
     expect(posts.length).toBe(1);
   });
 
-  test('錠の返事待ちは書かず、where=deferred / reason=ask が残る', function() {
+  test('解決器が書かない訳を返したら書かず、where=deferred / その訳が残る', function() {
     as.setConfig({ backend: 'file', fileDir: '/test' });
-    as.setFileNameResolver(function() { return { name: '', reason: 'ask' }; });
+    as.setFileNameResolver(function() { return { name: '', reason: 'untouched' }; });
     as.scheduleSave('plantuml-class', 'BODY');
     as.flush();
     expect(posts.length).toBe(0);
     var last = as.getLastWrite();
     expect(last.where).toBe('deferred');
-    expect(last.reason).toBe('ask');
+    expect(last.reason).toBe('untouched');
     // 打った内容そのものは失われない (ブラウザ側には残る)。
     expect(as.restoreFor('plantuml-class')).toBe('BODY');
   });
 
-  test('返事待ちは黙って落とさず知らせる (打っても何も起きない状態を続けない)', function() {
+  test('書かなかった回は黙って落とさず知らせる (打っても何も起きない状態を続けない)', function() {
     var heard = [];
     as.onFileDeferred(function(info) { heard.push(info); });
     as.setConfig({ backend: 'file', fileDir: '/test' });
-    as.setFileNameResolver(function() { return { name: '', reason: 'ask' }; });
+    as.setFileNameResolver(function() { return { name: '', reason: 'untouched' }; });
     as.scheduleSave('plantuml-class', 'BODY');
     as.flush();
     expect(heard.length).toBe(1);
-    expect(heard[0].reason).toBe('ask');
+    expect(heard[0].reason).toBe('untouched');
   });
 
   test('開いたときのまま (unchanged) も deferred だが訳が違う', function() {
@@ -101,7 +100,7 @@ describe('自動保存が「どこまで届いたか」を残す', function() {
 
   test('手で押した保存 (別経路) が書いたら記録も届いた先に揃う', function() {
     as.setConfig({ backend: 'file', fileDir: '/test' });
-    as.setFileNameResolver(function() { return { name: '', reason: 'ask' }; });
+    as.setFileNameResolver(function() { return { name: '', reason: 'untouched' }; });
     as.scheduleSave('plantuml-class', 'BODY');
     as.flush();
     expect(as.getLastWrite().where).toBe('deferred');
@@ -127,12 +126,11 @@ describe('状態バーの が届いた先を言い分ける', function() {
     expect(d.pending).toBe(false);
   });
 
-  test('返事待ちは「たった今」と言わず、未保存と名指しして押せる', function() {
-    var d = AST.describe(meta, { where: 'deferred', reason: 'ask' }, 'たった今', 'driver_common_class');
+  test('書けなかった回は「たった今」と言わず、未保存と名指しする', function() {
+    var d = AST.describe(meta, { where: 'deferred', reason: 'no-name' }, 'たった今', 'driver_common_class');
     expect(d.text).not.toContain('たった今');
     expect(d.text).toContain('未保存');
     expect(d.text).toContain('driver_common_class.puml');
-    expect(d.pending).toBe(true);
   });
 
   test('控えへ逸れた回は控えの名前が出る (本体が変わったと読めない)', function() {

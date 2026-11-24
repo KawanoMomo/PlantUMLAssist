@@ -46,4 +46,15 @@ describe('save-target — 「保存」の行き先 (BLK-primary-20260907-0823)',
       .toBe('⬇ timer_state.puml をダウンロードしました');
     expect(STG.messageFor(null, true)).toBe('');
   });
+
+  // BLK-human-20261006-2020-1: 押した直後に保存ボタンの隣へ「いつ・どこへ」を出す。
+  test('savedFlash: 時刻と保存先のフォルダ名・ファイル名を 1 行で言い、title に全パスを持つ', () => {
+    var at = new Date(2026, 9, 6, 9, 5, 7);
+    var f = STG.savedFlash({ mode: 'file', name: 'adc_seq', dir: 'E:/persona-data/junior' }, at);
+    expect(f.text).toBe('✓ 09:05:07 junior/adc_seq.puml に保存');
+    expect(f.title).toBe('09:05:07 に E:/persona-data/junior/adc_seq.puml へ保存しました');
+    var d = STG.savedFlash({ mode: 'download', name: 'adc_seq' }, at);
+    expect(d.text).toBe('✓ 09:05:07 adc_seq.puml をダウンロード');
+    expect(STG.savedFlash(null, at)).toBeNull();
+  });
 });

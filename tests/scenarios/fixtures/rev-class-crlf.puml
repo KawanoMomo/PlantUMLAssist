@@ -1,0 +1,15 @@
+@startuml
+' 構成(レビュー用・CRLF)
+skinparam classAttributeIconSize 0
+
+class Drv {
+  ' 属性
+  - speed : int
+  + start() : void
+}
+' 監視側
+class DrvMon {
+  - speed : int
+}
+Drv --> DrvMon
+@enduml

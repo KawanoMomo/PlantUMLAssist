@@ -13,14 +13,14 @@ if (!global.window) {
   global.document = dom.window.document;
 }
 
-['../src/core/dsl-utils.js', '../src/core/method-audit.js',
- '../src/core/name-audit.js', '../src/core/outline.js'].forEach(function(m) {
+// method-audit (遷移ラベルとメソッドの突合) は TICKET-owner-20261116-0321-prune で外した。
+// name-audit (名前突合) は TICKET-roadmap-20261115-2114-2 で外した。
+['../src/core/dsl-utils.js', '../src/core/outline.js'].forEach(function(m) {
   try { delete require.cache[require.resolve(m)]; } catch (e) {}
   require(m);
 });
 
 var DU = global.window.MA.dslUtils;
-var MA_ = global.window.MA.methodAudit;
 var OL = global.window.MA.outline;
 
 var STATE_DSL = [
@@ -68,43 +68,6 @@ describe('dslUtils.splitLines', function() {
   test('空・null でも落ちない', function() {
     expect(DU.splitLines('')).toEqual(['']);
     expect(DU.splitLines(null)).toEqual(['']);
-  });
-});
-
-describe('methodAudit.stateEvents — CRLF', function() {
-  test('LF と CRLF で同じイベントが取れる', function() {
-    var a = MA_.stateEvents(docs(lf));
-    var b = MA_.stateEvents(docs(crlf));
-    expect(a.map(function(e) { return e.event; })).toEqual(['Timer_StartConv', 'Timer_Ack']);
-    expect(b).toEqual(a);
-  });
-
-  test('CRLF でも 0 件にならない (これが今回の不具合)', function() {
-    expect(MA_.stateEvents(docs(crlf)).length).toBe(2);
-  });
-
-  test('行番号も CRLF でずれない', function() {
-    var b = MA_.stateEvents(docs(crlf));
-    expect(b[0].line).toBe(5);
-    expect(b[1].line).toBe(6);
-  });
-});
-
-describe('methodAudit.parseStateEvent — CRLF の 1 行', function() {
-  test('行末に CR が付いていてもきっかけを取れる', function() {
-    expect(MA_.parseStateEvent('Idle --> Sampling : Timer_StartConv\r'))
-      .toEqual({ event: 'Timer_StartConv' });
-  });
-});
-
-describe('methodAudit.audit — CRLF', function() {
-  test('宣言の無いイベントを CRLF でも指摘する', function() {
-    var lfRes = MA_.audit(docs(lf));
-    var crlfRes = MA_.audit(docs(crlf));
-    expect(crlfRes.issues.length).toBe(lfRes.issues.length);
-    expect(crlfRes.clean).toBe(lfRes.clean);
-    // Timer_Driver に StartConv / Ack が無いので「問題なし」にはならない
-    expect(crlfRes.clean).toBe(false);
   });
 });
 
