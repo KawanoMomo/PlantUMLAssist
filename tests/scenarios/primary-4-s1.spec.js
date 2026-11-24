@@ -259,11 +259,11 @@ const KINDS = [
       await page.locator('#co-edit-id').fill('App' + v);
       await page.locator('#co-edit-apply').click();
     },
-    // 表示名 (App) は残るので、図には識別子が出ない。描き直しは本文の描画の完了で待つ。
-    drawnAfter: [],
     // 改名は名前を識別子として持つ行 (9 行目の関係) も同じ反映で付け替える (TICKET-owner-20261124-0422-1)。
     refLines: { 9: (v) => '  App' + v + ' ..> ISpi' },
-    expectLine: (v) => 'component "App" as App' + v },
+    // 表示名を書いていない宣言は名前の字だけが替わり、図も新しい名前 (Appv2) で描く (TICKET-owner-20261124-0822-3。
+    // 以前は前の名前を表示名に据えた `component "App" as Appv1` を期待していた)。
+    expectLine: (v) => 'component App' + v },
   { kind: 'usecase の名前', fixture: 'uc-1.puml', words: ['Send data'], type: 'usecase', line: 5,
     async edit(page, v) {
       await page.locator('#uc-edit-label').fill('Send ' + v);
