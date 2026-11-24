@@ -103,6 +103,8 @@ test.describe('BLK-human-1850 複数の図をタブで扱う', () => {
     await page.locator('#btn-tab-new').click();
     await typeDsl(page, CAN_SEQ);
     await page.locator('#tab-bar .tab').nth(1).locator('.tab-close').click();
+    // TICKET-owner-20261124-0822-2: 打った図は保存先の無い画面ではどこにも書かれていないので、× は窓で聞く。
+    await page.locator('#close-confirm button[data-choice="discard"]').click();
     await page.waitForTimeout(300);
     await expect(page.locator('#tab-bar .tab')).toHaveCount(1);
     expect(await getEditorText(page)).toContain('SpiDrv');

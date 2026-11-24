@@ -75,11 +75,19 @@ window.MA.sourceLock = (function() {
     return { action: 'write' };
   }
 
+  // isUnchanged(docId, dsl) — 開いたときの本文のままか (錠は外さない。読むだけ)。
+  // タブの × が「開いて眺めただけの図」を聞かずに閉じるのに使う (ファイルは既にこの内容)。
+  function isUnchanged(docId, dsl) {
+    var e = docId ? _read()[docId] : null;
+    return !!(e && e.opened && typeof dsl === 'string' && fingerprint(dsl) === e.opened);
+  }
+
   return {
     mark: mark,
     fingerprint: fingerprint,
     release: release,
     clearAll: clearAll,
     decide: decide,
+    isUnchanged: isUnchanged,
   };
 })();
