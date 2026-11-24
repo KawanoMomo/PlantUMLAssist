@@ -129,7 +129,7 @@ window.MA.properties = (function() {
   function fieldHtml(label, id, value, placeholder) {
     return '<div style="margin-bottom:8px;">' +
       '<label' + _for(id) + ' style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + escHtml(label) + '</label>' +
-      '<input id="' + id + '" type="text" value="' + escHtml(value || '') + '" placeholder="' + escHtml(placeholder || '') + '" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;">' +
+      '<input id="' + id + '" type="text"' + (_isApplyFieldLabel(label) ? ' data-apply-field="1"' : '') + ' value="' + escHtml(value || '') + '" placeholder="' + escHtml(placeholder || '') + '" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary);padding:3px 6px;border-radius:3px;font-size:12px;">' +
     '</div>';
   }
 
@@ -615,7 +615,8 @@ window.MA.properties = (function() {
 
   // primaryButtonHtml: full-width accent button
   function primaryButtonHtml(id, label) {
-    return '<button id="' + id + '" style="width:100%;background:var(--accent);color:#fff;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:12px;">' + escHtml(label) + '</button>';
+    var T = window.MA.terms || {};
+    return '<button id="' + id + '"' + (T.apply && label === T.apply ? ' data-apply="1"' : '') + ' style="width:100%;background:var(--accent);color:#fff;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:12px;">' + escHtml(label) + '</button>';
   }
 
   // dangerButtonHtml: full-width red button (for delete actions)
@@ -725,9 +726,83 @@ window.MA.properties = (function() {
     return el ? !!el.checked : true;
   }
 
+  // ── 右パネルの欄の確定 (TICKET-owner-20261124-0822-1) ─────────────────────
+  // 「名前 (id)」「表示名」「ステレオタイプ」の欄 (data-apply-field) は 5 図種で同じ形で確定する:
+  //   - Enter は、その欄の後ろにある「変更を反映」(data-apply) を押したのと同じ
+  //   - 打って反映していない字があるまま欄を離れたとき (図の別の要素を押す・Tab で欄の外へ) も反映する
+  //     (黙って捨てない)。同じ組の欄・「変更を反映」・チェックへ移るときは反映しない (続けて打てる)
+  // 図種のモジュールは Enter・離れたときの処理を持たない。
+  function _isApplyFieldLabel(label) {
+    var T = window.MA.terms || {};
+    return !!label && (label === T.id || label === T.label || label === T.stereotype);
+  }
+  function _applyButtonFor(field) {
+    var root = document.getElementById('props-content') || document;
+    var btns = root.querySelectorAll('[data-apply]');
+    for (var i = 0; i < btns.length; i++) {
+      // 欄より後ろにある最初の「変更を反映」がその欄の組のボタン
+      if (field.compareDocumentPosition(btns[i]) & 4) return btns[i];
+    }
+    return null;
+  }
+  // 欄と同じ「変更を反映」に属する欄のどれかに、反映していない字があるか。
+  function _isDirty(field) {
+    if (!field) return false;
+    var btn = _applyButtonFor(field);
+    var root = document.getElementById('props-content') || document;
+    var fs = root.querySelectorAll('[data-apply-field]');
+    for (var i = 0; i < fs.length; i++) {
+      if (fs[i].value !== fs[i].defaultValue && _applyButtonFor(fs[i]) === btn) return true;
+    }
+    return false;
+  }
+  function applyField(field) {
+    if (!field || field._maApplied || field.isConnected === false) return false;
+    var btn = _applyButtonFor(field);
+    if (!btn || btn.disabled) return false;
+    var root = document.getElementById('props-content') || document;
+    var group = Array.prototype.filter.call(root.querySelectorAll('[data-apply-field]'), function(f) {
+      return _applyButtonFor(f) === btn;
+    });
+    // 押している間に欄が組み直されて離れても (focusout)、同じ字をもう一度反映しない
+    group.forEach(function(f) { f._maApplied = true; });
+    try { btn.click(); } finally {
+      group.forEach(function(f) { f._maApplied = false; f.defaultValue = f.value; });
+    }
+    return true;
+  }
+  function _applyFieldTarget(t) {
+    if (!t || !t.getAttribute || t.getAttribute('data-apply-field') !== '1') return null;
+    var root = document.getElementById('props-content');
+    if (!root || !root.contains(t)) return null;
+    return t;
+  }
+  function _onApplyKey(e) {
+    if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.defaultPrevented) return;
+    var f = _applyFieldTarget(e.target);
+    if (!f) return;
+    e.preventDefault();
+    if (_isDirty(f)) applyField(f);
+  }
+  function _onApplyLeave(e) {
+    var f = _applyFieldTarget(e.target);
+    if (!f || !_isDirty(f)) return;
+    var to = e.relatedTarget;
+    var root = document.getElementById('props-content');
+    if (to && root && root.contains(to) && to.matches
+      && to.matches('[data-apply-field], [data-apply], input[type="checkbox"]')) return;
+    applyField(f);
+  }
+  if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
+    document.addEventListener('keydown', _onApplyKey);
+    document.addEventListener('focusout', _onApplyLeave);
+  }
+
   return {
     renameRefsCheckHtml: renameRefsCheckHtml,
     renameRefsOn: renameRefsOn,
+    applyField: applyField,
     init: init,
     needFieldText: needFieldText,
     needField: needField,

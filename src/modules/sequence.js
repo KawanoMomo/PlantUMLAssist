@@ -3461,6 +3461,8 @@ window.MA.modules.plantumlSequence = (function() {
             // 参加者の図に出る名前は 6 図種と同じ「表示名」(メッセージ・注釈の文字は「本文」)。
             '<div style="margin-bottom:8px;"><label style="display:block;font-size:10px;color:var(--text-secondary);margin-bottom:2px;">' + window.MA.terms.label + '</label><div id="seq-edit-label-rle"></div></div>' +
             P.renameRefsCheckHtml('seq-edit-rename-refs') +
+            // 5 図種と同じ語・同じ並びの「変更を反映」(欄の Enter・離れたときも同じ。src/ui/properties.js)
+            P.primaryButtonHtml('seq-edit-apply', window.MA.terms.apply) +
             paletteHtml +
             actionBarHtml(selLine, 'participant', pp.id);
           var ln = pp.line;
@@ -3469,8 +3471,11 @@ window.MA.modules.plantumlSequence = (function() {
             ctx.setMmdText(updateParticipant(ctx.getMmdText(), ln, 'ptype', this.value));
             ctx.onUpdate();
           });
-          document.getElementById('seq-edit-alias').addEventListener('change', function() {
-            var rawNewAlias = this.value;
+          P.bindEvent('seq-edit-apply', 'click', function() {
+            var aliasEl = document.getElementById('seq-edit-alias');
+            if (!aliasEl || aliasEl.disabled) return;
+            var rawNewAlias = aliasEl.value;
+            if (rawNewAlias === pp.id) return;
             // Non-ASCII alias would break MSG_RE matching for any subsequent
             // message referencing this participant. Force ASCII alias and
             // promote the typed string to label via updateParticipant.
