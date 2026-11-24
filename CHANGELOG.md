@@ -1,3 +1,4 @@
+- TICKET-owner-20261124-0822-3: 表示名を書いていない要素(`component Bus`・`[Bus]`・`actor User`・`usecase Login`・`state Idle`)の「名前 (id)」だけを替えて「変更を反映」すると、宣言の行は名前の字だけが替わり(`component Bus2`。形・ステレオタイプ・色・`{` はそのまま)、図も新しい名前で描く。表示名のある宣言は表示名を残し、打った表示名は今どおり書く。共通部は `dslUpdater.renameDecl`
 - TICKET-owner-20261124-0822-2: 未保存の図(上部バー「● 保存」)のタブを × で閉じると、閉じる前にアプリ内の窓が「保存して閉じる / 保存せずに閉じる / やめる」を聞く(開いたら「保存して閉じる」に手が入り、Esc は何もせず閉じる)。保存済み・見本のまま・開いただけの図は今どおり 1 押しで閉じる。判定は `src/core/close-guard.js`
 - TICKET-owner-20261124-0822-1: 右パネルの「名前 (id)」「表示名」「ステレオタイプ」に打って Enter を押すと「変更を反映」と同じに入る(class・component・state・usecase・sequence)。打ったまま図の別の要素を押す・欄の外へ離れたときも反映し、黙って捨てない。sequence の参加者のパネルにも同じ並びの「変更を反映」が出た。共通部は `src/ui/properties.js`
 - releaser: version 8.2.0

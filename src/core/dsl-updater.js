@@ -154,9 +154,36 @@ window.MA.dslUpdater = (function() {
     if (/\r$/.test(b[idx]) && !/\r$/.test(a[idx])) { a[idx] += '\r'; return a.join('\n'); }
     return after;
   }
+  // 表示名を書いていない宣言 (`component Bus`・`[Bus]`・`actor User`・`usecase (Login)`・`state Idle #pink`) は、
+  // 名前の字だけを替えた行を返す (宣言の形・ステレオタイプ・色・`{` はそのまま)。表示名のある宣言 (`"…"`・`as`) や
+  // 名前が識別子として出てこない行は null (図種の更新関数に任せる)。TICKET-owner-20261124-0822-3:
+  // 以前は図種の更新関数が前の名前を表示名に据えて `component "Bus" as Bus2` と書き、図は前の名前のまま描かれた。
+  function _bareDeclRename(line, oldId, newId) {
+    if (line == null || String(line).indexOf('"') >= 0) return null;
+    var s = String(line);
+    if (DU.isPlantumlComment(s)) return null;
+    var head = s.replace(/:[^:\s][^:]*:/g, ' ');   // `:User:` の形のアクターは名前そのもの
+    var cut = head.search(/:(?!:)/);
+    if (cut >= 0) head = head.slice(0, cut);
+    if (/\bas\b/i.test(head)) return null;
+    var out = renameWithRefs(s, oldId, newId);
+    return out === s ? null : out;
+  }
+
   function renameDecl(text, declLine, oldId, newId, updateDecl, withRefs) {
     var renamed = (oldId && newId && oldId !== newId);
     var idx = (declLine | 0) - 1;
+    if (renamed) {
+      var all = text.split('\n');
+      var bare = (idx >= 0 && idx < all.length) ? _bareDeclRename(all[idx], oldId, newId) : null;
+      if (bare != null) {
+        var base = withRefs ? renameWithRefs(text, oldId, newId).split('\n') : all;
+        if (base.length === all.length) {
+          base[idx] = bare;
+          return base.join('\n');
+        }
+      }
+    }
     if (!renamed || !withRefs) return _keepCr(text, updateDecl(text), idx);
     var lines = text.split('\n');
     if (idx < 0 || idx >= lines.length) return renameWithRefs(updateDecl(text), oldId, newId);

@@ -2191,7 +2191,10 @@ window.MA.modules.plantumlState = (function() {
       var freshParsed = parse(ctx.getMmdText());
       var renameNorm = idFieldToWrite(st, rawId, freshParsed);
       var newId = renameNorm.id;
-      var newLabel = (renameNorm.id !== renameNorm.label) ? renameNorm.label : rawLabel;
+      // 表示名の欄が開いたときの字のまま (表示名の無い宣言では名前と同じ字) なら、表示名は書かない
+      // (TICKET-owner-20261124-0822-3。打っていない表示名を宣言に書き足さない。component・usecase と同じ)。
+      var newLabel = (renameNorm.id !== renameNorm.label) ? renameNorm.label
+        : (rawLabel === (st.label || '') ? null : rawLabel);
       var src = ctx.getMmdText();
       var declFields = {
         id: newId,
@@ -2205,6 +2208,11 @@ window.MA.modules.plantumlState = (function() {
       // 1 回で書く (TICKET-owner-20261124-0422-1。他の 5 図種と同じ共通の口)。
       var out = window.MA.dslUpdater.renameDecl(src, st.line, oldBareId, bareId,
         function(s) { return updateState(s, st.line, declFields); }, P.renameRefsOn('st-rename-refs'));
+      // 表示名の無い宣言の改名は共通の口が名前の字だけを替える (更新関数を通らない)。打った表示名・選び直した
+      // ステレオタイプはその後で書く。
+      if (oldBareId !== bareId && (declFields.label != null || declFields.stereotype !== undefined)) {
+        out = updateState(out, st.line, { label: declFields.label, stereotype: declFields.stereotype });
+      }
       // If state id was renamed, clean up orphan description lines under the
       // old bare id first to avoid leaving stale entry/do/exit lines pointing
       // to a now-nonexistent identifier.
